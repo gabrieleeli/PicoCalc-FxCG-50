@@ -245,4 +245,57 @@ void Canvas::drawLayer(const Layer& layer) noexcept {
     bitmap(layer.x,layer.y,layer.width,layer.height,layer.pixels,layer.transparentKey,layer.useTransparency);
 }
 void Canvas::blendPixel(int x,int y,std::uint16_t c,std::uint8_t a) noexcept {if(a==255)pixel(x,y,c);else if(a)pixel(x,y,blend(c,getPixel(x,y),a));}
+void Canvas::verticalGradient(int x,int y,int w,int h,std::uint16_t top,std::uint16_t bottom) noexcept {
+    if(w<=0||h<=0)return;
+    for(int i=0;i<h;++i){
+        const unsigned a=h>1?static_cast<unsigned>((i*255)/(h-1)):0U;
+        hLine(x,y+i,w,blend(bottom,top,static_cast<std::uint8_t>(a)));
+    }
+}
+void Canvas::dottedRect(int x,int y,int w,int h,std::uint16_t c) noexcept {
+    if(w<=0||h<=0)return;
+    for(int i=0;i<w;i+=2){pixel(x+i,y,c);pixel(x+i,y+h-1,c);}
+    for(int j=0;j<h;j+=2){pixel(x,y+j,c);pixel(x+w-1,y+j,c);}
+}
+std::size_t TileDiff::diff(const std::uint16_t* px,int width,int height,Rect* out,std::size_t maxOut) noexcept {
+    if(!px||!out||maxOut==0||width<=0||height<=0)return 0;
+    const int tx=std::min(MaxTilesX,(width+Tile-1)/Tile),ty=std::min(MaxTilesY,(height+Tile-1)/Tile);
+    bool changed[MaxTilesX*MaxTilesY]{};
+    bool any=false;
+    for(int r=0;r<ty;++r)for(int c=0;c<tx;++c){
+        std::uint32_t h=2166136261u;
+        const int y1=std::min(height,(r+1)*Tile),x0=c*Tile,x1=std::min(width,x0+Tile);
+        for(int y=r*Tile;y<y1;++y){const std::uint16_t* row=px+static_cast<std::size_t>(y)*width;
+            for(int x=x0;x<x1;++x){h^=row[x];h*=16777619u;}}
+        const int i=r*MaxTilesX+c;
+        if(!valid_||hashes_[i]!=h){changed[i]=true;any=true;}
+        hashes_[i]=h;
+    }
+    valid_=true;
+    if(!any)return 0;
+    std::size_t n=0;bool overflow=false;
+    for(int r=0;r<ty&&!overflow;++r){
+        int c=0;
+        while(c<tx){
+            if(!changed[r*MaxTilesX+c]){++c;continue;}
+            const int start=c;while(c<tx&&changed[r*MaxTilesX+c])++c;
+            Rect rect{start*Tile,r*Tile,std::min(width,c*Tile)-start*Tile,std::min(height,(r+1)*Tile)-r*Tile};
+            // Merge with a rectangle directly above that has the same horizontal span.
+            bool merged=false;
+            for(std::size_t k=0;k<n;++k){Rect& o=out[k];
+                if(o.x==rect.x&&o.w==rect.w&&o.y+o.h==rect.y){o.h+=rect.h;merged=true;break;}}
+            if(merged)continue;
+            if(n==maxOut){overflow=true;break;}
+            out[n++]=rect;
+        }
+    }
+    if(overflow){
+        int x0=width,y0=height,x1=0,y1=0;
+        for(int r=0;r<ty;++r)for(int c=0;c<tx;++c)if(changed[r*MaxTilesX+c]){
+            x0=std::min(x0,c*Tile);y0=std::min(y0,r*Tile);
+            x1=std::max(x1,std::min(width,(c+1)*Tile));y1=std::max(y1,std::min(height,(r+1)*Tile));}
+        out[0]={x0,y0,x1-x0,y1-y0};return 1;
+    }
+    return n;
+}
 } // namespace gfx

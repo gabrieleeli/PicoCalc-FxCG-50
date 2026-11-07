@@ -1,5 +1,7 @@
 #include "cheatsheet.hpp"
-#include <cassert>
+#include "test_util.hpp"
+#undef assert
+#define assert(x) CHECK(x)
 #include <cstring>
 int main() {
     using namespace fx::help;
@@ -21,4 +23,5 @@ int main() {
             assert(page.entries[i].example && page.entries[i].example[0]);
         }
     }
+    return testutil::finish("cheatsheet_smoke");
 }

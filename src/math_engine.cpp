@@ -10,6 +10,7 @@
 namespace fx {
 static AngleMode g_mode=AngleMode::Radians;
 void setAngleMode(AngleMode m){g_mode=m;}
+AngleMode angleMode() noexcept{return g_mode;}
 double toRadians(double x){ if(g_mode==AngleMode::Degrees)return x*M_PI/180.0; if(g_mode==AngleMode::Gradians)return x*M_PI/200.0; return x; }
 double fromRadians(double x){ if(g_mode==AngleMode::Degrees)return x*180.0/M_PI; if(g_mode==AngleMode::Gradians)return x*200.0/M_PI; return x; }
 double factorial(unsigned n){ if(n>170) throw std::overflow_error("n! troppo grande"); double r=1; for(unsigned i=2;i<=n;++i)r*=i; return r; }

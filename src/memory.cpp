@@ -2,10 +2,11 @@
 #include <cctype>
 namespace fx {
 void CalculatorMemory::store(char n,double v){n=static_cast<char>(std::toupper(static_cast<unsigned char>(n)));if(n<'A'||n>'Z')throw std::invalid_argument("Variabile ammessa: A-Z");vars_[n-'A']=v;used_[n-'A']=true;}
-double CalculatorMemory::recall(char n)const{n=static_cast<char>(std::toupper(static_cast<unsigned char>(n)));if(n<'A'||n>'Z')throw std::invalid_argument("Variabile ammessa: A-Z");if(!used_[n-'A'])throw std::domain_error("Variabile non inizializzata");return vars_[n-'A'];}
+double CalculatorMemory::recall(char n)const{n=static_cast<char>(std::toupper(static_cast<unsigned char>(n)));if(n<'A'||n>'Z')throw std::invalid_argument("Variabile ammessa: A-Z");// fx-CG50 behaviour: variables that were never assigned read as 0.
+return used_[n-'A']?vars_[n-'A']:0.0;}
 void CalculatorMemory::clear(char n){n=static_cast<char>(std::toupper(static_cast<unsigned char>(n)));if(n<'A'||n>'Z')throw std::invalid_argument("Variabile ammessa: A-Z");vars_[n-'A']=0;used_[n-'A']=false;}
-void CalculatorMemory::clearAll(){vars_.fill(0);used_.fill(false);answer_=previousAnswer_=independent_=0;}
-void CalculatorMemory::setAnswer(double v){previousAnswer_=answer_;answer_=v;}
+void CalculatorMemory::clearAll(){vars_.fill(0);used_.fill(false);answer_=previousAnswer_=independent_=0;answerImag_=previousAnswerImag_=0;}
+void CalculatorMemory::setAnswer(double v,double im){previousAnswer_=answer_;previousAnswerImag_=answerImag_;answer_=v;answerImag_=im;}
 namespace {
 std::string superscript(char c){switch(c){case '0':return "⁰";case '1':return "¹";case '2':return "²";case '3':return "³";case '4':return "⁴";case '5':return "⁵";case '6':return "⁶";case '7':return "⁷";case '8':return "⁸";case '9':return "⁹";case '-':return "⁻";case '+':return "⁺";default:return std::string(1,c);}}
 struct Symbol {const char* name; const char* glyph;};

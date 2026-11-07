@@ -1,14 +1,16 @@
+// Math engine regression suite (ported from the v1.5.4 math_smoke test).
 #include "math_engine.hpp"
 #include "point_a.hpp"
 #include "expression.hpp"
 #include "graph.hpp"
 #include "memory.hpp"
 #include "editors.hpp"
-#include "natural_editor.hpp"
-#include "keyboard_input.hpp"
-#include "run_matrix.hpp"
-#include <cassert>
+#include "test_util.hpp"
 #include <cmath>
+#include <cstdint>
+#include <vector>
+#undef assert
+#define assert(x) CHECK(x)
 int main(){
  auto surface=fx::sample3DSurface("x+y",-1,1,-1,1,-2,2,320,320,12); assert(!surface.empty());
  auto curve=fx::sample2D("x^2",-2,2,0,4,320,320); assert(!curve.empty());
@@ -54,7 +56,7 @@ int main(){
  assert(std::abs(fx::evaluate("-2^2")+4)<1e-9);
  assert(std::abs(fx::evaluate("2^-2")-0.25)<1e-9);
  assert(std::abs(fx::evaluate("log(100)")-2)<1e-9);
- assert(std::abs(fx::evaluate("log(8,2)")-3)<1e-9);
+ assert(std::abs(fx::evaluate("log(2,8)")-3)<1e-9); // fx-CG50 convention: log(base,value)
  assert(std::abs(fx::evaluate("max(2,7)+min(4,1)")-8)<1e-9);
  assert(std::abs(fx::evaluate("round(2.6)+frac(3.25)")-3.25)<1e-9);
  assert(std::abs(fx::evaluate("atan2(1,1)")-std::acos(-1.0)/4)<1e-9);
@@ -113,109 +115,8 @@ int main(){
  assert(std::abs(convert(1,Unit::Kilometer,Unit::Meter)-1000)<1e-12);
  assert(engineeringPrefix("k")==1000&&std::abs(physicalConstant("c")-299792458)<1e-6);
  assert(formatNaturalExpression("2*x/3")=="2 × x ÷ 3");
- // Natural V.P.A.M. structured editor: fraction/radical/power nesting and keyboard events.
- fx::NaturalEditor ne; ne.insertFraction(); ne.insert('1'); assert(ne.moveDown()); ne.insert('3'); assert(ne.toExpression()=="(1)/(3)"); assert(std::abs(fx::evaluate(ne.toExpression())-1.0/3.0)<1e-12);
- ne.clear(); ne.insertRadical(); ne.insert('9'); assert(ne.toExpression()=="sqrt(9)"&&fx::evaluate(ne.toExpression())==3);
- ne.clear(); ne.insert('2'); ne.insertPower(); ne.insert('3'); assert(ne.toExpression()=="(2)^(3)"&&fx::evaluate(ne.toExpression())==8); assert(ne.moveUp());
- ne.clear(); ne.insert('2'); ne.insert('^'); ne.insert('3'); assert(ne.toExpression()=="(2)^(3)"&&fx::evaluate(ne.toExpression())==8);
- ne.clear(); for(char c:std::string("sqrt"))ne.insert(c); assert(ne.toExpression()=="sqrt()"); ne.insert('9'); assert(ne.toExpression()=="sqrt(9)"&&fx::evaluate(ne.toExpression())==3);
- ne.clear(); for(char c:std::string("cbrt"))ne.insert(c); ne.insert('2'); ne.insert('7'); assert(ne.toExpression()=="root(3,27)"&&fx::evaluate(ne.toExpression())==3);
- ne.clear(); for(char c:std::string("root5"))ne.insert(c); ne.insert('3'); ne.insert('2'); assert(ne.toExpression()=="root(5,32)"&&fx::evaluate(ne.toExpression())==2);
- ne.clear(); for(char c:std::string("root10"))ne.insert(c); ne.insert('1'); ne.insert('0'); assert(ne.toExpression()=="root(10,10)"&&std::abs(fx::evaluate(ne.toExpression())-std::pow(10.0,0.1))<1e-12);
- ne.clear(); for(char c:std::string("sqrt(3)"))ne.insert(c); assert(ne.toExpression()=="sqrt(3)"&&std::abs(fx::evaluate(ne.toExpression())-std::sqrt(3.0))<1e-12);
- ne.clear(); for(char c:std::string("root3(27)"))ne.insert(c); assert(ne.toExpression()=="root(3,27)"&&fx::evaluate(ne.toExpression())==3);
- ne.clear(); for(char c:std::string("sin(30)"))ne.insert(c); fx::setAngleMode(fx::AngleMode::Degrees); assert(ne.toExpression()=="sin(30)"&&std::abs(fx::evaluate(ne.toExpression())-0.5)<1e-12); fx::setAngleMode(fx::AngleMode::Radians);
- assert(std::abs(fx::evaluate("root3(27)")-3.0)<1e-12);
- assert(std::abs(fx::evaluate("root5(32)")-2.0)<1e-12);
- assert(std::abs(fx::evaluate("integral(x^2,0,3)")-9.0)<1e-9);
- assert(std::abs(fx::evaluate("derivative(x^2,3)")-6.0)<1e-6);
- assert(fx::formatNatural("integral(x^2,0,3)").find("∫")!=std::string::npos);
- assert(fx::formatNatural("sum(x,1,5)").find("Σ")!=std::string::npos);
- assert(std::abs(fx::evaluate("sum(x,1,5)")-15.0)<1e-12);
- assert(std::abs(fx::evaluate("sum(x^2,1,3)")-14.0)<1e-12);
- // Calculus templates are real editable VPAM nodes with separate argument rows.
- ne.clear(); ne.insertIntegral(); for(char c:std::string("x^2")) ne.insert(c); assert(ne.moveRight());
- assert(ne.moveDown()); ne.insert('0'); assert(ne.moveDown()); ne.insert('3');
- assert(ne.toExpression()=="integral((x)^(2),0,3)"); assert(std::abs(fx::evaluate(ne.toExpression())-9.0)<1e-9);
- auto integralOps=ne.layout(0,30,300); bool integralGlyph=false; for(const auto& op:integralOps) if(op.kind==fx::NaturalDrawOp::Kind::Text&&op.text=="∫") integralGlyph=true; assert(integralGlyph);
- ne.clear(); ne.insertDerivative(); for(char c:std::string("x^2")) ne.insert(c); assert(ne.moveRight()); assert(ne.moveDown()); ne.insert('3');
- assert(ne.toExpression()=="derivative((x)^(2),3)"); assert(std::abs(fx::evaluate(ne.toExpression())-6.0)<1e-6);
- ne.clear(); ne.insertSummation(); ne.insert('x'); assert(ne.moveDown()); ne.insert('1'); assert(ne.moveDown()); ne.insert('5');
- assert(ne.toExpression()=="sum(x,1,5)"); assert(fx::evaluate(ne.toExpression())==15.0);
 
- ne.clear(); for(char c:std::string("alpha"))ne.insert(c); auto greekOps=ne.layout(4,20,300); bool greekVisible=false; for(const auto& op:greekOps)if(op.kind==fx::NaturalDrawOp::Kind::Text&&op.text=="α")greekVisible=true; assert(greekVisible&&ne.toExpression()=="alpha");
- ne.clear(); ne.insert('1'); ne.insert('2'); ne.insertPower(); ne.insert('2'); assert(ne.toExpression()=="(12)^(2)"&&fx::evaluate(ne.toExpression())==144);
- ne.clear(); ne.insert('1'); ne.insert('2'); ne.insertFraction(); assert(ne.toExpression()=="(12)/()"); assert(ne.moveDown()); ne.insert('3'); assert(ne.toExpression()=="(12)/(3)"&&std::abs(fx::evaluate(ne.toExpression())-4)<1e-12);
- ne.clear(); ne.insertFraction(); ne.insert('1'); assert(ne.moveDown()); ne.insert('3'); assert(ne.moveUp()); ne.insert('+'); ne.insert('1'); assert(ne.moveDown()); assert(ne.toExpression()=="(1+1)/(3)"); assert(std::abs(fx::evaluate(ne.toExpression())-2.0/3.0)<1e-12);
- ne.clear(); ne.handle({fx::NaturalKey::Character,'4'}); ne.handle({fx::NaturalKey::Character,'2'}); assert(ne.toExpression()=="42"); ne.handle({fx::NaturalKey::Backspace,0}); assert(ne.toExpression()=="4");
- ne.clear(); ne.insertGroup(); ne.insert('5'); ne.insert('+'); ne.insert('1'); assert(ne.toExpression()=="(5+1)"&&fx::evaluate(ne.toExpression())==6);
- auto naturalOps=ne.layout(4,20,300); assert(!naturalOps.empty()); bool cursorDrawn=false; for(const auto& op:naturalOps) cursorDrawn|=op.kind==fx::NaturalDrawOp::Kind::Cursor; assert(cursorDrawn);
- ne.clear(); ne.insert('x'); ne.insertSubscript(); ne.insert('1'); bool subscriptRejected=false; try{(void)ne.toExpression();}catch(const std::runtime_error&){subscriptRejected=true;} assert(subscriptRejected);
  bool fractionOverflow=false; try { (void)fx::makeFraction(INT64_MIN,-1); } catch(const std::overflow_error&) { fractionOverflow=true; } assert(fractionOverflow);
- // PicoCalc STM32 FIFO decoding: state in MSB, physical key code in LSB.
- assert(fx::decodePicoCalcKey(0).action==fx::InputAction::None);
- assert(fx::decodePicoCalcKey(0x0301).action==fx::InputAction::None); // release ignored
- assert(fx::decodePicoCalcKey(0x0131).action==fx::InputAction::Character && fx::decodePicoCalcKey(0x0131).character=='1');
- assert(fx::decodePicoCalcKey(0x015E).action==fx::InputAction::Character && fx::decodePicoCalcKey(0x015E).character=='^');
- assert(fx::decodePicoCalcKey(0x02B5).action==fx::InputAction::Up); // held arrow repeat
- assert(fx::decodePicoCalcKey(0x01B4).action==fx::InputAction::Left);
- assert(fx::decodePicoCalcKey(0x0108).action==fx::InputAction::Backspace);
- assert(fx::decodePicoCalcKey(0x01D4).action==fx::InputAction::Delete);
- assert(fx::decodePicoCalcKey(0x010A).action==fx::InputAction::Evaluate);
- assert(fx::decodePicoCalcKey(0x01B1).action==fx::InputAction::Escape);
- assert(fx::decodePicoCalcKey(0x0181).action==fx::InputAction::Fraction);
- assert(fx::decodePicoCalcKey(0x0182).action==fx::InputAction::Radical);
- assert(fx::decodePicoCalcKey(0x0183).action==fx::InputAction::Power);
- assert(fx::decodePicoCalcKey(0x0184).action==fx::InputAction::Subscript);
- assert(fx::decodePicoCalcKey(0x0185).action==fx::InputAction::Group);
- assert(fx::decodePicoCalcKey(0x0186).action==fx::InputAction::Clear);
- // End-to-end host flow: launcher -> Run-Matrix -> edit -> evaluate -> return.
- fx::RunMatrixController app;
- assert(app.screen()==fx::AppScreen::Home);
- app.handle(fx::decodePicoCalcKey(0x0181));
- assert(app.screen()==fx::AppScreen::RunMatrix);
- app.handle(fx::decodePicoCalcKey(0x0131));
- app.handle(fx::decodePicoCalcKey(0x012B));
- app.handle(fx::decodePicoCalcKey(0x0132));
- app.handle(fx::decodePicoCalcKey(0x010A));
- assert(app.expression()=="1+2" && app.result()=="3" && app.message().empty());
- assert(app.session().history().size()==1);
- app.handle(fx::decodePicoCalcKey(0x01B1));
- assert(app.screen()==fx::AppScreen::Home);
- // Natural fraction workflow: F1, numerator, DOWN, denominator, EXE.
- app.handle(fx::decodePicoCalcKey(0x0181));
- app.handle(fx::decodePicoCalcKey(0x0181));
- app.handle(fx::decodePicoCalcKey(0x0131));
- app.handle(fx::decodePicoCalcKey(0x02B6));
- app.handle(fx::decodePicoCalcKey(0x0133));
- app.handle(fx::decodePicoCalcKey(0x010A));
- assert(app.expression()=="(1)/(3)" && app.result()=="0.3333333333");
- // Radical and power templates are editable through their physical function-key events.
- app.handle(fx::decodePicoCalcKey(0x0186));
- app.handle(fx::decodePicoCalcKey(0x0182));
- app.handle(fx::decodePicoCalcKey(0x0139));
- app.handle(fx::decodePicoCalcKey(0x010A));
- assert(app.expression()=="sqrt(9)" && app.result()=="3");
- app.handle(fx::decodePicoCalcKey(0x0186));
- app.handle(fx::decodePicoCalcKey(0x0132));
- app.handle(fx::decodePicoCalcKey(0x0183));
- app.handle(fx::decodePicoCalcKey(0x0133));
- app.handle(fx::decodePicoCalcKey(0x010A));
- assert(app.expression()=="(2)^(3)" && app.result()=="8");
- app.handle(fx::decodePicoCalcKey(0x0186)); app.handle(fx::decodePicoCalcKey(0x0134)); app.handle(fx::decodePicoCalcKey(0x015E)); app.handle(fx::decodePicoCalcKey(0x0132)); app.handle(fx::decodePicoCalcKey(0x010A)); assert(app.expression()=="(4)^(2)" && app.result()=="16");
- // F5 creates a nested group; F4 creates a visible but not yet parser-evaluable subscript.
- app.handle(fx::decodePicoCalcKey(0x0186));
- app.handle(fx::decodePicoCalcKey(0x0185));
- app.handle(fx::decodePicoCalcKey(0x0132));
- app.handle(fx::decodePicoCalcKey(0x012B));
- app.handle(fx::decodePicoCalcKey(0x0133));
- app.handle(fx::decodePicoCalcKey(0x010A));
- assert(app.expression()=="(2+3)" && app.result()=="5");
  fx::pointa::RunMatrixSession limitedHistory; for(int i=0;i<35;++i)limitedHistory.execute("1+1"); assert(limitedHistory.history().size()==30 && limitedHistory.history().front().expression=="1+1");
- app.handle(fx::decodePicoCalcKey(0x0186));
- app.handle(fx::decodePicoCalcKey(0x0178));
- app.handle(fx::decodePicoCalcKey(0x0184));
- app.handle(fx::decodePicoCalcKey(0x0131));
- app.handle(fx::decodePicoCalcKey(0x010A));
- assert(!app.message().empty() && app.session().history().size()==6);
+ return testutil::finish("math_engine_test");
 }

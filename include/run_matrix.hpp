@@ -1,40 +1,30 @@
 #pragma once
-#include "keyboard_input.hpp"
-#include "natural_editor.hpp"
-#include "point_a.hpp"
-#include "graph_renderer.hpp"
+#include "expression_ast.hpp"
+#include "workspace.hpp"
 #include <string>
 
 namespace fx {
-enum class AppScreen { Home, RunMatrix, Graph, Cheatsheet, Unavailable };
 
-class RunMatrixController {
-public:
-    void handle(const InputEvent& event);
-    AppScreen screen() const noexcept { return screen_; }
-    const NaturalEditor& editor() const noexcept { return editor_; }
-    const std::string& result() const noexcept { return result_; }
-    const std::string& message() const noexcept { return message_; }
-    const std::string& expression() const noexcept { return expression_; }
-    const pointa::RunMatrixSession& session() const noexcept { return session_; }
-    unsigned selection() const noexcept { return selected_; }
-    const char* selectedAppName() const noexcept;
-    unsigned cheatsheetPage() const noexcept { return cheatsheetPage_; }
-    unsigned cheatsheetSelection() const noexcept { return cheatsheetSelection_; }
-    const GraphView& graphView() const noexcept { return graphView_; }
-    const std::string& graphExpression() const noexcept { return graphExpression_; }
-private:
-    void evaluate();
-    AppScreen screen_{AppScreen::Home};
-    unsigned selected_{};
-    unsigned cheatsheetPage_{};
-    unsigned cheatsheetSelection_{};
-    GraphView graphView_{};
-    std::string graphExpression_{"x^2"};
-    NaturalEditor editor_;
-    pointa::RunMatrixSession session_;
-    std::string expression_;
-    std::string result_;
-    std::string message_;
+// Result of one RUN-MATRIX calculation.
+struct RunOutcome {
+    Complex value{};
+    char storedTo{};            // variable letter for "expr->A", 0 otherwise
+    std::string pairText;       // "r=5  θ=53.13" for Pol(), "x=..  y=.." for Rec()
 };
-}
+
+// Evaluates a linear expression exactly like the RUN-MATRIX mode: handles the
+// store arrow (U+2192 or "->"), Pol(x,y)/Rec(r,θ) pairs, updates Ans/PreAns and
+// appends the entry to the workspace history. Throws on Syntax/Math errors.
+RunOutcome runCalculation(Workspace& ws, const std::string& expression);
+
+// Result views stored in HistoryEntry::view.
+enum ResultView : std::uint8_t { ViewAuto = 0, ViewDecimal = 1, ViewHex = 2, ViewBin = 3, ViewOct = 4, ViewDms = 5 };
+
+// True when the auto view shows the value as an exact fraction (rational
+// value, no decimal point typed in the expression, fraction display enabled).
+bool showsAsFraction(const HistoryEntry& entry, const Settings& settings, long long& num, long long& den);
+// Linear text of a result in its current view ("1/3", "0.3333333333", "0x1F", "30°15'0\"").
+std::string resultText(const HistoryEntry& entry, const Settings& settings);
+// 2D tree used to draw the result (stacked fraction, ×10^n exponent).
+ast::NodePtr resultTree(const HistoryEntry& entry, const Settings& settings);
+} // namespace fx

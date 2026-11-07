@@ -1,19 +1,50 @@
+# PicoCalc FX-CG50 AI - RP2350 (Raspberry Pi Pico 2 W) firmware.
+# Host tests and the simulator live in tests/CMakeLists.txt.
 cmake_minimum_required(VERSION 3.13)
-include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+if(NOT DEFINED PICO_BOARD)
+  set(PICO_BOARD pico2_w CACHE STRING "Target board")
+endif()
+# The math engine reports Syntax/Math errors with C++ exceptions.
+set(PICO_CXX_ENABLE_EXCEPTIONS 1)
+if(NOT PICO_SDK_PATH AND DEFINED ENV{PICO_SDK_PATH})
+  set(PICO_SDK_PATH $ENV{PICO_SDK_PATH} CACHE PATH "Raspberry Pi Pico SDK")
+endif()
+if(NOT PICO_SDK_PATH)
+  message(FATAL_ERROR "Set PICO_SDK_PATH (environment or -DPICO_SDK_PATH=...) to a Pico SDK >= 2.0 checkout")
+endif()
+include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 project(PicoCalcFXAI C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 pico_sdk_init()
-option(FXAI_DISPLAY_CALIBRATION_SCREEN "Boot into LCD color/orientation calibration screen" OFF)
+
+file(READ ${CMAKE_CURRENT_LIST_DIR}/VERSION FXAI_VERSION)
+string(STRIP "${FXAI_VERSION}" FXAI_VERSION)
+
+option(FXAI_DISPLAY_CALIBRATION_SCREEN "Show the LCD colour/orientation test pattern at boot" OFF)
+option(FXAI_LCD_RGB565 "Drive the LCD in 16-bit RGB565 instead of the official 18-bit mode" OFF)
+set(FXAI_LCD_SPI_HZ 25000000 CACHE STRING "LCD SPI clock (official driver: 25 MHz)")
+
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/fxai_sources.cmake)
 add_executable(picocalc_fxai
-  src/main.cpp src/natural_editor.cpp src/keyboard_input.cpp src/run_matrix.cpp src/point_a.cpp src/math_engine.cpp src/expression.cpp src/graph.cpp
-  src/ui.cpp src/window_manager.cpp src/graphics_engine.cpp src/font_renderer.cpp src/math_renderer.cpp src/graph_renderer.cpp src/widget_system.cpp src/animation_system.cpp src/board_port.cpp src/ai_client.cpp src/memory.cpp src/editors.cpp)
-pico_generate_pio_header(picocalc_fxai ${CMAKE_CURRENT_LIST_DIR}/src/lcd_spi.pio)
-target_include_directories(picocalc_fxai PRIVATE include)
-if(FXAI_DISPLAY_CALIBRATION_SCREEN)
-  target_compile_definitions(picocalc_fxai PRIVATE FXAI_DISPLAY_CALIBRATION_SCREEN=1)
-endif()
-target_link_libraries(picocalc_fxai pico_stdlib hardware_spi hardware_i2c hardware_pwm hardware_pio hardware_dma pico_cyw43_arch_lwip_threadsafe_background)
+  ${FXAI_CORE_SOURCES}
+  src/platform/pico/board_pico.cpp
+  src/platform/pico/net_pico.cpp
+  src/platform/pico/main_pico.cpp)
+target_include_directories(picocalc_fxai PRIVATE ${FXAI_INCLUDE_DIR})
+target_compile_options(picocalc_fxai PRIVATE -Wall -Wextra)
+target_compile_definitions(picocalc_fxai PRIVATE
+  FXAI_VERSION="${FXAI_VERSION}"
+  FXAI_LCD_SPI_HZ=${FXAI_LCD_SPI_HZ}
+  FXAI_LCD_RGB565=$<BOOL:${FXAI_LCD_RGB565}>
+  FXAI_DISPLAY_CALIBRATION_SCREEN=$<BOOL:${FXAI_DISPLAY_CALIBRATION_SCREEN}>
+  PICO_STACK_SIZE=0x8000)
+pico_set_linker_script(picocalc_fxai ${CMAKE_CURRENT_LIST_DIR}/src/platform/pico/memmap_picocalc.ld)
+target_link_libraries(picocalc_fxai
+  pico_stdlib hardware_spi hardware_i2c hardware_flash pico_flash
+  pico_cyw43_arch_none)
+pico_set_program_name(picocalc_fxai "PicoCalc FX-CG50 AI")
+pico_set_program_version(picocalc_fxai "${FXAI_VERSION}")
 pico_enable_stdio_usb(picocalc_fxai 1)
 pico_enable_stdio_uart(picocalc_fxai 0)
 pico_add_extra_outputs(picocalc_fxai)

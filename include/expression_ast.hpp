@@ -25,7 +25,7 @@ inline bool validShape(const Node& n) noexcept {
     case Kind::Fraction: case Kind::Power: case Kind::Subscript: case Kind::Binary: return count==2;
     case Kind::Radical: case Kind::Group: case Kind::Unary: return count==1;
     case Kind::Call: return !n.text.empty() && count>=1;
-    case Kind::Calculus: return (n.text=="derivative"&&count==2)||((n.text=="integral"||n.text=="sum")&&count==3);
+    case Kind::Calculus: return (n.text=="derivative"&&count==2)||((n.text=="integral"||n.text=="sum"||n.text=="prod")&&count==3);
     }
     return false;
 }

@@ -1,129 +1,132 @@
 #include "run_matrix.hpp"
-#include "cheatsheet.hpp"
+#include "math_engine.hpp"
+#include <cctype>
+#include <cmath>
 #include <cstdio>
-#include <exception>
+#include <cstdlib>
 
 namespace fx {
-void RunMatrixController::evaluate() {
-    try {
-        expression_ = editor_.toExpression();
-        if (expression_.empty()) {
-            message_ = "Inserire un'espressione";
-            result_.clear();
-            return;
-        }
-        const double value = session_.execute(expression_);
-        char buffer[48];
-        std::snprintf(buffer, sizeof(buffer), "%.10g", value);
-        result_ = buffer;
-        message_.clear();
-    } catch (const std::exception& error) {
-        result_.clear();
-        message_ = error.what();
+namespace {
+const char* const kArrow = "\xE2\x86\x92";   // U+2192
+
+std::string trim(const std::string& s) {
+    const auto a = s.find_first_not_of(" \t");
+    if (a == std::string::npos) return {};
+    return s.substr(a, s.find_last_not_of(" \t") - a + 1);
+}
+ast::NodePtr tok(const std::string& t) { return ast::make(ast::Kind::Token, t); }
+ast::NodePtr rowOf(const std::string& text) {
+    auto r = ast::make(ast::Kind::Row);
+    for (char c : text) r->children.push_back(tok(std::string(1, c)));
+    return r;
+}
+} // namespace
+
+RunOutcome runCalculation(Workspace& ws, const std::string& raw) {
+    std::string expr = trim(raw);
+    RunOutcome out;
+    // Store arrow: "expr -> A" (A-Z, case-insensitive).
+    std::size_t arrow = expr.rfind(kArrow);
+    std::size_t arrowLen = 3;
+    if (arrow == std::string::npos) { arrow = expr.rfind("->"); arrowLen = 2; }
+    if (arrow != std::string::npos) {
+        const std::string target = trim(expr.substr(arrow + arrowLen));
+        if (target.size() != 1 || !std::isalpha(static_cast<unsigned char>(target[0])))
+            throw SyntaxError("Syntax ERROR: dopo -> serve una variabile A-Z");
+        out.storedTo = static_cast<char>(std::toupper(static_cast<unsigned char>(target[0])));
+        expr = trim(expr.substr(0, arrow));
     }
-}
-
-const char* RunMatrixController::selectedAppName() const noexcept {
-    static constexpr const char* names[22]={
-        "RUN-MATRIX","STATISTICS","eACTIVITY","SPREADSHEET","GRAPH",
-        "DYNA GRAPH","TABLE","RECURSION","CONIC GRAPHS","EQUATION",
-        "PROGRAM","FINANCIAL","E-CON4","LINK","MEMORY","SYSTEM",
-        "GEOMETRY","PICTURE PLOT","3D GRAPH","CONVERSION","AI CHAT",
-        "SYMBOL CHEATSHEET"
-    };
-    return names[selected_<22?selected_:0];
-}
-
-void RunMatrixController::handle(const InputEvent& event) {
-    if (event.action == InputAction::None) return;
-    if (screen_ == AppScreen::Home) {
-        constexpr unsigned Columns=4, GridCount=20;
-        if(selected_>=GridCount){
-            switch(event.action){
-            case InputAction::Left: case InputAction::Right: selected_=selected_==20?21:20; return;
-            case InputAction::Up: selected_=selected_==20?16:17; return;
-            case InputAction::Down: return;
-            case InputAction::Fraction: selected_=0; screen_=AppScreen::RunMatrix; break;
-            case InputAction::Evaluate:
-                if(selected_==21){screen_=AppScreen::Cheatsheet;cheatsheetPage_=0;cheatsheetSelection_=0;message_.clear();}
-                else {screen_=AppScreen::Unavailable;message_="AI chat requires network/API configuration";}
-                return;
-            default:return;
-            }
+    ws.apply();
+    auto tree = parseExpression(expr);
+    const EvalContext ctx = ws.evalContext();
+    out.value = evaluateValue(*tree, ctx);
+    // Pol / Rec at the top level produce a pair, like the fx-CG50.
+    if (tree->kind == ast::Kind::Call && (tree->text == "pol" || tree->text == "rec") && tree->children.size() == 2) {
+        const double a = evaluateReal(*tree->children[0], ctx), b = evaluateReal(*tree->children[1], ctx);
+        const DisplayFormat f = ws.settings.display;
+        if (tree->text == "pol") {
+            const auto p = rectToPolar(a, b);
+            out.pairText = "r=" + formatReal(p.first, f) + "  \xCE\xB8=" + formatReal(p.second, f);
         } else {
-            const unsigned row=selected_/Columns, col=selected_%Columns;
-            switch(event.action){
-            case InputAction::Left: selected_=row*Columns+(col+Columns-1)%Columns; return;
-            case InputAction::Right: selected_=row*Columns+(col+1)%Columns; return;
-            case InputAction::Up:
-                if(row==0) selected_=16+col;
-                else selected_=(row-1)*Columns+col;
-                return;
-            case InputAction::Down:
-                if(row==4) selected_=(col==0?20:21);
-                else selected_=(row+1)*Columns+col;
-                return;
-            case InputAction::Fraction: selected_=0; screen_=AppScreen::RunMatrix; break;
-            case InputAction::Evaluate:
-                if(selected_==0){screen_=AppScreen::RunMatrix;editor_.clear();expression_.clear();result_.clear();message_.clear();}
-                else if(selected_==4){screen_=AppScreen::Graph;message_.clear();}
-                else {screen_=AppScreen::Unavailable;message_="Application is not implemented yet";}
-                return;
-            default:return;
-            }
+            const auto p = polarToRect(a, b);
+            out.pairText = "x=" + formatReal(p.first, f) + "  y=" + formatReal(p.second, f);
         }
-        if(screen_==AppScreen::RunMatrix){editor_.clear();expression_.clear();result_.clear();message_.clear();}
-        return;
     }
-    if(event.action==InputAction::Escape){screen_=AppScreen::Home;return;}
-    if(screen_==AppScreen::Unavailable){if(event.action==InputAction::Evaluate||event.action==InputAction::Clear)screen_=AppScreen::Home;return;}
-    if(screen_==AppScreen::Cheatsheet){
-        const unsigned count=static_cast<unsigned>(help::PageCount);
-        const unsigned entries=help::pages[cheatsheetPage_].count;
-        switch(event.action){
-        case InputAction::Left: cheatsheetPage_=(cheatsheetPage_+count-1)%count;cheatsheetSelection_=0;break;
-        case InputAction::Right: cheatsheetPage_=(cheatsheetPage_+1)%count;cheatsheetSelection_=0;break;
-        case InputAction::Up: if(entries) cheatsheetSelection_=(cheatsheetSelection_+entries-1)%entries;break;
-        case InputAction::Down: if(entries) cheatsheetSelection_=(cheatsheetSelection_+1)%entries;break;
-        case InputAction::Clear: cheatsheetSelection_=0;break;
-        default: break;
-        }
-        return;
+    if (out.storedTo) {
+        if (out.value.imag() != 0) throw MathError("Argument ERROR: le variabili A-Z sono reali");
+        ws.memory.store(out.storedTo, out.value.real());
     }
-    if(screen_==AppScreen::Graph){
-        switch(event.action){
-        case InputAction::Left: graphView_.cursorX=graphView_.cursorX>12?graphView_.cursorX-4:12;graphView_.trace=true;break;
-        case InputAction::Right: graphView_.cursorX=graphView_.cursorX<308?graphView_.cursorX+4:308;graphView_.trace=true;break;
-        case InputAction::Up: GraphRenderer::zoom(graphView_,0.8);break;
-        case InputAction::Down: GraphRenderer::zoom(graphView_,1.25);break;
-        case InputAction::Clear: graphView_=GraphView{};break;
-        default:break;
-        }
-        return;
-    }
+    ws.memory.setAnswer(out.value.real(), out.value.imag());
+    HistoryEntry h;
+    h.expression = raw;
+    h.value = out.value;
+    if (!out.pairText.empty()) h.error = std::string("=") + out.pairText;   // '=' prefix: informative text, not an error
+    ws.addHistory(std::move(h));
+    return out;
+}
 
-    editor_.clearError();
-    if (event.action != InputAction::Evaluate) message_.clear();
-    try {
-    switch (event.action) {
-    case InputAction::Escape: screen_ = AppScreen::Home; break;
-    case InputAction::Character: editor_.insert(event.character); result_.clear(); message_.clear(); break;
-    case InputAction::Left: editor_.handle({NaturalKey::Left, 0}); break;
-    case InputAction::Right: editor_.handle({NaturalKey::Right, 0}); break;
-    case InputAction::Up: editor_.handle({NaturalKey::Up, 0}); break;
-    case InputAction::Down: editor_.handle({NaturalKey::Down, 0}); break;
-    case InputAction::Backspace: editor_.handle({NaturalKey::Backspace, 0}); result_.clear(); break;
-    case InputAction::Delete: editor_.handle({NaturalKey::Delete, 0}); result_.clear(); break;
-    case InputAction::Fraction: editor_.insertFraction(); result_.clear(); break;
-    case InputAction::Radical: editor_.insertRadical(); result_.clear(); break;
-    case InputAction::Power: editor_.insertPower(); result_.clear(); break;
-    case InputAction::Subscript: editor_.insertSubscript(); result_.clear(); break;
-    case InputAction::Group: editor_.insertGroup(); result_.clear(); break;
-    case InputAction::Evaluate: evaluate(); break;
-    case InputAction::Clear: editor_.clear(); expression_.clear(); result_.clear(); message_.clear(); break;
-    case InputAction::None: break;
+bool showsAsFraction(const HistoryEntry& e, const Settings& s, long long& num, long long& den) {
+    if (e.view != ViewAuto || !s.fractionResults || e.value.imag() != 0 || !e.error.empty()) return false;
+    if (e.expression.find('.') != std::string::npos) return false;
+    const double v = e.value.real();
+    if (v == std::floor(v)) return false;
+    return exactFraction(v, num, den, 9999) && den > 1;
+}
+
+std::string resultText(const HistoryEntry& e, const Settings& s) {
+    if (!e.error.empty() && e.error[0] == '=') return e.error.substr(1);
+    if (!e.error.empty()) return e.error;
+    long long n = 0, d = 0;
+    if (showsAsFraction(e, s, n, d)) return std::to_string(n) + "/" + std::to_string(d);
+    const double v = e.value.real();
+    if (e.view >= ViewHex && e.view <= ViewOct && e.value.imag() == 0) {
+        if (v != std::floor(v) || std::abs(v) > 9.0e15) return "Math ERROR: Base-N richiede un intero";
+        const unsigned base = e.view == ViewHex ? 16 : e.view == ViewBin ? 2 : 8;
+        const long long iv = static_cast<long long>(v);
+        const std::string digits = toBase(static_cast<std::uint64_t>(iv < 0 ? -iv : iv), base);
+        const char* prefix = e.view == ViewHex ? "0x" : e.view == ViewBin ? "0b" : "0o";
+        return (iv < 0 ? "-" : "") + std::string(prefix) + digits;
     }
-    } catch (const std::exception& error) { message_ = error.what(); result_.clear(); }
-    if (!editor_.error().empty()) message_ = editor_.error();
+    if (e.view == ViewDms && e.value.imag() == 0) {
+        const auto sx = decimalToSexagesimal(v);
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "%d\xC2\xB0%d'%s\"", sx.degrees, sx.minutes, formatReal(std::round(sx.seconds * 1e6) / 1e6, s.display).c_str());
+        return (v < 0 && sx.degrees == 0 ? "-" : "") + std::string(buf);
+    }
+    return formatValue(e.value, s.complex, s.display);
 }
+
+ast::NodePtr resultTree(const HistoryEntry& e, const Settings& s) {
+    auto root = ast::make(ast::Kind::Row);
+    long long n = 0, d = 0;
+    if (showsAsFraction(e, s, n, d)) {
+        if (n < 0) { root->children.push_back(tok("-")); n = -n; }
+        auto f = ast::make(ast::Kind::Fraction);
+        f->children = {rowOf(std::to_string(n)), rowOf(std::to_string(d))};
+        root->children.push_back(f);
+        return root;
+    }
+    if (e.error.empty() && e.value.imag() == 0 && e.view <= ViewDecimal) {
+        const FormattedNumber fnum = formatNumber(e.value.real(), s.display);
+        for (char c : fnum.mantissa) root->children.push_back(tok(std::string(1, c)));
+        if (fnum.scientific) {
+            root->children.push_back(tok("*"));
+            auto p = ast::make(ast::Kind::Power);
+            char exp[16]; std::snprintf(exp, sizeof(exp), "%d", fnum.exponent);
+            p->children = {rowOf("10"), rowOf(exp)};
+            root->children.push_back(p);
+        }
+        return root;
+    }
+    // Complex, base-N, DMS and pair results are shown as plain text tokens.
+    const std::string t = resultText(e, s);
+    std::size_t i = 0;
+    while (i < t.size()) {
+        const unsigned char c = static_cast<unsigned char>(t[i]);
+        const std::size_t len = c < 0x80 ? 1 : (c & 0xE0) == 0xC0 ? 2 : (c & 0xF0) == 0xE0 ? 3 : 4;
+        root->children.push_back(tok(t.substr(i, len)));
+        i += len;
+    }
+    return root;
 }
+} // namespace fx
