@@ -1,0 +1,53 @@
+
+Funzioni di base:
+
+• Unità angolo, conversione unità angolo (Deg, Rad, Gra)
+• Funzioni trigonometriche e trigonometriche inverse
+• Funzioni iperboliche e iperboliche inverse
+• Funzioni esponenziali, funzioni logaritmiche
+• Funzioni di potenza (radice quadrata, radice cubica, quadrato, potenza, radice radicale)
+• Conversione di coordinate (Pol, Rec)
+• Analisi combinatoria/permutazione (nCr, nPr)
+• Analisi fattoriale, inversa, numeri casuali, campionamento casuale di una lista esistente, frazioni:
+• Operazioni logiche
+• Conversione ↔ decimale sessagesimale
+• Calcoli della matrice
+• Calcoli vettoriali
+• Calcoli con numeri complessi
+• Calcoli su base n
+• Calcoli dei dati degli elenchi
+• Arrotondamento
+• Formato di visualizzazione
+• Conversione (software preinstallato)
+• Calcoli dei simboli tecnici
+• Notazione tecnica
+Grafici:
+
+• Grafico 3D (software preinstallato)
+• Grafici a coordinate rettangolari, grafici a coordinate polari
+• Grafico di integrazione
+• Grafici delle funzioni parametriche e delle disuguaglianze
+• Traccia, Zoom (zoom a schermo intero, zoom avanti, zoom indietro, zoom automatico)
+• Tabella e grafico
+• Doppio grafico (tabella e grafico, due grafici)
+• Schizzo (linea tangente, linea normale, funzione inversa)
+• Risoluzione radice, minimo, massimo, intersezione, integrazione: miglioramento del calcolo integrale (calcolo integrale in tempo reale), nuova funzione di calcolo integrale (integrali misti)
+• Grafico dinamico
+• Grafico a sezione conica
+• Grafico ricorsivo
+• Picture Plot (software preinstallato)
+Statistiche:
+
+• Analisi statistica a una e a due variabili basata su elenchi
+• Calcoli di regressione statistica
+• Grafico statistico (grafico a dispersione, a linee xy, grafico a probabilità normale, istogramma, grafico a caselle)
+• Grafici di regressione statistica (lineari, med-med, quadratici, cubici, quartici, logaritmici, esponenziali, di potenza, sinusoidali, di regressione logistica)
+• Calcoli statistici avanzati: test (test Z, test t, test χ², test F, ANOVA), intervalli (intervallo Z, intervallo t), distribuzioni
+• Grafico a torta
+• Grafico a barre
+
+Ai:
+
+utilizzo chiavi api
+
+applicazione con claude e chat gpt che mi permetta di chattare con le ai 
