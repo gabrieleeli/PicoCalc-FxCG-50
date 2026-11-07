@@ -34,6 +34,8 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/apps/system_app.cpp
   ${FXAI_ROOT}/src/apps/memory_app.cpp
   ${FXAI_ROOT}/src/apps/conversion_app.cpp
+  ${FXAI_ROOT}/src/apps/ai_chat_app.cpp
+  ${FXAI_ROOT}/src/ai_protocol.cpp
 )
 set(FXAI_INCLUDE_DIR ${FXAI_ROOT}/include)
 file(READ ${FXAI_ROOT}/VERSION FXAI_VERSION_RAW)

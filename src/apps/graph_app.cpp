@@ -421,7 +421,7 @@ void GraphApp::drawPlot(Context& ctx, gfx::Canvas& c) {
         const auto& s = solutions_[static_cast<std::size_t>(solutionIndex_)];
         const int px = sx(s.first), py = sy(s.second);
         c.circle(px, py, 4, Error, false); c.circle(px, py, 3, Error, false);
-        char idx[32]; std::snprintf(idx, sizeof(idx), "  [%d/%d \xE2\x97\x80\xE2\x96\xB6]", solutionIndex_ + 1, static_cast<int>(solutions_.size()));
+        char idx[64]; std::snprintf(idx, sizeof(idx), "  [%d/%d \xE2\x97\x80\xE2\x96\xB6]", solutionIndex_ + 1, static_cast<int>(solutions_.size()));
         infoBox(solveLabel_ + " Y" + std::to_string(traceFn_ + 1) + (solutions_.size() > 1 ? idx : ""), "X=" + formatReal(s.first, df) + "  Y=" + formatReal(s.second, df));
     } else if (shadeIntegral_) {
         infoBox("\xE2\x88\xAB" "dx Y" + std::to_string(traceFn_ + 1) + "  [" + formatReal(intA_, df) + ", " + formatReal(intB_, df) + "]", "\xE2\x88\xAB" "dx=" + formatReal(intValue_, ctx.ws.settings.display));

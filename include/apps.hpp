@@ -229,4 +229,24 @@ private:
     std::string result_;
 };
 
+class AiChatApp final : public App {
+public:
+    AppId id() const override { return AppId::AiChat; }
+    void enter(Context& ctx) override;
+    void leave(Context& ctx) override;
+    void key(Context& ctx, const KeyEvent& ev) override;
+    void draw(Context& ctx, gfx::Canvas& c) override;
+    bool tick(Context& ctx) override;
+    bool busy() const noexcept { return sending_; }
+    const std::string& status() const noexcept { return status_; }
+private:
+    void send(Context& ctx);
+    LineEditor input_{800};
+    bool sending_{false};
+    bool statusError_{false};
+    std::string status_;
+    int scroll_{0};                    // lines scrolled up from the newest text
+    std::uint32_t lastDraw_{0};
+};
+
 } // namespace fx::app

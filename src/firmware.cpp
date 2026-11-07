@@ -16,6 +16,7 @@ struct Firmware::Apps {
     app::SystemApp system;
     app::MemoryApp memory;
     app::ConversionApp conversion;
+    app::AiChatApp aiChat;
 };
 
 namespace { constexpr std::uint32_t AutosaveDelayMs = 2500; }
@@ -25,7 +26,7 @@ Firmware::Firmware(app::Platform& platform, storage::FlashDevice& flash)
     manager_.setLauncher(apps_->launcher);
     manager_.setUnavailable(apps_->unavailable);
     app::App* list[] = {&apps_->runMatrix, &apps_->symbols, &apps_->equation, &apps_->statistics, &apps_->graph,
-                        &apps_->table, &apps_->system, &apps_->memory, &apps_->conversion};
+                        &apps_->table, &apps_->system, &apps_->memory, &apps_->conversion, &apps_->aiChat};
     for (app::App* a : list) {
         manager_.add(*a);
         apps_->launcher.setAvailability(static_cast<std::size_t>(a->id()), true);

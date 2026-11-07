@@ -56,7 +56,7 @@ void SystemApp::enter(Context& ctx) {
         text("Token relay", s.relayToken, true),
         choice("AI provider", {"Claude", "ChatGPT"}, s.aiProvider ? 1 : 0),
         text("AI modello", s.aiModel),
-        number("AI max token", s.aiMaxTokens),
+        number("AI max caratteri", s.aiMaxChars),
     };
     form_.selected = 0; info_ = false; confirmReset_ = false;
 }
@@ -71,12 +71,12 @@ void SystemApp::apply(Context& ctx) {
     const double lcd = form_.number(ctx, FLcd), kbd = form_.number(ctx, FKbd), port = form_.number(ctx, FPort), tokens = form_.number(ctx, FTokens);
     if (lcd < 0 || lcd > 255 || kbd < 0 || kbd > 255) throw MathError("Argument ERROR: retroilluminazione 0..255");
     if (port < 1 || port > 65535 || port != static_cast<int>(port)) throw MathError("Argument ERROR: porta 1..65535");
-    if (tokens < 16 || tokens > 4000) throw MathError("Argument ERROR: max token 16..4000");
+    if (tokens < 200 || tokens > 4000) throw MathError("Argument ERROR: AI max caratteri 200..4000");
     s.lcdBacklight = static_cast<std::uint8_t>(lcd); s.kbdBacklight = static_cast<std::uint8_t>(kbd);
     s.wifiSsid = f[FSsid].text; s.wifiPassword = f[FPass].text; s.relayHost = f[FHost].text;
     s.relayPort = static_cast<std::uint16_t>(port); s.relayPath = f[FPath].text.empty() ? "/v1/chat" : f[FPath].text;
     s.relayToken = f[FToken].text; s.aiProvider = static_cast<std::uint8_t>(f[FProvider].choice);
-    s.aiModel = f[FModel].text; s.aiMaxTokens = static_cast<std::uint16_t>(tokens);
+    s.aiModel = f[FModel].text; s.aiMaxChars = static_cast<std::uint16_t>(tokens);
     ctx.ws.apply();
     ctx.platform.setBacklight(s.lcdBacklight, s.kbdBacklight);
     ctx.markDirty();

@@ -74,7 +74,7 @@ std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws) {
     w.u8(static_cast<std::uint8_t>(s.angle)); w.u8(static_cast<std::uint8_t>(s.display.mode)); w.u8(s.display.digits);
     w.u8(static_cast<std::uint8_t>(s.complex)); w.u8(s.fractionResults ? 1 : 0); w.u8(s.lcdBacklight); w.u8(s.kbdBacklight);
     w.str(s.wifiSsid); w.str(s.wifiPassword); w.str(s.relayHost); w.u16(s.relayPort); w.str(s.relayPath); w.str(s.relayToken);
-    w.u8(s.aiProvider); w.str(s.aiModel); w.u16(s.aiMaxTokens);
+    w.u8(s.aiProvider); w.str(s.aiModel); w.u16(s.aiMaxChars);
     for (char v = 'A'; v <= 'Z'; ++v) w.f64(ws.memory.recall(v));
     w.f64(ws.memory.answer()); w.f64(ws.memory.previousAnswer());
     w.u16(static_cast<std::uint16_t>(ws.history.size()));
@@ -107,7 +107,7 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
     const auto cm = r.u8(); if (cm > 2) return false; s.complex = static_cast<ComplexMode>(cm);
     s.fractionResults = r.u8() != 0; s.lcdBacklight = r.u8(); s.kbdBacklight = r.u8();
     s.wifiSsid = r.str(); s.wifiPassword = r.str(); s.relayHost = r.str(); s.relayPort = r.u16(); s.relayPath = r.str(); s.relayToken = r.str();
-    s.aiProvider = r.u8(); s.aiModel = r.str(); s.aiMaxTokens = r.u16();
+    s.aiProvider = r.u8(); s.aiModel = r.str(); s.aiMaxChars = r.u16();
     for (char v = 'A'; v <= 'Z'; ++v) { const double d = r.f64(); if (d != 0) ws.memory.store(v, d); }
     const double ans = r.f64(), pre = r.f64();
     ws.memory.setAnswer(pre); ws.memory.setAnswer(ans);

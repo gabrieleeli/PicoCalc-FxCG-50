@@ -25,7 +25,7 @@ struct Settings {
     std::string relayToken;              // per-device token issued by the relay
     std::uint8_t aiProvider{0};          // 0 = Claude (Anthropic), 1 = ChatGPT (OpenAI)
     std::string aiModel;                 // empty = relay default
-    std::uint16_t aiMaxTokens{400};
+    std::uint16_t aiMaxChars{1200};           // reply length requested from the relay (200..4000)
 };
 
 struct HistoryEntry {

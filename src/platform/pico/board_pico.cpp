@@ -250,6 +250,7 @@ PicoFlash* flashDevice = nullptr;
 } // namespace
 
 fx::net::ChatTransport* picoChatTransport();   // net_pico.cpp
+void picoNetService();                          // net_pico.cpp: cyw43_arch_poll() once Wi-Fi is on
 
 void init() {
     stdio_init_all();
@@ -278,7 +279,7 @@ bool pollKey(std::uint16_t& raw) {
     raw = keyQueue[keyHead]; keyHead = (keyHead + 1) % KeyQueueSize; --keyCount;
     return true;
 }
-void service() { serviceKeyboard(); }
+void service() { serviceKeyboard(); picoNetService(); }
 void idle() { sleep_ms(2); }
 std::uint32_t millis() { return to_ms_since_boot(get_absolute_time()); }
 int batteryPercent() { return battery; }
