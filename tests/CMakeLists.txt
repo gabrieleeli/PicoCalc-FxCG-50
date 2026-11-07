@@ -15,13 +15,14 @@ endif()
 
 add_library(fxai_core STATIC ${FXAI_CORE_SOURCES})
 target_include_directories(fxai_core PUBLIC ${FXAI_INCLUDE_DIR})
+target_compile_definitions(fxai_core PUBLIC FXAI_VERSION_STRING="${FXAI_VERSION_STRING}")
 
 add_library(fxai_host_board STATIC ${FXAI_ROOT}/src/platform/host/board_host.cpp)
 target_link_libraries(fxai_host_board PUBLIC fxai_core)
 
 enable_testing()
 set(FXAI_TESTS
-  expression_test editor_test math_engine_test storage_test app_test
+  expression_test editor_test math_engine_test storage_test app_test apps_flow_test solvers_test statistics_test
   graphics_smoke font_smoke animation_smoke cheatsheet_smoke vpam_ast_smoke)
 foreach(t ${FXAI_TESTS})
   add_executable(${t} ${CMAKE_CURRENT_LIST_DIR}/${t}.cpp)

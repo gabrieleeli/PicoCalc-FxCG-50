@@ -35,6 +35,7 @@ target_include_directories(picocalc_fxai PRIVATE ${FXAI_INCLUDE_DIR})
 target_compile_options(picocalc_fxai PRIVATE -Wall -Wextra)
 target_compile_definitions(picocalc_fxai PRIVATE
   FXAI_VERSION="${FXAI_VERSION}"
+  FXAI_VERSION_STRING="${FXAI_VERSION}"
   FXAI_LCD_SPI_HZ=${FXAI_LCD_SPI_HZ}
   FXAI_LCD_RGB565=$<BOOL:${FXAI_LCD_RGB565}>
   FXAI_DISPLAY_CALIBRATION_SCREEN=$<BOOL:${FXAI_DISPLAY_CALIBRATION_SCREEN}>

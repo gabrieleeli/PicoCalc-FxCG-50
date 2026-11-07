@@ -78,7 +78,9 @@ int main() {
         // Store arrow and Ans.
         r.type("Ans*3"); r.key(pckey::Insert); r.type("B"); r.key(pckey::Enter);
         CHECK_NEAR(ws.memory.recall('B'), 1.0, 1e-12);
-        // Degrees by default: sin(30) = 1/2 shown as a fraction.
+        // Radians by default (fx-CG50); in Deg mode sin(30) = 1/2 is shown as a fraction.
+        CHECK(ws.settings.angle == AngleMode::Radians);
+        ws.settings.angle = AngleMode::Degrees;
         r.type("sin(30)"); r.key(pckey::Enter);
         CHECK_EQ_STR(resultText(ws.history.back(), ws.settings), "1/2");
         // Errors open the fx-CG50 error box and keep the input for correction.

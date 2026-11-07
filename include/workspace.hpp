@@ -11,7 +11,7 @@
 namespace fx {
 
 struct Settings {
-    AngleMode angle{AngleMode::Degrees};
+    AngleMode angle{AngleMode::Radians};      // fx-CG50 factory default
     DisplayFormat display{};
     ComplexMode complex{ComplexMode::Real};
     bool fractionResults{true};          // show exact fractions when the result is rational

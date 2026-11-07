@@ -9,6 +9,13 @@ struct Firmware::Apps {
     app::UnavailableApp unavailable;
     app::RunMatrixApp runMatrix;
     app::SymbolsApp symbols;
+    app::EquationApp equation;
+    app::StatisticsApp statistics;
+    app::GraphApp graph;
+    app::TableApp table;
+    app::SystemApp system;
+    app::MemoryApp memory;
+    app::ConversionApp conversion;
 };
 
 namespace { constexpr std::uint32_t AutosaveDelayMs = 2500; }
@@ -17,7 +24,8 @@ Firmware::Firmware(app::Platform& platform, storage::FlashDevice& flash)
     : platform_(platform), store_(flash), manager_(ws_, platform), apps_(std::make_unique<Apps>(manager_)) {
     manager_.setLauncher(apps_->launcher);
     manager_.setUnavailable(apps_->unavailable);
-    app::App* list[] = {&apps_->runMatrix, &apps_->symbols};
+    app::App* list[] = {&apps_->runMatrix, &apps_->symbols, &apps_->equation, &apps_->statistics, &apps_->graph,
+                        &apps_->table, &apps_->system, &apps_->memory, &apps_->conversion};
     for (app::App* a : list) {
         manager_.add(*a);
         apps_->launcher.setAvailability(static_cast<std::size_t>(a->id()), true);

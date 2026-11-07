@@ -20,9 +20,21 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/workspace.cpp
   ${FXAI_ROOT}/src/storage.cpp
   ${FXAI_ROOT}/src/run_matrix.cpp
+  ${FXAI_ROOT}/src/solvers.cpp
+  ${FXAI_ROOT}/src/statistics.cpp
   ${FXAI_ROOT}/src/app_manager.cpp
   ${FXAI_ROOT}/src/firmware.cpp
   ${FXAI_ROOT}/src/apps/launcher.cpp
   ${FXAI_ROOT}/src/apps/run_matrix_app.cpp
+  ${FXAI_ROOT}/src/apps/widgets.cpp
+  ${FXAI_ROOT}/src/apps/equation_app.cpp
+  ${FXAI_ROOT}/src/apps/statistics_app.cpp
+  ${FXAI_ROOT}/src/apps/graph_app.cpp
+  ${FXAI_ROOT}/src/apps/table_app.cpp
+  ${FXAI_ROOT}/src/apps/system_app.cpp
+  ${FXAI_ROOT}/src/apps/memory_app.cpp
+  ${FXAI_ROOT}/src/apps/conversion_app.cpp
 )
 set(FXAI_INCLUDE_DIR ${FXAI_ROOT}/include)
+file(READ ${FXAI_ROOT}/VERSION FXAI_VERSION_RAW)
+string(STRIP "${FXAI_VERSION_RAW}" FXAI_VERSION_STRING)
