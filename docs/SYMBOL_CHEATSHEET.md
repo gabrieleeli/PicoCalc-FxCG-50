@@ -13,10 +13,11 @@ in English.
 
 ## Contents
 
-Fifteen compact pages cover arithmetic, powers and roots, lowercase and
+Seventeen compact pages cover arithmetic, powers and roots, lowercase and
 uppercase Greek letters, mathematical constants (including `ln2` and `ln10`), physical constants (including `g0`), common
 functions, calculus, sets and logic, statistics, graphing, complex numbers,
-matrices, vectors, units, and general notation. All 24 Greek letters are listed
+matrices, vectors, units, general notation and (v1.7.0) comparisons, logic,
+Int÷/Rmdr, mixed fractions and repeating decimals. All 24 Greek letters are listed
 by name in both cases. The app uses short ASCII spellings because the current
 5x7 text font is intentionally small and has only a limited set of native
 math glyphs.

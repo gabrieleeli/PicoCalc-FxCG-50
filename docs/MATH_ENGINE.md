@@ -1,4 +1,4 @@
-# Motore matematico — v1.6.0
+# Motore matematico — v1.7.0
 
 Riferimenti storici: `archive/VPAM_SHARED_AST.md`, `archive/RUN_MATRIX_PHASE*.md` e
 `archive/math_engine_original.py` descrivono le versioni precedenti (vedi [README.md](README.md)).
@@ -13,15 +13,40 @@ Lexer → Parser                 ast::Node Binary/Unary/Call/Group/Token
    ▼
 evalNode<double>               modo Real
 evalNode<std::complex<double>> modi a+bi e r∠θ
+exactNode → exact::Value       forma esatta (Run-Matrix), sullo stesso AST
 ```
 
-Esiste **un solo** parser e **un solo** valutatore (templato sul tipo numerico):
+Esiste **un solo** parser e **un solo** valutatore numerico (templato sul tipo):
 Run-Matrix, Graph, Table, Equation, Statistics e i test usano lo stesso codice
 (`include/expression.hpp`). `CompiledExpression` analizza una volta e valuta molte
 volte (grafici, tabelle, solver).
 
+## Valutazione esatta (v1.7.0)
+
+`evaluateExact(ast, ctx, out, &decimalInput)` percorre **lo stesso AST** con
+`exact::Value` (`include/exact.hpp`): razionali a 64 bit con controllo di
+overflow, radicali con al più due termini `a√b/c ± d√e/f` (radicando senza
+quadrati, ≤ 10⁶) e multipli razionali di π. Ogni passo restituisce il valore
+esatto oppure "nessuna forma esatta": il modulo **non approssima mai**.
+
+| Supportato | Non esatto (mai) |
+|---|---|
+| + − × ÷, potenze intere, potenze razionali con radici perfette, √ (√12 = 2√3), ∛, ˣ√, denominatori razionalizzati (1/(1+√2) = √2−1) | funzioni trascendenti in punti generici (sin 1, ln 2, e) |
+| sin/cos/tan ai multipli di 30° e 45° (Deg, Rad come multipli di π, Gra); asin/acos/atan dei valori notevoli | ∫, d/dx, d²/dx², SOLVE (metodi numerici) |
+| log, log₂, logₐb di potenze esatte; ln 1; exp(0) | numeri casuali |
+| \|x\|, Int, Intg, Frac, Round/RndFix, sign, n! (≤ 20), nCr, nPr, GCD, LCM, MOD, Int÷, Rmdr | variabili che contengono valori approssimati |
+| relazioni e operatori logici; Σ e Π (≤ 10 000 termini) con termini esatti; letterali decimali e periodici | numeri complessi non reali |
+
+Memoria: Ans, PreAns e A–Z conservano la forma esatta (`ExactSlot`) e se il
+valore viene da un input decimale. Run-Matrix usa la forma esatta come valore
+(il suo valore in virgola mobile sostituisce quello arrotondato), con le regole
+di visualizzazione descritte in [RUN_MATRIX.md](RUN_MATRIX.md). Se l'esatto
+fallisce (anche per budget di stack) resta il valore numerico: nessun errore in
+più rispetto alla valutazione numerica.
+
 ## Sintassi e priorità (come nel manuale fx-CG50)
 
+0. (più bassa) `Or`, `Xor` < `And` < relazioni `= ≠ < > ≤ ≥` (risultato 1/0);
 1. parentesi, funzioni con parentesi; le parentesi finali si possono omettere;
 2. postfissi: `!`, `°` (gradi);
 3. potenza `^`, associativa a destra, esponente con segno (`2^-2`);
@@ -30,12 +55,16 @@ volte (grafici, tabelle, solver).
    (`6/2(1+2) = 1`, `1/2x = 1/(2x)`);
 6. funzioni prefisse senza parentesi prendono il prodotto implicito che segue
    (`sin 2x = sin(2x)`), fermandosi alla funzione successiva (`sin x cos x`);
-7. `*`, `/`, `%` (modulo);
-8. `+`, `-`.
+7. `*`, `/`, `%` (modulo), `Int÷` (quoziente intero), `Rmdr` (resto);
+8. `+`, `-`;
+9. relazioni, poi `And`, poi `Or`/`Xor` (vedi punto 0).
 
 Le lettere digitate vengono unite in parole note (`sinx`, `2pix`); le variabili sono
 le lettere A–Z, `Ans`, `PreAns`, `θ` e le variabili legate dalle app (x, y, …).
-Letterali `0x`, `0b`, `0o` per Base-N.
+Letterali `0x`, `0b`, `0o` per Base-N; decimali periodici `0.1_6` = 0.1666…
+(nell'editor: modello "periodo" con la linea sopra le cifre). Nomi condivisi
+`xmin … tptch`, `tblstart/tblend/tblpitch` risolti dal workspace tramite
+`EvalContext::names` (`NameResolver`): fuori da Run-Matrix danno Math ERROR.
 
 ## Funzioni
 
@@ -50,6 +79,10 @@ Letterali `0x`, `0b`, `0o` per Base-N.
 | Varie | min max hypot atan2 percent deg rad grad dms(d,m,s) pol(x,y) rec(r,θ) |
 | Casuali | rand() ran randint(a,b) |
 | Complessi | re im arg conj real imag, unità `i` |
+| Frazioni | `mixed(w,n,d)` (modello a b/c: −2 1/3 = −(2+1/3)), `frac(a,b)` |
+| Logica e confronti | `not`, operatori `and or xor`, `= ≠ < > <= >=` |
+| Interi e arrotondamenti (v1.7.0) | `modexp(n,p,m)` (MOD_Exp), `rndfix(x,n)` (RndFix), operatori `Int÷`, `Rmdr` |
+| Casuali (v1.7.0) | `rannorm(σ,μ)` (RanNorm#), `ranbin(n,p)` (RanBin#) |
 | Calcolo (valutazione pigra) | integral(f,a,b) derivative(f,x₀) derivative2(f,x₀) sum(f,a,b) prod(f,a,b) solve(f,x₀) |
 | Costanti | pi tau phi eulergamma sqrt2 ln2 ln10 e; fisiche: speedoflight/physc, physg, physh, na, kb, qe, g0 (anche con nomi estesi) |
 
@@ -70,9 +103,18 @@ Letterali `0x`, `0b`, `0o` per Base-N.
 ## Formati di visualizzazione
 
 `number_format.hpp`: Norm1/Norm2 (10 cifre significative, soglie esponenziali
-come la CG50), Fix 0–9 decimali, Sci 1–10 cifre, Eng; frazioni esatte (frazioni continue,
-denominatore ≤ 9999) per S⇔D; Base-N Hex/Bin/Oct; sessagesimale; complessi in
-forma `a+bi` o `r∠θ`. Gli zeri con segno vengono normalizzati (`√-4 = 2i`, non `-2i`).
+come la CG50), Fix 0–9 decimali, Sci 1–10 cifre, Eng; Base-N Hex/Bin/Oct;
+sessagesimale; complessi in forma `a+bi` o `r∠θ`. Gli zeri con segno vengono
+normalizzati (`√-4 = 2i`, non `-2i`).
+
+Arrotondamento (v1.7.0): il valore viene prima ridotto alla mantissa decimale a
+15 cifre, poi arrotondato per eccesso a metà alle cifre mostrate, come la
+calcolatrice (`0.125` in Fix2 → `0.13`, `2.675` → `2.68`; prima `printf`
+arrotondava il valore binario a pari: `0.12`, `2.67`).
+
+Frazioni, radicali e π per S⇔D vengono dalla **valutazione esatta** (sopra),
+non più dalla ricerca di una frazione vicina al valore in virgola mobile.
+`exactFraction()` (frazioni continue) resta solo come API di compatibilità.
 
 ## Errori
 
@@ -101,6 +143,14 @@ Misure con `-fstack-usage` sul target ARM: `evalNode` 32–80 byte,
 `evalChain` 104–128 byte, `callFunction` 80–128 byte; le funzioni con frame
 grandi (`applyFunction`, `ridders` ≈1,2 KB) non restano attive durante la ricorsione.
 
+Valutatore esatto (v1.7.0, `arm-none-eabi-g++ -O3 -mcpu=cortex-m33`): `exactNode`
+80 byte, `exactChain` 152, `exactToken` 184, `exactCall` 216, `exactSum` 288;
+`exactApply` (1136 byte) e `exactBinary` (224) sono foglie non attive durante la
+ricorsione. Le catene sono iterative come nel valutatore numerico e il budget
+di stack viene controllato: oltre il budget l'esatto rinuncia senza errori.
+Nucleo Run-Matrix: `evaluateEntry` 552 byte, `recalculateHistory` 432,
+`editHistoryEntry` 96 (le copie di sicurezza di memoria e cronologia sono sull'heap).
+
 ## Moduli
 
 | File | Contenuto |
@@ -113,10 +163,12 @@ grandi (`applyFunction`, `ridders` ≈1,2 KB) non restano attive durante la rico
 | `math_engine.hpp/.cpp` | matrici, vettori, frazioni, basi, sessagesimale, angolo |
 | `solvers.hpp/.cpp` | polinomi, disequazioni, solver numerico |
 | `statistics.hpp/.cpp` | statistiche, regressioni, distribuzioni, test |
-| `run_matrix.hpp/.cpp` | esecuzione di una riga di Run-Matrix (→, Pol/Rec, S⇔D) |
+| `exact.hpp/.cpp` | razionali, radicali, multipli di π, letterali periodici, regole di visualizzazione |
+| `run_matrix.hpp/.cpp` | riga di Run-Matrix (→, →A~F, Pol/Rec), cronologia con ricalcolo, viste dei risultati |
 
 ## Non ancora disponibile
 
-Matrici e vettori come valori del parser (esistono come API C++), derivate e
-integrali simbolici, limiti, operatori logici Base-N nel parser, regressioni
-sinusoidale e logistica. Vedi [FEATURE_MATRIX.md](FEATURE_MATRIX.md).
+Matrici, vettori e liste come valori del parser (esistono come API C++),
+derivate e integrali simbolici, limiti, operatori bit a bit Base-N (and/or/xor
+come operazioni sui bit nella modalità Base-N intera), simboli ingegneristici,
+regressioni sinusoidale e logistica. Vedi [FEATURE_MATRIX.md](FEATURE_MATRIX.md).

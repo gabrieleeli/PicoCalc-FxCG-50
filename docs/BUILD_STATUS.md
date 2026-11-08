@@ -1,7 +1,31 @@
-# Build status — v1.6.0
+# Build status — v1.7.0
 
 Le note storiche delle versioni v0.3–v1.5.4 restano nella cronologia Git e in
-[CHANGELOG.md](CHANGELOG.md).
+[CHANGELOG.md](CHANGELOG.md). Le sezioni dopo "v1.7.0" descrivono l'audit e la
+build della v1.6.0 e restano valide come base.
+
+## v1.7.0 (branch `version/v1.7.0`)
+
+Stesso ambiente della v1.6.0 (sotto), ricreato da zero nel container: toolchain
+`gcc-arm-none-eabi` 13.2.rel1, Pico SDK 2.2.0 con i submodule tinyusb,
+cyw43-driver, lwip, mbedtls.
+
+| Voce | Valore |
+|---|---|
+| Output | `build/pico2w/picocalc_fxai.uf2` (2 315 776 byte, build pulita) |
+| Immagine flash | ≈1130 KB (`__flash_binary_end` = `0x1011A978`) su 4096 KB; area dati utente (ultimi 128 KB) libera |
+| RAM statica | ≈283 KB fino a `__end__` = `0x200469E4` (di cui 200 KB framebuffer) |
+| Heap | ≈197 KB (`0x200469E4` → `0x20078000`) |
+| Stack core 0 | 32 KB (`0x20078000`–`0x20080000`) |
+| Warning | nessuno nei sorgenti del progetto (build pulita; solo i due avvisi CMake dell'SDK su picotool e btstack) |
+| Test host | 17 suite, 5347 controlli, tutti superati; anche con ASan + UBSan |
+| Relay AI | 15 test Python superati |
+| Stack dei nuovi frame | misurato con `-fstack-usage` (vedi [MATH_ENGINE.md](MATH_ENGINE.md)) |
+| Hardware | **non provato** sulla PicoCalc |
+
+Crescita rispetto alla v1.6.0: +111 KB di flash (aritmetica esatta, valutatore
+esatto, registro e modelli, nuova interfaccia di Run-Matrix), +2,6 KB di RAM
+statica (forme esatte di A–Z/Ans nel workspace).
 
 ## Ambiente di build verificato
 

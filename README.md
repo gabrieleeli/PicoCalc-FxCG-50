@@ -8,14 +8,14 @@ calcolatrice grafica Casio fx-CG50, con chat AI (Claude e ChatGPT) tramite Wi-Fi
 > ogni modalità è reimplementata in modo indipendente. La documentazione Casio è
 > usata solo come riferimento di comportamento.
 
-![Menu principale](docs/screenshots/01_main_menu.png) ![Run-Matrix](docs/screenshots/02_run_matrix.png) ![Graph](docs/screenshots/07_graph_integral.png)
+![Menu principale](docs/screenshots/01_main_menu.png) ![Run-Matrix](docs/screenshots/12_run_matrix_exact.png) ![Graph](docs/screenshots/07_graph_integral.png)
 
-## Stato (v1.6.0)
+## Stato (v1.7.0)
 
 | | Stato |
 |---|---|
 | Compilazione UF2 per RP2350 (Pico SDK 2.2.0, `pico2_w`) | ✅ compila, nessun warning nei sorgenti del progetto |
-| Test automatici host | ✅ 14 suite, 4495 controlli, anche con AddressSanitizer/UBSan |
+| Test automatici host | ✅ 17 suite, 5347 controlli (incluso il test di architettura), tutti superati anche con AddressSanitizer/UBSan |
 | Test relay AI | ✅ 15 test (SDK ufficiali contro API simulate, TLS reale in loopback) |
 | **Prova su PicoCalc fisica** | ❌ **non ancora eseguita** — display, tastiera, flash, Wi-Fi e TLS sono implementati secondo i driver ufficiali ClockworkPi ma vanno collaudati |
 
@@ -26,7 +26,7 @@ Dettagli: [docs/BUILD_STATUS.md](docs/BUILD_STATUS.md) · stato per funzione:
 
 | Tasto | Modalità | Contenuto |
 |---|---|---|
-| 1 | **Run-Matrix** | input naturale 2D (frazioni, radici, potenze, ∫, d/dx, Σ, Π, \|x\|, logₐb), storia richiamabile, Ans/PreAns, variabili A–Z con `→`, S⇔D, Base-N, DMS, numeri complessi, Pol/Rec, catalogo OPTN, VARS, copia/incolla, undo/redo |
+| 1 | **Run-Matrix** | input naturale 2D (frazioni, frazioni miste, radici, potenze, ∫, d/dx, Σ, Π, \|x\|, logₐb, periodo); **risultati esatti** (frazioni, √, π) con S⇔D che non altera il valore, Frac Result d/c ↔ ab/c, sviluppo periodico; cronologia modificabile sul posto con ricalcolo; Ans/PreAns e A–Z che conservano la forma esatta, `→A~F`; relazioni e logica, Int÷/Rmdr; VARS (A–Z, V-WIN, TABLE); Base-N, DMS, complessi, Pol/Rec, copia/incolla, undo/redo — vedi [docs/RUN_MATRIX.md](docs/RUN_MATRIX.md) |
 | 2 | **Statistics** | liste 1–6, 1-Var/2-Var, 9 regressioni (ax+b, Med-Med, X², X³, X⁴, Log, Exp, ab^x, Power) con grafico e copia in GRAPH, scatter/xyLine/istogramma/box plot, distribuzioni (normale, binomiale, Poisson, t, χ², F), test Z/t e intervalli |
 | 5 | **Graph** | Y1–Y6: Y=, r= (polari), Y>, Y<, Y≥, Y≤ (con campitura), trace, zoom, V-Window, tangente/normale, G-Solve (radici, max, min, intercetta, intersezioni, ∫dx con area) |
 | 7 | **Table** | tabella dei valori con Start/End/Step |
@@ -41,6 +41,9 @@ Le altre icone del menu (eActivity, Spreadsheet, Dyna Graph, Recursion, Conic
 Graphs, Program, Financial, E-CON4, Link, Geometry, Picture Plot, 3D Graph,
 Python) sono **mostrate in grigio con un segno rosso** e aprono una schermata che
 spiega cosa manca: non sono presentate come funzionanti.
+Il progetto di ogni modalità (responsabilità, servizi condivisi, modello dati,
+dipendenze, test) è in [docs/APPLICATIONS_ARCHITECTURE.md](docs/APPLICATIONS_ARCHITECTURE.md);
+la separazione tra le applicazioni è verificata da `tests/architecture_test.cpp`.
 
 ## Tastiera PicoCalc → fx-CG50
 

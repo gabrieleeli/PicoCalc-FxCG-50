@@ -1,11 +1,13 @@
 # Documentazione
 
-## Documenti attuali (v1.6.0)
+## Documenti attuali (v1.7.0)
 
 | Documento | Contenuto |
 |---|---|
 | [BUILD_STATUS.md](BUILD_STATUS.md) | ambiente di build, audit della v1.5.4, risultati di build e test, cosa non è verificato |
-| [FEATURE_MATRIX.md](FEATURE_MATRIX.md) | stato di ogni funzione (NOT STARTED … TESTED ON HARDWARE) |
+| [FEATURE_MATRIX.md](FEATURE_MATRIX.md) | stato di ogni funzione (NOT STARTED … TESTED ON SIMULATOR … TESTED ON HARDWARE) |
+| [APPLICATIONS_ARCHITECTURE.md](APPLICATIONS_ARCHITECTURE.md) | registro delle modalità, servizi condivisi, dati scambiati, progetto delle modalità future, test di architettura |
+| [RUN_MATRIX.md](RUN_MATRIX.md) | Run-Matrix: tasti, cronologia, risultati esatti, S⇔D, frazioni miste, periodo, variabili |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | strati, ciclo principale, workspace, memoria, cartelle |
 | [HARDWARE.md](HARDWARE.md) | PicoCalc + Pico 2 W: display, tastiera, flash, collaudo |
 | [GRAPHICS_ENGINE.md](GRAPHICS_ENGINE.md) | canvas, aggiornamento parziale, font, renderer matematico, UI kit |
@@ -27,6 +29,7 @@ Lo sviluppo nuovo avviene in branch separati.
 |---|---|
 | `version/v1.5.4` | codice originale caricato (non compilava per RP2350) |
 | `version/v1.6.0` | prima build RP2350, modalità complete della v1.6.0, relay AI |
+| `version/v1.7.0` | Sessione 1: audit, architettura delle applicazioni, Run-Matrix con risultati esatti (in sviluppo fino all'approvazione) |
 
 ## Documenti storici (versioni ≤ 1.5.4)
 

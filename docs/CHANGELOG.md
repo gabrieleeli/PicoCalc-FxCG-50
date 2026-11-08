@@ -1,5 +1,49 @@
 # Changelog
 
+## v1.7.0 — 2026-11-08 — Sessione 1: audit, architettura delle applicazioni, Run-Matrix
+
+Branch `version/v1.7.0` (partito da `claude/peaceful-euler-auyrm5` = v1.6.0 + documentazione).
+Non ancora provata sulla PicoCalc fisica.
+
+### Architettura
+- Registro delle 23 modalità (`app_registry.hpp/.cpp`): stato (Available / Planned /
+  External), responsabilità, servizi condivisi, sezioni del workspace, collegamenti
+  consentiti, file sorgente. Usato da launcher, AppManager e test.
+- Modelli dati iniziali delle modalità future (`app_models.hpp/.cpp`): Recursion,
+  Dyna Graph, Conic Graphs (con classificazione), 3D Graph, Financial, Spreadsheet
+  (riferimenti di cella), file di Program/Python/eActivity, Geometry, Picture Plot.
+- `SymbolsApp` in un modulo proprio; `docs/APPLICATIONS_ARCHITECTURE.md`.
+- `architecture_test`: verifica registro ↔ sorgenti ↔ firmware, separazione delle
+  app (Run-Matrix solo calcoli e risultati), stratificazione motore/UI, assenza di
+  cicli di include.
+
+### Motore matematico
+- Aritmetica esatta (`exact.hpp/.cpp`): razionali, radicali con due termini,
+  multipli di π; valutatore esatto sullo stesso AST del parser.
+- Operatori relazionali e logici, Int÷, Rmdr, MOD_Exp, RndFix, RanNorm#, RanBin#,
+  frazioni miste, decimali periodici, variabili condivise (Xmin…, TblStart…).
+- Arrotondamento di Fix/Sci come la calcolatrice (0.125 → 0.13 in Fix2).
+
+### Run-Matrix
+- Risultati esatti (frazioni, √, π) con le regole di visualizzazione della CG50;
+  S⇔D che non altera il valore; Ans e A–Z conservano la forma esatta.
+- Frac Result d/c / ab/c (System) e conversione per singolo risultato; modello di
+  frazione mista; vista e input dei numeri periodici; radice con indice modificabile.
+- Cronologia: modifica sul posto con ricalcolo delle righe successive, riuso di
+  espressione o risultato, eliminazione; →A~F; VARS per categorie (A–Z, Ans,
+  V-WIN, TABLE); OPTN con LOGIC, RELAZIONI e RISULTATO; "≈" sui risultati numerici;
+  barra di scorrimento della cronologia; indicatore d/c / ab/c nella barra di stato.
+
+### Persistenza
+- Formato del workspace versione 2 (valori esatti, Frac Result, Ans complesso);
+  i record v1.6.0 (versione 1) vengono ancora letti.
+
+### Test
+- Nuove suite `exact_test`, `run_matrix_test`, `architecture_test`; 17 suite in
+  totale, tutte superate anche con ASan/UBSan. Screenshot 12–19 dal simulatore.
+- UF2 compilato senza warning nei sorgenti del progetto; stack dei nuovi frame
+  misurato con `-fstack-usage` sul target.
+
 ## v1.6.0 — 2026-11-08 — prima build RP2350 per PicoCalc + Pico 2 W
 
 Prima versione che **compila per l'RP2350** (UF2 verificato con `picotool`). Non

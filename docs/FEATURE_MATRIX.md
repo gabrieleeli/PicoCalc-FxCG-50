@@ -1,10 +1,19 @@
-# Feature matrix — v1.6.0
+# Feature matrix — v1.7.0
 
-Stati: **NOT STARTED** · **IN PROGRESS** · **IMPLEMENTED** (codice presente, senza
-test automatici dedicati) · **TESTED ON HOST** (test automatici su PC superati) ·
-**TESTED ON HARDWARE** · **COMPLETE**.
+Stati (in italiano tra parentesi):
 
-Nessuna voce è ancora TESTED ON HARDWARE: la PicoCalc fisica non è stata usata.
+| Stato | Significato |
+|---|---|
+| **NOT STARTED** (mancante) | nessun codice |
+| **IN PROGRESS** (in sviluppo) | codice parziale o solo modello dati |
+| **IMPLEMENTED** (implementata) | codice presente, senza test automatici dedicati |
+| **TESTED ON HOST** (testata su host) | test automatici su PC superati (stesso sorgente del firmware) |
+| **TESTED ON SIMULATOR** (testata su simulatore) | in più, flusso verificato nel simulatore host con screenshot (`docs/screenshots/`) |
+| **TESTED ON HARDWARE** (testata su hardware) | provata sulla PicoCalc fisica |
+| **COMPLETE** | testata su hardware e con la funzionalità CG50 corrispondente completa |
+
+Nessuna voce è TESTED ON HARDWARE: la PicoCalc fisica non è stata usata.
+Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 
 ## Piattaforma e hardware
 
@@ -27,8 +36,9 @@ Nessuna voce è ancora TESTED ON HARDWARE: la PicoCalc fisica non è stata usata
 
 | Funzione | Stato |
 |---|---|
-| Menu principale a icone (23 modalità, accesso diretto 1–9/A–N) | TESTED ON HOST |
-| Barra di stato (angolo, display, complessi, batteria, Wi-Fi, SHIFT) | TESTED ON HOST |
+| Menu principale a icone (23 modalità, accesso diretto 1–9/A–N) | TESTED ON SIMULATOR (accesso diretto verificato da architecture_test) |
+| Registro delle modalità (stato, servizi, dati, collegamenti) e test di architettura | TESTED ON HOST |
+| Barra di stato (angolo, display, complessi, Frac Result, batteria, Wi-Fi, SHIFT) | TESTED ON SIMULATOR |
 | Tasti funzione F1–F6 stile CG50, SHIFT one-shot | TESTED ON HOST |
 | Finestre di errore stile CG50 (Math/Syntax/Non-Real ERROR) | TESTED ON HOST |
 | Menu popup, form, liste di risultati, griglie di celle | TESTED ON HOST |
@@ -46,6 +56,7 @@ Nessuna voce è ancora TESTED ON HARDWARE: la PicoCalc fisica non è stata usata
 | Navigazione dentro/fuori dai modelli, su/giù tra campi | TESTED ON HOST |
 | Parole atomiche (sin, π, θ, Ans) | TESTED ON HOST |
 | Undo / redo, copia / incolla (Ctrl+Z/Y/C/V) | TESTED ON HOST |
+| Frazione mista `□ □/□`, radice con indice modificabile, periodo (linea sopra le cifre) | TESTED ON SIMULATOR |
 | Selezione parziale con il cursore | NOT STARTED (copia/incolla dell'intera espressione) |
 | Scorrimento orizzontale dell'input | TESTED ON HOST |
 | Matrici/vettori come modelli 2D modificabili | NOT STARTED (solo rendering del nodo Matrix) |
@@ -61,13 +72,23 @@ Nessuna voce è ancora TESTED ON HARDWARE: la PicoCalc fisica non è stata usata
 | ln, log, log₂, logₐb, exp, radici, potenze razionali di negativi | TESTED ON HOST |
 | n!, nCr, nPr (senza overflow), gcd, lcm, mod, int, intg, frac, round | TESTED ON HOST |
 | rand(), randint() | TESTED ON HOST |
-| Variabili A–Z, Ans, PreAns, memorizzazione con → | TESTED ON HOST |
+| Variabili A–Z, Ans, PreAns, memorizzazione con →, anche →A~F | TESTED ON HOST |
+| Forma esatta conservata in Ans/PreAns/A–Z | TESTED ON HOST |
+| Variabili di altre modalità via workspace (VARS: V-WIN, TABLE) | TESTED ON SIMULATOR |
 | Costanti matematiche e fisiche | TESTED ON HOST |
 | Numeri complessi nel parser (a+bi, r∠θ, arg, conj, re, im) | TESTED ON HOST |
 | Formati Norm1/Norm2/Fix/Sci/Eng (10 cifre) | TESTED ON HOST |
-| Risultati in frazione (S⇔D) | TESTED ON HOST |
+| Aritmetica esatta: razionali, radicali a√b/c (≤ 2 termini), multipli di π | TESTED ON HOST |
+| Valutazione esatta sullo stesso AST (trigonometria ai multipli di 30°/45°, radici, log esatti, n!, nCr…) | TESTED ON HOST |
+| S⇔D con valore interno preservato; regole di visualizzazione CG50 (10 caratteri, limiti radicali e π) | TESTED ON SIMULATOR |
+| Frac Result d/c ↔ ab/c (impostazione e per risultato) | TESTED ON SIMULATOR |
+| Numeri periodici: vista del periodo e input periodico | TESTED ON SIMULATOR |
+| Arrotondamento di visualizzazione come la calcolatrice (mantissa 15 cifre, per eccesso a metà) | TESTED ON HOST |
+| Operatori relazionali e logici (= ≠ < > ≤ ≥, And, Or, Xor, Not) | TESTED ON HOST |
+| Int÷, Rmdr, MOD_Exp, RndFix, RanNorm#, RanBin# | TESTED ON HOST |
+| Simboli ingegneristici (k, M, m, µ…), Simp manuale | NOT STARTED |
 | Base-N (letterali 0x/0b/0o, visualizzazione Hex/Bin/Oct) | TESTED ON HOST |
-| Operatori logici Base-N (and/or/xor/not) nel parser | NOT STARTED (API C++ presenti) |
+| Modalità Base-N intera (Mode Hex/Bin/Oct) con operatori bit a bit | NOT STARTED (viste Hex/Bin/Oct dei risultati presenti) |
 | Sessagesimale (dms, °, visualizzazione DMS) | TESTED ON HOST |
 | Pol / Rec | TESTED ON HOST |
 | Integrali (Gauss-Kronrod adattivo), derivate (Ridders), d²/dx² | TESTED ON HOST |
@@ -83,7 +104,9 @@ Nessuna voce è ancora TESTED ON HARDWARE: la PicoCalc fisica non è stata usata
 
 | Modalità | Stato | Note |
 |---|---|---|
-| Run-Matrix | TESTED ON HOST | storia, OPTN, VARS, Base-N, DMS |
+| Run-Matrix | TESTED ON SIMULATOR | forme esatte, S⇔D, frazioni miste, periodo, cronologia modificabile con ricalcolo, OPTN, VARS, Base-N, DMS (dettagli in RUN_MATRIX.md) |
+| Run-Matrix: cronologia modificabile sul posto con ricalcolo delle righe successive | TESTED ON SIMULATOR | |
+| Run-Matrix: matrici/vettori/liste (MAT/VCT/List) | NOT STARTED | API C++ esistenti |
 | Statistics | TESTED ON HOST | liste, 1/2-Var, 9 regressioni, grafici, DIST, test Z/t, intervalli |
 | Regressioni sinusoidale e logistica | NOT STARTED | |
 | Test χ², F, 2-campioni, ANOVA nell'interfaccia | NOT STARTED | ANOVA e t a 2 campioni esistono come API C++ |
@@ -100,16 +123,18 @@ Nessuna voce è ancora TESTED ON HARDWARE: la PicoCalc fisica non è stata usata
 | Conversion | TESTED ON HOST | |
 | AI Chat (Claude / ChatGPT) | TESTED ON HOST | con trasporto simulato; rete reale da collaudare |
 | Symbols (guida) | TESTED ON HOST | |
-| eActivity, Spreadsheet, Dyna Graph, Recursion, Conic Graphs | NOT STARTED | indicate come non disponibili nel menu |
-| Program, Financial, E-CON4, Link, Geometry, Picture Plot, 3D Graph | NOT STARTED | idem |
-| Python (MicroPython) | NOT STARTED | richiede l'integrazione del runtime come libreria |
+| eActivity, Spreadsheet, Dyna Graph, Recursion, Conic Graphs | IN PROGRESS | solo architettura e modello dati (`app_models.hpp`, testato); nessuna interfaccia; schermata "non disponibile" |
+| Program, Financial, Link, Geometry, Picture Plot, 3D Graph | IN PROGRESS | idem |
+| E-CON4 | NOT STARTED | richiede un data logger esterno: non realizzabile sulla PicoCalc (stato External) |
+| Python (MicroPython) | NOT STARTED | richiede l'integrazione del runtime come libreria (modello dei file di script definito) |
 
 ## Persistenza
 
 | Dato | Stato |
 |---|---|
 | Impostazioni, variabili, Ans | TESTED ON HOST |
-| Storia Run-Matrix | TESTED ON HOST |
+| Storia Run-Matrix (con forma esatta, vista, frazione mista) | TESTED ON HOST |
+| Lettura dei record v1.6.0 (formato versione 1) | TESTED ON HOST |
 | Liste statistiche | TESTED ON HOST |
 | Funzioni e V-Window di Graph, range di Table | TESTED ON HOST |
 | Coefficienti Equation | TESTED ON HOST |

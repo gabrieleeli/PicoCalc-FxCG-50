@@ -1,4 +1,7 @@
-# Architettura — v1.6.0
+# Architettura — v1.7.0
+
+Architettura di ogni modalità, servizi condivisi, dati scambiati e regole
+verificate dai test: [APPLICATIONS_ARCHITECTURE.md](APPLICATIONS_ARCHITECTURE.md).
 
 ## Strati
 
@@ -9,13 +12,15 @@
 │ System · Memory · Conversion · AI Chat · Symbols · "non disponibile" │
 ├──────────────────────────────────────────────────────────────────────┤
 │ Framework app (app.hpp, app_manager.cpp, app_widgets.hpp)            │
+│ Registro (app_registry): stato, servizi, dati, collegamenti          │
 │ AppManager: routing tasti, MENU/SHIFT/EXIT lungo, errori → box CG50  │
 │ Context: Workspace + Platform + clipboard + toast                   │
 ├───────────────────────────┬──────────────────────────────────────────┤
 │ UI kit (ui_kit, widgets)  │ Motore matematico                        │
-│ Natural editor + renderer │ expression (tokenizer→AST→valutatore)    │
-│ font_renderer, graphics   │ number_format, solvers, statistics,      │
-│ (Canvas RGB565, TileDiff) │ math_engine, point_a, editors            │
+│ Natural editor + renderer │ expression (tokenizer→AST→valutatori     │
+│ font_renderer, graphics   │ numerico ed esatto), exact, run_matrix,  │
+│ (Canvas RGB565, TileDiff) │ number_format, solvers, statistics,      │
+│                           │ math_engine, point_a, app_models         │
 ├───────────────────────────┴──────────────────────────────────────────┤
 │ Firmware (firmware.cpp): boot, decoder tasti, autosalvataggio, redraw│
 ├──────────────────────────────────────────────────────────────────────┤
@@ -46,18 +51,24 @@ loop:
 ## Dati condivisi: `Workspace`
 
 `include/workspace.hpp` contiene tutto lo stato persistente: impostazioni,
-memoria (A–Z, Ans/PreAns anche complessi), storia di Run-Matrix, funzioni Y1–Y6 e
+memoria (A–Z, Ans/PreAns anche complessi, con la forma esatta), storia di
+Run-Matrix (con forma esatta e vista), funzioni Y1–Y6 e
 V-Window, range di Table, liste 1–6, stato di Equation, conversazione AI.
 Le app comunicano tramite questo modello (es. Statistics copia una regressione in
 Graph, Graph apre Table con G↔T, Table imposta la finestra di Graph con G-PLT).
 
-`serializeWorkspace()` produce un blob binario versionato; `RecordStore` lo scrive
-in uno dei due slot flash con CRC-32 dell'intestazione e del contenuto.
+Il workspace implementa anche `NameResolver`: Run-Matrix legge in sola lettura
+le variabili di Graph e Table (`Xmin`, `TblStart`, …) senza accedere direttamente
+a quelle sezioni.
+
+`serializeWorkspace()` produce un blob binario versionato (versione 2 dalla
+v1.7.0; la versione 1 viene ancora letta); `RecordStore` lo scrive in uno dei due
+slot flash con CRC-32 dell'intestazione e del contenuto.
 
 ## Motore matematico
 
-Una sola rappresentazione (`ast::Node`) è condivisa da editor, parser, valutatore e
-renderer. L'editor costruisce nodi Row/Token/Fraction/Radical/Power/Calculus/Call;
+Una sola rappresentazione (`ast::Node`) è condivisa da editor, parser, valutatori
+(numerico ed esatto) e renderer. L'editor costruisce nodi Row/Token/Fraction/Radical/Power/Calculus/Call;
 `ast::serialize` produce il testo lineare canonico, che il parser trasforma in nodi
 Binary/Unary/Call valutati da un unico valutatore templato su `double` (modo Real) e
 `std::complex<double>` (modi a+bi e r∠θ). Vedi [MATH_ENGINE.md](MATH_ENGINE.md).
