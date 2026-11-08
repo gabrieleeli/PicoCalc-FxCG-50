@@ -97,6 +97,23 @@ Box measureNode(const NaturalNode& n, int level, bool isRoot, unsigned depth) {
             const Box c = measureNode(*child(n, 0), level, false, depth + 1);
             return {c.w + 6, std::max(c.asc, f.asc()) + 1, std::max(c.desc, f.desc()) + 1};
         }
+        if (n.text == "mixed" && n.children.size() == 3) {
+            // Whole part followed by a stacked fraction: 2 1/3.
+            const Box w = measureNode(*child(n, 0), level, false, depth + 1);
+            const Box a = measureNode(*child(n, 1), level, false, depth + 1), b = measureNode(*child(n, 2), level, false, depth + 1);
+            const int axis = f.axis();
+            return {w.w + 1 + std::max(a.w, b.w) + 4, std::max(w.asc, axis + 2 + a.desc + a.asc), std::max({w.desc, f.desc(), b.asc + b.desc + 2 - axis})};
+        }
+        if ((n.text == "period" || n.text == "overline") && n.children.size() == 1) {
+            const Box c = measureNode(*child(n, 0), level, false, depth + 1);
+            return {c.w, c.asc + 2, c.desc};
+        }
+        if (n.text == "root" && n.children.size() == 2) {
+            // Radical with an editable index (x√ template): index in Small before the sign.
+            const Box i = measureNode(*child(n, 0), level + 1, false, depth + 1), c = measureNode(*child(n, 1), level, false, depth + 1);
+            const int prefix = std::max(0, i.w - 3);
+            return {prefix + 8 + c.w + 2, std::max(c.asc + 3, c.asc / 2 + 2 + i.asc + i.desc), c.desc + 1};
+        }
         if (n.text == "log" && n.children.size() == 2) {
             const Box b = measureNode(*child(n, 0), level + 1, false, depth + 1), v = measureNode(*child(n, 1), level, false, depth + 1);
             return {3 * f.adv + b.w + 1 + v.w + 2 * f.adv, std::max(v.asc, f.asc()), std::max({v.desc, f.desc(), 3 + b.desc})};
@@ -239,6 +256,34 @@ void drawNode(Ctx& c, const NaturalNode& n, int x, int base, int level, bool isR
             addLine(c, x + 1, base - gb.asc + 1, x + 1, base + gb.desc - 2);
             addLine(c, x + gb.w - 2, base - gb.asc + 1, x + gb.w - 2, base + gb.desc - 2);
             drawNode(c, *child(n, 0), x + 3, base, level, false, depth + 1);
+            return;
+        }
+        if (n.text == "mixed" && n.children.size() == 3) {
+            const Box w = measureNode(*child(n, 0), level, false, depth + 1);
+            const Box a = measureNode(*child(n, 1), level, false, depth + 1), b = measureNode(*child(n, 2), level, false, depth + 1);
+            drawNode(c, *child(n, 0), x, base, level, false, depth + 1);
+            const int fx = x + w.w + 1, fw = std::max(a.w, b.w) + 4, bar = base - f.axis();
+            drawNode(c, *child(n, 1), fx + (fw - a.w) / 2, bar - 2 - a.desc, level, false, depth + 1);
+            addLine(c, fx + 1, bar, fx + fw - 2, bar);
+            drawNode(c, *child(n, 2), fx + (fw - b.w) / 2, bar + 2 + b.asc, level, false, depth + 1);
+            return;
+        }
+        if ((n.text == "period" || n.text == "overline") && n.children.size() == 1) {
+            const Box cb = measureNode(*child(n, 0), level, false, depth + 1);
+            drawNode(c, *child(n, 0), x, base, level, false, depth + 1);
+            addLine(c, x, base - cb.asc, x + cb.w - 1, base - cb.asc);
+            return;
+        }
+        if (n.text == "root" && n.children.size() == 2) {
+            const Box ib = measureNode(*child(n, 0), level + 1, false, depth + 1), cb = measureNode(*child(n, 1), level, false, depth + 1);
+            const int prefix = std::max(0, ib.w - 3);
+            const int x0 = x + prefix, top = base - cb.asc - 2, mid = base - cb.asc / 2 + 1, bottom = base + cb.desc;
+            addLine(c, x0, mid, x0 + 2, mid - 1);
+            addLine(c, x0 + 2, mid - 1, x0 + 4, bottom);
+            addLine(c, x0 + 4, bottom, x0 + 7, top);
+            addLine(c, x0 + 7, top, x0 + 8 + cb.w + 1, top);
+            drawNode(c, *child(n, 0), x, mid - 2 - ib.desc, level + 1, false, depth + 1);
+            drawNode(c, *child(n, 1), x0 + 8, base, level, false, depth + 1);
             return;
         }
         if (n.text == "log" && n.children.size() == 2) {
@@ -390,6 +435,15 @@ std::string displayToken(const std::string& t) {
     for (std::size_t i = 0; i < sizeof(kGreekNames) / sizeof(kGreekNames[0]); ++i) if (low == kGreekNames[i]) return kGreekGlyphs[i];
     if (low == "ans") return "Ans";
     if (low == "preans") return "PreAns";
+    // Shared variables (VARS) and operator words in fx-CG50 spelling.
+    static const struct { const char* name; const char* shown; } kNames[] = {
+        {"xmin", "Xmin"}, {"xmax", "Xmax"}, {"xscl", "Xscl"}, {"ymin", "Ymin"}, {"ymax", "Ymax"}, {"yscl", "Yscl"},
+        {"tmin", "Tmin"}, {"tmax", "Tmax"}, {"tptch", "Tptch"}, {"tblstart", "TblStart"}, {"tblend", "TblEnd"},
+        {"tblpitch", "TblPitch"}, {"and", " And "}, {"or", " Or "}, {"xor", " Xor "}, {"not", "Not "}, {"rmdr", " Rmdr "},
+        {"modexp", "MOD_Exp"}, {"rndfix", "RndFix"}, {"rannorm", "RanNorm#"}, {"ranbin", "RanBin#"}, {"randint", "RanInt#"}};
+    for (const auto& k : kNames) if (low == k.name) return k.shown;
+    if (t == "<=") return "\xE2\x89\xA4";
+    if (t == ">=") return "\xE2\x89\xA5";
     if (t == "->") return "→";
     return t;
 }

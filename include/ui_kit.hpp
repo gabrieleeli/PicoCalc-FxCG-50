@@ -49,6 +49,7 @@ struct StatusInfo {
     const char* angle{};
     const char* display{};
     const char* complex{};
+    const char* fraction{};      // Frac Result: "d/c" or "ab/c"
     int battery{-1};
     bool charging{};
     bool shift{};

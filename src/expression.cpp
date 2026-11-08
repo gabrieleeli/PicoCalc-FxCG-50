@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <numeric>
 #include <type_traits>
 #include <vector>
 
@@ -46,6 +47,8 @@ constexpr FnInfo kFunctions[] = {
     {"npr",2,2,false},{"atan2",2,2,false},{"hypot",2,2,false},{"pow",2,2,false},{"mod",2,2,false},
     {"gcd",2,2,false},{"lcm",2,2,false},{"randint",2,2,false},{"rand",0,0,false},{"ran",0,0,false},
     {"dms",1,3,false},{"pol",2,2,false},{"rec",2,2,false},
+    {"mixed",3,3,false},{"modexp",3,3,false},{"rndfix",2,2,false},{"rannorm",2,2,false},{"ranbin",2,2,false},
+    {"not",1,1,false},
     {"integral",3,3,true},{"integrate",3,3,true},{"derivative",2,2,true},{"diff",2,2,true},
     {"derivative2",2,2,true},{"sum",3,3,true},{"prod",3,3,true},{"solve",2,2,true},
 };
@@ -61,6 +64,13 @@ const ConstInfo kConstants[] = {
 };
 // Names resolved at evaluation time (not constants): memory values and bindings.
 constexpr const char* kSpecialNames[] = {"ans","preans","theta"};
+// Variables owned by other applications (VARS menu), resolved through EvalContext::names.
+constexpr const char* kSystemNames[] = {"xmin","xmax","xscl","ymin","ymax","yscl","tmin","tmax","tptch",
+    "tblstart","tblend","tblpitch",nullptr};
+// Infix operator words (fx-CG50 And/Or/Xor, Int÷ and Rmdr) and their internal op codes.
+struct OpWord { const char* name; char op; };
+constexpr OpWord kOperatorWords[] = {{"and",'&'},{"or",'|'},{"xor",'x'},{"rmdr",'r'},{"intdiv",'q'}};
+char operatorWord(const std::string& lowerName){for(const auto& w:kOperatorWords)if(lowerName==w.name)return w.op;return 0;}
 
 std::string lower(std::string s){for(char& c:s)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));return s;}
 bool isRootN(const std::string& n){
@@ -73,10 +83,14 @@ const FnInfo* findFunction(const std::string& lowerName){
     return nullptr;
 }
 bool isFunctionName(const std::string& lowerName){return findFunction(lowerName)||isRootN(lowerName);}
+bool isSystemName(const std::string& lowerName){
+    for(const char* const* n=kSystemNames;*n;++n)if(lowerName==*n)return true;
+    return false;
+}
 bool isConstantName(const std::string& lowerName){
     for(const auto& c:kConstants)if(lowerName==c.name)return true;
     for(const char* s:kSpecialNames)if(lowerName==s)return true;
-    return false;
+    return isSystemName(lowerName);
 }
 
 // ---------------------------------------------------------------- lexer
@@ -95,7 +109,11 @@ public:
             if(std::isdigit(c)||(c=='.'&&p_+1<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[p_+1])))){out.push_back(number());continue;}
             if(std::isalpha(c)||c=='_'){identifier(out);continue;}
             if(c>=0x80){utf8(out);continue;}
-            if(std::strchr("+-*/%^!,()",static_cast<int>(c))){out.push_back({TT::Op,{},static_cast<char>(c)});++p_;continue;}
+            if(c=='<'||c=='>'){
+                const bool eq=p_+1<s_.size()&&s_[p_+1]=='=';
+                out.push_back({TT::Op,{},c=='<'?(eq?'l':'<'):(eq?'g':'>')});p_+=eq?2:1;continue;
+            }
+            if(std::strchr("+-*/%^!,()=",static_cast<int>(c))){out.push_back({TT::Op,{},static_cast<char>(c)});++p_;continue;}
             throw SyntaxError(std::string("Syntax ERROR: carattere non valido '")+static_cast<char>(c)+"'");
         }
     }
@@ -114,6 +132,17 @@ private:
         }
         while(p_<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[p_])))++p_;
         if(p_<s_.size()&&s_[p_]=='.'){++p_;while(p_<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[p_])))++p_;}
+        // Repeating decimal: "0.1_6" = 0.1666... (written with an overline in the editor).
+        if(p_<s_.size()&&s_[p_]=='_'){
+            if(s_.find('.',b)>=p_)throw SyntaxError("Syntax ERROR: il periodo segue la virgola");
+            const std::size_t q=++p_;
+            while(p_<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[p_])))++p_;
+            if(p_==q)throw SyntaxError("Syntax ERROR: periodo vuoto");
+            const std::string t=s_.substr(b,p_-b);
+            exact::Rational r;
+            if(!exact::parseDecimal(t,r))throw MathError("Memory ERROR: numero periodico troppo lungo");
+            return {TT::Num,t,0};
+        }
         if(p_<s_.size()&&(s_[p_]=='e'||s_[p_]=='E')){
             std::size_t q=p_+1;if(q<s_.size()&&(s_[q]=='+'||s_[q]=='-'))++q;
             if(q<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[q]))){p_=q;while(p_<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[p_])))++p_;}
@@ -126,20 +155,28 @@ private:
         const std::size_t b=p_;
         while(p_<s_.size()&&(std::isalnum(static_cast<unsigned char>(s_[p_]))||s_[p_]=='_'))++p_;
         const std::string raw=s_.substr(b,p_-b);
+        // fx-CG50 "Int÷" (integer quotient) is written as Int followed by the division sign.
+        if(lower(raw)=="int"&&s_.compare(p_,2,"\xC3\xB7")==0){p_+=2;out.push_back({TT::Op,{},'q'});return;}
         splitIdentifier(raw,out);
     }
     // Resolves an identifier, splitting e.g. "sinx" -> sin x, "2pix" -> pi x, "ab" -> a b.
     static void splitIdentifier(const std::string& raw,std::vector<Tok>& out){
         const std::string low=lower(raw);
+        if(const char op=operatorWord(low)){out.push_back({TT::Op,{},op});return;}
         if(raw.size()==1||isFunctionName(low)||isConstantName(low)){out.push_back({TT::Ident,raw.size()==1?raw:low,0});return;}
         std::size_t k=0;
         while(k<raw.size()){
             std::size_t best=0;
             for(std::size_t len=raw.size()-k;len>=2;--len){
                 const std::string piece=lower(raw.substr(k,len));
-                if(isFunctionName(piece)||isConstantName(piece)){best=len;break;}
+                if(isFunctionName(piece)||isConstantName(piece)||operatorWord(piece)){best=len;break;}
             }
-            if(best){out.push_back({TT::Ident,lower(raw.substr(k,best)),0});k+=best;continue;}
+            if(best){
+                const std::string word=lower(raw.substr(k,best));
+                if(const char op=operatorWord(word))out.push_back({TT::Op,{},op});
+                else out.push_back({TT::Ident,word,0});
+                k+=best;continue;
+            }
             if(std::isdigit(static_cast<unsigned char>(raw[k]))){
                 std::size_t e=k;while(e<raw.size()&&std::isdigit(static_cast<unsigned char>(raw[e])))++e;
                 out.push_back({TT::Num,raw.substr(k,e-k),0});k=e;continue;
@@ -154,7 +191,8 @@ private:
             {"\xCF\x80",TT::Ident,0,"pi"},{"\xCE\xB8",TT::Ident,0,"theta"},{"\xC3\x97",TT::Op,'*',nullptr},
             {"\xC3\xB7",TT::Op,'/',nullptr},{"\xE2\x88\x92",TT::Op,'-',nullptr},{"\xC2\xB0",TT::Op,'d',nullptr},
             {"\xE2\x88\x9A",TT::Ident,0,"sqrt"},{"\xE2\x88\x9B",TT::Ident,0,"cbrt"},{"\xE2\x8B\x85",TT::Op,'*',nullptr},
-            {"\xC2\xB7",TT::Op,'*',nullptr},
+            {"\xC2\xB7",TT::Op,'*',nullptr},{"\xE2\x89\xA0",TT::Op,'n',nullptr},{"\xE2\x89\xA4",TT::Op,'l',nullptr},
+            {"\xE2\x89\xA5",TT::Op,'g',nullptr},
         };
         for(const auto& m:maps){const std::size_t n=std::strlen(m.seq);
             if(s_.compare(p_,n,m.seq)==0){p_+=n;out.push_back({m.type,m.name?m.name:"",m.op});return;}}
@@ -172,7 +210,7 @@ public:
     }
     ast::NodePtr run(){
         if(t_.size()==1)throw SyntaxError("Syntax ERROR: espressione vuota");
-        auto n=addSub();
+        auto n=expr();
         if(peek().type!=TT::End){
             if(isOp(')'))throw SyntaxError("Syntax ERROR: ) in eccesso");
             throw SyntaxError("Syntax ERROR: caratteri extra");
@@ -203,6 +241,24 @@ private:
         return k.type==TT::Num||k.type==TT::Ident||(k.type==TT::Op&&k.op=='(');
     }
     bool atFunction() const {return peek().type==TT::Ident&&isFunctionName(peek().text);}
+    // Lowest priorities (fx-CG50 order): Or/Xor < And < relational operators < + -.
+    ast::NodePtr expr(){
+        auto n=logicAnd();
+        for(;;){if(eat('|'))n=bin('|',n,logicAnd());else if(eat('x'))n=bin('x',n,logicAnd());else return n;}
+    }
+    ast::NodePtr logicAnd(){
+        auto n=relation();
+        while(eat('&'))n=bin('&',n,relation());
+        return n;
+    }
+    ast::NodePtr relation(){
+        auto n=addSub();
+        for(;;){
+            bool matched=false;
+            for(char op:{'=','n','<','>','l','g'})if(eat(op)){n=bin(op,n,addSub());matched=true;break;}
+            if(!matched)return n;
+        }
+    }
     ast::NodePtr addSub(){
         auto n=mulDiv();
         for(;;){if(eat('+'))n=bin('+',n,mulDiv());else if(eat('-'))n=bin('-',n,mulDiv());else return n;}
@@ -213,6 +269,8 @@ private:
             if(eat('*'))n=bin('*',n,implicitProduct());
             else if(eat('/'))n=bin('/',n,implicitProduct());
             else if(eat('%'))n=bin('%',n,implicitProduct());
+            else if(eat('q'))n=bin('q',n,implicitProduct());
+            else if(eat('r'))n=bin('r',n,implicitProduct());
             else return n;
         }
     }
@@ -259,7 +317,7 @@ private:
         if(k.type==TT::Op&&k.op=='('){
             ++i_;
             if(isOp(')'))throw SyntaxError("Syntax ERROR: parentesi vuote");
-            auto inner=addSub();
+            auto inner=expr();
             // Casio allows omitting closing parentheses at the end of the input.
             if(!eat(')')&&peek().type!=TT::End)throw SyntaxError("Syntax ERROR: manca )");
             auto g=ast::make(ast::Kind::Group);g->children={inner};return g;
@@ -272,7 +330,7 @@ private:
                 const unsigned minArgs=info?info->minArgs:1,maxArgs=info?info->maxArgs:1;
                 if(eat('(')){
                     if(!isOp(')')){
-                        do{call->children.push_back(addSub());}while(eat(','));
+                        do{call->children.push_back(expr());}while(eat(','));
                     }
                     if(!eat(')')&&peek().type!=TT::End)throw SyntaxError("Syntax ERROR: manca ) in "+k.text);
                 }else{
@@ -357,6 +415,7 @@ struct Env {
     int localCount{};
     std::uint8_t depth{};
     std::uintptr_t stackBase{};
+    bool decimal{};            // exact evaluation met a plain decimal literal
 };
 // Current stack position. The frame address (not a local's address) is used so
 // that AddressSanitizer's fake stack does not distort the measurement.
@@ -449,6 +508,7 @@ template<typename T> FXAI_NOINLINE T callCalculus(const ast::Node& n,Env& env){
         if(++env.depth>4){--env.depth;throw MathError("Stack ERROR: calcoli annidati troppo profondi");}
         struct DepthGuard{Env& e;~DepthGuard(){--e.depth;}} guard{env};
         const ast::Node& body=*n.children.at(0);
+        if(env.ctx.info&&f!="sum"&&f!="prod")env.ctx.info->numerical=true;
         LocalBind bind(env,"x",0.0);
         auto fx=[&](double v)->double{bind.set(v);const T r=evalNode<T>(body,env);return asReal<T>(r,"funzione integranda");};
         if(f=="integral"||f=="integrate"){const double a=rarg(1),b=rarg(2);return R(integrateFn(fx,a,b,1e-10));}
@@ -560,6 +620,7 @@ template<typename T> FXAI_NOINLINE T applyFunction(const ast::Node& n,const T* a
         if(f=="rad")return R(v*kPi/180.0);
         if(f=="grad")return R(v*200.0/kPi);
         if(f=="fact"||f=="factorial")return R(factorialChecked(v));
+        if(f=="not")return R(v==0?1.0:0.0);
         if(f=="dms")return R(v);
         throw SyntaxError("Syntax ERROR: funzione sconosciuta "+f);
     }
@@ -585,6 +646,23 @@ template<typename T> FXAI_NOINLINE T applyFunction(const ast::Node& n,const T* a
         else{if(std::abs(x.imag())<1e-15&&(x.real()>=0||static_cast<int>(idx)%2==1))return R(nthRoot(x.real(),static_cast<int>(idx)));return std::pow(x,1.0/idx);}
     }
     if(f=="frac"){const T a=arg(0),b=arg(1);if(b==T(0))throw MathError("Math ERROR: denominatore nullo");return a/b;}
+    if(f=="mixed"){
+        // Mixed fraction w n/d: the sign of the whole part applies to the fraction (-2 1/3 = -(2+1/3)).
+        const T w=arg(0),num=arg(1),den=arg(2);
+        if(den==T(0))throw MathError("Math ERROR: denominatore nullo");
+        const double ws=asReal<T>(w,"frazione mista");
+        return ws<0?w-num/den:w+num/den;
+    }
+    if(f=="modexp"){
+        // fx-CG50 MOD_Exp(n,p,m) = n^p mod m by square-and-multiply on exact integers.
+        const long long nb=toIntArg(rarg(0),"MOD_Exp"),pe=toIntArg(rarg(1),"MOD_Exp"),m=toIntArg(rarg(2),"MOD_Exp");
+        if(m<=0||pe<0||nb<0)throw MathError("Argument ERROR: MOD_Exp(n,p,m) con n,p>=0 e m>0");
+        auto mulmod=[m](unsigned long long x,unsigned long long y){unsigned long long res=0;x%=static_cast<unsigned long long>(m);
+            while(y){if(y&1)res=(res+x)%static_cast<unsigned long long>(m);x=(x*2)%static_cast<unsigned long long>(m);y>>=1;}return res;};
+        unsigned long long result=1%static_cast<unsigned long long>(m),base=static_cast<unsigned long long>(nb)%static_cast<unsigned long long>(m);
+        for(unsigned long long e=static_cast<unsigned long long>(pe);e;e>>=1){if(e&1)result=mulmod(result,base);base=mulmod(base,base);}
+        return R(static_cast<double>(result));
+    }
     if(f=="dms"){
         const double d=rarg(0),m=rarg(1),s=n.children.size()>2?rarg(2):0.0;
         const double sign=(d<0||m<0||s<0)?-1.0:1.0;
@@ -594,6 +672,20 @@ template<typename T> FXAI_NOINLINE T applyFunction(const ast::Node& n,const T* a
     if(f=="min")return R(std::min(a,b));
     if(f=="max")return R(std::max(a,b));
     if(f=="round"){const long long dg=toIntArg(b,"round");if(dg<0||dg>14)throw MathError("Argument ERROR: cifre 0..14");const double p=std::pow(10.0,static_cast<double>(dg));return R(std::round(a*p)/p);}
+    if(f=="rndfix"){const long long dg=toIntArg(b,"RndFix");if(dg<0||dg>9)throw MathError("Argument ERROR: RndFix cifre 0..9");const double p=std::pow(10.0,static_cast<double>(dg));return R(std::round(a*p)/p);}
+    if(f=="rannorm"){
+        // RanNorm#(sigma, mu): Box-Muller transform of two uniform numbers in (0,1].
+        if(a<=0)throw MathError("Argument ERROR: RanNorm# richiede sigma>0");
+        const double u1=(static_cast<double>(nextRandom()>>8)+1.0)/16777217.0,u2=static_cast<double>(nextRandom()>>8)/16777216.0;
+        return R(b+a*std::sqrt(-2.0*std::log(u1))*std::cos(2.0*kPi*u2));
+    }
+    if(f=="ranbin"){
+        const long long trials=toIntArg(a,"RanBin#");
+        if(trials<1||trials>100000||b<0||b>1)throw MathError("Argument ERROR: RanBin#(n,p) con 1<=n<=100000, 0<=p<=1");
+        long long hits=0;
+        for(long long k=0;k<trials;++k)if(static_cast<double>(nextRandom()>>8)/16777216.0<b)++hits;
+        return R(static_cast<double>(hits));
+    }
     if(f=="ncr"||f=="npr"){
         if(a<0||b<0||!isInteger(a)||!isInteger(b)||a>100000)throw MathError("Argument ERROR: nCr/nPr richiedono interi non negativi");
         if(b>a)throw MathError("Math ERROR: r non puo superare n");
@@ -643,7 +735,14 @@ template<typename T> FXAI_NOINLINE T callFunction(const ast::Node& n,Env& env){
 template<typename T> FXAI_NOINLINE T evalToken(const ast::Node& n,Env& env){
         if(n.text.empty())throw SyntaxError("Syntax ERROR: token vuoto");
         const unsigned char c0=static_cast<unsigned char>(n.text[0]);
-        if(std::isdigit(c0)||c0=='.'){char* e=nullptr;const double v=std::strtod(n.text.c_str(),&e);if(e!=n.text.c_str()+n.text.size())throw SyntaxError("Syntax ERROR: numero non valido");return fromReal<T>(v);}
+        if(std::isdigit(c0)||c0=='.'){
+            if(n.text.find('_')!=std::string::npos){
+                exact::Rational r;
+                if(!exact::parseDecimal(n.text,r))throw SyntaxError("Syntax ERROR: numero periodico non valido");
+                return fromReal<T>(r.toDouble());
+            }
+            char* e=nullptr;const double v=std::strtod(n.text.c_str(),&e);if(e!=n.text.c_str()+n.text.size())throw SyntaxError("Syntax ERROR: numero non valido");return fromReal<T>(v);
+        }
         double bound=0;
         if(lookupBinding(env,n.text,bound))return fromReal<T>(bound);
         if(n.text=="e")return fromReal<T>(std::exp(1.0));
@@ -663,6 +762,11 @@ template<typename T> FXAI_NOINLINE T evalToken(const ast::Node& n,Env& env){
             throw MathError(std::string("Math ERROR: variabile ")+static_cast<char>(std::toupper(c0))+" non definita");
         }
         if(low=="theta")throw MathError("Math ERROR: theta non definito");
+        if(isSystemName(low)){
+            double v=0;
+            if(env.ctx.names&&env.ctx.names->resolve(low,v))return fromReal<T>(v);
+            throw MathError("Math ERROR: "+n.text+" non disponibile qui");
+        }
         throw SyntaxError("Syntax ERROR: nome sconosciuto "+n.text);
 }
 
@@ -674,6 +778,27 @@ template<typename T> FXAI_NOINLINE T applyBinary(char op,const T& a,const T& b){
         case '*': r=a*b;break;
         case '/': if(b==T(0))throw MathError("Math ERROR: divisione per zero");r=a/b;break;
         case '%':{const double x=asReal<T>(a,"%"),y=asReal<T>(b,"%");if(y==0)throw MathError("Math ERROR: modulo per zero");r=fromReal<T>(std::fmod(x,y));break;}
+        case 'q': case 'r':{
+            // fx-CG50 Int÷ / Rmdr: integer quotient and remainder (sign of the dividend).
+            const double x=asReal<T>(a,"Int\xC3\xB7"),y=asReal<T>(b,"Rmdr");
+            if(!isInteger(x)||!isInteger(y)||std::abs(x)>9e15||std::abs(y)>9e15)throw MathError("Argument ERROR: Int\xC3\xB7 e Rmdr richiedono interi");
+            if(y==0)throw MathError("Math ERROR: divisione per zero");
+            const double qv=std::trunc(x/y);
+            r=fromReal<T>(op=='q'?qv:x-qv*y);break;
+        }
+        case '=': case 'n': case '<': case '>': case 'l': case 'g':{
+            bool v=false;
+            if(op=='='||op=='n'){v=(a==b);if(op=='n')v=!v;}
+            else{
+                const double x=asReal<T>(a,"confronto"),y=asReal<T>(b,"confronto");
+                v=op=='<'?x<y:op=='>'?x>y:op=='l'?x<=y:x>=y;
+            }
+            r=fromReal<T>(v?1.0:0.0);break;
+        }
+        case '&': case '|': case 'x':{
+            const bool x=!(a==T(0)),y=!(b==T(0));
+            r=fromReal<T>((op=='&'?(x&&y):op=='|'?(x||y):(x!=y))?1.0:0.0);break;
+        }
         case '^':
             if constexpr(std::is_same_v<T,double>)r=realPow(a,b);
             else{
@@ -694,7 +819,7 @@ template<typename T> FXAI_NOINLINE T applyBinary(char op,const T& a,const T& b){
 // walked iteratively so that the recursion depth follows the nesting of the
 // input, not its length.
 bool isChainNode(const ast::Node& n) noexcept {
-    return n.kind==ast::Kind::Binary&&n.text.size()==1&&std::strchr("+-*/%",n.text[0])!=nullptr&&n.children.size()==2&&n.children[0]&&n.children[1];
+    return n.kind==ast::Kind::Binary&&n.text.size()==1&&std::strchr("+-*/%qr=n<>lg&|x",n.text[0])!=nullptr&&n.children.size()==2&&n.children[0]&&n.children[1];
 }
 template<typename T> FXAI_NOINLINE T evalChain(const ast::Node& top,Env& env){
     constexpr std::size_t kChunk=16;
@@ -745,6 +870,387 @@ template<typename T> T evalNode(const ast::Node& node,Env& env){
     throw SyntaxError("Syntax ERROR: nodo non valutabile");
 }
 
+// ---------------------------------------------------------------- exact evaluation
+// Second walk over the same parsed AST with exact::Value. Every helper returns
+// false as soon as a step has no exact form; the frames on the recursive path
+// (exactNode, exactChain, exactCall) hold at most a few values, and the large
+// function table (exactApply) is never live across the recursion.
+using exact::Rational;
+using exact::Value;
+
+bool exactStackOk(const Env& env){
+    const std::uintptr_t here=stackPosition();
+    return !(env.stackBase>here&&env.stackBase-here>gEvalStackBudget);
+}
+bool exactInteger(const Value& v,long long& out){
+    Rational r;
+    if(!v.rational(r)||!r.isInteger())return false;
+    out=r.num;return true;
+}
+Value exactInt(long long v){return Value::fromInteger(v);}
+// Angle argument converted to degrees (Deg: rational, Rad: rational multiple of π, Gra: rational gon).
+bool exactToDegrees(const Value& v,Rational& deg){
+    if(v.isZero()){deg={};return true;}
+    switch(angleMode()){
+    case AngleMode::Degrees: return v.rational(deg);
+    case AngleMode::Gradians:{Rational g;return v.rational(g)&&exact::mul(g,{9,10},deg);}
+    case AngleMode::Radians:
+        if(!v.isPi())return false;
+        return exact::mul(v.term(0).coef,Rational::integer(180),deg);
+    }
+    return false;
+}
+bool exactFromDegrees(const Rational& deg,Value& out){
+    switch(angleMode()){
+    case AngleMode::Degrees: out=Value::fromRational(deg);return true;
+    case AngleMode::Gradians:{Rational g;if(!exact::mul(deg,{10,9},g))return false;out=Value::fromRational(g);return true;}
+    case AngleMode::Radians:{Rational c;if(!exact::div(deg,Rational::integer(180),c))return false;out=Value::piTimes(c);return true;}
+    }
+    return false;
+}
+Value surdTerm(Rational coef,long long radicand){
+    const exact::Term t{coef,radicand};
+    Value v;(void)Value::fromTerms(&t,1,v);return v;
+}
+// sin of an integer number of degrees that is a multiple of 30 or 45.
+bool exactSinDegrees(const Rational& deg,Value& out){
+    if(!deg.isInteger())return false;
+    const long long d=((deg.num%360)+360)%360;
+    switch(d){
+    case 0: case 180: out=Value{};return true;
+    case 90: out=exactInt(1);return true;
+    case 270: out=exactInt(-1);return true;
+    case 30: case 150: out=Value::fromRational({1,2});return true;
+    case 210: case 330: out=Value::fromRational({-1,2});return true;
+    case 45: case 135: out=surdTerm({1,2},2);return true;
+    case 225: case 315: out=surdTerm({-1,2},2);return true;
+    case 60: case 120: out=surdTerm({1,2},3);return true;
+    case 240: case 300: out=surdTerm({-1,2},3);return true;
+    default: return false;
+    }
+}
+// Inverse sine / tangent of the special values, in degrees.
+bool exactAsinDegrees(const Value& v,Rational& deg){
+    const struct {Value value;long long degrees;} table[]={
+        {Value{},0},{exactInt(1),90},{exactInt(-1),-90},{Value::fromRational({1,2}),30},{Value::fromRational({-1,2}),-30},
+        {surdTerm({1,2},2),45},{surdTerm({-1,2},2),-45},{surdTerm({1,2},3),60},{surdTerm({-1,2},3),-60}};
+    for(const auto& e:table)if(e.value==v){deg=Rational::integer(e.degrees);return true;}
+    return false;
+}
+bool exactAtanDegrees(const Value& v,Rational& deg){
+    const struct {Value value;long long degrees;} table[]={
+        {Value{},0},{exactInt(1),45},{exactInt(-1),-45},{surdTerm({1,3},3),30},{surdTerm({-1,3},3),-30},
+        {surdTerm({1,1},3),60},{surdTerm({-1,1},3),-60}};
+    for(const auto& e:table)if(e.value==v){deg=Rational::integer(e.degrees);return true;}
+    return false;
+}
+// floor() of an exact value: exact for rationals; for irrational surds the
+// floating value is used only when it is far from an integer (an irrational
+// surd is never an integer, so the floor is then certain).
+bool exactFloor(const Value& v,long long& out){
+    Rational r;
+    if(v.rational(r)){
+        long long q=r.num/r.den;
+        if(r.num%r.den!=0&&r.num<0)--q;
+        out=q;return true;
+    }
+    const double d=v.toDouble();
+    if(!std::isfinite(d)||std::abs(d)>9e15||std::abs(d-std::nearbyint(d))<1e-6)return false;
+    out=static_cast<long long>(std::floor(d));return true;
+}
+bool exactRoundDigits(const Value& v,long long digits,Value& out){
+    Rational r,scaled,half{1,2};
+    if(!v.rational(r)||digits<0||digits>14)return false;
+    long long p10=1;for(long long k=0;k<digits;++k)p10*=10;
+    const bool negative=r.num<0;
+    if(negative)r.num=-r.num;
+    if(!exact::mul(r,Rational::integer(p10),scaled)||!exact::add(scaled,half,scaled))return false;
+    const long long q=scaled.num/scaled.den;
+    Rational res;
+    if(!Rational::make(negative?-q:q,p10,res))return false;
+    out=Value::fromRational(res);return true;
+}
+bool exactCompare(const Value& a,const Value& b,int& sign){
+    Value d;
+    if(!exact::sub(a,b,d))return false;
+    sign=d.sign();return true;
+}
+bool exactPow(const Value& a,const Value& b,Value& out){
+    Rational e;
+    if(!b.rational(e))return false;
+    if(a.isZero()&&e.sign()<=0)return e.isZero()?(out=exactInt(1),true):false;
+    return exact::powRational(a,e,out);
+}
+FXAI_NOINLINE bool exactBinary(char op,const Value& a,const Value& b,Value& out){
+    switch(op){
+    case '+': return exact::add(a,b,out);
+    case '-': return exact::sub(a,b,out);
+    case '*': return exact::mul(a,b,out);
+    case '/': return exact::div(a,b,out);
+    case '^': return exactPow(a,b,out);
+    case '%': case 'q': case 'r':{
+        Rational x,y,q;
+        if(!a.rational(x)||!b.rational(y)||y.isZero())return false;
+        if(op!='%'&&(!x.isInteger()||!y.isInteger()))return false;
+        if(!exact::div(x,y,q))return false;
+        const long long t=q.num/q.den;     // truncation towards zero (fmod semantics)
+        if(op=='q'){out=exactInt(t);return true;}
+        Rational prod,rem;
+        if(!exact::mul(y,Rational::integer(t),prod)||!exact::sub(x,prod,rem))return false;
+        out=Value::fromRational(rem);return true;
+    }
+    case '=': case 'n': case '<': case '>': case 'l': case 'g':{
+        int c=0;
+        if(!exactCompare(a,b,c))return false;
+        const bool v=op=='='?c==0:op=='n'?c!=0:op=='<'?c<0:op=='>'?c>0:op=='l'?c<=0:c>=0;
+        out=exactInt(v?1:0);return true;
+    }
+    case '&': out=exactInt(!a.isZero()&&!b.isZero());return true;
+    case '|': out=exactInt(!a.isZero()||!b.isZero());return true;
+    case 'x': out=exactInt(a.isZero()!=b.isZero());return true;
+    default: return false;
+    }
+}
+// Exact counterparts of the scalar functions; false for functions whose
+// values are transcendental (or random) at the given argument.
+FXAI_NOINLINE bool exactApply(const std::string& f,const Value* a,std::size_t count,Value& out){
+    long long i0=0,i1=0,i2=0;
+    Rational r0,r1,deg;
+    if(count==1){
+        const Value& x=a[0];
+        if(f=="abs"){if(x.sign()<0)return exact::neg(x,out);out=x;return true;}
+        if(f=="sqrt")return exact::sqrt(x,out);
+        if(f=="cbrt")return exact::nthRoot(x,3,out);
+        if(isRootN(f))return exact::nthRoot(x,static_cast<int>(std::strtol(f.c_str()+4,nullptr,10)),out);
+        if(f=="recip")return exact::div(exactInt(1),x,out);
+        if(f=="percent")return exact::div(x,exactInt(100),out);
+        if(f=="re"||f=="real"||f=="conj"){out=x;return true;}
+        if(f=="im"||f=="imag"){out=Value{};return true;}
+        if(f=="arg"){const int s=x.sign();if(s==0)return false;return exactFromDegrees(Rational::integer(s>0?0:180),out);}
+        if(f=="sin"||f=="cos"||f=="tan"){
+            if(!exactToDegrees(x,deg))return false;
+            Value sn,cs;
+            if(f!="cos"&&!exactSinDegrees(deg,sn))return false;
+            if(f!="sin"){Rational d90;if(!exact::add(deg,Rational::integer(90),d90)||!exactSinDegrees(d90,cs))return false;}
+            if(f=="sin"){out=sn;return true;}
+            if(f=="cos"){out=cs;return true;}
+            return exact::div(sn,cs,out);
+        }
+        if(f=="asin"||f=="acos"||f=="atan"){
+            if(!(f=="atan"?exactAtanDegrees(x,deg):exactAsinDegrees(x,deg)))return false;
+            if(f=="acos"&&!exact::sub(Rational::integer(90),deg,deg))return false;
+            return exactFromDegrees(deg,out);
+        }
+        if(f=="fromdeg"){Rational d;if(x.isZero()){out=x;return true;}if(!x.rational(d))return false;return exactFromDegrees(d,out);}
+        if(f=="deg"){if(x.isZero()){out=x;return true;}if(!x.isPi())return false;Rational d;if(!exact::mul(x.term(0).coef,Rational::integer(180),d))return false;out=Value::fromRational(d);return true;}
+        if(f=="grad"){if(x.isZero()){out=x;return true;}if(!x.isPi())return false;Rational d;if(!exact::mul(x.term(0).coef,Rational::integer(200),d))return false;out=Value::fromRational(d);return true;}
+        if(f=="rad"){Rational d;if(!x.rational(d)||!exact::div(d,Rational::integer(180),d))return false;out=Value::piTimes(d);return true;}
+        if(f=="ln"||f=="exp"){
+            Rational v;
+            if(!x.rational(v))return false;
+            if(f=="ln"&&v==Rational::integer(1)){out=Value{};return true;}
+            if(f=="exp"&&v.isZero()){out=exactInt(1);return true;}
+            return false;
+        }
+        if(f=="log"||f=="log10"||f=="log2"){
+            Rational v;
+            if(!x.rational(v)||v.sign()<=0)return false;
+            const long long base=f=="log2"?2:10;
+            for(long long k=-60;k<=60;++k){
+                Value p;
+                if(exact::powInt(exactInt(base),k,p)&&p==x){out=exactInt(k);return true;}
+            }
+            return false;
+        }
+        if(f=="floor"||f=="intg"){if(!exactFloor(x,i0))return false;out=exactInt(i0);return true;}
+        if(f=="ceil"){Value n;if(!exact::neg(x,n)||!exactFloor(n,i0))return false;out=exactInt(-i0);return true;}
+        if(f=="trunc"||f=="int"||f=="frac"){
+            if(!exactFloor(x,i0))return false;
+            if(x.sign()<0&&!(x.isRational()&&x==exactInt(i0)))++i0;          // towards zero
+            if(f=="frac")return exact::sub(x,exactInt(i0),out);
+            out=exactInt(i0);return true;
+        }
+        if(f=="round"){Value h;if(!exactRoundDigits(x,0,h))return false;out=h;return true;}
+        if(f=="sign"){out=exactInt(x.sign());return true;}
+        if(f=="not"){out=exactInt(x.isZero()?1:0);return true;}
+        if(f=="fact"||f=="factorial"){
+            if(!exactInteger(x,i0)||i0<0||i0>20)return false;
+            long long p=1;for(long long k=2;k<=i0;++k)p*=k;
+            out=exactInt(p);return true;
+        }
+        if(f=="dms"){out=x;return true;}
+        return false;
+    }
+    if(count==2){
+        const Value &x=a[0],&y=a[1];
+        if(f=="pow")return exactPow(x,y,out);
+        if(f=="frac")return exact::div(x,y,out);
+        if(f=="root"){if(!exactInteger(x,i0)||i0<2||i0>99)return false;return exact::nthRoot(y,static_cast<int>(i0),out);}
+        if(f=="log"){
+            // log(a,b) = k when b = a^k exactly (rational base).
+            if(!x.rational(r0)||!y.rational(r1)||r0.sign()<=0||r1.sign()<=0||r0==Rational::integer(1))return false;
+            const double k=std::round(std::log(r1.toDouble())/std::log(r0.toDouble()));
+            if(!std::isfinite(k)||std::abs(k)>64)return false;
+            Value p;
+            if(!exact::powInt(x,static_cast<long long>(k),p)||p!=y)return false;
+            out=exactInt(static_cast<long long>(k));return true;
+        }
+        if(f=="min"||f=="max"){int c=0;if(!exactCompare(x,y,c))return false;out=(f=="min")==(c<=0)?x:y;return true;}
+        if(f=="hypot"){Value s1,s2,s;return exact::mul(x,x,s1)&&exact::mul(y,y,s2)&&exact::add(s1,s2,s)&&exact::sqrt(s,out);}
+        if(f=="mod")return exactBinary('%',x,y,out);
+        if(f=="round"||f=="rndfix"){if(!exactInteger(y,i1))return false;return exactRoundDigits(x,i1,out);}
+        if(f=="gcd"||f=="lcm"){
+            if(!exactInteger(x,i0)||!exactInteger(y,i1))return false;
+            long long g=std::llabs(i0),h=std::llabs(i1);while(h){const long long t=g%h;g=h;h=t;}
+            if(f=="gcd"){out=exactInt(g);return true;}
+            if(g==0){out=Value{};return true;}
+            long long l=0;
+            if(__builtin_mul_overflow(std::llabs(i0)/g,std::llabs(i1),&l))return false;
+            out=exactInt(l);return true;
+        }
+        if(f=="ncr"||f=="npr"){
+            if(!exactInteger(x,i0)||!exactInteger(y,i1)||i0<0||i1<0||i1>i0)return false;
+            long long acc=1;
+            if(f=="npr"){for(long long k=0;k<i1;++k)if(__builtin_mul_overflow(acc,i0-k,&acc))return false;}
+            else{
+                const long long k=std::min(i1,i0-i1);
+                for(long long j=1;j<=k;++j){
+                    // acc * (n-k+j) / j is always an integer; divide by the gcd first to delay overflow.
+                    long long num=i0-k+j,den=j;
+                    long long g=std::gcd(acc,den);acc/=g;den/=g;
+                    g=std::gcd(num,den);num/=g;den/=g;
+                    if(den!=1||__builtin_mul_overflow(acc,num,&acc))return false;
+                }
+            }
+            out=exactInt(acc);return true;
+        }
+        return false;
+    }
+    if(count==3){
+        if(f=="mixed"){
+            Value fr;
+            if(!exact::div(a[1],a[2],fr))return false;
+            return a[0].sign()<0?exact::sub(a[0],fr,out):exact::add(a[0],fr,out);
+        }
+        if(f=="dms"){
+            Value m,s,t;
+            return exact::div(a[1],exactInt(60),m)&&exact::div(a[2],exactInt(3600),s)&&exact::add(a[0],m,t)&&exact::add(t,s,out);
+        }
+        if(f=="modexp"){
+            if(!exactInteger(a[0],i0)||!exactInteger(a[1],i1)||!exactInteger(a[2],i2)||i0<0||i1<0||i2<=0)return false;
+            return false;   // the floating-point path computes it exactly with integers; nothing to add
+        }
+    }
+    return false;
+}
+
+bool exactNode(const ast::Node& n,Env& env,Value& out);
+
+FXAI_NOINLINE bool exactToken(const ast::Node& n,Env& env,Value& out){
+    if(n.text.empty())return false;
+    const unsigned char c0=static_cast<unsigned char>(n.text[0]);
+    if(std::isdigit(c0)||c0=='.'){
+        Rational r;
+        if(!exact::parseDecimal(n.text,r))return false;
+        if(exact::isPlainDecimal(n.text))env.decimal=true;
+        out=Value::fromRational(r);return true;
+    }
+    double bound=0;
+    if(lookupBinding(env,n.text,bound)){
+        if(!isInteger(bound)||std::abs(bound)>9e15)return false;   // only exact integer indices (Σ, Π)
+        out=exactInt(static_cast<long long>(bound));return true;
+    }
+    const std::string low=lower(n.text);
+    if(low=="pi"){out=Value::piTimes(Rational::integer(1));return true;}
+    if(low=="tau"){out=Value::piTimes(Rational::integer(2));return true;}
+    const CalculatorMemory* mem=env.ctx.memory;
+    bool decimal=false;
+    if(low=="ans"||low=="preans"){
+        if(!mem||!(low=="ans"?mem->exactAnswer(out,decimal):mem->exactPreviousAnswer(out,decimal)))return false;
+        env.decimal=env.decimal||decimal;return true;
+    }
+    if(n.text.size()==1&&std::isalpha(c0)&&n.text!="e"&&n.text!="i"){
+        if(!mem||!mem->exactRecall(static_cast<char>(c0),out,decimal))return false;
+        env.decimal=env.decimal||decimal;return true;
+    }
+    return false;
+}
+// Σ / Π over integer ranges with an exact body (at most 10000 terms).
+FXAI_NOINLINE bool exactSum(const ast::Node& n,Env& env,Value& out){
+    if(n.children.size()!=3||!n.children[0]||!n.children[1]||!n.children[2])return false;
+    Value lo,hi;
+    long long a=0,b=0;
+    if(!exactNode(*n.children[1],env,lo)||!exactNode(*n.children[2],env,hi)||!exactInteger(lo,a)||!exactInteger(hi,b))return false;
+    if(b-a>10000)return false;
+    if(++env.depth>4){--env.depth;return false;}
+    struct DepthGuard{Env& e;~DepthGuard(){--e.depth;}} guard{env};
+    const bool sum=n.text=="sum";
+    Value acc=exactInt(sum?0:1);
+    LocalBind bind(env,"x",0.0);
+    for(long long k=a;k<=b;++k){
+        bind.set(static_cast<double>(k));
+        Value term;
+        if(!exactNode(*n.children[0],env,term))return false;
+        if(!(sum?exact::add(acc,term,acc):exact::mul(acc,term,acc)))return false;
+    }
+    out=acc;return true;
+}
+FXAI_NOINLINE bool exactCall(const ast::Node& n,Env& env,Value& out){
+    const std::string& f=n.text;
+    if(f=="sum"||f=="prod")return exactSum(n,env,out);
+    // Numerical calculus and random numbers have no exact value here.
+    if(isLazyFunction(f)||f=="rand"||f=="ran"||f=="randint"||f=="rannorm"||f=="ranbin")return false;
+    const std::size_t count=n.children.size();
+    if(count>3)return false;
+    Value args[3];
+    for(std::size_t i=0;i<count;++i){
+        if(!n.children[i]||!exactNode(*n.children[i],env,args[i]))return false;
+    }
+    if(!exactApply(f,args,count,out))return false;
+    // Rounding to decimal places gives a decimal result (fx-CG50 RndFix).
+    if(f=="rndfix"||(f=="round"&&count==2))env.decimal=true;
+    return true;
+}
+FXAI_NOINLINE bool exactChain(const ast::Node& top,Env& env,Value& out){
+    constexpr std::size_t kChunk=16;
+    const ast::Node* spine[kChunk];
+    std::size_t count=0;
+    const ast::Node* cur=&top;
+    while(count<kChunk&&isChainNode(*cur)){spine[count++]=cur;cur=cur->children[0].get();}
+    if(!(isChainNode(*cur)?exactChain(*cur,env,out):exactNode(*cur,env,out)))return false;
+    while(count>0){
+        const ast::Node& b=*spine[--count];
+        Value rhs;
+        if(!exactNode(*b.children[1],env,rhs)||!exactBinary(b.text[0],out,rhs,out))return false;
+    }
+    return true;
+}
+bool exactNode(const ast::Node& node,Env& env,Value& out){
+    using ast::Kind;
+    if(!exactStackOk(env))return false;
+    const ast::Node* np=&node;
+    while(np->kind==Kind::Group){
+        if(np->children.size()!=1||!np->children[0])return false;
+        np=np->children[0].get();
+    }
+    const ast::Node& n=*np;
+    switch(n.kind){
+    case Kind::Token: return exactToken(n,env,out);
+    case Kind::Unary:
+        if(n.children.size()!=1||!n.children[0]||!exactNode(*n.children[0],env,out))return false;
+        return n.text!="-"||exact::neg(out,out);
+    case Kind::Binary:{
+        if(n.children.size()!=2||!n.children[0]||!n.children[1]||n.text.size()!=1)return false;
+        if(isChainNode(n))return exactChain(n,env,out);
+        Value rhs;
+        if(!exactNode(*n.children[0],env,out)||!exactNode(*n.children[1],env,rhs))return false;
+        return exactBinary(n.text[0],out,rhs,out);
+    }
+    case Kind::Call: return exactCall(n,env,out);
+    default: return false;
+    }
+}
+
 bool isEditorKind(ast::Kind k){
     using ast::Kind;
     return k==Kind::Row||k==Kind::Fraction||k==Kind::Radical||k==Kind::Power||k==Kind::Subscript||k==Kind::Calculus||k==Kind::Matrix;
@@ -785,6 +1291,18 @@ Complex evaluateComplex(const ast::Node& parsed,const EvalContext& context){
     if(std::abs(im)<1e-14*scale)im=0;
     return {re==0.0?0.0:re,im==0.0?0.0:im};
 }
+bool evaluateExact(const ast::Node& parsed,const EvalContext& context,exact::Value& out,bool* decimalInput){
+    try{
+        Env env{context};
+        env.stackBase=stackPosition();
+        exact::Value v;
+        if(!exactNode(parsed,env,v))return false;
+        out=v;
+        if(decimalInput)*decimalInput=env.decimal;
+        return true;
+    }catch(...){return false;}
+}
+const char* const* systemVariableNames() noexcept{return kSystemNames;}
 Complex evaluateValue(const ast::Node& parsed,const EvalContext& context){
     if(context.complexMode==ComplexMode::Real)return {evaluateReal(parsed,context),0.0};
     return evaluateComplex(parsed,context);
@@ -836,6 +1354,6 @@ double differentiate(const CompiledExpression& f,double x,const CalculatorMemory
     auto g=[&](double v){return f(v,memory);};
     return ridders(g,x);
 }
-bool isReservedWord(const std::string& lowerName){return isFunctionName(lowerName)||isConstantName(lowerName);}
+bool isReservedWord(const std::string& lowerName){return isFunctionName(lowerName)||isConstantName(lowerName)||operatorWord(lowerName)!=0;}
 void seedRandom(std::uint32_t seed) noexcept{g_rng=seed?seed:0x9E3779B9u;}
 } // namespace fx

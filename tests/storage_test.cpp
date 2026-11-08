@@ -66,8 +66,9 @@ int main() {
         ws.settings.complex = fx::ComplexMode::Rectangular;
         ws.settings.wifiSsid = "rete"; ws.settings.relayHost = "relay.example.org"; ws.settings.relayToken = "tok";
         ws.memory.store('A', 12.5); ws.memory.store('Z', -1e-9); ws.memory.setAnswer(42);
-        ws.history.push_back({"1+1", {2, 0}, {}, 0});
-        ws.history.push_back({"sqrt(-4)", {0, 2}, {}, 0});
+        auto entry = [](const char* e, fx::Complex v) { fx::HistoryEntry h; h.expression = e; h.value = v; return h; };
+        ws.history.push_back(entry("1+1", {2, 0}));
+        ws.history.push_back(entry("sqrt(-4)", {0, 2}));
         ws.functions[1] = {"x^2-1", fx::GraphType::YGreater, false, 3};
         ws.view.xmin = -10; ws.view.xmax = 10;
         ws.lists[0] = {1, 2, 3.5}; ws.lists[5] = {9};

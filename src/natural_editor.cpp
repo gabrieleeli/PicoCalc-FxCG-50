@@ -176,6 +176,12 @@ void importInto(NaturalNode& target, const std::string& s, int depth) {
             target.children.insert(target.children.begin() + static_cast<std::ptrdiff_t>(operand.first), box);
             continue;
         }
+        if (c == '_') {                 // repeating digits of a decimal literal
+            std::size_t e = i + 1; while (e < s.size() && std::isdigit(static_cast<unsigned char>(s[e]))) ++e;
+            auto box = node(Kind::Call, "period");
+            box->children = {importRow(s.substr(i + 1, e - i - 1), depth)};
+            target.children.push_back(box); i = e; continue;
+        }
         if (std::isalpha(c)) {
             std::size_t e = i; while (e < s.size() && (std::isalnum(static_cast<unsigned char>(s[e])) || s[e] == '_')) ++e;
             const std::string word = s.substr(i, e - i);
@@ -192,6 +198,7 @@ void importInto(NaturalNode& target, const std::string& s, int depth) {
                     const long idx = std::strtol(args[0].c_str(), nullptr, 10);
                     if (idx >= 2 && idx <= 99 && std::to_string(idx) == args[0]) { box = node(Kind::Radical, args[0]); box->children = {importRow(args[1], depth)}; }
                 } else if (low == "frac" && args.size() == 2) { box = node(Kind::Fraction); box->children = {importRow(args[0], depth), importRow(args[1], depth)}; }
+                else if (low == "mixed" && args.size() == 3) { box = node(Kind::Call, "mixed"); box->children = {importRow(args[0], depth), importRow(args[1], depth), importRow(args[2], depth)}; }
                 else if (low == "abs" && args.size() == 1) { box = node(Kind::Call, "abs"); box->children = {importRow(inner, depth)}; }
                 else if (low == "log" && args.size() == 2) { box = node(Kind::Call, "log"); box->children = {importRow(args[0], depth), importRow(args[1], depth)}; }
                 else if ((low == "integral" || low == "sum" || low == "prod") && args.size() == 3) { box = node(Kind::Calculus, low); box->children = {importRow(args[0], depth), importRow(args[1], depth), importRow(args[2], depth)}; }
@@ -336,7 +343,7 @@ void NaturalEditor::insert(char c) {
         autoRootParenOpened_ = false; error_.clear(); return;
     }
     autoRootParenPending_ = false;
-    if (!(std::isalnum(static_cast<unsigned char>(c)) || std::strchr(".+-*/%!,()=<>", c) != nullptr))
+    if (!(std::isalnum(static_cast<unsigned char>(c)) || std::strchr(".+-*/%!,()=<>~", c) != nullptr))
         throw std::invalid_argument("Carattere non ammesso nell'espressione");
     pushUndo();
     insertNode(token(std::string(1, c)));
@@ -413,7 +420,29 @@ void NaturalEditor::insertFraction() {
     autoRootParenPending_ = false;
     checkLimits();
 }
+void NaturalEditor::insertMixedFraction() {
+    auto m = node(Kind::Call, "mixed"); m->children = {row(), row(), row()};
+    insertBox(m, 0);
+}
+void NaturalEditor::insertPeriod() {
+    // The period must follow the decimal digits of a number ("0.1", "2.").
+    const auto& r = activeRow();
+    bool point = false;
+    for (std::size_t k = cursor_; k > 0; --k) {
+        const auto& t = *r.children[k - 1];
+        if (t.kind != Kind::Token || t.text.size() != 1) break;
+        if (t.text[0] == '.') { point = true; break; }
+        if (!std::isdigit(static_cast<unsigned char>(t.text[0]))) break;
+    }
+    if (!point) throw SyntaxError("Syntax ERROR: il periodo va dopo la parte decimale (es. 0.1)");
+    auto p = node(Kind::Call, "period"); p->children = {row()};
+    insertBox(p, 0);
+}
 void NaturalEditor::insertRadical() { insertNthRoot(2); }
+void NaturalEditor::insertRootTemplate() {
+    auto r = node(Kind::Call, "root"); r->children = {row(), row()};
+    insertBox(r, 0);
+}
 void NaturalEditor::insertNthRoot(unsigned index) {
     if (index < 2 || index > 99) throw std::invalid_argument("Indice della radice: usare 2-99");
     auto f = node(Kind::Radical, std::to_string(index)); f->children = {row()};

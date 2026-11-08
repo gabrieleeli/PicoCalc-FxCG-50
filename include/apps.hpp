@@ -57,19 +57,31 @@ class RunMatrixApp final : public App {
 public:
     AppId id() const override { return AppId::RunMatrix; }
     void enter(Context& ctx) override;
+    void leave(Context& ctx) override;
     void key(Context& ctx, const KeyEvent& ev) override;
     void draw(Context& ctx, gfx::Canvas& c) override;
     NaturalEditor& editor() noexcept { return editor_; }
-    int browsing() const noexcept { return browse_; }
+    int browsing() const noexcept { return browse_; }      // selected history entry, -1 = input line
+    int editing() const noexcept { return editIndex_; }    // history entry edited in place, -1 = none
+    enum class Menu : std::uint8_t { None, Math, OptnCategories, OptnItems, VarsCategories, VarsItems };
 private:
     void evaluate(Context& ctx);
     void insertCatalogItem(Context& ctx, const std::string& item);
+    void beginEdit(Context& ctx, int index);
+    void endEdit(bool restoreInput);
+    bool browseKey(Context& ctx, const KeyEvent& ev);    // false: the key leaves browsing and is handled normally
+    void menuChoice(Context& ctx, int choice);
+    HistoryEntry* target(Context& ctx);                  // entry the result keys act on
+    void resultKey(Context& ctx, int kind);              // 0 S<->D, 1 ab/c<->d/c, 2 period, 3..7 views
     NaturalEditor editor_;
-    int browse_{-1};                // selected history entry, -1 = editing
+    ast::NodePtr pendingInput_;     // input line kept aside while a history entry is edited
+    int browse_{-1};
+    int editIndex_{-1};
     int scrollX_{0};
     PopupMenu menu_;
-    int menuKind_{0};               // 1 MATH, 2 OPTN categories, 3 OPTN items, 4 VARS
+    Menu menuKind_{Menu::None};
     int optnCategory_{0};
+    int varsCategory_{0};
 };
 
 class SymbolsApp final : public App {

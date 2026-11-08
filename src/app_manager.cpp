@@ -54,6 +54,7 @@ ui::StatusInfo Context::status(const char* title) const {
     s.angle = angleName(ws.settings.angle);
     s.display = displayModeName(ws.settings.display);
     s.complex = complexName(ws.settings.complex);
+    s.fraction = ws.settings.mixedFractions ? "ab/c" : "d/c";
     s.battery = platform.batteryPercent();
     s.charging = platform.charging();
     s.shift = shift_;

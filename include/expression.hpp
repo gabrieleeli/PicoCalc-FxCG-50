@@ -1,4 +1,5 @@
 #pragma once
+#include "exact.hpp"
 #include "expression_ast.hpp"
 #include "memory.hpp"
 #include <complex>
@@ -21,14 +22,34 @@ enum class ComplexMode : std::uint8_t { Real = 0, Rectangular = 1, Polar = 2 };
 // Variables bound by the caller (graph X, polar theta, parametric T, surface Y).
 struct Binding { const char* name{}; double value{}; };
 
+// Read-only access to variables owned by other applications (V-Window,
+// Table range, ...). The workspace implements it; names are lower-case and
+// listed by systemVariableNames().
+class NameResolver {
+public:
+    virtual ~NameResolver() = default;
+    virtual bool resolve(const std::string& lowerName, double& out) const = 0;
+};
+
+// Facts about one evaluation that the caller may want to show.
+struct EvalInfo {
+    bool numerical{};      // an iterative numerical method (integral, d/dx, SOLVE) produced the value
+};
+
 struct EvalContext {
     static constexpr std::size_t MaxBindings = 4;
     const CalculatorMemory* memory{};
     Binding bindings[MaxBindings]{};
     std::uint8_t bindingCount{};
     ComplexMode complexMode{ComplexMode::Real};
+    const NameResolver* names{};
+    EvalInfo* info{};
     EvalContext& bind(const char* name, double value);
 };
+
+// Shared variable names resolved through EvalContext::names
+// ("xmin", "xmax", ..., "tblstart"); nullptr-terminated.
+const char* const* systemVariableNames() noexcept;
 
 // Limits that keep parsing and evaluation within the 32 KB stack of the RP2350.
 // Longer input raises "Memory ERROR", deeper nesting "Stack ERROR".
@@ -51,6 +72,15 @@ double evaluateReal(const ast::Node& parsed, const EvalContext& context);
 Complex evaluateComplex(const ast::Node& parsed, const EvalContext& context);
 // Evaluates according to context.complexMode.
 Complex evaluateValue(const ast::Node& parsed, const EvalContext& context);
+
+// Exact evaluation of the same AST with rationals, surds (a√b/c ± d√e/f) and
+// rational multiples of π (see exact.hpp). Returns false when any step has no
+// exact form (transcendental functions, numerical calculus, random numbers,
+// variables holding approximate values...); it never throws and never
+// approximates. decimalInput is set when the expression contains a plain
+// decimal literal or a value that came from one (fx-CG50: such results are
+// shown as decimals, S<->D converts them).
+bool evaluateExact(const ast::Node& parsed, const EvalContext& context, exact::Value& out, bool* decimalInput = nullptr);
 
 // Parsed-once expression for graphs, tables and solvers.
 class CompiledExpression {

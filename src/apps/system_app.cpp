@@ -1,4 +1,4 @@
-// SYSTEM / SET UP: angle unit, display format, complex mode, fraction results,
+// SYSTEM / SET UP: angle unit, display format, complex mode, exact results, Frac Result (d/c, ab/c),
 // backlights, Wi-Fi and AI relay configuration, device information and reset.
 #include "apps.hpp"
 #include "net.hpp"
@@ -36,7 +36,7 @@ DisplayFormat displayFrom(int i) {
 FormField choice(const char* l, std::vector<std::string> c, int sel) { const std::string t = c[static_cast<std::size_t>(sel)]; return {l, t, FormField::Type::Choice, std::move(c), sel}; }
 FormField text(const char* l, const std::string& v, bool secret = false) { return {l, v, secret ? FormField::Type::Secret : FormField::Type::Text, {}, 0}; }
 FormField number(const char* l, double v) { return {l, formatReal(v), FormField::Type::Number, {}, 0}; }
-enum Field { FAngle, FDisplay, FComplex, FFrac, FLcd, FKbd, FSsid, FPass, FHost, FPort, FPath, FToken, FProvider, FModel, FTokens };
+enum Field { FAngle, FDisplay, FComplex, FFrac, FMixed, FLcd, FKbd, FSsid, FPass, FHost, FPort, FPath, FToken, FProvider, FModel, FTokens };
 } // namespace
 
 void SystemApp::enter(Context& ctx) {
@@ -45,7 +45,8 @@ void SystemApp::enter(Context& ctx) {
         choice("Angolo", {"Deg", "Rad", "Gra"}, s.angle == AngleMode::Degrees ? 0 : s.angle == AngleMode::Radians ? 1 : 2),
         choice("Display", displayChoices(), displayIndex(s.display)),
         choice("Complessi", {"Real", "a+bi", "r\xE2\x88\xA0\xCE\xB8"}, static_cast<int>(s.complex)),
-        choice("Frazioni", {"On", "Off"}, s.fractionResults ? 0 : 1),
+        choice("Forme esatte", {"On", "Off"}, s.fractionResults ? 0 : 1),
+        choice("Frac Result", {"d/c", "ab/c"}, s.mixedFractions ? 1 : 0),
         number("Luce LCD", s.lcdBacklight),
         number("Luce tastiera", s.kbdBacklight),
         text("Wi-Fi SSID", s.wifiSsid),
@@ -68,6 +69,7 @@ void SystemApp::apply(Context& ctx) {
     s.display = displayFrom(f[FDisplay].choice);
     s.complex = static_cast<ComplexMode>(f[FComplex].choice);
     s.fractionResults = f[FFrac].choice == 0;
+    s.mixedFractions = f[FMixed].choice == 1;
     const double lcd = form_.number(ctx, FLcd), kbd = form_.number(ctx, FKbd), port = form_.number(ctx, FPort), tokens = form_.number(ctx, FTokens);
     if (lcd < 0 || lcd > 255 || kbd < 0 || kbd > 255) throw MathError("Argument ERROR: retroilluminazione 0..255");
     if (port < 1 || port > 65535 || port != static_cast<int>(port)) throw MathError("Argument ERROR: porta 1..65535");

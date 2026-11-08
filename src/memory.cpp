@@ -1,12 +1,28 @@
 #include "memory.hpp"
 #include <cctype>
 namespace fx {
-void CalculatorMemory::store(char n,double v){n=static_cast<char>(std::toupper(static_cast<unsigned char>(n)));if(n<'A'||n>'Z')throw std::invalid_argument("Variabile ammessa: A-Z");vars_[n-'A']=v;used_[n-'A']=true;}
+namespace {
+std::size_t slotIndex(char n){n=static_cast<char>(std::toupper(static_cast<unsigned char>(n)));if(n<'A'||n>'Z')throw std::invalid_argument("Variabile ammessa: A-Z");return static_cast<std::size_t>(n-'A');}
+}
+void CalculatorMemory::store(char n,double v){const auto i=slotIndex(n);vars_[i]=v;used_[i]=true;exact_[i]=ExactSlot{};}
+void CalculatorMemory::storeExact(char n,double v,const exact::Value& e,bool decimal){const auto i=slotIndex(n);vars_[i]=v;used_[i]=true;exact_[i]=ExactSlot{e,true,decimal};}
+bool CalculatorMemory::exactRecall(char n,exact::Value& out,bool& decimal) const{
+ const auto i=slotIndex(n);
+ if(!used_[i]){out=exact::Value{};decimal=false;return true;}
+ if(!exact_[i].valid)return false;
+ out=exact_[i].value;decimal=exact_[i].decimal;return true;
+}
+const ExactSlot& CalculatorMemory::exactSlot(char n) const{return exact_[slotIndex(n)];}
+bool CalculatorMemory::used(char n) const{return used_[slotIndex(n)];}
+void CalculatorMemory::setAnswerExact(double v,const exact::Value& e,bool decimal){setAnswer(v,0.0);exactAns_=ExactSlot{e,true,decimal};}
+bool CalculatorMemory::exactAnswer(exact::Value& out,bool& decimal) const{if(!exactAns_.valid)return false;out=exactAns_.value;decimal=exactAns_.decimal;return true;}
+bool CalculatorMemory::exactPreviousAnswer(exact::Value& out,bool& decimal) const{if(!exactPreAns_.valid)return false;out=exactPreAns_.value;decimal=exactPreAns_.decimal;return true;}
+void CalculatorMemory::restoreAnswers(double a,double ai,const ExactSlot& ae,double p,double pi,const ExactSlot& pe){answer_=a;answerImag_=ai;exactAns_=ae;previousAnswer_=p;previousAnswerImag_=pi;exactPreAns_=pe;}
 double CalculatorMemory::recall(char n)const{n=static_cast<char>(std::toupper(static_cast<unsigned char>(n)));if(n<'A'||n>'Z')throw std::invalid_argument("Variabile ammessa: A-Z");// fx-CG50 behaviour: variables that were never assigned read as 0.
 return used_[n-'A']?vars_[n-'A']:0.0;}
-void CalculatorMemory::clear(char n){n=static_cast<char>(std::toupper(static_cast<unsigned char>(n)));if(n<'A'||n>'Z')throw std::invalid_argument("Variabile ammessa: A-Z");vars_[n-'A']=0;used_[n-'A']=false;}
-void CalculatorMemory::clearAll(){vars_.fill(0);used_.fill(false);answer_=previousAnswer_=independent_=0;answerImag_=previousAnswerImag_=0;}
-void CalculatorMemory::setAnswer(double v,double im){previousAnswer_=answer_;previousAnswerImag_=answerImag_;answer_=v;answerImag_=im;}
+void CalculatorMemory::clear(char n){const auto i=slotIndex(n);vars_[i]=0;used_[i]=false;exact_[i]=ExactSlot{};}
+void CalculatorMemory::clearAll(){vars_.fill(0);used_.fill(false);exact_.fill(ExactSlot{});answer_=previousAnswer_=independent_=0;answerImag_=previousAnswerImag_=0;exactAns_=exactPreAns_=ExactSlot{};}
+void CalculatorMemory::setAnswer(double v,double im){previousAnswer_=answer_;previousAnswerImag_=answerImag_;exactPreAns_=exactAns_;answer_=v;answerImag_=im;exactAns_=ExactSlot{};}
 namespace {
 std::string superscript(char c){switch(c){case '0':return "⁰";case '1':return "¹";case '2':return "²";case '3':return "³";case '4':return "⁴";case '5':return "⁵";case '6':return "⁶";case '7':return "⁷";case '8':return "⁸";case '9':return "⁹";case '-':return "⁻";case '+':return "⁺";default:return std::string(1,c);}}
 struct Symbol {const char* name; const char* glyph;};

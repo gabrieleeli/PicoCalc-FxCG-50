@@ -48,8 +48,13 @@ public:
     void insertText(const std::string& text);           // inserts each ASCII char / UTF-8 symbol
     void insertSymbol(const std::string& utf8);          // single atomic token (pi, theta, ->, ...)
     void insertFraction();
+    void insertMixedFraction();                            // a b/c template (whole, numerator, denominator)
+    // Repeating digits after a decimal number (0.1 + period 6 = 0.1666...).
+    // Throws SyntaxError when the cursor does not follow a decimal number.
+    void insertPeriod();
     void insertRadical();
     void insertNthRoot(unsigned index);
+    void insertRootTemplate();                             // x√ template with an editable index: root(n, x)
     void insertPower();
     void insertSquare();                                  // x^2 template
     void insertSubscript();

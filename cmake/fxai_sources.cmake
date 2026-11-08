@@ -3,6 +3,7 @@ set(FXAI_ROOT ${CMAKE_CURRENT_LIST_DIR}/..)
 set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/math_engine.cpp
   ${FXAI_ROOT}/src/expression.cpp
+  ${FXAI_ROOT}/src/exact.cpp
   ${FXAI_ROOT}/src/memory.cpp
   ${FXAI_ROOT}/src/number_format.cpp
   ${FXAI_ROOT}/src/point_a.cpp

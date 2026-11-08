@@ -31,7 +31,7 @@ void statusBar(gfx::Canvas& c, const StatusInfo& s) {
         font::draw(c, font::Face::Small, x, 3, t, StatusInk);
         x += font::measure(font::Face::Small, t).width + 8;
     };
-    item(s.angle); item(s.display); item(s.complex);
+    item(s.angle); item(s.display); item(s.complex); item(s.fraction);
     int right = ScreenW - 26;
     batteryIcon(c, right, 4, s.battery, s.charging);
     if (s.wifi) { right -= 18; font::draw(c, font::Face::Small, right, 3, "WiFi", Accent); right -= 8; }
