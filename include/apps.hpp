@@ -215,7 +215,7 @@ private:
         int stop{0};
     };
     struct ModifyState { int plot{-1}; int function{-1}; std::string vars; int selected{0}; double step{1}; };
-    struct InputBox { Ask ask{Ask::None}; std::string prompt; LineEditor editor{40}; bool text{false}; };
+    struct InputBox { Ask ask{Ask::None}; std::string prompt; LineEditor editor{40}; bool text{false}; bool replace{false}; };
 
     // graph_app.cpp: screens other than the plot
     std::vector<Line> lines(Context& ctx) const;
@@ -236,6 +236,8 @@ private:
     void menuChoice(Context& ctx, Menu menu, int choice);
     void showMenu(Menu m, const char* title, std::vector<std::string> items);
     void ask(Ask a, const std::string& prompt, const std::string& initial = {}, bool text = false);
+    // Pop-up showing the current value: the first typed character replaces it.
+    void askValue(Ask a, const std::string& prompt, const std::string& current, bool text = false);
     void answer(Context& ctx, Ask a, const std::string& text);
     void confirm(Confirm c, const std::string& message);
     void confirmed(Context& ctx, Confirm c);
@@ -370,6 +372,7 @@ private:
     std::vector<graph::Curve> sketchCurves_;
     std::uint32_t lastMove_{0};
     int speed_{1};                                       // pointer acceleration
+    bool keepPointer_{false};                            // next pointer starts at the trace point
     std::uint64_t fingerprint_{0};                       // data the plots were built from
     std::uint64_t sourceFingerprint(Context& ctx) const;
 };

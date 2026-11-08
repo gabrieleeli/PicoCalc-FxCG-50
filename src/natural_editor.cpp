@@ -349,7 +349,9 @@ void NaturalEditor::insert(char c) {
         autoRootParenOpened_ = false; error_.clear(); return;
     }
     autoRootParenPending_ = false;
-    if (!(std::isalnum(static_cast<unsigned char>(c)) || std::strchr(".+-*/%!,()=<>~", c) != nullptr))
+    // '[' ']' delimit the GRAPH suffixes ",[a,b]" / ",[A=...]", '@' starts a graph
+    // function reference; the parser rejects them where they are not valid.
+    if (!(std::isalnum(static_cast<unsigned char>(c)) || std::strchr(".+-*/%!,()=<>~[]@", c) != nullptr))
         throw std::invalid_argument("Carattere non ammesso nell'espressione");
     pushUndo();
     insertNode(token(std::string(1, c)));

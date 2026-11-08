@@ -87,9 +87,10 @@ void GraphApp::enter(Context& ctx) {
     if (!ctx.ws.graph.overlay.empty() && overlayPath_ != ctx.ws.graph.overlay) {
         try { recallPicture(ctx, ctx.ws.graph.overlay, false); } catch (const std::exception&) { overlay_ = {}; overlayPath_.clear(); }
     }
-    if (tableDraw(ctx)) { screen_ = Screen::Plot; mode_ = Mode::View; return; }
-    if (screen_ == Screen::Plot) mode_ = Mode::View;
-    else if (screen_ != Screen::List) screen_ = Screen::List;
+    mode_ = Mode::View; action_ = Action::None;
+    // From the main menu GRAPH opens on the relation list (fx-CG50); TABLE's
+    // GPH-CON/GPH-PLT open the graph screen directly.
+    screen_ = tableDraw(ctx) ? Screen::Plot : Screen::List;
 }
 void GraphApp::leave(Context& ctx) {
     ctx.ws.table.draw = TableRange::Draw::None;
@@ -336,9 +337,9 @@ void GraphApp::windowKey(Context& ctx, const KeyEvent& ev) {
     const AngleMode angle = ctx.ws.settings.angle;
     auto current = [&]() { ViewWindow keep = ctx.ws.view; try { (void)applyWindow(ctx); } catch (...) { ctx.ws.view = keep; throw; } return ctx.ws.view; };
     switch (ev.key) {
-    case Key::F1: loadWindowForm(graph::initialWindow(angle)); windowText_.assign(WCount, std::string()); return;
-    case Key::F2: { ViewWindow v = graph::trigWindow(windowStart_, angle); loadWindowForm(v); windowText_.assign(WCount, std::string()); return; }
-    case Key::F3: { ViewWindow v = graph::standardWindow(windowStart_); loadWindowForm(v); windowText_.assign(WCount, std::string()); return; }
+    case Key::F1: loadWindowForm(graph::initialWindow(angle));  return;
+    case Key::F2: { ViewWindow v = graph::trigWindow(windowStart_, angle); loadWindowForm(v);  return; }
+    case Key::F3: { ViewWindow v = graph::standardWindow(windowStart_); loadWindowForm(v);  return; }
     case Key::F4: showMenu(Menu::VMem, "V-MEM", {"STORE", "RECALL"}); return;
     case Key::F5: showMenu(Menu::Square, "SQUARE", {"Y-BASE (X corretto)", "X-BASE (Y corretto)"}); return;
     case Key::F6:
@@ -496,7 +497,15 @@ void GraphApp::modifyKey(Context& ctx, const KeyEvent& ev) {
         changed(ctx);
         return;
     }
-    case Key::F1: case Key::Optn: copyTarget_ = 0; screen_ = Screen::List; ctx.toast("Scegli la riga e premi EXE"); return;
+    case Key::F1: case Key::Optn: {
+        // COPY: choose the destination line, starting on the first empty one.
+        copyTarget_ = 0;
+        const auto ls = lines(ctx);
+        for (int i = 0; i < static_cast<int>(ls.size()); ++i)
+            if (ctx.ws.functions[static_cast<std::size_t>(ls[static_cast<std::size_t>(i)].fn)].empty()) { row_ = i; break; }
+        screen_ = Screen::List;
+        return;
+    }
     case Key::Exit: mode_ = Mode::View; return;
     case Key::Char:
         if (!ev.ctrl && (std::isdigit(static_cast<unsigned char>(ev.ch)) || ev.ch == '-' || ev.ch == '.' || ev.ch == '(')) {
@@ -505,9 +514,9 @@ void GraphApp::modifyKey(Context& ctx, const KeyEvent& ev) {
         }
         return;
     case Key::Exe:
-        if (modify_.selected >= n) ask(Ask::ModifyStep, "Step:", numberText(modify_.step));
-        else ask(Ask::ModifyValue, std::string(1, modify_.vars[static_cast<std::size_t>(modify_.selected)]) + "=",
-                 numberText(ctx.ws.memory.recall(modify_.vars[static_cast<std::size_t>(modify_.selected)])));
+        if (modify_.selected >= n) askValue(Ask::ModifyStep, "Step:", numberText(modify_.step));
+        else askValue(Ask::ModifyValue, std::string(1, modify_.vars[static_cast<std::size_t>(modify_.selected)]) + "=",
+                      numberText(ctx.ws.memory.recall(modify_.vars[static_cast<std::size_t>(modify_.selected)])));
         return;
     default: return;
     }
@@ -545,9 +554,13 @@ void GraphApp::showMenu(Menu m, const char* title, std::vector<std::string> item
     menuKind_ = m;
 }
 void GraphApp::ask(Ask a, const std::string& prompt, const std::string& initial, bool text) {
-    input_.ask = a; input_.prompt = prompt; input_.text = text;
+    input_.ask = a; input_.prompt = prompt; input_.text = text; input_.replace = false;
     input_.editor.clear();
     if (!initial.empty()) input_.editor.insert(initial);
+}
+void GraphApp::askValue(Ask a, const std::string& prompt, const std::string& current, bool text) {
+    ask(a, prompt, current, text);
+    input_.replace = !current.empty();
 }
 void GraphApp::confirm(Confirm c, const std::string& message) { confirm_ = c; confirmText_ = message; }
 
@@ -619,7 +632,7 @@ void GraphApp::menuChoice(Context& ctx, Menu menu, int c) {
             if (ctx.ws.graph.project.empty()) ask(Ask::ProjectSaveAs, "SAVE AS (max 16):", {}, true);
             else saveProject(ctx, ctx.ws.graph.project);
             return;
-        case 3: ask(Ask::ProjectSaveAs, "SAVE AS (max 16):", ctx.ws.graph.project, true); return;
+        case 3: askValue(Ask::ProjectSaveAs, "SAVE AS (max 16):", ctx.ws.graph.project, true); return;
         default: openFiles(ctx, Browse::Projects); return;      // RENAME / DELETE from the file list
         }
     case Menu::EditMore:
@@ -649,7 +662,7 @@ void GraphApp::menuChoice(Context& ctx, Menu menu, int c) {
         ViewWindow cur = ctx.ws.view;
         try { (void)applyWindow(ctx); cur = ctx.ws.view; } catch (...) { throw; }
         loadWindowForm(c == 0 ? graph::squareWindow(cur) : graph::squareXBase(cur));
-        windowText_.assign(WCount, std::string());
+        
         return;
     }
     default:
@@ -681,7 +694,7 @@ void GraphApp::answer(Context& ctx, Ask a, const std::string& text) {
         const int n = index(static_cast<int>(VWindowMemories));
         if (!(ctx.ws.graph.vmemUsed & (1u << (n - 1)))) throw MathError("Memory ERROR: V-Win" + std::to_string(n) + " vuota");
         loadWindowForm(ctx.ws.graph.vmem[static_cast<std::size_t>(n - 1)]);
-        windowText_.assign(WCount, std::string());
+        
         return;
     }
     case Ask::RefY: case Ask::RefR: case Ask::RefXt: case Ask::RefYt: case Ask::RefX: {
@@ -760,7 +773,7 @@ void GraphApp::confirmed(Context& ctx, Confirm c) {
             ViewWindow v = background_.view;
             const ViewWindow cur = screen_ == Screen::Window ? windowStart_ : ctx.ws.view;
             v.tmin = cur.tmin; v.tmax = cur.tmax; v.tstep = cur.tstep;    // T values are not taken (manual 5-11)
-            if (screen_ == Screen::Window) { loadWindowForm(v); windowText_.assign(WCount, std::string()); }
+            if (screen_ == Screen::Window) { loadWindowForm(v);  }
             else if (validateView(v).empty()) { ctx.ws.view = v; ctx.markDirty(); ctx.ws.graph.projectModified = true; }
         }
         return;
@@ -781,6 +794,8 @@ void GraphApp::key(Context& ctx, const KeyEvent& ev) {
             answer(ctx, a, text);
             return;
         }
+        if (input_.replace && ((ev.is(Key::Char) && !ev.ctrl) || ev.is(Key::Del))) input_.editor.clear();
+        input_.replace = false;
         (void)input_.editor.key(ev);
         return;
     }

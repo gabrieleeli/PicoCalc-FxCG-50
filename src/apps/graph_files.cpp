@@ -169,7 +169,7 @@ void GraphApp::filesKey(Context& ctx, const KeyEvent& ev) {
         return;
     }
     case Key::F2: if (n) confirm(Confirm::DeleteFile, "Eliminare " + selectedName() + "?"); return;
-    case Key::F3: if (n) ask(Ask::ProjectRename, "Nuovo nome:", files::stem(selectedName()), true); return;
+    case Key::F3: if (n) askValue(Ask::ProjectRename, "Nuovo nome:", files::stem(selectedName()), true); return;
     case Key::F4:
         if (n && files_.purpose != Browse::Projects) {
             // BMP copy of a picture, readable on a PC.

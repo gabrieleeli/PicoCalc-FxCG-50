@@ -522,7 +522,7 @@ void GraphApp::drawOverlays(Context& ctx, gfx::Canvas& c) {
         if (action_ == Action::Pen && pen_.size() >= 4)
             for (std::size_t i = 2; i + 1 < pen_.size(); i += 2) mathSegment(c, vp, pen_[i - 2], pen_[i - 1], pen_[i], pen_[i + 1], penFor(gs.sketchLine, false), graphColor(gs.plotColor));
         c.resetClip();
-        cross(px_, py_, action_ == Action::Pan && panGrab_ ? Accent : Ink);
+        cross(px_, py_, action_ == Action::Pan && panGrab_ ? Accent : Error);
         if (gs.coord) bottomText_ = "X=" + value(x, df) + "  Y=" + value(y, df);
         break;
     }
@@ -822,7 +822,11 @@ void GraphApp::traceKey(Context& ctx, const KeyEvent& ev) {
         // The other tools start from the plain graph (the trace point is kept for ZOOM IN/OUT).
         {
             double x, y;
-            if (tracePoint(x, y)) { const graph::Viewport vp(ctx.ws.view); px_ = std::clamp(static_cast<int>(std::lround(vp.screenX(x))), L, R); py_ = std::clamp(static_cast<int>(std::lround(vp.screenY(y))), T, B); }
+            if (tracePoint(x, y)) {
+                const graph::Viewport vp(ctx.ws.view);
+                px_ = std::clamp(static_cast<int>(std::lround(vp.screenX(x))), L, R); py_ = std::clamp(static_cast<int>(std::lround(vp.screenY(y))), T, B);
+                keepPointer_ = ev.is(Key::F2);
+            }
         }
         mode_ = Mode::View; action_ = Action::None;
         plotKey(ctx, ev);
@@ -836,6 +840,10 @@ void GraphApp::startPointer(Action purpose) {
     mode_ = Mode::Pointer;
     havePoint1_ = false; penDown_ = false; panGrab_ = false;
     pen_.clear();
+    // The pointer appears in the centre of the screen (manual 5-8), or at the
+    // trace point when ZOOM is chosen during Trace.
+    if (!keepPointer_) { px_ = (L + R + 1) / 2; py_ = (T + B + 1) / 2; }
+    keepPointer_ = false;
     px_ = std::clamp(px_, L, R); py_ = std::clamp(py_, T, B);
     speed_ = 1;
 }
@@ -1244,7 +1252,7 @@ void GraphApp::zoomAction(Context& ctx, int choice) {
     if ((mode_ == Mode::Trace || mode_ == Mode::Results) && cursor(tx, ty)) { cx = tx; cy = ty; }
     switch (choice) {
     case 0: startPointer(Action::ZoomBox); return;
-    case 1: ask(Ask::Factor, "Xfact:", formatReal(ctx.ws.graph.settings.xFactor, {DisplayMode::Norm2, 0})); return;
+    case 1: askValue(Ask::Factor, "Xfact:", formatReal(ctx.ws.graph.settings.xFactor, {DisplayMode::Norm2, 0})); return;
     case 2: startPointer(Action::ZoomIn); return;
     case 3: startPointer(Action::ZoomOut); return;
     case 4: {
@@ -1360,7 +1368,7 @@ void GraphApp::plotMenu(Context& ctx, Menu menu, int c) {
         switch (c) {
         case 0: showMenu(Menu::Picture, "PICTURE", {"STORE (Pict 1-20)", "SAVE\xE2\x80\xA2" "AS", "RECALL (Pict 1-20)", "OPEN", "Esporta BMP"}); return;
         case 1: startPointer(Action::Pan); return;
-        case 2: ask(Ask::Fade, "Fade I/O (0-100%):", std::to_string(ctx.ws.graph.settings.fade)); return;
+        case 2: askValue(Ask::Fade, "Fade I/O (0-100%):", std::to_string(ctx.ws.graph.settings.fade)); return;
         case 3:
             if (background_.empty()) throw MathError("Argument ERROR: nessuna immagine di sfondo");
             showMenu(Menu::BgvWin, "BGV-WIN", {"SAVE", "SAVE\xE2\x80\xA2" "AS"});
@@ -1402,7 +1410,7 @@ bool GraphApp::plotAnswer(Context& ctx, Ask a, const std::string& text) {
         const double v = number();
         if (!(v > 0)) throw MathError("Argument ERROR: fattore positivo");
         factorX_ = v;
-        ask(Ask::FactorY, "Yfact:", formatReal(ctx.ws.graph.settings.yFactor, {DisplayMode::Norm2, 0}));
+        askValue(Ask::FactorY, "Yfact:", formatReal(ctx.ws.graph.settings.yFactor, {DisplayMode::Norm2, 0}));
         return true;
     }
     case Ask::FactorY: {
