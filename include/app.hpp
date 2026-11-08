@@ -1,4 +1,5 @@
 #pragma once
+#include "app_registry.hpp"
 #include "graphics_engine.hpp"
 #include "keyboard_input.hpp"
 #include "ui_kit.hpp"
@@ -11,24 +12,6 @@ namespace fx {
 namespace net { class ChatTransport; }
 
 namespace app {
-
-// Main-menu entries in fx-CG50 order (keys 1..9, A..K) plus project extensions.
-enum class AppId : std::uint8_t {
-    RunMatrix, Statistics, EActivity, Spreadsheet, Graph, DynaGraph, Table, Recursion,
-    ConicGraphs, Equation, Program, Financial, ECon4, Link, Memory, System, Geometry,
-    PicturePlot, Graph3D, Conversion, Python, AiChat, Symbols, Count, MainMenu = 0xFF
-};
-constexpr std::size_t AppCount = static_cast<std::size_t>(AppId::Count);
-
-struct AppInfo {
-    AppId id;
-    const char* name;          // main menu caption
-    const char* key;           // direct access key on the main menu
-    std::uint16_t color;       // icon colour
-    const char* missing;       // non-null while the mode is not implemented
-};
-const AppInfo& appInfo(AppId id) noexcept;
-const AppInfo& appInfoAt(std::size_t index) noexcept;
 
 // Hardware services an application may use (implemented by the Pico and host ports).
 class Platform {

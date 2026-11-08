@@ -22,7 +22,7 @@ target_link_libraries(fxai_host_board PUBLIC fxai_core)
 
 enable_testing()
 set(FXAI_TESTS
-  expression_test exact_test run_matrix_test editor_test math_engine_test storage_test app_test apps_flow_test solvers_test statistics_test ai_test
+  expression_test exact_test run_matrix_test architecture_test editor_test math_engine_test storage_test app_test apps_flow_test solvers_test statistics_test ai_test
   graphics_smoke font_smoke animation_smoke cheatsheet_smoke vpam_ast_smoke)
 foreach(t ${FXAI_TESTS})
   add_executable(${t} ${CMAKE_CURRENT_LIST_DIR}/${t}.cpp)
@@ -30,6 +30,9 @@ foreach(t ${FXAI_TESTS})
   target_include_directories(${t} PRIVATE ${CMAKE_CURRENT_LIST_DIR})
   add_test(NAME ${t} COMMAND ${t})
 endforeach()
+
+# The architecture test reads the sources it checks.
+target_compile_definitions(architecture_test PRIVATE FXAI_SOURCE_ROOT="${FXAI_ROOT}")
 
 add_executable(picocalc_sim ${FXAI_ROOT}/src/platform/host/simulator.cpp)
 target_link_libraries(picocalc_sim PRIVATE fxai_core fxai_host_board)

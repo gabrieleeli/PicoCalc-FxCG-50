@@ -23,9 +23,12 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/run_matrix.cpp
   ${FXAI_ROOT}/src/solvers.cpp
   ${FXAI_ROOT}/src/statistics.cpp
+  ${FXAI_ROOT}/src/app_registry.cpp
+  ${FXAI_ROOT}/src/app_models.cpp
   ${FXAI_ROOT}/src/app_manager.cpp
   ${FXAI_ROOT}/src/firmware.cpp
   ${FXAI_ROOT}/src/apps/launcher.cpp
+  ${FXAI_ROOT}/src/apps/symbols_app.cpp
   ${FXAI_ROOT}/src/apps/run_matrix_app.cpp
   ${FXAI_ROOT}/src/apps/widgets.cpp
   ${FXAI_ROOT}/src/apps/equation_app.cpp

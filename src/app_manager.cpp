@@ -6,41 +6,9 @@
 
 namespace fx::app {
 namespace {
-using gfx::rgb888To565;
-const AppInfo kApps[AppCount] = {
-    {AppId::RunMatrix,   "Run-Matrix",   "1", rgb888To565(232, 96, 30),  nullptr},
-    {AppId::Statistics,  "Statistics",   "2", rgb888To565(30, 160, 90),  nullptr},
-    {AppId::EActivity,   "eActivity",    "3", rgb888To565(220, 40, 140), "Documenti misti testo/formule non ancora implementati."},
-    {AppId::Spreadsheet, "Spreadsheet",  "4", rgb888To565(70, 150, 40),  "Foglio di calcolo con formule e riferimenti non ancora implementato."},
-    {AppId::Graph,       "Graph",        "5", rgb888To565(60, 70, 200),  nullptr},
-    {AppId::DynaGraph,   "Dyna Graph",   "6", rgb888To565(40, 110, 220), "Grafici dinamici con parametro variabile non ancora implementati."},
-    {AppId::Table,       "Table",        "7", rgb888To565(120, 70, 200), nullptr},
-    {AppId::Recursion,   "Recursion",    "8", rgb888To565(40, 60, 160),  "Successioni ricorsive an+1 non ancora implementate."},
-    {AppId::ConicGraphs, "Conic Graphs", "9", rgb888To565(30, 140, 170), "Grafici di coniche non ancora implementati."},
-    {AppId::Equation,    "Equation",     "A", rgb888To565(240, 140, 20), nullptr},
-    {AppId::Program,     "Program",      "B", rgb888To565(170, 160, 20), "Linguaggio di programmazione Casio non implementato."},
-    {AppId::Financial,   "Financial",    "C", rgb888To565(230, 190, 20), "Calcoli finanziari (TVM, interessi) non ancora implementati."},
-    {AppId::ECon4,       "E-CON4",       "D", rgb888To565(130, 40, 180), "Richiede un data logger esterno: non supportato."},
-    {AppId::Link,        "Link",         "E", rgb888To565(70, 140, 140), "Trasferimento dati via USB/seriale non ancora implementato."},
-    {AppId::Memory,      "Memory",       "F", rgb888To565(70, 110, 170), nullptr},
-    {AppId::System,      "System",       "G", rgb888To565(60, 130, 150), nullptr},
-    {AppId::Geometry,    "Geometry",     "H", rgb888To565(50, 110, 210), "Costruzioni geometriche interattive non ancora implementate."},
-    {AppId::PicturePlot, "Picture Plot", "I", rgb888To565(40, 170, 80),  "Picture Plot non ancora implementato."},
-    {AppId::Graph3D,     "3D Graph",     "J", rgb888To565(70, 60, 190),  "Grafici 3D z=f(x,y) non ancora implementati nell'interfaccia."},
-    {AppId::Conversion,  "Conversion",   "K", rgb888To565(220, 90, 120), nullptr},
-    {AppId::Python,      "Python",       "L", rgb888To565(40, 120, 180), "Runtime MicroPython non integrato in questa build."},
-    {AppId::AiChat,      "AI Chat",      "M", rgb888To565(0, 150, 200),  nullptr},
-    {AppId::Symbols,     "Symbols",      "N", rgb888To565(130, 60, 170), nullptr},
-};
 const char* angleName(AngleMode a) { return a == AngleMode::Degrees ? "Deg" : a == AngleMode::Radians ? "Rad" : "Gra"; }
 const char* complexName(ComplexMode m) { return m == ComplexMode::Real ? "Real" : m == ComplexMode::Rectangular ? "a+bi" : "r\xE2\x88\xA0\xCE\xB8"; }
 } // namespace
-
-const AppInfo& appInfo(AppId id) noexcept {
-    const auto i = static_cast<std::size_t>(id);
-    return kApps[i < AppCount ? i : 0];
-}
-const AppInfo& appInfoAt(std::size_t index) noexcept { return kApps[index < AppCount ? index : 0]; }
 
 void Context::open(AppId id) { manager_.open(id); }
 void Context::home() { manager_.home(); }
