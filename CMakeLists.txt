@@ -48,7 +48,9 @@ target_compile_definitions(picocalc_fxai PRIVATE
   FXAI_LCD_SPI_HZ=${FXAI_LCD_SPI_HZ}
   FXAI_LCD_RGB565=$<BOOL:${FXAI_LCD_RGB565}>
   FXAI_DISPLAY_CALIBRATION_SCREEN=$<BOOL:${FXAI_DISPLAY_CALIBRATION_SCREEN}>
-  PICO_STACK_SIZE=0x8000)
+  PICO_STACK_SIZE=0x8000
+  # Stack bytes one evaluation may use (of the 32 KB stack); see expression.cpp.
+  FXAI_EVAL_STACK_BUDGET=16384)
 pico_set_linker_script(picocalc_fxai ${CMAKE_CURRENT_LIST_DIR}/src/platform/pico/memmap_picocalc.ld)
 target_link_libraries(picocalc_fxai
   pico_stdlib hardware_spi hardware_i2c hardware_flash pico_flash

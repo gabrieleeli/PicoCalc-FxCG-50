@@ -31,6 +31,11 @@ ast::NodePtr cloneTree(const NaturalNode& node);
 // the canonical linear text consumed by the single expression parser.
 class NaturalEditor {
 public:
+    // Input limits (bounded recursion and memory on the RP2350): an edit that
+    // would exceed them is undone and raises "Stack ERROR" / "Memory ERROR".
+    static constexpr std::size_t MaxTemplateDepth = 12;   // nested template boxes
+    static constexpr std::size_t MaxNodes = 400;          // nodes in the whole input tree
+
     NaturalEditor();
     void clear();
     // Structural import of linear text: "(a)/(b)" and frac(a,b) become fractions,
@@ -97,5 +102,6 @@ private:
     void insertNode(ast::NodePtr node);
     void mergeWord();
     void pushUndo();
+    void checkLimits();   // rolls back the edit recorded by the last pushUndo() and throws
 };
 } // namespace fx

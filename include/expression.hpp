@@ -2,6 +2,7 @@
 #include "expression_ast.hpp"
 #include "memory.hpp"
 #include <complex>
+#include <cstddef>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -29,9 +30,20 @@ struct EvalContext {
     EvalContext& bind(const char* name, double value);
 };
 
+// Limits that keep parsing and evaluation within the 32 KB stack of the RP2350.
+// Longer input raises "Memory ERROR", deeper nesting "Stack ERROR".
+constexpr std::size_t MaxExpressionTokens = 320;   // lexer tokens per expression
+constexpr int MaxExpressionNesting = 32;           // parentheses, signs, exponents, arguments
+
 // Parses linear text into the canonical expression AST (Binary/Unary/Call/
-// Group/Token nodes). Throws SyntaxError.
+// Group/Token nodes). Throws SyntaxError, or MathError for the limits above.
 ast::NodePtr parseExpression(const std::string& expression);
+
+// Stack bytes one evaluation may use before it stops with "Stack ERROR". This
+// is a safety net behind the parser limits; the firmware sets it at build time
+// (FXAI_EVAL_STACK_BUDGET) and tests may lower it.
+void setEvalStackBudget(std::size_t bytes) noexcept;
+std::size_t evalStackBudget() noexcept;
 
 // Evaluates a parsed AST. evaluateReal() throws NonRealError when a real
 // result does not exist; evaluateComplex() uses principal branches.

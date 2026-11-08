@@ -14,6 +14,17 @@ using ast::Kind;
 constexpr std::size_t MaxUndo = 32;
 
 NodePtr node(Kind k, std::string text = {}) { return ast::make(k, std::move(text)); }
+std::size_t countNodes(const NaturalNode& n) {
+    std::size_t total = 1;
+    for (const auto& c : n.children) if (c) total += countNodes(*c);
+    return total;
+}
+// Number of nested template boxes (rows do not count).
+std::size_t templateDepth(const NaturalNode& n) {
+    std::size_t inner = 0;
+    for (const auto& c : n.children) if (c) inner = std::max(inner, templateDepth(*c));
+    return (n.kind == Kind::Row || n.kind == Kind::Token) ? inner : inner + 1;
+}
 NodePtr row() { return node(Kind::Row); }
 NodePtr token(std::string t) { return node(Kind::Token, std::move(t)); }
 
@@ -127,7 +138,7 @@ void appendToken(NaturalNode& r, std::string text) {
     }
 }
 void importInto(NaturalNode& target, const std::string& s, int depth) {
-    if (depth > 24) throw SyntaxError("Syntax ERROR: annidamento eccessivo");
+    if (depth > static_cast<int>(NaturalEditor::MaxTemplateDepth)) throw MathError("Stack ERROR: annidamento eccessivo");
     std::size_t i = 0;
     while (i < s.size()) {
         const unsigned char c = static_cast<unsigned char>(s[i]);
@@ -214,6 +225,9 @@ bool NaturalEditor::empty() const noexcept { return !root_ || root_->children.em
 void NaturalEditor::setExpression(const std::string& expression) {
     auto r = row();
     importInto(*r, expression, 0);
+    // Imported text may be slightly larger than the tree it was produced from.
+    if (countNodes(*r) > 2 * MaxNodes) throw MathError("Memory ERROR: espressione troppo lunga");
+    if (templateDepth(*r) > MaxTemplateDepth) throw MathError("Stack ERROR: annidamento eccessivo");
     root_ = r; rowPath_.clear(); cursor_ = root_->children.size(); error_.clear();
     autoRootParenPending_ = false; autoRootParenOpened_ = false;
 }
@@ -236,6 +250,16 @@ NaturalNode* NaturalEditor::parentBox() {
     NaturalNode* n = root_.get();
     for (std::size_t i = 0; i + 1 < rowPath_.size(); ++i) n = n->children.at(rowPath_[i]).get();
     return n;
+}
+void NaturalEditor::checkLimits() {
+    const std::size_t depth = templateDepth(*root_);
+    if (depth <= MaxTemplateDepth && countNodes(*root_) <= MaxNodes) return;
+    if (!undo_.empty()) {
+        auto s = std::move(undo_.back()); undo_.pop_back();
+        root_ = s.root; rowPath_ = s.path; cursor_ = s.cursor;
+    }
+    autoRootParenPending_ = false; autoRootParenOpened_ = false;
+    throw MathError(depth > MaxTemplateDepth ? "Stack ERROR: troppi modelli annidati" : "Memory ERROR: espressione troppo lunga");
 }
 void NaturalEditor::pushUndo() {
     if (!root_) return;
@@ -268,6 +292,7 @@ void NaturalEditor::paste(const NaturalNode& tree) {
     if (copy->kind == Kind::Row) items = copy->children; else items.push_back(copy);
     r.children.insert(r.children.begin() + static_cast<std::ptrdiff_t>(cursor_), items.begin(), items.end());
     cursor_ += items.size();
+    checkLimits();
 }
 
 void NaturalEditor::insertNode(NodePtr n) {
@@ -336,10 +361,12 @@ void NaturalEditor::insert(char c) {
             r.children.insert(r.children.begin() + static_cast<std::ptrdiff_t>(cursor_), box);
             rowPath_.push_back(cursor_); rowPath_.push_back(0); cursor_ = 0;
             autoRootParenPending_ = true; autoRootParenOpened_ = false;
+            checkLimits();
             return;
         }
         if (std::isalpha(static_cast<unsigned char>(c))) mergeWord();
     }
+    checkLimits();
 }
 void NaturalEditor::insertText(const std::string& text) {
     for (std::size_t i = 0; i < text.size();) {
@@ -354,6 +381,7 @@ void NaturalEditor::insertSymbol(const std::string& utf8) {
     pushUndo();
     autoRootParenPending_ = false;
     insertNode(token(utf8));
+    checkLimits();
 }
 void NaturalEditor::insertBox(NodePtr box, std::size_t focusChild) {
     pushUndo();
@@ -363,6 +391,7 @@ void NaturalEditor::insertBox(NodePtr box, std::size_t focusChild) {
     rowPath_.push_back(cursor_); rowPath_.push_back(focusChild);
     cursor_ = box->children[focusChild]->children.size();
     error_.clear();
+    checkLimits();
 }
 void NaturalEditor::insertFraction() {
     pushUndo();
@@ -382,6 +411,7 @@ void NaturalEditor::insertFraction() {
     rowPath_.push_back(at); rowPath_.push_back(tookOperand ? 1 : 0);
     cursor_ = 0;
     autoRootParenPending_ = false;
+    checkLimits();
 }
 void NaturalEditor::insertRadical() { insertNthRoot(2); }
 void NaturalEditor::insertNthRoot(unsigned index) {
@@ -400,17 +430,20 @@ void NaturalEditor::insertPower() {
         auto p = node(Kind::Power); p->children = {row(), row()};
         r.children.insert(r.children.begin() + static_cast<std::ptrdiff_t>(cursor_), p);
         rowPath_.push_back(cursor_); rowPath_.push_back(0); cursor_ = 0;
+        checkLimits();
         return;
     }
     auto operand = takeTrailingOperand(r, cursor_);
     auto p = node(Kind::Power); p->children = {operand.second, row()};
     r.children.insert(r.children.begin() + static_cast<std::ptrdiff_t>(operand.first), p);
     rowPath_.push_back(operand.first); rowPath_.push_back(1); cursor_ = 0;
+    checkLimits();
 }
 void NaturalEditor::insertSquare() {
     insertPower();
     insertNode(token("2"));
     (void)leaveChild(true);
+    checkLimits();
 }
 void NaturalEditor::insertSubscript() {
     auto& r = activeRow();
@@ -419,6 +452,7 @@ void NaturalEditor::insertSubscript() {
     auto p = node(Kind::Subscript); p->children = {operand.second, row()};
     r.children.insert(r.children.begin() + static_cast<std::ptrdiff_t>(operand.first), p);
     rowPath_.push_back(operand.first); rowPath_.push_back(1); cursor_ = 0;
+    checkLimits();
 }
 void NaturalEditor::insertGroup() { auto g = node(Kind::Group); g->children = {row()}; insertBox(g, 0); }
 void NaturalEditor::insertAbs() { auto g = node(Kind::Call, "abs"); g->children = {row()}; insertBox(g, 0); }

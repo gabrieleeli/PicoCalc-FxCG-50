@@ -138,5 +138,47 @@ int main() {
         int placeholders = 0; for (const auto& o : ph.layout(0, 40, 200)) if (o.kind == NaturalDrawOp::Kind::Placeholder) ++placeholders;
         CHECK(placeholders == 2);
     }
+    // --- input limits (bounded recursion and memory on the RP2350)
+    {
+        auto errorStarts = [](auto&& action, const char* prefix) {
+            try { action(); } catch (const MathError& e) { return std::string(e.what()).rfind(prefix, 0) == 0; } catch (...) { return false; }
+            return false;
+        };
+        NaturalEditor deep;
+        for (std::size_t i = 0; i < NaturalEditor::MaxTemplateDepth; ++i) deep.insertFraction();
+        CHECK(deep.cursorPath().size() == 2 * NaturalEditor::MaxTemplateDepth);
+        const std::string before = deep.toExpression();
+        CHECK(errorStarts([&] { deep.insertFraction(); }, "Stack ERROR"));
+        CHECK(errorStarts([&] { deep.insertRadical(); }, "Stack ERROR"));
+        CHECK_EQ_STR(deep.toExpression(), before);                  // the refused edit was rolled back
+        CHECK(deep.cursorPath().size() == 2 * NaturalEditor::MaxTemplateDepth);
+        deep.insert('1');                                           // plain input still works at the limit
+        CHECK(deep.toExpression() != before);
+        // A power that takes a nested operand also counts the operand's depth.
+        NaturalEditor powDeep;
+        for (std::size_t i = 0; i < NaturalEditor::MaxTemplateDepth; ++i) powDeep.insertRadical();
+        powDeep.insert('2');
+        powDeep.moveEnd();
+        CHECK(errorStarts([&] { powDeep.insertPower(); }, "Stack ERROR"));
+        NaturalEditor longInput;
+        bool full = false;
+        for (std::size_t i = 0; i < NaturalEditor::MaxNodes + 10 && !full; ++i)
+            full = errorStarts([&] { longInput.insert(i % 2 ? '+' : '1'); }, "Memory ERROR");
+        CHECK(full);
+        const std::string longText = longInput.toExpression();
+        CHECK(longText.size() == NaturalEditor::MaxNodes - 1);       // root row + one node per character
+        CHECK(errorStarts([&] { longInput.insertSymbol("pi"); }, "Memory ERROR"));
+        CHECK_EQ_STR(longInput.toExpression(), longText);
+        CHECK(longInput.undo());                                    // history still consistent after refusals
+        CHECK(longInput.toExpression().size() == longText.size() - 1);
+        NaturalEditor paster; type(paster, "12+34");
+        bool pasteRefused = false;
+        for (int i = 0; i < 12 && !pasteRefused; ++i) { auto copy = paster.copyTree(); pasteRefused = errorStarts([&] { paster.paste(*copy); }, "Memory ERROR"); }
+        CHECK(pasteRefused);
+        NaturalEditor imported;
+        std::string nested; for (int i = 0; i < 13; ++i) nested += "sqrt("; nested += "2"; for (int i = 0; i < 13; ++i) nested += ")";
+        CHECK(errorStarts([&] { imported.setExpression(nested); }, "Stack ERROR"));
+        CHECK_NOTHROW(imported.setExpression("sqrt(sqrt(2))+(1)/(3)"));
+    }
     return testutil::finish("editor_test");
 }

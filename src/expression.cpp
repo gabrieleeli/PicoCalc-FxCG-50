@@ -14,9 +14,22 @@
 #include <type_traits>
 #include <vector>
 
+#if defined(__GNUC__)
+#define FXAI_NOINLINE __attribute__((noinline))
+#else
+#define FXAI_NOINLINE
+#endif
+
+// Default evaluation stack budget: generous on the host, set by the firmware
+// build for the 32 KB stack of the RP2350 (see CMakeLists.txt).
+#ifndef FXAI_EVAL_STACK_BUDGET
+#define FXAI_EVAL_STACK_BUDGET (1024u * 1024u)
+#endif
+
 namespace fx {
 namespace {
 constexpr double kPi = 3.14159265358979323846;
+std::size_t gEvalStackBudget = FXAI_EVAL_STACK_BUDGET;
 
 // ---------------------------------------------------------------- names
 struct FnInfo { const char* name; std::uint8_t minArgs, maxArgs; bool lazy; };
@@ -153,7 +166,10 @@ private:
 // ---------------------------------------------------------------- parser
 class Parser {
 public:
-    explicit Parser(std::vector<Tok> t):t_(std::move(t)){}
+    explicit Parser(std::vector<Tok> t):t_(std::move(t)){
+        // t_ always ends with an End token.
+        if(t_.size()>MaxExpressionTokens+1)throw MathError("Memory ERROR: espressione troppo lunga");
+    }
     ast::NodePtr run(){
         if(t_.size()==1)throw SyntaxError("Syntax ERROR: espressione vuota");
         auto n=addSub();
@@ -165,6 +181,19 @@ public:
     }
 private:
     std::vector<Tok> t_; std::size_t i_{};
+    int depth_{};
+    // Every nested level (parentheses, function arguments, signs, exponents)
+    // passes through unary() or powerOperand(); bounding it bounds the
+    // recursion of the parser and of the evaluator.
+    struct Nest {
+        int& d;
+        explicit Nest(int& depth):d(depth){
+            if(++d>MaxExpressionNesting){--d;throw MathError("Stack ERROR: troppi livelli annidati");}
+        }
+        ~Nest(){--d;}
+        Nest(const Nest&)=delete;
+        Nest& operator=(const Nest&)=delete;
+    };
     const Tok& peek() const {return t_[i_];}
     bool isOp(char c) const {return peek().type==TT::Op&&peek().op==c;}
     bool eat(char c){if(isOp(c)){++i_;return true;}return false;}
@@ -199,6 +228,7 @@ private:
         return n;
     }
     ast::NodePtr unary(){
+        const Nest nest(depth_);
         if(eat('+'))return unary();
         if(eat('-')){auto n=ast::make(ast::Kind::Unary,"-");n->children={unary()};return n;}
         return power();
@@ -214,7 +244,7 @@ private:
         }
         return base;
     }
-    ast::NodePtr powerOperand(){return power();}
+    ast::NodePtr powerOperand(){const Nest nest(depth_);return power();}
     ast::NodePtr postfix(){
         auto n=atom();
         for(;;){
@@ -326,7 +356,19 @@ struct Env {
     Binding local[8]{};
     int localCount{};
     std::uint8_t depth{};
+    std::uintptr_t stackBase{};
 };
+// Current stack position. The frame address (not a local's address) is used so
+// that AddressSanitizer's fake stack does not distort the measurement.
+FXAI_NOINLINE std::uintptr_t stackPosition() noexcept {
+    return reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0));
+}
+void checkStack(const Env& env){
+    const std::uintptr_t here=stackPosition();
+    // The stack grows downwards on every supported target.
+    if(env.stackBase>here&&env.stackBase-here>gEvalStackBudget)
+        throw MathError("Stack ERROR: calcolo troppo annidato");
+}
 struct LocalBind {
     Env& env;
     LocalBind(Env& e,const char* name,double v):env(e){
@@ -394,7 +436,9 @@ template<typename F> double ridders(F f,double x){
     return best;
 }
 
-template<typename T> T callFunction(const ast::Node& n,Env& env){
+// Calculus functions evaluate their body lazily with x bound; env.depth limits
+// how many of them can be nested.
+template<typename T> FXAI_NOINLINE T callCalculus(const ast::Node& n,Env& env){
     const std::string& f=n.text;
     auto arg=[&](std::size_t i)->T{return evalNode<T>(*n.children.at(i),env);};
     auto rarg=[&](std::size_t i)->double{return asReal<T>(arg(i),f.c_str());};
@@ -433,6 +477,16 @@ template<typename T> T callFunction(const ast::Node& n,Env& env){
         if(lo<=hi){for(long long k=lo;k<=hi;++k){bind.set(static_cast<double>(k));const T v=evalNode<T>(body,env);if(f=="sum")acc+=v;else acc*=v;}}
         return acc;
     }
+    throw SyntaxError("Syntax ERROR: funzione sconosciuta "+f);
+}
+
+// Non-recursive part of a function call: the arguments are already evaluated,
+// so the large frame of this function is never live across the recursion.
+template<typename T> FXAI_NOINLINE T applyFunction(const ast::Node& n,const T* args,std::size_t count){
+    const std::string& f=n.text;
+    auto arg=[&](std::size_t i)->T{if(i>=count)throw SyntaxError("Argument ERROR: "+f+" numero di argomenti errato");return args[i];};
+    auto rarg=[&](std::size_t i)->double{return asReal<T>(arg(i),f.c_str());};
+    auto R=[](double v){return fromReal<T>(v);};
 
     // ---- zero-argument
     if(f=="rand"||f=="ran")return R(static_cast<double>(nextRandom()>>8)/16777216.0);
@@ -571,10 +625,22 @@ template<typename T> T callFunction(const ast::Node& n,Env& env){
     throw SyntaxError("Syntax ERROR: funzione sconosciuta "+f);
 }
 
-template<typename T> T evalNode(const ast::Node& n,Env& env){
-    using ast::Kind;
-    switch(n.kind){
-    case Kind::Token:{
+bool isLazyFunction(const std::string& f){
+    return f=="integral"||f=="integrate"||f=="derivative"||f=="diff"||f=="derivative2"||f=="sum"||f=="prod"||f=="solve";
+}
+template<typename T> FXAI_NOINLINE T callFunction(const ast::Node& n,Env& env){
+    if(isLazyFunction(n.text))return callCalculus<T>(n,env);
+    const std::size_t count=n.children.size();
+    if(count>3)throw SyntaxError("Argument ERROR: "+n.text+" numero di argomenti errato");
+    T args[3]{};
+    for(std::size_t i=0;i<count;++i){
+        if(!n.children[i])throw SyntaxError("Syntax ERROR: argomento mancante");
+        args[i]=evalNode<T>(*n.children[i],env);
+    }
+    return applyFunction<T>(n,args,count);
+}
+
+template<typename T> FXAI_NOINLINE T evalToken(const ast::Node& n,Env& env){
         if(n.text.empty())throw SyntaxError("Syntax ERROR: token vuoto");
         const unsigned char c0=static_cast<unsigned char>(n.text[0]);
         if(std::isdigit(c0)||c0=='.'){char* e=nullptr;const double v=std::strtod(n.text.c_str(),&e);if(e!=n.text.c_str()+n.text.size())throw SyntaxError("Syntax ERROR: numero non valido");return fromReal<T>(v);}
@@ -598,23 +664,11 @@ template<typename T> T evalNode(const ast::Node& n,Env& env){
         }
         if(low=="theta")throw MathError("Math ERROR: theta non definito");
         throw SyntaxError("Syntax ERROR: nome sconosciuto "+n.text);
-    }
-    case Kind::Group: return evalNode<T>(*n.children.at(0),env);
-    case Kind::Unary:{
-        const T a=evalNode<T>(*n.children.at(0),env);
-        if(n.text!="-")return a;
-        if constexpr(std::is_same_v<T,double>)return -a;
-        else{
-            // Negating 4+0i must give -4+0i (not -4-0i): a signed zero imaginary
-            // part would put sqrt(-4) and ln(-1) on the wrong side of the branch cut.
-            const double re=-a.real(),im=-a.imag();
-            return Complex(re==0.0?0.0:re,im==0.0?0.0:im);
-        }
-    }
-    case Kind::Binary:{
-        const T a=evalNode<T>(*n.children.at(0),env),b=evalNode<T>(*n.children.at(1),env);
+}
+
+template<typename T> FXAI_NOINLINE T applyBinary(char op,const T& a,const T& b){
         T r{};
-        switch(n.text.empty()?'?':n.text[0]){
+        switch(op){
         case '+': r=a+b;break;
         case '-': r=a-b;break;
         case '*': r=a*b;break;
@@ -634,6 +688,56 @@ template<typename T> T evalNode(const ast::Node& n,Env& env){
         }
         checkFinite(r);
         return r;
+}
+
+// Left-associative chains (1+2+3+..., 2*x*y) form left-deep trees. They are
+// walked iteratively so that the recursion depth follows the nesting of the
+// input, not its length.
+bool isChainNode(const ast::Node& n) noexcept {
+    return n.kind==ast::Kind::Binary&&n.text.size()==1&&std::strchr("+-*/%",n.text[0])!=nullptr&&n.children.size()==2&&n.children[0]&&n.children[1];
+}
+template<typename T> FXAI_NOINLINE T evalChain(const ast::Node& top,Env& env){
+    constexpr std::size_t kChunk=16;
+    const ast::Node* spine[kChunk];
+    std::size_t count=0;
+    const ast::Node* cur=&top;
+    while(count<kChunk&&isChainNode(*cur)){spine[count++]=cur;cur=cur->children[0].get();}
+    T acc=isChainNode(*cur)?evalChain<T>(*cur,env):evalNode<T>(*cur,env);
+    while(count>0){
+        const ast::Node& b=*spine[--count];
+        const T rhs=evalNode<T>(*b.children[1],env);
+        acc=applyBinary<T>(b.text[0],acc,rhs);
+    }
+    return acc;
+}
+
+template<typename T> T evalNode(const ast::Node& node,Env& env){
+    using ast::Kind;
+    checkStack(env);
+    const ast::Node* np=&node;
+    while(np->kind==Kind::Group){
+        if(np->children.size()!=1||!np->children[0])throw SyntaxError("Syntax ERROR: gruppo vuoto");
+        np=np->children[0].get();
+    }
+    const ast::Node& n=*np;
+    switch(n.kind){
+    case Kind::Token: return evalToken<T>(n,env);
+    case Kind::Unary:{
+        const T a=evalNode<T>(*n.children.at(0),env);
+        if(n.text!="-")return a;
+        if constexpr(std::is_same_v<T,double>)return -a;
+        else{
+            // Negating 4+0i must give -4+0i (not -4-0i): a signed zero imaginary
+            // part would put sqrt(-4) and ln(-1) on the wrong side of the branch cut.
+            const double re=-a.real(),im=-a.imag();
+            return Complex(re==0.0?0.0:re,im==0.0?0.0:im);
+        }
+    }
+    case Kind::Binary:{
+        if(isChainNode(n))return evalChain<T>(n,env);
+        const T a=evalNode<T>(*n.children.at(0),env);
+        const T b=evalNode<T>(*n.children.at(1),env);
+        return applyBinary<T>(n.text.empty()?'?':n.text[0],a,b);
     }
     case Kind::Call:{T r=callFunction<T>(n,env);checkFinite(r);return r;}
     default: break;
@@ -661,14 +765,19 @@ EvalContext& EvalContext::bind(const char* name,double value){
 ast::NodePtr parseExpression(const std::string& expression){
     return Parser(Lexer(expression).run()).run();
 }
+void setEvalStackBudget(std::size_t bytes) noexcept{gEvalStackBudget=bytes;}
+std::size_t evalStackBudget() noexcept{return gEvalStackBudget;}
+
 double evaluateReal(const ast::Node& parsed,const EvalContext& context){
     Env env{context};
+    env.stackBase=stackPosition();
     const double v=evalNode<double>(parsed,env);
     if(!std::isfinite(v))throw MathError("Math ERROR: risultato non finito");
     return v==0.0?0.0:v;   // normalise -0
 }
 Complex evaluateComplex(const ast::Node& parsed,const EvalContext& context){
     Env env{context};
+    env.stackBase=stackPosition();
     Complex v=evalNode<Complex>(parsed,env);
     const double scale=std::max(std::abs(v.real()),std::abs(v.imag()));
     double re=v.real(),im=v.imag();

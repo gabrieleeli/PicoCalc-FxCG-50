@@ -4,6 +4,7 @@
 #include "number_format.hpp"
 #include "test_util.hpp"
 #include <cmath>
+#include <string>
 
 using namespace fx;
 static double ev(const char* s, double x = 0.0) { return evaluate(s, x); }
@@ -161,5 +162,43 @@ int main() {
     CHECK(exactFraction(-0.75, p, q) && p == -3 && q == 4);
     CHECK(!exactFraction(std::sqrt(2.0), p, q));
     CHECK(!exactFraction(pi, p, q));
+
+    // --- limits that keep the RP2350 stack bounded
+    {
+        auto repeat = [](const std::string& unit, int n) { std::string out; for (int i = 0; i < n; ++i) out += unit; return out; };
+        // Long left-associative chains are evaluated iteratively (any length up to the token limit).
+        const std::string sum150 = "1" + repeat("+1", 149);                      // 299 tokens
+        CHECK_NEAR(evaluate(sum150), 150, 1e-12);
+        std::string alt = "100"; double expect = 100;                             // crosses the 16-node chunks
+        for (int i = 1; i <= 60; ++i) { alt += (i % 2 ? "-" : "+"); alt += std::to_string(i); expect += (i % 2 ? -i : i); }
+        CHECK_NEAR(evaluate(alt), expect, 1e-9);
+        CHECK_NEAR(ev("100/2/5/2"), 5, 1e-12);                                     // still left-associative
+        CHECK_NEAR(ev("2*3+4*5-6/3"), 24, 1e-12);
+        CHECK_NEAR(ev("17%5%3"), 2, 1e-12);
+        CHECK_NEAR(evc("1+i+1+i+1+i").imag(), 3, 1e-12);
+        bool memory = false;
+        try { (void)evaluate("1" + repeat("+1", MaxExpressionTokens / 2)); } catch (const MathError& e) { memory = std::string(e.what()).rfind("Memory ERROR", 0) == 0; }
+        CHECK(memory);
+        // Nesting: parentheses, signs, exponents and function arguments.
+        const int okDepth = MaxExpressionNesting - 1;
+        CHECK_NEAR(evaluate(repeat("(", okDepth) + "7" + repeat(")", okDepth)), 7, 1e-12);
+        auto stackError = [](const std::string& text) {
+            try { (void)evaluate(text); } catch (const MathError& e) { return std::string(e.what()).rfind("Stack ERROR", 0) == 0; } catch (...) { return false; }
+            return false;
+        };
+        CHECK(stackError(repeat("(", 40) + "7" + repeat(")", 40)));
+        CHECK(stackError(repeat("-", 40) + "7"));
+        CHECK(stackError("2" + repeat("^2", 40)));
+        CHECK(stackError(repeat("sqrt(", 40) + "16" + repeat(")", 40)));
+        CHECK(stackError(repeat("sin ", 40) + "1"));
+        CHECK_NEAR(ev("sqrt(sqrt(sqrt(256)))"), 2, 1e-12);
+        // The runtime stack budget stops evaluation cleanly instead of overflowing.
+        const std::size_t budget = evalStackBudget();
+        setEvalStackBudget(256);
+        CHECK(stackError(repeat("sqrt(", 20) + "16" + repeat(")", 20)));
+        setEvalStackBudget(budget);
+        CHECK(evalStackBudget() == budget);
+        CHECK_NEAR(evaluate(repeat("sqrt(", 20) + "16" + repeat(")", 20)), std::pow(16.0, std::pow(0.5, 20)), 1e-12);
+    }
     return testutil::finish("expression_test");
 }
