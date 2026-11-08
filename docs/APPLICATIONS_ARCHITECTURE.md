@@ -82,8 +82,9 @@ display) → `tick()` per lavoro periodico (rete) → `leave()`.
 | Help | `cheatsheet.hpp` | Symbols |
 | RunCore | `run_matrix.hpp` | Run-Matrix; previsto per eActivity e Program (righe di calcolo) |
 | Models | `app_models.hpp` | modelli dati delle modalità future |
-| GraphCore | `graph_model.hpp`, `graph_engine.hpp`, `graph_solve.hpp` | Graph, Table; previsto per Dyna Graph, Recursion, Conic Graphs (campionamento, viewport, G-Solve) — [GRAPH_ENGINE.md](GRAPH_ENGINE.md) |
+| GraphCore | `graph_model.hpp`, `graph_engine.hpp`, `graph_solve.hpp`, `table_model.hpp` | Graph, Table; previsto per Dyna Graph, Recursion, Conic Graphs (campionamento, viewport, G-Solve) — [GRAPH_ENGINE.md](GRAPH_ENGINE.md) |
 | Files | `file_store.hpp`, `graph_file.hpp`, `pict.hpp` | Graph (progetti `.pcgraph`, immagini `.pcpict`, BMP sulla microSD); previsto per Picture Plot, Program, eActivity — [STORAGE.md](STORAGE.md) |
+| Diag | `diagnostics.hpp` | System (SYSTEM → DIAG: test della microSD e tempi di GRAPH sul dispositivo, log USB) |
 
 Errori: il motore lancia `SyntaxError`, `MathError`, `NonRealError` con testi
 nello stile CG50; `AppManager` li mostra nella finestra di errore. Memoria:
@@ -99,8 +100,8 @@ nessuna allocazione dinamica nei percorsi ricorsivi; limiti espliciti
 | `History` | cronologia di Run-Matrix (con forma esatta e vista) | Run-Matrix | Memory |
 | `Functions` | Y1–Y20: tipo (12), espressione, Yt, selezione, colore, stile | Graph, Table, Statistics (copia della regressione) | Graph, Table |
 | `View` | V-Window (con T e Xdot) | Graph, Table (GPH-CON/PLT) | Graph, Table; Run-Matrix in sola lettura via `NameResolver` (VARS › V-WIN, `Xdot`) |
-| `Table` | Start/End/Step, richiesta GPH-CON/PLT | Table, Graph (progetto) | Table, Graph |
-| `Lists` | List 1–6 | Statistics | Statistics, Graph e Table (grafici da lista) |
+| `Table` | Start/End/Step, variabile (range/lista), tipo, righe generate, richiesta GPH-CON/PLT | Table, Graph (progetto) | Table, Graph |
+| `Lists` | List 1–6 | Statistics, Table (LISTMEM) | Statistics, Graph e Table (grafici e tabelle da lista) |
 | `Graph` | Setup di Graph, memorie V-Window e grafiche, SKETCH, immagine richiamata, progetto aperto | Graph | Graph, Table (Setup Derivative) |
 | `Equation` | coefficienti, solver | Equation | Equation |
 | `Chat` | conversazione AI | AI Chat | AI Chat |
@@ -112,8 +113,8 @@ Le funzioni di Graph entrano in un'altra funzione solo tramite
 `FunctionResolver` (riferimenti `Y1(x)` … delle funzioni composte).
 Non esistono sistemi di variabili separati per modalità.
 
-Persistenza: `serializeWorkspace()` (versione 3 dalla v1.8.0; le versioni 1
-della v1.6.0 e 2 della v1.7.0 vengono ancora lette) → `RecordStore` con due slot
+Persistenza: `serializeWorkspace()` (versione 4 dalla v1.8.0 con TABLE; le
+versioni 1 della v1.6.0, 2 della v1.7.0 e 3 vengono ancora lette) → `RecordStore` con due slot
 e CRC-32. I file dell'utente (progetti GRAPH, immagini) sono sulla microSD
 tramite il servizio Files ([STORAGE.md](STORAGE.md)).
 
@@ -124,10 +125,10 @@ tramite il servizio Files ([STORAGE.md](STORAGE.md)).
 | Run-Matrix | `RunMatrixApp` + nucleo `run_matrix.cpp` | calcoli e risultati: input naturale, forme esatte, cronologia modificabile, variabili, Base-N, DMS | Expression, Exact, Editor, MathRender, Format, MathCore, RunCore | Settings, Memory, History | — |
 | Statistics | `StatisticsApp` | liste, 1/2-Var, regressioni, grafici statistici, DIST, TEST, INTR | Expression, Stats, Widgets | Settings, Lists, Functions | — |
 | Graph | `GraphApp` (`graph_app.cpp`, `graph_plot.cpp`, `graph_files.cpp`) | grafici Y=, r=, parametrici, X=, disequazioni (Y1–Y20); TRACE, ZOOM, V-Window, SKETCH, G-SOLVE, Modify, memorie, PICT, progetti `.pcgraph` — [GRAPH_PARITY.md](GRAPH_PARITY.md) | Expression, Editor, Format, Widgets, MathRender, Storage, GraphCore, Files | Settings, Memory, Functions, View, Table, Lists, Graph | Table |
-| Table | `TableApp` | tabelle delle funzioni Y con dY/dX, GPH-CON/GPH-PLT | Expression, Editor, Format, Widgets, Storage, GraphCore | Settings, Memory, Functions, View, Table, Lists, Graph | Graph |
+| Table | `TableApp` + `table_model` | tabelle di Y=, r= e parametriche da range o lista, derivate, EDIT/ROW/DELETE, LISTMEM, GPH-CON/GPH-PLT — [TABLE.md](TABLE.md) | Expression, Editor, Format, Widgets, MathRender, Storage, GraphCore | Settings, Memory, Functions, View, Table, Lists, Graph | Graph |
 | Equation | `EquationApp` | sistemi, polinomi, solver, disequazioni | Expression, Solvers | Settings, Memory, Equation | — |
 | Memory | `MemoryApp` | uso e cancellazione dei dati | Widgets, Storage | tutte | — |
-| System | `SystemApp` | SET UP, retroilluminazione, Wi-Fi, relay, reset | Widgets, Network | tutte (RESET) | — |
+| System | `SystemApp` | SET UP, retroilluminazione, Wi-Fi, relay, reset, DIAG | Widgets, Network, Diag | tutte (RESET) | — |
 | Conversion | `ConversionApp` | conversioni di unità, risultato in Ans | Expression, Units | Settings, Memory | — |
 | AI Chat | `AiChatApp` | chat con Claude/ChatGPT tramite relay | Network, Editor | Settings, Chat | System |
 | Symbols | `SymbolsApp` | guida dei simboli | Help | — | — |

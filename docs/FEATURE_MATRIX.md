@@ -1,4 +1,4 @@
-# Feature matrix — v1.8.0
+# Feature matrix — v1.8.0 (dopo il collaudo software di GRAPH, microSD e TABLE)
 
 Stati (in italiano tra parentesi):
 
@@ -27,7 +27,8 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Pressione prolungata / ripetizione | TESTED ON HOST | ripetizione generata dallo STM32, long-press nel decoder |
 | Batteria e retroilluminazione | IMPLEMENTED | registri 0x05/0x0A/0x0B |
 | Storage flash A/B con CRC | TESTED ON HOST | test di interruzione di alimentazione; driver Pico da collaudare |
-| microSD (SPI0 GP16–19, card detect GP22) | IMPLEMENTED | protocollo SD in SPI e FatFs R0.16 TESTED ON HOST con scheda simulata (`sd_fatfs_test`); bus SPI0 reale da collaudare ([STORAGE.md](STORAGE.md)) |
+| microSD (SPI0 GP16–19, card detect GP22) | IMPLEMENTED | protocollo SD, recupero dopo estrazione/errori e FatFs TESTED ON HOST con scheda simulata (`sd_fatfs_test`); volumi FAT16/FAT32/exFAT verificati con fsck.fat, fsck.exfat e mtools (`sd_interop_test`); bus SPI0 reale da collaudare ([STORAGE.md](STORAGE.md), [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md)) |
+| Diagnostica sul dispositivo (SYSTEM → DIAG: microSD, tempi GRAPH, log USB) | TESTED ON HOST | prova eseguita nel simulatore e nei test; serve per il collaudo fisico |
 | Wi-Fi CYW43 | IMPLEMENTED | da collaudare |
 | HTTPS (lwIP altcp_tls + mbedTLS, verifica obbligatoria) | IMPLEMENTED | parser HTTP TESTED ON HOST |
 | Gestione energetica / sospensione | NOT STARTED | |
@@ -116,8 +117,9 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Graph: progetti `.pcgraph` su microSD (NEW/OPEN/SAVE/SAVE AS/RENAME/DELETE) | TESTED ON SIMULATOR | scheda simulata; formato in [PCGRAPH_FORMAT.md](PCGRAPH_FORMAT.md) |
 | Graph: Dual Screen G+G/GtoT, Graph to Table, comandi grafici di Run-Matrix | NOT STARTED | |
 | Grafici impliciti (f(x,y)=0) | NOT STARTED | non presenti nella modalità Graph della CG50 (Conic Graphs) |
-| Table: funzioni Y, dY/dX, SET, GPH-CON/GPH-PLT | TESTED ON SIMULATOR | |
-| Table: r= e parametriche, Variable LIST, editing delle righe, LISTMEM | NOT STARTED | |
+| Table: lista delle relazioni, Y=/r=/Param, SET, Variable Range/List, derivate, celle di 6 caratteri | TESTED ON SIMULATOR | [TABLE.md](TABLE.md), screenshot 32, 35–37 |
+| Table: EDIT, ROW DELETE/INSERT/ADD, DELETE, LISTMEM, GPH-CON/GPH-PLT dalle righe | TESTED ON HOST | `table_test` |
+| Table: Dual Screen T+G | NOT STARTED | sessione v1.9.0 |
 | Equation: sistemi 2–6, polinomi 2–6, solver | TESTED ON HOST | |
 | Disequazioni polinomiali 1–6 | TESTED ON HOST | |
 | Sistemi di disequazioni (interfaccia) | NOT STARTED | API `solveInequalitySystem` (grado ≤ 2) TESTED ON HOST |
@@ -139,9 +141,11 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Storia Run-Matrix (con forma esatta, vista, frazione mista) | TESTED ON HOST |
 | Lettura dei record v1.6.0 (formato versione 1) | TESTED ON HOST |
 | Liste statistiche | TESTED ON HOST |
-| Stato di GRAPH (20 funzioni, V-Window, Setup, memorie V-Window e grafiche, SKETCH), range di Table — record v3 | TESTED ON HOST |
+| Stato di GRAPH (20 funzioni, V-Window, Setup, memorie V-Window e grafiche, SKETCH) e di TABLE (range, variabile, tipo, righe) — record v4 | TESTED ON HOST |
+| Lettura dei record v3 (GRAPH v1.8.0 prima di TABLE) | TESTED ON HOST |
+| Record oltre la capacità della flash: messaggio "Memoria flash piena" con la dimensione | TESTED ON HOST |
 | Lettura dei record v1.7.0 (versione 2) e correzione delle V-Window legacy | TESTED ON HOST |
-| Progetti `.pcgraph` e immagini `.pcpict`/BMP sulla microSD, scrittura atomica e recupero | TESTED ON HOST (scheda simulata) |
+| Progetti `.pcgraph` e immagini `.pcpict`/BMP sulla microSD, scrittura atomica e recupero | TESTED ON HOST (scheda simulata, pila completa GraphApp → FatFs → SD) |
 | Coefficienti Equation | TESTED ON HOST |
 | Conversazioni AI (cancellabili da AI Chat e Memory) | TESTED ON HOST |
 | Programmi, file Python, documenti, matrici salvate | NOT STARTED |

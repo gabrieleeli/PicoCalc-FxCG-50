@@ -59,16 +59,16 @@ std::vector<Line> testStorage(files::FileSystem* fs, const Clock& now) {
                               : std::string("lettura: DATI DIVERSI da quelli scritti"));
     }
     // A GRAPH project through the real codec.
-    graphfile::Project p;
-    p.functions[0].expr = "(x)^(3)-4x";
-    p.functions[1] = {"3cos(t)", GraphType::Param, true, 3, LineStyle::Thick, "2sin(t)"};
-    const std::string text = graphfile::encode(p), project = dir + "/DIAG.pcgraph";
+    // Projects on the heap (about 2 KB each; the RP2350 stack is 32 KB).
+    auto p = std::make_unique<graphfile::Project>(), q = std::make_unique<graphfile::Project>();
+    p->functions[0].expr = "(x)^(3)-4x";
+    p->functions[1] = {"3cos(t)", GraphType::Param, true, 3, LineStyle::Thick, "2sin(t)"};
+    const std::string text = graphfile::encode(*p), project = dir + "/DIAG.pcgraph";
     st = files::writeAtomic(*fs, project, reinterpret_cast<const std::uint8_t*>(text.data()), text.size());
     std::vector<std::uint8_t> raw;
     if (st == files::Status::Ok) st = files::readAll(*fs, project, raw, graphfile::MaxProjectBytes);
-    graphfile::Project q;
-    const std::string err = st == files::Status::Ok ? graphfile::decode(std::string(raw.begin(), raw.end()), q) : files::statusMessage(st);
-    add(out, err.empty() && q.functions[1].expr2 == "2sin(t)", err.empty() ? "progetto .pcgraph: salvato e riletto" : "progetto .pcgraph: " + err);
+    const std::string err = st == files::Status::Ok ? graphfile::decode(std::string(raw.begin(), raw.end()), *q) : files::statusMessage(st);
+    add(out, err.empty() && q->functions[1].expr2 == "2sin(t)", err.empty() ? "progetto .pcgraph: salvato e riletto" : "progetto .pcgraph: " + err);
     // Clean up: nothing of the test stays on the card.
     files::Status rm = fs->remove(path);
     if (rm == files::Status::Ok || rm == files::Status::NotFound) rm = fs->remove(project);
@@ -90,15 +90,18 @@ std::vector<Line> testGraph(Workspace& ws, const Clock& now) {
     const AngleMode angle = ws.settings.angle;
     setAngleMode(AngleMode::Radians);
     try {
-        graph::GraphEngine engine;
+        auto holder = std::make_unique<graph::GraphEngine>();       // on the heap, like the projects
+        graph::GraphEngine& engine = *holder;
         std::uint32_t t0 = now();
         engine.build({functions.get(), &ws.memory, &ws, &ws.lists});
         add(out, engine.plots().size() == 5, format("compilazione di 5 grafici: %.0f ms", now() - t0));
         const graph::Viewport vp(ViewWindow{});
         std::size_t evals = 0, points = 0;
         t0 = now();
+        auto curve = std::make_unique<graph::Curve>();
         for (const auto& plot : engine.plots()) {
-            graph::Curve c;
+            graph::Curve& c = *curve;
+            c = graph::Curve{};
             for (int guard = 0; !c.done && guard < 1000; ++guard) {
                 int budget = 600;
                 graph::sampleStep(engine, plot, vp, false, c, budget);

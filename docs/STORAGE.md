@@ -1,4 +1,4 @@
-# Memorizzazione: flash interna e microSD (v1.8.0)
+# Memorizzazione: flash interna e microSD (v1.8.0, collaudo software)
 
 Il firmware usa due memorie con ruoli diversi.
 
@@ -15,14 +15,23 @@ microSD contiene i file che l'utente salva, apre, rinomina o cancella.
 Due slot da 64 KB con CRC-32 e numero di sequenza: si scrive sempre lo slot più
 vecchio, quindi un'interruzione durante la scrittura lascia valido l'altro
 (test di interruzione in ogni punto in `storage_test`). Il record è alla
-**versione 3** (v1.8.0): aggiunge le 20 funzioni di GRAPH con stile e Yt, il
-Setup della modalità, le 6 memorie V-Window, le 20 memorie grafiche, gli
-elementi SKETCH, l'immagine richiamata e il progetto aperto. I record v1
-(v1.6.0) e v2 (v1.7.0) sono letti: le 6 funzioni di allora diventano Y1–Y6 e
+**versione 4**: la versione 3 (GRAPH v1.8.0) aggiunge le 20 funzioni di GRAPH
+con stile e Yt, il Setup della modalità, le 6 memorie V-Window, le 20 memorie
+grafiche, gli elementi SKETCH, l'immagine richiamata e il progetto aperto; la
+versione 4 (TABLE v1.8.0) la variabile, il tipo e le righe della tabella
+(≤ 999). I record v1 (v1.6.0), v2 (v1.7.0) e v3 sono letti: le 6 funzioni di allora diventano Y1–Y6 e
 la griglia booleana diventa Grid On/Off; una V-Window che non supera i controlli
 della v1.8.0 viene corretta (scale positive, intervallo T) o, se non basta,
 sostituita da quella iniziale, senza scartare il resto dei dati (test in
 `run_matrix_test`).
+
+La capacità del record è ~63,7 KB. Per restarne lontani i tratti PEN dello
+SKETCH hanno un limite complessivo di 1200 punti (prima 64 × 400 punti
+potevano superare 200 KB); con 20 funzioni, 20 memorie grafiche piene e 64
+elementi SKETCH lo stato GRAPH resta sotto 60 KB (`graph_app_test`). Se il
+record supera comunque la capacità (es. molte conversazioni AI lunghe),
+l'autosalvataggio mostra "Memoria flash piena: N KB > M KB (cancella memorie
+grafiche, SKETCH, chat)" invece di un errore generico.
 
 ## Pila della microSD
 
@@ -55,7 +64,8 @@ Modellata sui servizi di FatFs, con esiti espliciti (`files::Status`):
 | `NotFound`, `Exists` | file o cartella mancante / già presente |
 | `Full` | volume o directory pieni, anche a metà scrittura |
 | `IoError` | errore di lettura/scrittura del dispositivo |
-| `Corrupt` | file system non riconosciuto o file non valido |
+| `Corrupt` | file non valido |
+| `Unformatted` | nessun volume FAT/exFAT sulla scheda ("scheda non formattata o file system non supportato: formattarla in FAT32 o exFAT dal computer") |
 | `InvalidName`, `TooLarge`, `NotSupported` | nome non valido, file oltre i limiti, operazione non disponibile |
 
 Operazioni di più alto livello (`file_store.cpp`): `readAll` con limite di
@@ -82,6 +92,23 @@ Le funzioni di I/O (`disk_status`, `disk_initialize`, `disk_read`,
 `disk_write`, `disk_ioctl`) sono in `src/fatfs_store.cpp` e usano il
 `BlockDevice` montato. Ogni operazione controlla la presenza della scheda: una
 scheda estratta e reinserita viene reinizializzata e rimontata.
+
+**Recupero dagli errori** (corretto nel collaudo della v1.8.0): se la scheda
+viene estratta e reinserita *tra* due operazioni, il contatto del card detect
+può non essere mai letto aperto; la scheda ha perso alimentazione e non
+risponde più in modalità SPI. Prima la scheda restava "pronta" e ogni
+operazione successiva falliva. Ora:
+
+1. ogni comando senza risposta o con token di errore marca la scheda come non
+   pronta (`SdCard::fail` → `reset`);
+2. `FatFsFileSystem` esegue ogni operazione con `withVolume`: dopo un errore
+   di I/O con la scheda non più pronta la reinizializza (CMD0…), rimonta il
+   volume e ripete l'operazione **una volta**;
+3. `files::readAll` ripete una volta la lettura completa dopo un errore di
+   lettura transitorio (leggere non ha effetti collaterali).
+
+Le scritture non vengono ripetute automaticamente: il salvataggio atomico
+lascia intatto il file precedente e l'errore viene mostrato.
 
 ### Protocollo SD (SPI)
 
@@ -114,15 +141,43 @@ Pin presi dai sorgenti ufficiali ClockworkPi (`Code/MP3Player/config.h`,
 | CS | GP17 |
 | Card detect | GP22 (basso = scheda inserita, pull-up interno) |
 
-**Da collaudare su PicoCalc fisica**: inizializzazione con schede reali
-(SDHC, SDXC exFAT), clock massimo affidabile, rilevamento dell'inserimento.
+Pin, polarità del card detect e pull-up verificati sui sorgenti ufficiali
+(`pico_multi_booter/boot.c`: `!gpio_get(SD_DET_PIN)` con pull-up); il loro
+`sd_boot` usa ~15,6 MHz, il firmware 12,5 MHz.
+
+**Da collaudare su PicoCalc fisica** (procedura in
+[HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md)): inizializzazione con
+schede reali (SDHC, SDXC exFAT), velocità, rilevamento dell'inserimento,
+estrazione durante un salvataggio.
+
+## Diagnostica sul dispositivo (SYSTEM → F2 DIAG)
+
+`src/diagnostics.cpp` esegue sul dispositivo, senza toccare i dati
+dell'utente: stato e descrizione della scheda (tipo SDSC/SDHC, capacità, FAT12/
+16/32 o exFAT, cluster), tempo di inizializzazione e montaggio, spazio libero,
+scrittura atomica di 64 KB con verifica CRC e velocità, lettura e confronto
+byte per byte, salvataggio e rilettura di un progetto `.pcgraph`, rimozione
+della cartella di prova `PICOCALC/DIAG`; poi i tempi di GRAPH. Ogni riga è
+mostrata sullo schermo e stampata sulla seriale USB come `[DIAG] OK|FAIL ...`.
+
+## Immagini disco sul PC
+
+- `board::host::FileDisk` (`src/platform/host/file_disk.*`): un `BlockDevice`
+  su un file immagine.
+- Simulatore: `PICOCALC_SD_IMAGE=scheda.img build/host/picocalc_sim ...` usa
+  un'immagine FAT/exFAT (anche la copia di una scheda reale, es. con `dd`)
+  tramite lo stesso FatFs del firmware.
+- `build/host/sd_image_tool <immagine> put|get|ls|rm|mkdir|project|check|recover ...`
+  scrive e legge file con il codice del firmware (`tools/sd_image_tool.cpp`);
+  `sd_image_tool - sample FILE.pcgraph` crea un progetto di esempio.
 
 ## Test
 
 | Suite | Cosa prova |
 |---|---|
-| `storage_test` | slot A/B, CRC, interruzione di alimentazione in ogni punto, round trip del record v3 |
+| `storage_test` | slot A/B, CRC, interruzione di alimentazione in ogni punto, round trip del record v4 |
 | `run_matrix_test` | lettura del record v1.6.0 (fixture), V-Window legacy corretta senza perdere i dati |
 | `graph_file_test` | codifica/decodifica di progetti, memorie e immagini; file danneggiati, troncati, di versione futura; `writeAtomic` e `recover` con guasti iniettati in ogni operazione (scrittura parziale, rinomina, rimozione, scheda estratta) |
-| `sd_fatfs_test` | protocollo SD con schede simulate SDHC, SDv2 e SDv1 (CSD v1/v2, token, busy), formattazione FAT su disco RAM, file con nomi lunghi, salvataggio atomico su FatFs, estrazione e reinserimento della scheda, scheda assente |
-| `graph_app_test` | progetti dal file manager: NEW, OPEN, SAVE, SAVE AS, RENAME, DELETE, scheda assente, scheda piena, ciclo completo 12.4 |
+| `sd_fatfs_test` | protocollo SD con schede simulate SDHC, SDv2 e SDv1 (CSD v1/v2, token, busy), formattazione FAT, nomi lunghi, salvataggio atomico, estrazione e reinserimento, scheda assente; scheda non formattata, scheda spenta e riaccesa tra due operazioni, errori di lettura permanenti e transitori, scritture rifiutate; dimensioni 0…300 000 byte ai bordi di settore e cluster, cartelle annidate, 150 file in una cartella, rinomina di sole maiuscole, nomi non validi, scheda piena con il file precedente intatto (302 controlli) |
+| `graph_app_test` | progetti dal file manager: NEW, OPEN, SAVE, SAVE AS, RENAME, DELETE, scheda assente, scheda piena, ciclo completo 12.4 su `RamFileSystem` e sull'intera pila GraphApp → FatFs → protocollo SD → scheda simulata (con riavvio del firmware e scheda spenta/riaccesa), scheda non formattata, SYSTEM > DIAG |
+| `sd_interop_test` | il codice del firmware scrive immagini FAT16, FAT32 ed exFAT create da `mkfs.fat`/`mkfs.exfat`; `fsck.fat`/`fsck.exfat` le trovano pulite; `mtools` rilegge i file byte per byte e scrive file (anche con nomi lunghi) che il firmware legge (41 controlli; saltato se gli strumenti non sono installati) |

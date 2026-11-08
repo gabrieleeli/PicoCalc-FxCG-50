@@ -81,7 +81,8 @@ schermo (interi a 16 bit, con interruzioni) e bordi delle disequazioni
   di almeno 2 pixel;
 - **riempimenti**: tratteggio diagonale ogni 4 pixel, colore della funzione
   schiarito (blend 110/255 sul bianco); con Union ogni disequazione usa una fase
-  diversa del tratteggio, con Intsect si riempie solo l'intersezione;
+  diversa del tratteggio, con Intsect si riempie solo l'intersezione; il ciclo
+  visita solo i pixel del motivo (un quarto dell'area, stessa immagine);
 - **area ∫dx**: colonne verticali piene dal grafico all'asse (o tra i due
   grafici), colore schiarito (blend 90/255);
 - **livelli**: sfondo (Fade = blend verso il bianco) → riempimenti → griglia →
@@ -93,6 +94,24 @@ schermo (interi a 16 bit, con interruzioni) e bordi delle disequazioni
 - **disegno incrementale**: ogni ciclo ridisegna i livelli con i punti già
   calcolati e una barra di avanzamento; l'aggiornamento a tile invia al display
   solo le parti cambiate.
+
+## Schermata delle tabelle (TABLE)
+
+`src/apps/table_app.cpp`: intestazione con la variabile (X, θ, T) e i titoli
+delle colonne con il colore della funzione; colonna della variabile larga 58 px
+e 4 colonne di funzioni di 64 px; righe di 18 px (circa 12 visibili) con il
+font Medium; celle di al massimo 6 caratteri allineate a destra (`ERROR` in
+rosso), selezione blu, barra di scorrimento; sotto, il valore completo della
+cella selezionata. La lista delle relazioni di TABLE usa lo stesso layout
+naturale di GRAPH (righe di 28 px, "=" evidenziato per le funzioni nella
+tabella, righe di altri tipi in grigio) e l'editor naturale in un pannello in
+basso. Le celle sono calcolate solo per le righe visibili a ogni ridisegno.
+
+## Diagnostica (SYSTEM → DIAG)
+
+Lista di righe con "+" (riuscita) o "!" (errore, in rosso), testo a capo su 49
+caratteri, intestazione "DIAGNOSTICA: tutto OK / N errori"; le stesse righe
+vanno sulla seriale USB.
 
 ## UI kit
 
@@ -109,7 +128,7 @@ indicatore SHIFT arancione, nello stile della fx-CG50 ma con grafica propria.
 `editor_test` (layout e cursore), `app_test` (rendering delle schermate su
 framebuffer host). Gli screenshot in `docs/screenshots/` sono prodotti dal
 simulatore con lo stesso codice del firmware (`tests/sim/run_matrix.txt` per
-12–19, `tests/sim/graph.txt` per 06, 07 e 20–34). `graph_app_test` controlla
+12–19, `tests/sim/graph.txt` per 06, 07 e 20–37). `graph_app_test` controlla
 anche singoli pixel del grafico (area ∫dx presente e poi cancellata).
 
 ## Limiti noti

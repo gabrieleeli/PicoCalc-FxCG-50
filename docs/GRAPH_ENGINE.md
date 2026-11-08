@@ -120,6 +120,7 @@ punti isolati invece di segmenti. Per le disequazioni il motore salva anche il
 | Limite | Valore |
 |---|---|
 | Punti per curva (`MaxCurvePoints`) | 6 000 (24 KB) |
+| Punti dei tratti PEN di tutto lo SKETCH (`MaxSketchPenPoints`) | 1 200 (9,6 KB nel record in flash) |
 | Punti di tutte le curve insieme (`MaxTotalCurvePoints`) | 24 000 (96 KB): il renderer assegna a ogni curva ciò che le altre non usano (`Curve::limit`) |
 | Bordo di una disequazione | 320 float (1,25 KB) |
 | Immagine RLE (sfondo o immagine richiamata) | ≤ 96 KB ciascuna |
@@ -144,7 +145,7 @@ Livelli del grafico, dal basso verso l'alto:
 
 1. immagine di sfondo con la luminosità di Fade I/O;
 2. regioni delle disequazioni (tratteggio; Union: ogni regione, Intsect: solo
-   la regione comune);
+   la regione comune); il ciclo visita solo i pixel del motivo (¼ dell'area);
 3. area dell'integrale ∫dx;
 4. griglia (punti o linee);
 5. assi, tacche, scala, etichette `x`, `y`, `O` (un asse fuori dalla finestra
@@ -200,15 +201,29 @@ Y= o disequazioni Y (come la CG50), con la funzione valutata dal motore.
 | Y-CAL | valore del grafico in x (errore se non definito) |
 | X-CAL | ROOT di f − y: tutte le x, scorribili con ←/→ |
 | Y-ICEPT | valore in x = 0 |
-| ∫dx | scansione di 64 punti per rilevare punti non definiti o poli (errore), poi **Gauss–Kronrod adattivo** (G7/K15, bisezione fino a 18 livelli e 20 000 valutazioni) con tolleranza 1e-10 |
+| ∫dx | scansione di 64 punti (punti non definiti → errore); ricerca dei **poli** sui massimi locali di \|f\| (1 280 campioni, Brent) con un test di crescita: se \|f\| cresce almeno come 1/\|t−x\| avvicinandosi al punto → "Math ERROR: integrale divergente (polo in x=…)"; i **salti** (int x, funzioni a tratti, individuati per bisezione) e i picchi integrabili (1/√\|x\|) diventano punti di divisione; ogni tratto con **Gauss–Kronrod adattivo** (G7/K15, fino a 18 livelli e 20 000 valutazioni), tolleranza 1e-10 |
 | area (∫dx ROOT/INTSECT/MIXED) | integrale del valore assoluto: l'intervallo è diviso alle radici (di f o di f − g) e i pezzi sono integrati separatamente |
 
 Più soluzioni sono ordinate e senza duplicati (al massimo 100); ←/→ passa
 alla successiva/precedente; "Not Found" se non ce ne sono. Il risultato di
-∫dx va in `Ans`. Valori verificati in `graph_solve_test` e `graph_app_test`
-contro risultati analitici: radici di x³ − 4x, estremi ±16/(3√3) in ∓2/√3,
+∫dx va in `Ans`. Valori verificati in `graph_solve_test`, `graph_verify_test` e
+`graph_app_test` contro risultati analitici (anche ln x, eˣ, x·e⁻ˣ, x + 1/x,
+razionali con poli, gradi e gradienti, ∫₁ᵉ ln x = 1, ∫₀³·⁵ int x = 4,5,
+poli rifiutati): radici di x³ − 4x, estremi ±16/(3√3) in ∓2/√3,
 ∫₋₂⁰ (x³ − 4x) dx = 4, ∫₋π^π sin x dx = 0 con area 4, intersezioni di x + 1 e x²
 in (1 ± √5)/2, X-CAL di x³ − 4x = 2,2 (tre soluzioni).
+
+## Precisione verificata
+
+`graph_verify_test` controlla che **ogni punto disegnato sia a meno di 1 pixel**
+dalla curva vera e che il punto medio di ogni segmento sia a meno di 1,5 pixel
+(la spezzata segue la curva) per 18 casi: polinomi, seno e coseno in radianti
+e gradi, eˣ, e^(−x²), 10ˣ, ln, log, √, |x|, una finestra di larghezza 0,002,
+1/x, razionali, tan in radianti e gradi, int x; inoltre X=, r= (cerchio e
+cardioide, distanza 2D) e parametriche. Lo scarto massimo misurato è 0,49 px.
+Le curve continue restano un solo tratto; nessun segmento attraversa poli o
+salti; ln x arriva al bordo inferiore vicino a 0; il semicerchio tocca l'asse
+x in ±2.
 
 ## Stack e prestazioni sul target
 
@@ -224,7 +239,8 @@ Misure `-fstack-usage` con i flag del firmware (arm-none-eabi-gcc 13.2,
 | `graphfile::decodeMemory` | 1 304 B |
 | `ridders` (derivata numerica) | 1 184–1 520 B (foglia) |
 | `GraphEngine::build` | 672 B |
-| `GraphApp::drawLayers` / `drawOverlays` | 488 B |
+| `GraphApp::drawLayers` / `drawOverlays` | 480 / 488 B |
+| `graph::integrate` (con la ricerca dei poli) | 616 B |
 | `sampleStep` | 368 B |
 | funzioni FatFs (`f_rename` il maggiore) | ≤ 288 B |
 

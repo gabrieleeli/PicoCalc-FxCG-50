@@ -104,6 +104,8 @@ crc32=76C89E50
 | `fade=` | 0–100 (%) |
 | `vmem1=` … `vmem6=` | memorie V-Window usate (stesso formato di `view`) |
 | `table=` | Start;End;Step di TABLE (Step > 0, Start ≤ End) |
+| `tablevar=` | variabile di TABLE: `Range` o `List1`…`List6` (aggiunta compatibile: i firmware che non la conoscono la ignorano) |
+| `tablefunc=` | tipo della tabella: `Y=`, `r=` o `Param` (aggiunta compatibile) |
 | `overlay=` | percorso dell'immagine richiamata (RECALL) |
 | `f<n>=` | funzione `n` (1–20): `tipo|selezione|colore|stile|espressione|Yt`; le righe vuote non sono scritte; `Yt` solo per `Param` |
 | `s=` | elemento SKETCH (max 64): `tipo|x0;y0;x1;y1|colore|stile|testo|percorso` |

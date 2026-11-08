@@ -23,17 +23,19 @@ estrazione durante il salvataggio, progetti scritti dal PC.
 
 ## 2. Prossima sessione — v1.9.0 (proposta)
 
-La v1.8.0 ha completato il motore e la modalità GRAPH (vedi
-[GRAPH_PARITY.md](GRAPH_PARITY.md)); restano, in ordine di priorità:
+Il collaudo software di GRAPH e della microSD e il completamento di TABLE
+sono stati fatti nella v1.8.0 (rapporto
+[reports/SESSIONE_v1.8.0_COLLAUDO_TABLE.md](reports/SESSIONE_v1.8.0_COLLAUDO_TABLE.md)).
+Restano, in ordine:
 
 | # | Voce | Note |
 |---|---|---|
-| 1 | Collaudo hardware di GRAPH e della microSD | §1; aggiornare GRAPH_PARITY a TESTED ON HARDWARE solo dopo la prova |
-| 2 | TABLE completa | tabelle di r= e parametriche, Variable = LIST, ROW DELETE/INSERT/ADD, EDIT di x, LISTMEM, lista delle relazioni propria |
-| 3 | Dual Screen G+G (COPY, SWAP) e GtoT, Graph to Table | divisione dello schermo 320×320; richiede un viewport per metà schermo (già parametrico in `graph::Viewport`) |
-| 4 | Dyna Graph, Recursion, Conic Graphs | sul servizio GraphCore (`sampleStep`, `Viewport`, G-Solve); modelli dati già pronti |
-| 5 | FORMAT durante lo SKETCH, suffissi angolari °/ʳ/ᵍ | piccoli completamenti di GRAPH |
-| 6 | Punto 3: Natural V.P.A.M. ↔ formato lineare | descritto sotto, rimandato dalla v1.8.0 |
+| 0 | **Esito del collaudo fisico** della v1.8.0 | procedura [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md); correggere i KO prima del resto e aggiornare a TESTED ON HARDWARE solo le voci provate |
+| 1 | Dual Screen G+G (COPY, SWAP), GtoT e T+G, Graph to Table | `graph::Viewport` accetta già un'area diversa da 320×282 |
+| 2 | Dyna Graph, Recursion, Conic Graphs | sul servizio GraphCore (`sampleStep`, `Viewport`, G-Solve, `table_model` per le tabelle delle successioni) |
+| 3 | FORMAT durante lo SKETCH, suffissi angolari °/ʳ/ᵍ | piccoli completamenti di GRAPH |
+| 4 | Liste di 999 elementi (LISTMEM di tabelle lunghe) | oggi 255 |
+| 5 | Punto 3: Natural V.P.A.M. ↔ formato lineare | descritto sotto |
 
 ### Punto 3: Natural V.P.A.M. ↔ formato lineare
 
@@ -77,7 +79,7 @@ Stato e progetto di ogni modalità in [APPLICATIONS_ARCHITECTURE.md](APPLICATION
 |---|---|
 | Statistics | regressioni sinusoidale e logistica; test χ², F, 2 campioni, ANOVA nell'interfaccia; grafici a torta e a barre |
 | Graph | Dual Screen G+G/GtoT, Graph to Table, comandi grafici di Run-Matrix/programmi, FORMAT nello SKETCH (dettaglio in [GRAPH_PARITY.md](GRAPH_PARITY.md)) |
-| Table | r= e parametriche, Variable = LIST, editing delle righe, LISTMEM |
+| Table | Dual Screen T+G; liste di 999 elementi per LISTMEM |
 | Equation | interfaccia per i sistemi di disequazioni; risultati esatti (servizio Exact) |
 | Recursion, Conic Graphs, Dyna Graph | modelli dati pronti (`app_models.hpp`) e servizio GraphCore per il disegno; mancano controller e UI |
 | Financial | TVM (modello pronto), flussi di cassa, ammortamento |
@@ -89,7 +91,8 @@ Stato e progetto di ogni modalità in [APPLICATIONS_ARCHITECTURE.md](APPLICATION
 
 ## 5. Piattaforma
 
-- microSD: driver SPI + FatFs presenti dalla v1.8.0 (progetti GRAPH, immagini);
+- microSD: driver SPI + FatFs presenti dalla v1.8.0 (progetti GRAPH, immagini),
+  recupero dopo estrazione verificato sul PC, diagnostica SYSTEM → DIAG;
   da collaudare su hardware; da estendere a programmi, documenti e backup del
   workspace; accesso multiblocco (CMD18/CMD25) per file grandi.
 - Gestione energetica: spegnimento del display, sospensione, risveglio da tastiera.

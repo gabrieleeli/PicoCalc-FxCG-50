@@ -58,7 +58,8 @@ loop:
 memoria (A–Z, Ans/PreAns anche complessi, con la forma esatta), storia di
 Run-Matrix (con forma esatta e vista), funzioni Y1–Y20 e V-Window di Graph,
 stato di Graph (Setup, memorie V-Window e grafiche, SKETCH, progetto aperto),
-range di Table, liste 1–6, stato di Equation, conversazione AI. I file
+range, variabile, tipo e righe di Table, liste 1–6, stato di Equation,
+conversazione AI. I file
 dell'utente (progetti GRAPH, immagini) sono sulla microSD
 ([STORAGE.md](STORAGE.md)).
 Le app comunicano tramite questo modello (es. Statistics copia una regressione in
@@ -68,8 +69,8 @@ Il workspace implementa anche `NameResolver`: Run-Matrix legge in sola lettura
 le variabili di Graph e Table (`Xmin`, `TblStart`, …) senza accedere direttamente
 a quelle sezioni.
 
-`serializeWorkspace()` produce un blob binario versionato (versione 3 dalla
-v1.8.0; le versioni 1 e 2 vengono ancora lette); `RecordStore` lo scrive in uno dei due
+`serializeWorkspace()` produce un blob binario versionato (versione 4 dalla
+v1.8.0 con TABLE; le versioni 1, 2 e 3 vengono ancora lette); `RecordStore` lo scrive in uno dei due
 slot flash con CRC-32 dell'intestazione e del contenuto.
 
 ## Motore matematico

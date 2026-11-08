@@ -10,6 +10,8 @@
 | [GRAPH_ENGINE.md](GRAPH_ENGINE.md) | motore dei grafici: modello, coordinate, campionamento, rendering, ZOOM, G-Solve, memoria e stack |
 | [STORAGE.md](STORAGE.md) | flash interna e microSD: workspace, file store, FatFs, protocollo SD, pin SPI0 |
 | [PCGRAPH_FORMAT.md](PCGRAPH_FORMAT.md) | formati `.pcgraph`, `PCGMEM`, `.pcpict`, BMP; scrittura atomica e recupero |
+| [TABLE.md](TABLE.md) | TABLE: lista delle relazioni, variabile range/lista, tipi Y=/r=/Param, editing delle righe, LISTMEM, persistenza |
+| [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md) | procedura di collaudo sulla PicoCalc fisica (GRAPH, microSD, TABLE) e dati da inviare |
 | [APPLICATIONS_ARCHITECTURE.md](APPLICATIONS_ARCHITECTURE.md) | registro delle modalità, servizi condivisi, dati scambiati, progetto delle modalità future, test di architettura |
 | [RUN_MATRIX.md](RUN_MATRIX.md) | Run-Matrix: tasti, cronologia, risultati esatti, S⇔D, frazioni miste, periodo, variabili |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | strati, ciclo principale, workspace, memoria, cartelle |
@@ -22,7 +24,7 @@
 | [ROADMAP.md](ROADMAP.md) | cosa manca e priorità |
 | [CHANGELOG.md](CHANGELOG.md) | cronologia delle versioni |
 | [SYMBOL_CHEATSHEET.md](SYMBOL_CHEATSHEET.md) | simboli e notazione (contenuto dell'app Symbols) |
-| [reports/](reports/) | rapporti di sessione (v1.7.0, GRAPH v1.8.0) |
+| [reports/](reports/) | rapporti di sessione (v1.7.0, GRAPH v1.8.0, collaudo e TABLE v1.8.0) |
 | [../CONTINUE.md](../CONTINUE.md) | stato e istruzioni per riprendere lo sviluppo |
 
 ## Versioni e branch

@@ -1,8 +1,9 @@
 # CONTINUE — punto di ripresa del progetto PicoCalc FX-CG50 AI
 
 Documento di checkpoint per riprendere lo sviluppo esattamente da qui.
-Ultimo aggiornamento: **v1.8.0 — Sessione GRAPH** (motore dei grafici, modalità
-GRAPH, progetti e microSD), branch **`version/v1.8.0`**.
+Ultimo aggiornamento: **v1.8.0 — collaudo software di GRAPH e microSD,
+completamento di TABLE**, branch **`version/v1.8.0`** (rapporto in
+`docs/reports/SESSIONE_v1.8.0_COLLAUDO_TABLE.md`).
 
 ## 0. Branch
 
@@ -11,77 +12,72 @@ GRAPH, progetti e microSD), branch **`version/v1.8.0`**.
 | `main` | codice originale caricato | non modificare |
 | `version/v1.5.4`, `version/v1.6.0` | release storiche | non modificare |
 | `version/v1.7.0` | Sessione 1 (audit, architettura, Run-Matrix), base della v1.8.0 (`72285e9`) | non modificare |
-| **`version/v1.8.0`** | lavoro della v1.8.0 | si continua qui finché l'utente non approva la release |
-| `claude/loving-meitner-jifxhg` | branch di sviluppo della sessione GRAPH, allineato a `version/v1.8.0` | storico |
+| **`version/v1.8.0`** | GRAPH, microSD, TABLE e collaudo software | si continua qui finché l'utente non approva la release |
+| `claude/loving-meitner-jifxhg` | branch di sviluppo delle sessioni v1.8.0, allineato a `version/v1.8.0` | storico |
 
-Non creare `version/v1.9.0` o successive finché i rispettivi incrementi non sono
-completati e verificati. Nessun tag/release v1.8.0 senza richiesta. Mai
+Non creare `version/v1.9.0` finché il collaudo fisico della v1.8.0 non è
+valutato e l'utente non lo chiede. Nessun tag/release senza richiesta. Mai
 force-push.
 
 ## 1. Stato attuale
 
-- **Firmware RP2350 compilabile**: `build/pico2w/picocalc_fxai.uf2` (2 874 880
-  byte, ≈1403 KB di immagine flash, RAM statica ≈286 KB, heap ≈194 KB, stack
-  32 KB), nessun warning nei sorgenti del progetto; `picotool info`: versione
-  1.8.0, `pico2_w`, SDK 2.2.0.
-- **Test host**: 22 suite CTest, 6540 controlli, 0 errori, anche con ASan/UBSan
-  (dettaglio in `docs/TESTING.md`). Relay AI: 15 test Python superati.
-- **Nessun test su hardware fisico** (né display né microSD).
-- GRAPH: matrice di parità voce per voce in `docs/GRAPH_PARITY.md`
-  (132 voci: 26 TESTED ON SIMULATOR, 87 TESTED ON HOST, 3 IMPLEMENTED,
-  3 parziali, 10 NOT STARTED, 3 fuori ambito). **Parità completa non
-  raggiunta.**
-- Simulatore: screenshot GRAPH/TABLE 06, 07, 20–34 (`tests/sim/graph.txt`) e
-  Run-Matrix 12–19 (`tests/sim/run_matrix.txt`) in `docs/screenshots/`.
+- **Firmware RP2350 compilabile**: `build/pico2w/picocalc_fxai.uf2` (3 012 096
+  byte, ≈1470 KB di flash, RAM statica ≈286 KB, heap ≈194 KB, stack 32 KB),
+  nessun warning nei sorgenti del progetto; `picotool info`: 1.8.0, `pico2_w`.
+- **Test host**: 25 test CTest (24 suite, 7169 controlli + `sd_interop_test`
+  con 41 controlli), 0 errori, anche con ASan/UBSan. Relay AI: 15 test.
+- **Nessun test su hardware fisico**: procedura pronta in
+  `docs/HARDWARE_TEST_v1.8.0.md`, diagnostica sul dispositivo in SYSTEM → F2
+  DIAG (righe `[DIAG]` anche sulla seriale USB).
+- GRAPH: `docs/GRAPH_PARITY.md` (135 voci: 29 TESTED ON SIMULATOR, 92 TESTED ON
+  HOST, 3 IMPLEMENTED, 2 parziali, 6 NOT STARTED, 3 fuori ambito). **Parità
+  completa non raggiunta.**
+- TABLE: completa secondo il manuale 5-32…5-35 tranne Dual Screen
+  (`docs/TABLE.md`).
+- microSD: pila verificata sul PC con scheda simulata e con fsck/mtools su
+  immagini FAT16/FAT32/exFAT (`docs/STORAGE.md`); bus SPI0 reale non provato.
+- Screenshot GRAPH/TABLE 06, 07, 20–37 (`tests/sim/graph.txt`), Run-Matrix 12–19.
 
-## 2. Cosa è stato fatto nella Sessione GRAPH
+## 2. Cosa è stato fatto nell'ultima sessione
 
 | Area | Contenuto |
 |---|---|
-| Motore | `graph_model`, `graph_engine` (viewport, clipping, compilazione della lista, riferimenti tra funzioni, campionamento adattivo incrementale, ZOOM), `graph_solve` (Brent, Ridders, Gauss–Kronrod) — `docs/GRAPH_ENGINE.md` |
-| Modalità GRAPH | riscritta in `graph_app.cpp`, `graph_plot.cpp`, `graph_files.cpp`: 20 funzioni e 12 tipi, V-Window, Setup proprio, TRACE, ZOOM, SKETCH, G-SOLVE, Modify, memorie, PICT, sfondo, progetti |
-| TABLE | sullo stesso motore: dY/dX, GPH-CON/GPH-PLT |
-| File | `file_store` (interfaccia, scrittura atomica, recupero, scheda in RAM), `graph_file` (`.pcgraph`, `PCGMEM`), `pict` (`.pcpict`, BMP) — `docs/PCGRAPH_FORMAT.md` |
-| microSD | `sd_card` (protocollo SD in SPI), `fatfs_store` + FatFs R0.16 (`third_party/fatfs`), `sd_spi_pico.cpp` (SPI0 GP16–19, GP22) — `docs/STORAGE.md` |
-| Persistenza | workspace versione 3; versioni 1 e 2 lette, V-Window legacy corrette |
-| Test | `graph_engine_test`, `graph_solve_test`, `graph_file_test`, `graph_app_test`, `sd_fatfs_test` |
-| Documentazione | GRAPH_PARITY, GRAPH_ENGINE, STORAGE, PCGRAPH_FORMAT (nuovi); FEATURE_MATRIX, APPLICATIONS_ARCHITECTURE, ARCHITECTURE, GRAPHICS_ENGINE, MATH_ENGINE, TESTING, HARDWARE, BUILD_STATUS, ROADMAP, CHANGELOG, README; rapporto `docs/reports/SESSIONE_GRAPH_v1.8.0.md` |
+| GRAPH | `graph_verify_test` (precisione ≤ 1 px, valori analitici); corretti ∫dx sui poli (ora Math ERROR), integrali con salti, record flash superabile con lo SKETCH PEN (limite 1200 punti, messaggio "Memoria flash piena"); tratteggio 4× più rapido |
+| microSD | corretto il blocco dopo l'estrazione tra due operazioni (reinizializzazione + nuovo tentativo) e il messaggio della scheda non formattata; test di guasti, dimensioni, cartelle, scheda piena; `sd_interop_test`; `tools/sd_image_tool`; simulatore con `PICOCALC_SD_IMAGE`; SYSTEM → DIAG |
+| TABLE | riscritta: lista delle relazioni, Y=/r=/Param, Variable Range/List, SET, Setup, EDIT, ROW, DELETE, LISTMEM, GPH-CON/PLT dalle righe; workspace v4; `table_test` |
+| Documentazione | TABLE, HARDWARE_TEST_v1.8.0, rapporto di sessione; aggiornati GRAPH_PARITY, GRAPH_ENGINE, STORAGE, PCGRAPH_FORMAT, FEATURE_MATRIX, TESTING, ROADMAP, GRAPHICS_ENGINE, APPLICATIONS_ARCHITECTURE, ARCHITECTURE, HARDWARE, BUILD_STATUS, CHANGELOG, README |
 
 ## 3. Funzionalità ancora da completare
 
-- GRAPH (dettaglio in `docs/GRAPH_PARITY.md`, sezione "Mancanze"): Dual Screen
-  G+G/GtoT e Graph to Table, comandi grafici di Run-Matrix/programmi, FORMAT
-  durante lo SKETCH, suffissi angolari °/ʳ/ᵍ, immagini a due livelli.
-- TABLE: r= e parametriche, Variable = LIST, editing delle righe, LISTMEM,
-  lista delle relazioni propria.
-- Run-Matrix: Punto 3 (Natural V.P.A.M. ↔ formato lineare), matrici/vettori/
-  liste nel parser, Base-N intera, simboli ingegneristici, Simp manuale.
-- Modalità con solo architettura e modello dati: eActivity, Spreadsheet, Dyna
-  Graph, Recursion, Conic Graphs, Program, Financial, Link, Geometry, Picture
-  Plot, 3D Graph; Python richiede MicroPython; E-CON4 non realizzabile.
-- Collaudo hardware. Dettaglio in `docs/ROADMAP.md` e `docs/FEATURE_MATRIX.md`.
+- Dual Screen (G+G, GtoT, T+G) e Graph to Table; comandi grafici di
+  Run-Matrix/programmi; FORMAT durante lo SKETCH; suffissi angolari °/ʳ/ᵍ.
+- Liste di 999 elementi (oggi 255: limita LISTMEM).
+- Run-Matrix: Punto 3 (Natural V.P.A.M. ↔ lineare), matrici/liste nel parser,
+  Base-N intera, simboli ingegneristici.
+- Modalità con solo modello dati: eActivity, Spreadsheet, Dyna Graph,
+  Recursion, Conic Graphs, Program, Financial, Link, Geometry, Picture Plot,
+  3D Graph; Python; E-CON4 non realizzabile.
 
-## 4. Prossimi passaggi esatti (v1.9.0, proposta in `docs/ROADMAP.md` §2)
+## 4. Prossimi passaggi esatti
 
-1. Collaudo su PicoCalc (procedura in `docs/HARDWARE.md`, punti 6–7 per GRAPH e
-   microSD); aggiornare GRAPH_PARITY/FEATURE_MATRIX a TESTED ON HARDWARE solo
-   dopo la prova, con data e revisione della scheda.
-2. TABLE completa (r=, parametriche, LIST, editing, LISTMEM).
-3. Dual Screen G+G/GtoT e Graph to Table (`graph::Viewport` accetta già
-   un'area diversa da 320×282).
-4. Dyna Graph, Recursion, Conic Graphs sul servizio GraphCore.
-5. Punto 3: Natural V.P.A.M. ↔ formato lineare.
+1. **Ricevere ed esaminare i risultati del collaudo fisico**
+   (`docs/HARDWARE_TEST_v1.8.0.md`: esiti HW-01…HW-36, log `[DIAG]`, foto);
+   correggere ogni KO con un test che lo riproduca; aggiornare a TESTED ON
+   HARDWARE solo le voci provate, con data e revisione della scheda.
+2. Poi la v1.9.0 secondo `docs/ROADMAP.md` §2.
 
 ## 5. Problemi noti / da verificare
 
-- Nessuna verifica su PicoCalc: display, tastiera, flash, microSD, Wi-Fi, TLS;
-  tempi di disegno di GRAPH e della valutazione esatta sul Cortex-M33.
-- microSD: pin SPI0 presi dai sorgenti ufficiali ClockworkPi ma non provati;
-  accesso a settore singolo (niente CMD18/CMD25); il firmware non formatta
-  schede (`f_mkfs` solo nell'host).
-- Memoria GRAPH: punti delle curve ≤ 96 KB in totale; due immagini RLE molto
-  complesse (≤ 96 KB ciascuna) insieme a 20 grafici densi possono esaurire
-  l'heap: il disegno si ferma con "Memory ERROR" (non verificato su hardware).
+- Nessuna verifica su PicoCalc: display, tastiera, flash, microSD (SPI0 a
+  12,5 MHz, card detect GP22), Wi-Fi, TLS; tempi di GRAPH e TABLE sul
+  Cortex-M33 (li misura SYSTEM → DIAG).
+- microSD: accesso a settore singolo (niente CMD18/CMD25); il firmware non
+  formatta schede; `f_getfree` su FAT32 con FSInfo non valido può essere lento
+  (scansione della FAT).
+- Il record del workspace (~63,7 KB) può ancora essere superato da molte
+  conversazioni AI lunghe: l'autosalvataggio lo segnala ("Memoria flash
+  piena"), ma la soluzione definitiva (spostare la chat o i dati grandi sulla
+  microSD) è da fare.
 - Senza RTC, mbedTLS non verifica le date dei certificati e FatFs usa la data
   fissa 1/1/2026.
 - Ritardo di 16 ms della tastiera I2C ripreso dal driver ufficiale, da ottimizzare.
@@ -112,6 +108,15 @@ scripts/make_release.sh
 # Simulatore: screenshot di Run-Matrix e di GRAPH/TABLE
 build/host/picocalc_sim /tmp/shots tests/sim/run_matrix.txt
 build/host/picocalc_sim docs/screenshots tests/sim/graph.txt
+```
+
+```bash
+# microSD: immagine reale nel simulatore, strumento e controllo con fsck
+sudo apt-get install -y dosfstools mtools exfatprogs
+truncate -s 64M sd.img && mkfs.fat -F 32 sd.img
+PICOCALC_SD_IMAGE=sd.img build/host/picocalc_sim /tmp/shots -
+build/host/sd_image_tool sd.img ls PICOCALC/GRAPH
+fsck.fat -n sd.img
 ```
 
 ```bash

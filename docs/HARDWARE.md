@@ -67,7 +67,8 @@ Shift+Tab `0xD2`, modificatori `0xA1–0xA5`, Caps `0xC1`.
 Driver in `src/platform/pico/sd_spi_pico.cpp` (bus) sopra il protocollo
 portabile `src/sd_card.cpp` e `src/fatfs_store.cpp`, provati sul PC con una
 scheda simulata. Cartelle usate: `PICOCALC/GRAPH` e `PICOCALC/PICT`
-([STORAGE.md](STORAGE.md)). **Da collaudare** sulla PicoCalc.
+([STORAGE.md](STORAGE.md)). **Da collaudare** sulla PicoCalc: procedura completa
+in [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md) e diagnostica SYSTEM → F2 DIAG.
 
 ## Flash
 
@@ -87,6 +88,8 @@ scheda simulata. Cartelle usate: `PICOCALC/GRAPH` e `PICOCALC/PICT`
 6. GRAPH: disegnare 20 funzioni (anche parametriche con Tpitch piccolo) e
    misurare il tempo di disegno; verificare che TRACE ed EXIT rispondano
    durante il disegno; controllare i colori di curve e riempimenti.
-7. microSD (FAT32 ed exFAT): FILE > SAVE AS, estrarre e reinserire la scheda,
+7. microSD e TABLE: seguire [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md)
+   (diagnostica SYSTEM → DIAG con log `[DIAG]` sulla seriale USB). In sintesi:
+   FILE > SAVE AS, estrarre e reinserire la scheda,
    OPEN; PICTURE STORE/RECALL; estrarre la scheda durante un salvataggio e
    verificare che resti il file precedente; leggere i file `.pcgraph` dal PC.

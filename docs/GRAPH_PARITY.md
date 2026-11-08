@@ -1,4 +1,4 @@
-# GRAPH — matrice di parità con la fx-CG50 (v1.8.0)
+# GRAPH — matrice di parità con la fx-CG50 (v1.8.0, dopo il collaudo software)
 
 Verifica sistematica, voce per voce, delle funzioni della modalità **Graph**
 della fx-CG50 rispetto al firmware PicoCalc FX-CG50 AI v1.8.0.
@@ -32,23 +32,21 @@ persistenza):
 
 | Stato | Voci |
 |---|---|
-| TESTED ON SIMULATOR | 26 |
-| TESTED ON HOST | 87 |
+| TESTED ON SIMULATOR | 29 |
+| TESTED ON HOST | 92 |
 | IMPLEMENTED | 3 |
-| IN PROGRESS (parziale) | 3 |
-| NOT STARTED | 10 |
+| IN PROGRESS (parziale) | 2 |
+| NOT STARTED | 6 |
 | Fuori ambito GRAPH (Conic Graphs, impostazioni globali) | 3 |
-| **Totale** | **132** |
+| **Totale** | **135** |
 
 Le modalità Dyna Graph, Recursion e Conic Graphs (sezioni 9–11 del capitolo 5)
 sono modalità separate e non sono contate.
 
 **La parità completa con la fx-CG50 NON è raggiunta.** Mancano in
-particolare: Dual Screen (G+G, GtoT) e Graph to Table, i comandi grafici di
-Run-Matrix/programmi (`Graph Y=`, `DrawGraph`, ...), le tabelle con variabile
-da lista, l'editing delle righe e LISTMEM, le tabelle di r= e parametriche,
-FORMAT durante lo SKETCH, i suffissi di unità angolare (°, ʳ, ᵍ) nelle
-espressioni. Elenco completo nella sezione "Mancanze".
+particolare: Dual Screen (G+G, GtoT, T+G) e Graph to Table, i comandi grafici
+di Run-Matrix/programmi (`Graph Y=`, `DrawGraph`, ...), FORMAT durante lo
+SKETCH, i suffissi di unità angolare (°, ʳ, ᵍ) nelle espressioni. Elenco completo nella sezione "Mancanze".
 
 ## 0. Audit iniziale (v1.7.0, commit `72285e9`)
 
@@ -153,18 +151,23 @@ espressioni. Elenco completo nella sezione "Mancanze".
 
 ## 7. Tabelle e integrazione GRAPH ↔ TABLE (5-32…5-37)
 
+TABLE completata nel collaudo della v1.8.0: dettaglio in [TABLE.md](TABLE.md).
+
 | Funzione CG50 | Stato | Implementazione / note | Verifica |
 |---|---|---|---|
-| Tabella dalle funzioni Y= selezionate (stesso motore dei grafici) | TESTED ON SIMULATOR | `TableApp` usa `GraphEngine` | graph_app_test, screenshot 32 |
-| SET (Start, End, Step) | TESTED ON HOST | `TableRange` | graph_app_test |
-| Tabella delle derivate (Derivative On) | TESTED ON SIMULATOR | colonne dY/dX | graph_app_test, screenshot 32 |
-| GPH-CON / GPH-PLT | TESTED ON SIMULATOR | i punti della tabella disegnati da GRAPH | graph_app_test, screenshot 33 |
-| → TABLE dal grafico / dalla lista (OPTN) e GRAPH dalla tabella | TESTED ON HOST | | graph_app_test |
-| Tabelle di r= e parametriche | NOT STARTED | solo funzioni di tipo Y | — |
-| Variable = LIST (x da una lista) | NOT STARTED | | — |
-| Editing della tabella (ROW DELETE/INSERT/ADD, EDIT di x, DELETE) | NOT STARTED | | — |
-| LISTMEM (colonna → lista) | NOT STARTED | | — |
-| Lista delle relazioni propria di TABLE (FORMULA) | IN PROGRESS | TABLE usa la lista di GRAPH | — |
+| Lista delle relazioni di TABLE (SELECT, DELETE, TYPE, STYLE, SET, TABLE, modifica) | TESTED ON SIMULATOR | funzioni condivise con GRAPH | table_test, screenshot 35 |
+| Tipi della tabella Y=, r=, Param (un tipo per tabella) | TESTED ON HOST | colonne Y, r, Xt/Yt | table_test |
+| SET (Start, End, Step), fino a 999 righe | TESTED ON SIMULATOR | errori Argument/Memory; il modulo torna ai valori validi | table_test, screenshot 36 |
+| Variable = LIST (x da List 1–6) | TESTED ON HOST | Setup di TABLE | table_test |
+| Tabella delle derivate (Derivative On), errore con intervallo/[A=] | TESTED ON SIMULATOR | dY/dX, dr/dθ | table_test, graph_app_test, screenshot 32 |
+| Celle di 6 caratteri, valore completo della cella selezionata | TESTED ON SIMULATOR | | table_test, screenshot 36 |
+| EDIT del valore di x (anche digitato), valore non valido → errore | TESTED ON SIMULATOR | | table_test, screenshot 37 |
+| ROW DELETE / INSERT / ADD, DELETE della tabella | TESTED ON HOST | INSERT/ADD copiano la riga (differenza dichiarata) | table_test |
+| LISTMEM (colonna → List n) | TESTED ON HOST | massimo 255 valori (limite delle liste) | table_test |
+| GPH-CON / GPH-PLT dalle righe della tabella | TESTED ON SIMULATOR | anche righe modificate e tipi r=/Param | table_test, graph_app_test, screenshot 33 |
+| GRAPH ↔ TABLE (→ TABLE dall'OPTN, G⇔T dopo GPH-CON) | TESTED ON HOST | | graph_app_test, table_test |
+| Persistenza della tabella (workspace v4, `.pcgraph`) | TESTED ON HOST | righe nel workspace, impostazioni anche nel progetto | table_test |
+| Dual Screen T+G, Graph to Table | NOT STARTED | sessione v1.9.0 | — |
 
 ## 8. Modify (5-38…5-41)
 
@@ -249,7 +252,7 @@ sessione. La TOOL > BUILT-IN di GRAPH riusa i 7 tipi predefiniti del Dyna Graph
 | Ineq Type (Intsect/Union) | TESTED ON SIMULATOR | screenshot 23/34 |
 | Dual Screen (G+G/GtoT/Off) | NOT STARTED | |
 | Input/Output, Frac Result, Complex Mode | Fuori ambito | impostazioni globali di SYSTEM |
-| Variable (RANG/LIST) di TABLE | NOT STARTED | solo RANG |
+| Variable (RANG/LIST) di TABLE | TESTED ON HOST | Setup di TABLE (anche Derivative, Angle) |
 
 Il tasto SETUP dentro GRAPH apre il Setup della modalità (non SYSTEM),
 come sulla CG50 (TESTED ON HOST).
@@ -274,8 +277,8 @@ come sulla CG50 (TESTED ON HOST).
 1. Dual Screen G+G e GtoT, Graph to Table.
 2. Comandi grafici di Run-Matrix e dei programmi (`Graph Y=`, `DrawGraph`,
    `ViewWindow`, `Plot`, `Line`, ...), insieme al linguaggio dei programmi.
-3. TABLE: tabelle di r= e parametriche, Variable = LIST, editing delle righe,
-   LISTMEM, lista delle relazioni propria.
+3. TABLE: completata nel collaudo della v1.8.0 (vedi [TABLE.md](TABLE.md));
+   restano Dual Screen T+G e liste di 999 elementi per LISTMEM.
 4. FORMAT durante lo SKETCH (si cambia dopo, da Elementi).
 5. Suffissi di unità angolare (°, ʳ, ᵍ) nelle espressioni.
 6. Immagini a due livelli (grafico e sfondo separati, come g3p).
@@ -289,8 +292,11 @@ come sulla CG50 (TESTED ON HOST).
 | `graph_engine_test` | 351 | viewport, clipping, campionamento, discontinuità, tipi, riferimenti, overwrite, liste, zoom, limiti di punti |
 | `graph_solve_test` | 51 | radici, estremi, intersezioni, integrali, aree, poli, tangenze |
 | `graph_file_test` | 345 | `.pcgraph`, G-Mem, `.pcpict`, BMP, file store, scrittura atomica, guasti |
-| `graph_app_test` | 249 | flussi completi dell'interfaccia GRAPH e TABLE, progetti, ciclo 12.4, budget di memoria delle curve |
-| `sd_fatfs_test` | 84 | protocollo SD simulato, FatFs, rimozione della scheda |
+| `graph_app_test` | 301 | flussi completi dell'interfaccia GRAPH, progetti, ciclo 12.4 anche sull'intera pila microSD simulata, budget di memoria, SYSTEM > DIAG |
+| `graph_verify_test` | 182 | precisione al pixel (≤ 1 px) di ogni punto e segmento per 18 casi, discontinuità, domini, X=/r=/Param, G-Solve, derivate e integrali contro valori analitici, poli |
+| `table_test` | 171 | TABLE: righe, celle, valori, tipi, editing, LISTMEM, limiti, persistenza |
+| `sd_fatfs_test` | 302 | protocollo SD simulato, FatFs, rimozione e spegnimento della scheda, errori, dimensioni, cartelle, scheda piena |
+| `sd_interop_test` | 41 | FAT16/FAT32/exFAT scritti dal codice del firmware e verificati con fsck.fat, fsck.exfat, mtools |
 
-Screenshot: `docs/screenshots/06`, `07`, `20`–`34`, prodotti dallo script
+Screenshot: `docs/screenshots/06`, `07`, `20`–`37`, prodotti dallo script
 `tests/sim/graph.txt` con lo stesso codice del firmware.

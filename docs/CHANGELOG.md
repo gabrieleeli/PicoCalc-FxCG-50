@@ -1,5 +1,50 @@
 # Changelog
 
+## v1.8.0 (continuazione) — collaudo di GRAPH e microSD, completamento di TABLE
+
+Sullo stesso branch `version/v1.8.0`. Verifiche su PC; **nessuna prova sulla
+PicoCalc fisica** (procedura in [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md)).
+Rapporto: [reports/SESSIONE_v1.8.0_COLLAUDO_TABLE.md](reports/SESSIONE_v1.8.0_COLLAUDO_TABLE.md).
+
+### GRAPH
+- `graph_verify_test`: ogni punto disegnato entro 1 pixel dalla curva vera
+  (18 casi Y= e X=, r=, Param), discontinuità, domini, G-Solve, derivate e
+  integrali contro valori analitici.
+- Corretto: ∫dx attraverso un polo dava un numero senza senso → "Math ERROR:
+  integrale divergente"; integrali di funzioni a salto imprecisi (4,500001)
+  → divisione ai salti e ai picchi integrabili.
+- Corretto: tratti PEN illimitati potevano rendere impossibile il salvataggio
+  del workspace in flash → 1200 punti in totale; messaggio "Memoria flash
+  piena" con la dimensione.
+- Tratteggio delle disequazioni 4 volte più rapido (immagine identica).
+
+### microSD
+- Corretto: dopo l'estrazione e il reinserimento della scheda tra due
+  operazioni ogni accesso falliva → reinizializzazione, nuovo montaggio e un
+  nuovo tentativo; lettura ripetuta dopo un errore transitorio.
+- Corretto: scheda non formattata segnalata come file danneggiato → stato
+  `Unformatted` con istruzioni.
+- Test sull'intera pila (GraphApp → FatFs → protocollo SD → scheda simulata),
+  guasti, dimensioni, cartelle, scheda piena; `sd_interop_test` con
+  fsck.fat/fsck.exfat/mtools; `tools/sd_image_tool`; simulatore con
+  `PICOCALC_SD_IMAGE`.
+- SYSTEM → F2 DIAG: test della microSD e tempi di GRAPH sul dispositivo,
+  stampati anche sulla seriale USB.
+
+### TABLE
+- Riscritta: lista delle relazioni propria (SELECT, DELETE, TYPE Y=/r=/Param,
+  STYLE, SET, TABLE), Setup (Variable Range/List, Derivative, Angle), fino a
+  999 righe, celle di 6 caratteri, EDIT, ROW DELETE/INSERT/ADD, DELETE,
+  LISTMEM, GPH-CON/GPH-PLT dalle righe effettive — [TABLE.md](TABLE.md).
+- Corretti: lettura fuori dai limiti dopo un intervallo non valido; modulo SET
+  che non si chiudeva con valori errati.
+- Workspace versione 4 (righe e impostazioni della tabella), `.pcgraph` con
+  `tablevar`/`tablefunc`.
+
+### Test
+- 25 test CTest (24 suite, 7169 controlli + 41 di interoperabilità), anche con
+  ASan/UBSan; UF2 senza warning (3 012 096 byte).
+
 ## v1.8.0 — 2026-11-08 — Sessione GRAPH
 
 Branch `version/v1.8.0` (creato da `version/v1.7.0`, commit `72285e9`).

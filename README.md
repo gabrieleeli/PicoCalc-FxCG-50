@@ -15,10 +15,10 @@ calcolatrice grafica Casio fx-CG50, con chat AI (Claude e ChatGPT) tramite Wi-Fi
 | | Stato |
 |---|---|
 | Compilazione UF2 per RP2350 (Pico SDK 2.2.0, `pico2_w`) | ✅ compila, nessun warning nei sorgenti del progetto |
-| Test automatici host | ✅ 22 suite, 6540 controlli (incluso il test di architettura), tutti superati anche con AddressSanitizer/UBSan |
+| Test automatici host | ✅ 25 test: 24 suite con 7169 controlli (precisione al pixel dei grafici, TABLE, microSD simulata) + interoperabilità FAT/exFAT con fsck e mtools; tutti superati anche con AddressSanitizer/UBSan |
 | Test relay AI | ✅ 15 test (SDK ufficiali contro API simulate, TLS reale in loopback) |
 | Parità con la fx-CG50 | ❌ **non completa** — GRAPH: matrice voce per voce in [docs/GRAPH_PARITY.md](docs/GRAPH_PARITY.md) |
-| **Prova su PicoCalc fisica** | ❌ **non ancora eseguita** — display, tastiera, flash, microSD, Wi-Fi e TLS sono implementati secondo i driver ufficiali ClockworkPi ma vanno collaudati |
+| **Prova su PicoCalc fisica** | ❌ **non ancora eseguita** — display, tastiera, flash, microSD, Wi-Fi e TLS sono implementati secondo i driver ufficiali ClockworkPi ma vanno collaudati: procedura in [docs/HARDWARE_TEST_v1.8.0.md](docs/HARDWARE_TEST_v1.8.0.md), diagnostica SYSTEM → DIAG |
 
 Dettagli: [docs/BUILD_STATUS.md](docs/BUILD_STATUS.md) · stato per funzione:
 [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md) · ripresa del lavoro: [CONTINUE.md](CONTINUE.md).
@@ -30,7 +30,7 @@ Dettagli: [docs/BUILD_STATUS.md](docs/BUILD_STATUS.md) · stato per funzione:
 | 1 | **Run-Matrix** | input naturale 2D (frazioni, frazioni miste, radici, potenze, ∫, d/dx, Σ, Π, \|x\|, logₐb, periodo); **risultati esatti** (frazioni, √, π) con S⇔D che non altera il valore, Frac Result d/c ↔ ab/c, sviluppo periodico; cronologia modificabile sul posto con ricalcolo; Ans/PreAns e A–Z che conservano la forma esatta, `→A~F`; relazioni e logica, Int÷/Rmdr; VARS (A–Z, V-WIN, TABLE); Base-N, DMS, complessi, Pol/Rec, copia/incolla, undo/redo — vedi [docs/RUN_MATRIX.md](docs/RUN_MATRIX.md) |
 | 2 | **Statistics** | liste 1–6, 1-Var/2-Var, 9 regressioni (ax+b, Med-Med, X², X³, X⁴, Log, Exp, ab^x, Power) con grafico e copia in GRAPH, scatter/xyLine/istogramma/box plot, distribuzioni (normale, binomiale, Poisson, t, χ², F), test Z/t e intervalli |
 | 5 | **Graph** | Y1–Y20: Y=, r=, parametriche, X=, 8 tipi di disequazioni (Union/Intsect), intervalli, sovrapposizioni [A=…], grafici da lista, funzioni composte; TRACE, ZOOM (13 funzioni), V-Window con memorie, SKETCH, G-SOLVE (ROOT, MAX, MIN, Y-ICEPT, INTSECT, Y-CAL, X-CAL, ∫dx anche tra radici/intersezioni), Modify, memorie grafiche, PICT e sfondo, progetti `.pcgraph` sulla microSD — vedi [docs/GRAPH_PARITY.md](docs/GRAPH_PARITY.md) |
-| 7 | **Table** | tabella dei valori delle funzioni Y con Start/End/Step, dY/dX, GPH-CON/GPH-PLT |
+| 7 | **Table** | tabelle di Y=, r= e parametriche da Start/End/Step o da una lista (fino a 999 righe), derivate, EDIT e ROW DELETE/INSERT/ADD, LISTMEM, GPH-CON/GPH-PLT — vedi [docs/TABLE.md](docs/TABLE.md) |
 | A | **Equation** | sistemi lineari 2–6 incognite, polinomi di grado 2–6 (radici complesse), solver numerico f(x)=g(x), disequazioni polinomiali di grado 1–6 |
 | F | **Memory** | uso della memoria, cancellazione selettiva, salvataggio |
 | G | **System** | angolo, formato display, modo complesso, frazioni, retroilluminazione, Wi-Fi, relay AI |
@@ -92,6 +92,7 @@ Senza rete tutte le funzioni matematiche restano disponibili.
 [ARCHITECTURE](docs/ARCHITECTURE.md) · [HARDWARE](docs/HARDWARE.md) ·
 [GRAPH_PARITY](docs/GRAPH_PARITY.md) · [GRAPH_ENGINE](docs/GRAPH_ENGINE.md) ·
 [STORAGE](docs/STORAGE.md) · [PCGRAPH_FORMAT](docs/PCGRAPH_FORMAT.md) ·
+[TABLE](docs/TABLE.md) · [HARDWARE_TEST](docs/HARDWARE_TEST_v1.8.0.md) ·
 [GRAPHICS_ENGINE](docs/GRAPHICS_ENGINE.md) · [MATH_ENGINE](docs/MATH_ENGINE.md) ·
 [AI_INTEGRATION](docs/AI_INTEGRATION.md) · [TESTING](docs/TESTING.md) ·
 [ROADMAP](docs/ROADMAP.md) · [CHANGELOG](docs/CHANGELOG.md) ·

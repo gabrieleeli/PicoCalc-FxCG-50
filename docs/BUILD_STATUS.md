@@ -1,8 +1,24 @@
-# Build status — v1.8.0
+# Build status — v1.8.0 (collaudo software e TABLE)
 
 Le note storiche delle versioni v0.3–v1.5.4 restano nella cronologia Git e in
 [CHANGELOG.md](CHANGELOG.md). Le sezioni dopo "v1.8.0" descrivono le build
 precedenti e l'audit della v1.6.0 e restano valide come base.
+
+## v1.8.0 — collaudo software di GRAPH e microSD, completamento di TABLE
+
+Stesso ambiente. Build pulita con `scripts/build_pico2w.sh` (Release, `-O3`).
+
+| Voce | Valore |
+|---|---|
+| Output | `build/pico2w/picocalc_fxai.uf2` (3 012 096 byte); `picotool info`: "PicoCalc FX-CG50 AI", versione 1.8.0, RP2350, `pico2_w`, SDK 2.2.0 |
+| Immagine flash | ≈1470 KB (`__flash_binary_end` = `0x1016F968`) su 4096 KB (+67 KB: TABLE, diagnostica, ricerca dei poli, recupero della microSD) |
+| RAM statica | ≈286 KB fino a `__end__` = `0x200476E8` (+16 byte) |
+| Heap | ≈194 KB; stack 32 KB |
+| Warning | nessuno nei sorgenti del progetto |
+| Test host | 25 test CTest: 24 suite con 7169 controlli + `sd_interop_test` (41 controlli con fsck.fat, fsck.exfat, mtools); tutti superati anche con ASan + UBSan |
+| Relay AI | 15 test Python superati |
+| Stack | frame massimi dei moduli toccati: diagnostica 808 B, `writeAtomic` 640 B, `graph::integrate` 616 B, `TableApp::drawList` 424 B |
+| Hardware | **non provato**: procedura in [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md) |
 
 ## v1.8.0 (branch `version/v1.8.0`) — sessione GRAPH
 
