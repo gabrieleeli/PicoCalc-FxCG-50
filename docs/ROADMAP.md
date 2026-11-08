@@ -2,7 +2,7 @@
 
 Il progetto **non** ha la parità con la Casio fx-CG50 e non va presentato come
 tale: la tabella sotto elenca ciò che manca, in ordine di priorità.
-Il documento storico `CG50_PARITY_ROADMAP.md` descrive gli obiettivi delle
+Il documento storico `archive/CG50_PARITY_ROADMAP.md` descrive gli obiettivi delle
 versioni precedenti.
 
 ## 1. Collaudo su hardware (priorità massima)

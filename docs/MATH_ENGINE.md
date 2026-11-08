@@ -1,7 +1,7 @@
 # Motore matematico — v1.6.0
 
-Riferimenti storici: `VPAM_SHARED_AST.md`, `RUN_MATRIX_PHASE*.md` e
-`math_engine_original.py` descrivono le versioni precedenti (vedi [README.md](README.md)).
+Riferimenti storici: `archive/VPAM_SHARED_AST.md`, `archive/RUN_MATRIX_PHASE*.md` e
+`archive/math_engine_original.py` descrivono le versioni precedenti (vedi [README.md](README.md)).
 
 ## Pipeline unica
 
