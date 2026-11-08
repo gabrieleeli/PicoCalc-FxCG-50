@@ -180,5 +180,30 @@ int main() {
         CHECK(errorStarts([&] { imported.setExpression(nested); }, "Stack ERROR"));
         CHECK_NOTHROW(imported.setExpression("sqrt(sqrt(2))+(1)/(3)"));
     }
+    // v1.7.0 templates: mixed fraction, repeating digits, root with an editable index.
+    {
+        NaturalEditor m;
+        m.insertMixedFraction(); type(m, "2"); m.moveRight(); type(m, "1"); m.moveDown(); type(m, "3");
+        CHECK_EQ_STR(m.toExpression(), "mixed(2,1,3)");
+        CHECK_NEAR(value(m), 7.0 / 3.0, 1e-15);
+        CHECK(m.moveUp() && m.cursorPath().back() == 1);                 // denominator -> numerator
+        NaturalEditor back; back.setExpression(m.toExpression());
+        CHECK_EQ_STR(back.toExpression(), "mixed(2,1,3)");
+        CHECK(math::measure(back.root()).height > 20);                   // drawn as a stacked fraction
+        NaturalEditor p; type(p, "0.1"); p.insertPeriod(); type(p, "6");
+        CHECK_EQ_STR(p.toExpression(), "0.1_6");
+        CHECK_NEAR(value(p), 1.0 / 6.0, 1e-15);
+        NaturalEditor pBack; pBack.setExpression("2+0.1_6");
+        CHECK_EQ_STR(pBack.toExpression(), "2+0.1_6");
+        NaturalEditor noPoint; type(noPoint, "12");
+        CHECK_THROWS_AS(noPoint.insertPeriod(), SyntaxError);
+        NaturalEditor r; r.insertRootTemplate(); type(r, "3"); r.moveRight(); type(r, "8");
+        CHECK_EQ_STR(r.toExpression(), "root(3,8)");
+        CHECK_NEAR(value(r), 2.0, 1e-15);
+        NaturalEditor rel; type(rel, "2<=3");
+        CHECK_NEAR(value(rel), 1.0, 0);
+        NaturalEditor range; type(range, "1->A~C");                      // '~' accepted for A~F stores
+        CHECK_EQ_STR(range.toExpression(), "1->A~C");
+    }
     return testutil::finish("editor_test");
 }

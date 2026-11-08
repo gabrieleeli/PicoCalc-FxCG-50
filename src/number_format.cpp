@@ -12,15 +12,59 @@ void stripZeros(std::string& s){
     while(!s.empty()&&s.back()=='0')s.pop_back();
     if(!s.empty()&&s.back()=='.')s.pop_back();
 }
-// Splits |v| rounded to `sig` significant digits into digit string and exponent.
-void sigDigits(double v,int sig,std::string& digits,int& exponent){
+// Calculator rounding: |v| is first reduced to the 15-digit decimal mantissa
+// the fx-CG50 uses internally, then rounded half away from zero to the digits
+// shown. printf would round the binary value half-to-even instead
+// (0.125 -> "0.12", 2.675 -> "2.67"; the calculator shows 0.13 and 2.68).
+void mantissa15(double v,std::string& digits,int& exponent){
     char buf[64];
-    std::snprintf(buf,sizeof(buf),"%.*e",sig-1,std::abs(v));
-    std::string s(buf);
+    std::snprintf(buf,sizeof(buf),"%.14e",std::abs(v));
+    const std::string s(buf);
     const auto e=s.find('e');
     exponent=std::atoi(s.c_str()+e+1);
     digits.clear();
     for(std::size_t i=0;i<e;++i)if(s[i]!='.')digits.push_back(s[i]);
+}
+// Keeps the first `keep` digits, rounding half up; returns true on carry out
+// of the first digit (the digit string then starts with an extra '1').
+bool roundKeep(std::string& d,std::size_t keep){
+    if(keep>=d.size()){d.append(keep-d.size(),'0');return false;}
+    const bool up=d[keep]>='5';
+    d.resize(keep);
+    if(!up)return false;
+    for(std::size_t i=keep;i-->0;){if(d[i]=='9')d[i]='0';else{++d[i];return false;}}
+    d.insert(d.begin(),'1');
+    return true;
+}
+// Splits |v| rounded to `sig` significant digits into digit string and exponent.
+void sigDigits(double v,int sig,std::string& digits,int& exponent){
+    mantissa15(v,digits,exponent);
+    if(roundKeep(digits,static_cast<std::size_t>(sig))){digits.pop_back();++exponent;}
+}
+// |v| with exactly `decimals` digits after the point (Fix), calculator rounding.
+std::string fixedText(double v,int decimals){
+    std::string d;int e=0;
+    mantissa15(v,d,e);
+    const int keep=e+1+decimals;
+    if(keep<=0){
+        // Below the last shown decimal: 0, or one unit of it when the value reaches half of it.
+        const bool up=keep==0&&d[0]>='5';
+        d=up?"1":"";e=up?-decimals:0;
+        if(!up){std::string z="0";if(decimals>0)z+="."+std::string(static_cast<std::size_t>(decimals),'0');return z;}
+    }else if(roundKeep(d,static_cast<std::size_t>(keep))){++e;}
+    std::string intPart,frac;
+    if(e>=0){
+        const std::size_t n=static_cast<std::size_t>(e+1);
+        intPart=d.substr(0,std::min(n,d.size()));
+        if(intPart.size()<n)intPart.append(n-intPart.size(),'0');
+        frac=d.size()>n?d.substr(n):std::string();
+    }else{
+        intPart="0";
+        frac=std::string(static_cast<std::size_t>(-e-1),'0')+d;
+    }
+    if(frac.size()<static_cast<std::size_t>(decimals))frac.append(static_cast<std::size_t>(decimals)-frac.size(),'0');
+    frac.resize(static_cast<std::size_t>(decimals));
+    return decimals>0?intPart+"."+frac:intPart;
 }
 std::string sciMantissa(const std::string& digits,bool strip){
     std::string m=digits.substr(0,1);
@@ -64,8 +108,7 @@ FormattedNumber formatNumber(double v,DisplayFormat f){
     }
     case DisplayMode::Fix:{
         if(std::abs(v)>=1e10){sigDigits(v,10,digits,e);out.mantissa=sign+sciMantissa(digits,true);out.exponent=e;out.scientific=true;return out;}
-        char buf[64];std::snprintf(buf,sizeof(buf),"%.*f",static_cast<int>(std::min<std::uint8_t>(f.digits,9)),std::abs(v));
-        std::string m(buf);
+        std::string m=fixedText(v,static_cast<int>(std::min<std::uint8_t>(f.digits,9)));
         // Avoid "-0.00" for tiny negatives.
         bool allZero=true;for(char c:m)if(c!='0'&&c!='.')allZero=false;
         out.mantissa=(allZero?"":sign)+m;return out;

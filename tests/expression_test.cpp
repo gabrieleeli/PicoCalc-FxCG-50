@@ -148,6 +148,19 @@ int main() {
     CHECK_EQ_STR(formatReal(3.14159265358979), "3.141592654");
     CHECK_EQ_STR(formatReal(2.5, {DisplayMode::Fix, 3}), "2.500");
     CHECK_EQ_STR(formatReal(-0.0001, {DisplayMode::Fix, 2}), "0.00");
+    // Calculator rounding (15-digit decimal mantissa, half away from zero), manual 2-2.
+    CHECK_EQ_STR(formatReal(0.125, {DisplayMode::Fix, 2}), "0.13");
+    CHECK_EQ_STR(formatReal(-0.125, {DisplayMode::Fix, 2}), "-0.13");
+    CHECK_EQ_STR(formatReal(2.675, {DisplayMode::Fix, 2}), "2.68");
+    CHECK_EQ_STR(formatReal(999.995, {DisplayMode::Fix, 2}), "1000.00");
+    CHECK_EQ_STR(formatReal(0.005, {DisplayMode::Fix, 2}), "0.01");
+    CHECK_EQ_STR(formatReal(0.0049, {DisplayMode::Fix, 2}), "0.00");
+    CHECK_EQ_STR(formatReal(100.0 / 6.0, {DisplayMode::Fix, 4}), "16.6667");
+    CHECK_EQ_STR(formatReal(200.0 / 7.0, {DisplayMode::Fix, 3}), "28.571");
+    CHECK_EQ_STR(formatReal(100.0 / 6.0, {DisplayMode::Sci, 5}), "1.6667E+01");
+    CHECK_EQ_STR(formatReal(2.675, {DisplayMode::Sci, 3}), "2.68E+00");
+    CHECK_EQ_STR(formatReal(9.9995, {DisplayMode::Sci, 4}), "1.000E+01");
+    CHECK_EQ_STR(formatReal(7.0, {DisplayMode::Fix, 0}), "7");
     CHECK_EQ_STR(formatReal(1234.5, {DisplayMode::Sci, 3}), "1.23E+03");
     CHECK_EQ_STR(formatReal(12345.0, {DisplayMode::Eng, 0}), "12.345E+03");
     CHECK_EQ_STR(formatReal(0.00012, {DisplayMode::Eng, 0}), "120E-06");

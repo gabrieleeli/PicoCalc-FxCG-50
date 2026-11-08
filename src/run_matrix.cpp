@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
 #include <numeric>
 
 namespace fx {
@@ -166,15 +167,17 @@ std::size_t recalculateHistory(Workspace& ws, std::size_t from) {
 
 std::size_t editHistoryEntry(Workspace& ws, std::size_t index, const std::string& expression) {
     if (index >= ws.history.size()) throw std::out_of_range("Voce della cronologia inesistente");
+    // Copies kept on the heap: CalculatorMemory with its exact slots is ~1.7 KB,
+    // too large for a frame on the 32 KB RP2350 stack.
     const std::vector<HistoryEntry> savedHistory = ws.history;
-    const CalculatorMemory savedMemory = ws.memory;
+    const auto savedMemory = std::make_unique<CalculatorMemory>(ws.memory);
     ws.history[index].expression = expression;
     const std::size_t failures = recalculateHistory(ws, index);
     const HistoryEntry& edited = ws.history[index];
     if (!edited.error.empty() && edited.error[0] != '=') {
         const std::string what = edited.error;
         ws.history = savedHistory;
-        ws.memory = savedMemory;
+        ws.memory = *savedMemory;
         // Re-raise with the original class so the error box shows the right title.
         if (what.rfind("Syntax", 0) == 0) throw SyntaxError(what);
         throw MathError(what);

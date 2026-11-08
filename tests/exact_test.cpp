@@ -211,6 +211,21 @@ int main() {
             CHECK_NEAR(e.toDouble(), evaluate(s), 1e-12 * std::max(1.0, std::abs(evaluate(s))));
         }
     }
+    // ---------------------------------------------------------------- stack budget
+    {
+        // With a tiny budget the exact walk gives up quietly (no exception, no crash).
+        std::string nested = "2";
+        for (int i = 0; i < 30; ++i) nested = "sqrt(" + nested + ")^2";
+        const auto tree = parseExpression(nested);
+        const std::size_t saved = evalStackBudget();
+        setEvalStackBudget(512);
+        Value x;
+        bool threw = false;
+        try { (void)evaluateExact(*tree, EvalContext{}, x); } catch (...) { threw = true; }
+        CHECK(!threw);
+        setEvalStackBudget(saved);
+        CHECK(evaluateExact(*tree, EvalContext{}, x) && x == v(2));
+    }
     // ---------------------------------------------------------------- canonical text for reuse
     {
         const Value forms[] = {v(-5, 3), surd(-1, 2, 2), Value::piTimes(q(-3, 4)), Value::piTimes(q(2, 1)), v(42)};

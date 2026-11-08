@@ -134,6 +134,14 @@ inline constexpr Entry display_formats[] = {
  {"Eng", "Esponente multiplo di tre", "12000 -> 12 x 10^3"},
  {"Frac", "Visualizzazione frazionaria", "0.75 -> 3/4"},
 };
+inline constexpr Entry run_matrix_v17[] = {
+ {"=  ≠  <  >", "Confronti: 1 se vero, 0 se falso", "3 > 2 = 1"},
+ {"≤  ≥", "Minore o uguale, maggiore o uguale", "2 <= 2 = 1"},
+ {"and or xor not", "Operatori logici (OPTN LOGIC)", "1 and 0 = 0"},
+ {"Int÷  Rmdr", "Quoziente e resto interi (OPTN CALC)", "107 Rmdr 7 = 2"},
+ {"a b/c", "Frazione mista (SHIFT F1), SHIFT F5 la converte", "2 1/3 = 7/3"},
+ {"0.1(6)", "Numero periodico (MATH periodo)", "0.1(6) = 1/6"},
+};
 inline constexpr Page pages[] = {
  {"ARITMETICA", arithmetic, 6}, {"POTENZE E RADICI", powers_roots, 6},
  {"LETTERE GRECHE", greek, 6}, {"COSTANTI MATEMATICHE", constants, 6},
@@ -143,6 +151,7 @@ inline constexpr Page pages[] = {
  {"ALTRE FUNZIONI", advanced_functions, 6}, {"COMBINATORIA", combinatorics, 6},
  {"UNITA' DI MISURA", units, 6}, {"NOTAZIONE", notation, 6},
  {"GRECHE MAIUSCOLE", greek_upper, 6}, {"FORMATI RISULTATO", display_formats, 6},
+ {"CONFRONTI E FRAZIONI", run_matrix_v17, 6},
 };
 inline constexpr std::size_t PageCount = sizeof(pages) / sizeof(pages[0]);
 } // namespace fx::help
