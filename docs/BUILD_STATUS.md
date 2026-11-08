@@ -1,8 +1,33 @@
-# Build status — v1.7.0
+# Build status — v1.8.0
 
 Le note storiche delle versioni v0.3–v1.5.4 restano nella cronologia Git e in
-[CHANGELOG.md](CHANGELOG.md). Le sezioni dopo "v1.7.0" descrivono l'audit e la
-build della v1.6.0 e restano valide come base.
+[CHANGELOG.md](CHANGELOG.md). Le sezioni dopo "v1.8.0" descrivono le build
+precedenti e l'audit della v1.6.0 e restano valide come base.
+
+## v1.8.0 (branch `version/v1.8.0`) — sessione GRAPH
+
+Stesso ambiente della v1.7.0 (sotto). Build pulita con
+`scripts/build_pico2w.sh` (Release, `-O3`).
+
+| Voce | Valore |
+|---|---|
+| Output | `build/pico2w/picocalc_fxai.uf2` (2 874 880 byte); `picotool info`: nome "PicoCalc FX-CG50 AI", versione 1.8.0, RP2350 ARM Secure, `pico2_w`, SDK 2.2.0 |
+| Immagine flash | ≈1403 KB (`__flash_binary_end` = `0x1015EDA4`) su 4096 KB; area dati utente (ultimi 128 KB) libera |
+| RAM statica | ≈286 KB fino a `__end__` = `0x200476D8` (di cui 200 KB framebuffer) |
+| Heap | ≈194 KB (`0x200476D8` → `0x20078000`) |
+| Stack core 0 | 32 KB (`0x20078000`–`0x20080000`) |
+| Warning | nessuno nei sorgenti del progetto; FatFs (`third_party/fatfs`) è compilato con `-w` |
+| Test host | 22 suite, 6540 controlli, tutti superati; anche con ASan + UBSan |
+| Relay AI | 15 test Python superati |
+| Stack dei frame di GRAPH | misurato con `-fstack-usage` (massimo `GraphApp::openProject` 1712 byte, vedi [GRAPH_ENGINE.md](GRAPH_ENGINE.md#stack-e-prestazioni-sul-target)) |
+| Hardware | **non provato** sulla PicoCalc (né display né microSD) |
+
+Crescita rispetto alla v1.7.0: +273 KB di flash (motore GRAPH, G-Solve, nuova
+interfaccia GRAPH, progetti e immagini, driver SD e FatFs), +3,2 KB di RAM
+statica (stato GRAPH nel workspace, oggetti del driver SD, buffer LFN statico
+di FatFs; il volume FatFs con il suo settore è allocato nell'heap); l'heap
+scende di 3,2 KB. Memoria dei grafici a runtime limitata a 96 KB di punti
+(`MaxTotalCurvePoints`) più le immagini RLE (≤ 96 KB ciascuna).
 
 ## v1.7.0 (branch `version/v1.7.0`)
 

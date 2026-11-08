@@ -1,11 +1,15 @@
 # Documentazione
 
-## Documenti attuali (v1.7.0)
+## Documenti attuali (v1.8.0)
 
 | Documento | Contenuto |
 |---|---|
 | [BUILD_STATUS.md](BUILD_STATUS.md) | ambiente di build, audit della v1.5.4, risultati di build e test, cosa non è verificato |
 | [FEATURE_MATRIX.md](FEATURE_MATRIX.md) | stato di ogni funzione (NOT STARTED … TESTED ON SIMULATOR … TESTED ON HARDWARE) |
+| [GRAPH_PARITY.md](GRAPH_PARITY.md) | GRAPH: audit della v1.7.0 e matrice di parità voce per voce con il capitolo 5 del manuale fx-CG50 |
+| [GRAPH_ENGINE.md](GRAPH_ENGINE.md) | motore dei grafici: modello, coordinate, campionamento, rendering, ZOOM, G-Solve, memoria e stack |
+| [STORAGE.md](STORAGE.md) | flash interna e microSD: workspace, file store, FatFs, protocollo SD, pin SPI0 |
+| [PCGRAPH_FORMAT.md](PCGRAPH_FORMAT.md) | formati `.pcgraph`, `PCGMEM`, `.pcpict`, BMP; scrittura atomica e recupero |
 | [APPLICATIONS_ARCHITECTURE.md](APPLICATIONS_ARCHITECTURE.md) | registro delle modalità, servizi condivisi, dati scambiati, progetto delle modalità future, test di architettura |
 | [RUN_MATRIX.md](RUN_MATRIX.md) | Run-Matrix: tasti, cronologia, risultati esatti, S⇔D, frazioni miste, periodo, variabili |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | strati, ciclo principale, workspace, memoria, cartelle |
@@ -18,6 +22,7 @@
 | [ROADMAP.md](ROADMAP.md) | cosa manca e priorità |
 | [CHANGELOG.md](CHANGELOG.md) | cronologia delle versioni |
 | [SYMBOL_CHEATSHEET.md](SYMBOL_CHEATSHEET.md) | simboli e notazione (contenuto dell'app Symbols) |
+| [reports/](reports/) | rapporti di sessione (v1.7.0, GRAPH v1.8.0) |
 | [../CONTINUE.md](../CONTINUE.md) | stato e istruzioni per riprendere lo sviluppo |
 
 ## Versioni e branch
@@ -29,7 +34,8 @@ Lo sviluppo nuovo avviene in branch separati.
 |---|---|
 | `version/v1.5.4` | codice originale caricato (non compilava per RP2350) |
 | `version/v1.6.0` | prima build RP2350, modalità complete della v1.6.0, relay AI |
-| `version/v1.7.0` | Sessione 1: audit, architettura delle applicazioni, Run-Matrix con risultati esatti (in sviluppo fino all'approvazione) |
+| `version/v1.7.0` | Sessione 1: audit, architettura delle applicazioni, Run-Matrix con risultati esatti |
+| `version/v1.8.0` | Sessione GRAPH: motore dei grafici, modalità GRAPH, progetti e microSD (in sviluppo fino all'approvazione) |
 
 ## Documenti storici (versioni ≤ 1.5.4)
 

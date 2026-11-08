@@ -56,7 +56,7 @@
 #define FF_MULTI_PARTITION	0
 #define FF_MIN_SS		512
 #define FF_MAX_SS		512
-#define FF_LBA64		1		/* required by exFAT */
+#define FF_LBA64		1		/* 64-bit LBA and GPT partitions (needs exFAT, see ff.h) */
 #define FF_MIN_GPT		0x10000000
 #define FF_USE_TRIM		0
 

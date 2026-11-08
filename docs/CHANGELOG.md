@@ -1,5 +1,73 @@
 # Changelog
 
+## v1.8.0 — 2026-11-08 — Sessione GRAPH
+
+Branch `version/v1.8.0` (creato da `version/v1.7.0`, commit `72285e9`).
+Non ancora provata sulla PicoCalc fisica. Parità con la fx-CG50 **non**
+completa: elenco voce per voce in [GRAPH_PARITY.md](GRAPH_PARITY.md).
+
+### Motore GRAPH (nuovo, `graph_model`, `graph_engine`, `graph_solve`)
+- Modello separato dall'interfaccia: 20 funzioni, 12 tipi (Y=, r=, Param,
+  X=, Y>/Y</Y≥/Y≤, X>/X</X≥/X≤), stili e colori, V-Window con T e Xdot,
+  Setup della modalità, memorie, SKETCH.
+- Viewport con clipping di Liang–Barsky; campionamento adattivo incrementale
+  con rilevamento di poli, salti e bordi di dominio; Draw Type Plot; bordi
+  delle disequazioni; limite di 6000 punti per curva e 24 000 in totale.
+- Intervalli `[a,b]`, sovrapposizioni `[A=…]`, grafici da lista, funzioni
+  composte (`Y1(x)`, ≤ 5 livelli) tramite `FunctionResolver` nel valutatore
+  condiviso; grafici incollati (≤ 10).
+- G-Solve con Brent–Dekker, minimizzazione di Brent, derivata di Ridders,
+  Gauss–Kronrod adattivo e area divisa alle radici.
+- ZOOM BOX/FACTOR/IN/OUT/AUTO/ORIGINAL/SQUARE/ROUND/INTEGER/PREVIOUS e preset
+  TRIG/STANDRD/INITIAL.
+
+### Modalità GRAPH (riscritta)
+- Lista delle relazioni Y1–Y20 con TYPE (13 voci, CONVERT), TOOL (STYLE,
+  GPH-MEM, BUILT-IN, FORMAT, FILE), MODIFY, DRAW; editor naturale con VARS
+  GRAPH e riferimenti.
+- V-Window a 10 campi con INITIAL/TRIG/STANDRD, V-MEM, SQUARE, BGV-WIN; Setup
+  proprio della modalità (16 voci) aperto dal tasto SETUP dentro GRAPH.
+- Disegno incrementale non bloccante (600 valutazioni per ciclo), Simul Graph,
+  livelli (sfondo con Fade, riempimenti Union/Intsect, area ∫dx, griglia,
+  assi con scala ed etichette, immagine richiamata, curve, SKETCH, punti).
+- TRACE con valore digitato, cambio grafico, derivata, linee ausiliarie e
+  punti con etichetta; ZOOM; PAN; SKETCH (Cls, Tangent, Norm, Inverse,
+  Plot/PlotOn/PlotOff/PlotChg, Line/F-Line, Circle, Vertical, Horz, PEN,
+  Text, elenco degli elementi); G-SOLVE completo con ∫dx ROOT/INTSECT/MIXED;
+  Modify con COPY; 20 memorie grafiche; PICTURE STORE/SAVE•AS/RECALL/OPEN,
+  esportazione BMP, immagine di sfondo.
+- Progetti `.pcgraph` sulla microSD: NEW, OPEN, SAVE, SAVE AS, RENAME,
+  DELETE, file manager con spazio libero; errori di scheda assente/piena/
+  danneggiata come "Storage ERROR".
+- TABLE sullo stesso motore: colonne dY/dX, GPH-CON/GPH-PLT, → TABLE e
+  GRAPH tra le due modalità.
+
+### File e microSD (nuovo)
+- Interfaccia `files::FileSystem`, scrittura atomica con verifica CRC e
+  recupero dopo interruzione, scheda in RAM con iniezione di guasti.
+- Formati documentati: `.pcgraph` (testo con CRC-32), `PCGMEM`, `.pcpict`
+  (RLE RGB565), BMP ([PCGRAPH_FORMAT.md](PCGRAPH_FORMAT.md)).
+- Protocollo SD in SPI (SDSC/SDHC/SDXC), FatFs R0.16 in `third_party/fatfs`,
+  bus SPI0 della PicoCalc (GP16–19, card detect GP22).
+
+### Persistenza
+- Workspace versione 3 (stato GRAPH); lettura delle versioni 1 e 2 con
+  correzione delle V-Window che non superano i nuovi controlli.
+
+### Correzioni
+- Le funzioni composte contano anche i riferimenti dentro gli argomenti; i
+  riempimenti non coprono più gli assi; un nuovo G-Solve cancella l'area ∫dx
+  precedente; i marcatori dei risultati non escono dall'area del grafico;
+  heap esaurito durante il disegno → "Memory ERROR" senza ripetizioni.
+
+### Test
+- Nuove suite `graph_engine_test`, `graph_solve_test`, `graph_file_test`,
+  `graph_app_test`, `sd_fatfs_test`: 22 suite, 6540 controlli, tutti superati
+  anche con ASan/UBSan. Screenshot 06, 07, 20–34 da `tests/sim/graph.txt`.
+- UF2 compilato senza warning nei sorgenti del progetto (2 874 880 byte,
+  `picotool info` verificato); stack dei frame di GRAPH misurato con
+  `-fstack-usage`.
+
 ## v1.7.0 — 2026-11-08 — Sessione 1: audit, architettura delle applicazioni, Run-Matrix
 
 Branch `version/v1.7.0` (partito da `claude/peaceful-euler-auyrm5` = v1.6.0 + documentazione).

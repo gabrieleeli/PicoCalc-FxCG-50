@@ -1,8 +1,8 @@
 # CONTINUE — punto di ripresa del progetto PicoCalc FX-CG50 AI
 
 Documento di checkpoint per riprendere lo sviluppo esattamente da qui.
-Ultimo aggiornamento: **v1.7.0 — Sessione 1** (audit, architettura delle
-applicazioni, Run-Matrix), branch **`version/v1.7.0`**.
+Ultimo aggiornamento: **v1.8.0 — Sessione GRAPH** (motore dei grafici, modalità
+GRAPH, progetti e microSD), branch **`version/v1.8.0`**.
 
 ## 0. Branch
 
@@ -10,65 +10,81 @@ applicazioni, Run-Matrix), branch **`version/v1.7.0`**.
 |---|---|---|
 | `main` | codice originale caricato | non modificare |
 | `version/v1.5.4`, `version/v1.6.0` | release storiche | non modificare |
-| `claude/peaceful-euler-auyrm5` | v1.6.0 + 2 commit di documentazione (base della v1.7.0) | storico |
-| **`version/v1.7.0`** | lavoro in corso della v1.7.0 | si continua qui finché l'utente non approva la release |
+| `version/v1.7.0` | Sessione 1 (audit, architettura, Run-Matrix), base della v1.8.0 (`72285e9`) | non modificare |
+| **`version/v1.8.0`** | lavoro della v1.8.0 | si continua qui finché l'utente non approva la release |
+| `claude/loving-meitner-jifxhg` | branch di sviluppo della sessione GRAPH, allineato a `version/v1.8.0` | storico |
 
-Non creare `version/v1.8.0` o successive finché i rispettivi incrementi non sono
-completati e verificati. Mai force-push.
+Non creare `version/v1.9.0` o successive finché i rispettivi incrementi non sono
+completati e verificati. Nessun tag/release v1.8.0 senza richiesta. Mai
+force-push.
 
 ## 1. Stato attuale
 
-- **Firmware RP2350 compilabile**: `build/pico2w/picocalc_fxai.uf2` (≈2,3 MB UF2,
-  ≈1130 KB di immagine flash, heap ≈197 KB, stack 32 KB), nessun warning nei
-  sorgenti del progetto. Pico SDK 2.2.0, board `pico2_w`, arm-none-eabi-gcc 13.2.
-- **Test host**: 17 suite CTest, 5347 controlli, 0 errori, anche con ASan/UBSan
+- **Firmware RP2350 compilabile**: `build/pico2w/picocalc_fxai.uf2` (2 874 880
+  byte, ≈1403 KB di immagine flash, RAM statica ≈286 KB, heap ≈194 KB, stack
+  32 KB), nessun warning nei sorgenti del progetto; `picotool info`: versione
+  1.8.0, `pico2_w`, SDK 2.2.0.
+- **Test host**: 22 suite CTest, 6540 controlli, 0 errori, anche con ASan/UBSan
   (dettaglio in `docs/TESTING.md`). Relay AI: 15 test Python superati.
-- **Nessun test su hardware fisico**.
-- Simulatore: screenshot 12–19 di Run-Matrix in `docs/screenshots/`
-  (script `tests/sim/run_matrix.txt`).
+- **Nessun test su hardware fisico** (né display né microSD).
+- GRAPH: matrice di parità voce per voce in `docs/GRAPH_PARITY.md`
+  (132 voci: 26 TESTED ON SIMULATOR, 87 TESTED ON HOST, 3 IMPLEMENTED,
+  3 parziali, 10 NOT STARTED, 3 fuori ambito). **Parità completa non
+  raggiunta.**
+- Simulatore: screenshot GRAPH/TABLE 06, 07, 20–34 (`tests/sim/graph.txt`) e
+  Run-Matrix 12–19 (`tests/sim/run_matrix.txt`) in `docs/screenshots/`.
 
-## 2. Cosa è stato fatto nella Sessione 1
+## 2. Cosa è stato fatto nella Sessione GRAPH
 
 | Area | Contenuto |
 |---|---|
-| Architettura | registro delle 23 modalità (`app_registry.hpp/.cpp`), modelli dati delle modalità future (`app_models.hpp/.cpp`), `docs/APPLICATIONS_ARCHITECTURE.md`, `architecture_test` (registro ↔ sorgenti ↔ firmware, separazione, stratificazione, cicli) |
-| Motore | aritmetica esatta (`exact.hpp/.cpp`) e valutatore esatto sullo stesso AST; relazioni, logica, Int÷, Rmdr, MOD_Exp, RndFix, RanNorm#, RanBin#; frazioni miste; decimali periodici; variabili condivise via `NameResolver`; arrotondamento di visualizzazione come la calcolatrice |
-| Run-Matrix | risultati esatti (frazioni, √, π) con le regole CG50; S⇔D che preserva il valore; Frac Result d/c ↔ ab/c; periodo; cronologia modificabile sul posto con ricalcolo; riuso di espressione/risultato; →A~F; VARS per categorie; OPTN esteso; "≈" per i metodi numerici |
-| Persistenza | formato v2 del workspace (valori esatti), lettura dei record v1.6.0 |
-| Documentazione | APPLICATIONS_ARCHITECTURE, RUN_MATRIX, MATH_ENGINE, FEATURE_MATRIX (stato "TESTED ON SIMULATOR"), TESTING, CHANGELOG, ROADMAP, BUILD_STATUS, ARCHITECTURE |
+| Motore | `graph_model`, `graph_engine` (viewport, clipping, compilazione della lista, riferimenti tra funzioni, campionamento adattivo incrementale, ZOOM), `graph_solve` (Brent, Ridders, Gauss–Kronrod) — `docs/GRAPH_ENGINE.md` |
+| Modalità GRAPH | riscritta in `graph_app.cpp`, `graph_plot.cpp`, `graph_files.cpp`: 20 funzioni e 12 tipi, V-Window, Setup proprio, TRACE, ZOOM, SKETCH, G-SOLVE, Modify, memorie, PICT, sfondo, progetti |
+| TABLE | sullo stesso motore: dY/dX, GPH-CON/GPH-PLT |
+| File | `file_store` (interfaccia, scrittura atomica, recupero, scheda in RAM), `graph_file` (`.pcgraph`, `PCGMEM`), `pict` (`.pcpict`, BMP) — `docs/PCGRAPH_FORMAT.md` |
+| microSD | `sd_card` (protocollo SD in SPI), `fatfs_store` + FatFs R0.16 (`third_party/fatfs`), `sd_spi_pico.cpp` (SPI0 GP16–19, GP22) — `docs/STORAGE.md` |
+| Persistenza | workspace versione 3; versioni 1 e 2 lette, V-Window legacy corrette |
+| Test | `graph_engine_test`, `graph_solve_test`, `graph_file_test`, `graph_app_test`, `sd_fatfs_test` |
+| Documentazione | GRAPH_PARITY, GRAPH_ENGINE, STORAGE, PCGRAPH_FORMAT (nuovi); FEATURE_MATRIX, APPLICATIONS_ARCHITECTURE, ARCHITECTURE, GRAPHICS_ENGINE, MATH_ENGINE, TESTING, HARDWARE, BUILD_STATUS, ROADMAP, CHANGELOG, README; rapporto `docs/reports/SESSIONE_GRAPH_v1.8.0.md` |
 
 ## 3. Funzionalità ancora da completare
 
-- Run-Matrix: matrici/vettori/liste nel parser, modalità Base-N intera con
-  operatori bit a bit, simboli ingegneristici, Simp manuale, cursore sul punto
-  dell'errore, selezione parziale (CLIP).
+- GRAPH (dettaglio in `docs/GRAPH_PARITY.md`, sezione "Mancanze"): Dual Screen
+  G+G/GtoT e Graph to Table, comandi grafici di Run-Matrix/programmi, FORMAT
+  durante lo SKETCH, suffissi angolari °/ʳ/ᵍ, immagini a due livelli.
+- TABLE: r= e parametriche, Variable = LIST, editing delle righe, LISTMEM,
+  lista delle relazioni propria.
+- Run-Matrix: Punto 3 (Natural V.P.A.M. ↔ formato lineare), matrici/vettori/
+  liste nel parser, Base-N intera, simboli ingegneristici, Simp manuale.
 - Modalità con solo architettura e modello dati: eActivity, Spreadsheet, Dyna
   Graph, Recursion, Conic Graphs, Program, Financial, Link, Geometry, Picture
   Plot, 3D Graph; Python richiede MicroPython; E-CON4 non realizzabile.
-- Statistics: regressioni sinusoidale e logistica, test χ²/F/2 campioni/ANOVA
-  nell'interfaccia, grafici a torta e a barre. Graph: parametrici.
 - Collaudo hardware. Dettaglio in `docs/ROADMAP.md` e `docs/FEATURE_MATRIX.md`.
 
-## 4. Prossimi passaggi esatti
+## 4. Prossimi passaggi esatti (v1.9.0, proposta in `docs/ROADMAP.md` §2)
 
-1. **Sessione successiva — Punto 3: Natural V.P.A.M. ↔ formato lineare**
-   (elenco completo in `docs/ROADMAP.md` §2): impostazione Input/Output
-   Math/Line, round-trip garantito testo ↔ albero con test su corpus, cursore
-   sul punto dell'errore, CLIP, SHIFT+INS, colori delle parentesi, regola del ×
-   prima delle frazioni, modelli MAT/VCT.
-2. Collaudo hardware (procedura in `docs/HARDWARE.md`).
-3. Poi: matrici nel parser (MAT/VCT in Run-Matrix), Recursion, Conic Graphs,
-   Financial (modelli pronti in `app_models.hpp`).
+1. Collaudo su PicoCalc (procedura in `docs/HARDWARE.md`, punti 6–7 per GRAPH e
+   microSD); aggiornare GRAPH_PARITY/FEATURE_MATRIX a TESTED ON HARDWARE solo
+   dopo la prova, con data e revisione della scheda.
+2. TABLE completa (r=, parametriche, LIST, editing, LISTMEM).
+3. Dual Screen G+G/GtoT e Graph to Table (`graph::Viewport` accetta già
+   un'area diversa da 320×282).
+4. Dyna Graph, Recursion, Conic Graphs sul servizio GraphCore.
+5. Punto 3: Natural V.P.A.M. ↔ formato lineare.
 
 ## 5. Problemi noti / da verificare
 
-- Nessuna verifica su PicoCalc: display, tastiera, flash, Wi-Fi, TLS; tempi della
-  valutazione esatta e del ricalcolo della cronologia sul Cortex-M33.
-- Senza RTC, mbedTLS non verifica le date di validità dei certificati.
+- Nessuna verifica su PicoCalc: display, tastiera, flash, microSD, Wi-Fi, TLS;
+  tempi di disegno di GRAPH e della valutazione esatta sul Cortex-M33.
+- microSD: pin SPI0 presi dai sorgenti ufficiali ClockworkPi ma non provati;
+  accesso a settore singolo (niente CMD18/CMD25); il firmware non formatta
+  schede (`f_mkfs` solo nell'host).
+- Memoria GRAPH: punti delle curve ≤ 96 KB in totale; due immagini RLE molto
+  complesse (≤ 96 KB ciascuna) insieme a 20 grafici densi possono esaurire
+  l'heap: il disegno si ferma con "Memory ERROR" (non verificato su hardware).
+- Senza RTC, mbedTLS non verifica le date dei certificati e FatFs usa la data
+  fissa 1/1/2026.
 - Ritardo di 16 ms della tastiera I2C ripreso dal driver ufficiale, da ottimizzare.
-- La fattorizzazione per i radicali (√ di razionali) usa divisioni di prova fino
-  a 10⁵: su numeri primi grandi può richiedere fino a ~0,1 s sul target (stima,
-  da misurare).
 
 ## 6. Comandi per riprendere
 
@@ -93,8 +109,9 @@ scripts/make_release.sh
 ```
 
 ```bash
-# Simulatore: screenshot di Run-Matrix
+# Simulatore: screenshot di Run-Matrix e di GRAPH/TABLE
 build/host/picocalc_sim /tmp/shots tests/sim/run_matrix.txt
+build/host/picocalc_sim docs/screenshots tests/sim/graph.txt
 ```
 
 ```bash
@@ -105,5 +122,5 @@ cd relay && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt &
 ```bash
 # Stack sul target di un sorgente (flag dal build del firmware)
 cd build/pico2w && FL=CMakeFiles/picocalc_fxai.dir/flags.make
-eval arm-none-eabi-g++ $(grep ^CXX_DEFINES $FL | cut -d= -f2-) $(grep ^CXX_INCLUDES $FL | cut -d= -f2-) $(grep ^CXX_FLAGS $FL | cut -d= -f2-) -fstack-usage -c ../../src/expression.cpp -o /tmp/expression.o
+eval arm-none-eabi-g++ $(grep ^CXX_DEFINES $FL | cut -d= -f2-) $(grep ^CXX_INCLUDES $FL | cut -d= -f2-) $(grep ^CXX_FLAGS $FL | cut -d= -f2-) -fstack-usage -c ../../src/graph_engine.cpp -o /tmp/graph_engine.o
 ```

@@ -93,7 +93,13 @@ void AppManager::key(const KeyEvent& ev) {
 bool AppManager::tick() {
     bool redraw = false;
     if (active_) {
-        try { redraw = active_->tick(ctx_); } catch (const std::exception& e) { showError(e.what()); redraw = true; }
+        try {
+            redraw = active_->tick(ctx_);
+        } catch (const std::bad_alloc&) {
+            showError("Memory ERROR: memoria insufficiente"); redraw = true;
+        } catch (const std::exception& e) {
+            showError(e.what()); redraw = true;
+        }
     }
     if (!ctx_.toast_.empty() && static_cast<std::int32_t>(ctx_.platform.millis() - ctx_.toastUntil_) >= 0) {
         ctx_.toast_.clear(); redraw = true;

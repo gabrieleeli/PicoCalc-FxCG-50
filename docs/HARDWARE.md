@@ -53,6 +53,22 @@ Codici dei tasti (da `keyboard.h` ufficiale): F1–F5 `0x81–0x85`, Shift+F1–
 Tab `0x09`, Del `0xD4`, Shift+Del `0xD5`, Shift+Esc `0xD0`, Shift+Enter `0xD1`,
 Shift+Tab `0xD2`, modificatori `0xA1–0xA5`, Caps `0xC1`.
 
+## microSD
+
+| | |
+|---|---|
+| Bus | **SPI0 hardware**: SCK GP18, MOSI GP19, MISO GP16 (pull-up), CS GP17 |
+| Card detect | GP22, basso = scheda inserita (pull-up interno) |
+| Clock | 400 kHz durante l'inizializzazione, poi 12,5 MHz |
+| Protocollo | SD in modalità SPI (CMD0/8/ACMD41/58/9/16/17/24/13), schede SDSC, SDHC, SDXC |
+| File system | FatFs R0.16: FAT12/16/32 ed exFAT, nomi lunghi |
+| Fonte dei pin | sorgenti ufficiali ClockworkPi: `Code/MP3Player/config.h`, `Code/pico_multi_booter/boot.c` |
+
+Driver in `src/platform/pico/sd_spi_pico.cpp` (bus) sopra il protocollo
+portabile `src/sd_card.cpp` e `src/fatfs_store.cpp`, provati sul PC con una
+scheda simulata. Cartelle usate: `PICOCALC/GRAPH` e `PICOCALC/PICT`
+([STORAGE.md](STORAGE.md)). **Da collaudare** sulla PicoCalc.
+
 ## Flash
 
 - Ultimi 128 KB (`FXAI_STORAGE_BYTES`) riservati al workspace: due slot da 64 KB.
@@ -68,3 +84,9 @@ Shift+Tab `0xD2`, modificatori `0xA1–0xA5`, Caps `0xC1`.
 3. Verificare ogni tasto nel menu e in Run-Matrix; SHIFT, Ctrl+Z, Esc tenuto.
 4. Modificare un'impostazione, attendere 3 s, togliere alimentazione, riaccendere.
 5. Configurare Wi-Fi e relay in SYSTEM e provare AI Chat.
+6. GRAPH: disegnare 20 funzioni (anche parametriche con Tpitch piccolo) e
+   misurare il tempo di disegno; verificare che TRACE ed EXIT rispondano
+   durante il disegno; controllare i colori di curve e riempimenti.
+7. microSD (FAT32 ed exFAT): FILE > SAVE AS, estrarre e reinserire la scheda,
+   OPEN; PICTURE STORE/RECALL; estrarre la scheda durante un salvataggio e
+   verificare che resti il file precedente; leggere i file `.pcgraph` dal PC.

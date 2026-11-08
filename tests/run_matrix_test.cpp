@@ -11,8 +11,10 @@
 #include "test_util.hpp"
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <functional>
 #include <string>
+#include <vector>
 
 using namespace fx;
 using app::AppId;
@@ -247,6 +249,20 @@ int main() {
         CHECK_EQ_STR(resultText(old.history[0], old.settings), "0.3333333333");
         CHECK(recalculateHistory(old, 0) == 0);                             // recalculation restores the exact form
         CHECK_EQ_STR(resultText(old.history[0], old.settings), "1/3");
+        // A legacy record whose V-Window fails the v1.8.0 checks keeps the
+        // user's data: only the window returns to the initial one.
+        {
+            std::vector<std::uint8_t> rec(kV1Record, kV1Record + sizeof(kV1Record));
+            const double xmin = -6.3, xmax = 6.3, bad = -20;
+            std::uint8_t pat[16];
+            std::memcpy(pat, &xmin, 8); std::memcpy(pat + 8, &xmax, 8);
+            const auto it = std::search(rec.begin(), rec.end(), pat, pat + 16);
+            CHECK(it != rec.end());
+            if (it != rec.end()) std::memcpy(&*(it + 8), &bad, 8);              // Xmax < Xmin
+            Workspace repaired;
+            CHECK(deserializeWorkspace(rec.data(), rec.size(), repaired));
+            CHECK(repaired.view == ViewWindow{} && repaired.memory.recall('A') == 2.5 && repaired.history.size() == 2);
+        }
         // Corrupted exact data is rejected: locate the slot of A = 1/3 (flags, count, num, den, radicand).
         Workspace one;
         one.memory.storeExact('A', 1.0 / 3.0, exact::Value::fromRational({1, 3}), false);

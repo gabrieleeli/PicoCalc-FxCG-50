@@ -285,6 +285,80 @@ int main() {
         CHECK(ws.settings.angle == AngleMode::Radians);
         ws.graph.settings = GraphSettings{};
     }
+    // ================================================================ BUILT-IN, Draw Type, Simul Graph
+    {
+        g = r.graphWith({});
+        r.key(pckey::Home);
+        r.key(pckey::F4); r.type("3"); r.type("2");                // TOOL > BUILT-IN > Y=A(X-B)^2+C
+        CHECK(ws.functions[0].type == GraphType::Y && ws.functions[0].expr == "A(x-B)^(2)+C" && ws.functions[0].selected);
+        ws.functions[0].type = GraphType::Polar; ws.functions[0].expr = "2";
+        r.key(pckey::F4); r.type("3"); r.type("1");                // a line of another type is not replaced
+        CHECK(r.error()); r.closeError();
+        CHECK(ws.functions[0].type == GraphType::Polar && ws.functions[0].expr == "2");
+        // Draw Type Plot: isolated points, one per column (manual 1-35)
+        g = r.graphWith({"x"});
+        r.key(pckey::F10); r.key(pckey::Down); r.key(pckey::Right); r.key(pckey::Esc);
+        CHECK(ws.graph.settings.plotDraw);
+        r.draw();
+        {
+            const auto& xy = g->curves().at(0).xy;
+            int points = 0, joined = 0;
+            for (std::size_t i = 0; i + 1 < xy.size(); i += 2) {
+                if (xy[i] == graph::PenUp) continue;
+                ++points;
+                if (i >= 2 && xy[i - 2] != graph::PenUp) ++joined;
+            }
+            CHECK(points > 100 && joined == 0);
+        }
+        r.key(pckey::Esc);
+        r.key(pckey::F10); r.key(pckey::Down); r.key(pckey::Left); r.key(pckey::Esc);
+        CHECK(!ws.graph.settings.plotDraw);
+        // Simul Graph On: the graphs advance together; Off: one after the other
+        auto twoCircles = [&](double tstep) {
+            g = r.graphWith({});
+            for (std::size_t i = 0; i < 2; ++i) {
+                ws.functions[i].type = GraphType::Param;
+                ws.functions[i].expr = i ? "2cos(t)" : "cos(t)";
+                ws.functions[i].expr2 = i ? "2sin(t)" : "sin(t)";
+            }
+            ws.view.tstep = tstep;                                  // thousands of steps per graph
+        };
+        twoCircles(0.001);
+        r.key(pckey::F10); r.keys(pckey::Down, 10); r.key(pckey::Left); r.key(pckey::Esc);
+        CHECK(ws.graph.settings.simulGraph);
+        r.key(pckey::F6);
+        CHECK(g->rendering() && g->curves().size() == 2);
+        if (g->curves().size() == 2) CHECK(g->curves()[0].next > 0 && g->curves()[1].next > 0 && !g->curves()[0].done);
+        r.settle();
+        CHECK(!g->rendering() && g->curves()[0].done && g->curves()[1].done);
+        r.key(pckey::Esc);
+        twoCircles(0.0011);
+        r.key(pckey::F10); r.keys(pckey::Down, 10); r.key(pckey::Right); r.key(pckey::Esc);
+        CHECK(!ws.graph.settings.simulGraph);
+        r.key(pckey::F6);
+        CHECK(g->rendering() && g->curves().size() == 2);
+        if (g->curves().size() == 2) CHECK(g->curves()[0].next > 0 && g->curves()[1].next == 0);
+        r.settle();
+        r.key(pckey::Esc);
+        ws.graph.settings = GraphSettings{};
+        // RAM: 20 dense Lissajous curves share MaxTotalCurvePoints (heap of the RP2350)
+        g = r.graphWith({});
+        for (std::size_t i = 0; i < MaxGraphFunctions; ++i) {
+            ws.functions[i].type = GraphType::Param;
+            ws.functions[i].expr = "6sin(" + std::to_string(37 + i) + "t)";
+            ws.functions[i].expr2 = "3cos(" + std::to_string(41 + i) + "t)";
+        }
+        ws.view.tstep = 0.0005;
+        r.draw();
+        {
+            std::size_t points = 0, truncated = 0;
+            for (const auto& c : g->curves()) { points += c.xy.size() / 2; truncated += c.truncated ? 1 : 0; }
+            CHECK(!g->rendering() && !r.error() && g->curves().size() == MaxGraphFunctions);
+            CHECK(points <= graph::MaxTotalCurvePoints && points > graph::MaxTotalCurvePoints / 2 && truncated > 0);
+        }
+        r.key(pckey::Esc);
+        ws.view = ViewWindow{};
+    }
     // ================================================================ G-SOLVE
     {
         g = r.graphWith({"x^3-4x"});                               // manual 5-57
@@ -405,7 +479,9 @@ int main() {
         CHECK(ws.graph.sketch.size() == 5);
         r.key(pckey::F4); r.type("6"); r.type("2"); r.key(pckey::Enter); r.steps(pckey::Up, 10); r.key(pckey::Enter); r.key(pckey::Esc);   // F-Line
         r.key(pckey::F4); r.type("7"); r.key(pckey::Enter); r.steps(pckey::Right, 15); r.key(pckey::Enter); r.key(pckey::Esc);           // Circle
+        ws.graph.settings.plotColor = 2; ws.graph.settings.sketchLine = LineStyle::Thick;      // Setup: Plot/LineCol, Sketch Line
         r.key(pckey::F4); r.type("8"); r.key(pckey::Enter); r.key(pckey::Esc);                                                          // Vertical
+        ws.graph.settings.plotColor = 0; ws.graph.settings.sketchLine = LineStyle::Normal;
         r.key(pckey::F4); r.type("9"); r.key(pckey::Enter); r.key(pckey::Esc);                                                          // Horz
         r.key(pckey::F4); r.keys(pckey::Down, 10); r.key(pckey::Enter); r.key(pckey::Enter); r.enter("Max"); r.key(pckey::Esc);        // Text
         r.key(pckey::F4); r.keys(pckey::Down, 9); r.key(pckey::Enter); r.key(pckey::Enter); r.steps(pckey::Right, 5); r.steps(pckey::Up, 5); r.key(pckey::Enter); r.key(pckey::Esc);   // PEN
@@ -413,6 +489,7 @@ int main() {
         const SketchItem::Kind kinds[] = {SketchItem::Kind::Segment, SketchItem::Kind::Circle, SketchItem::Kind::Vertical, SketchItem::Kind::Horizontal, SketchItem::Kind::Text, SketchItem::Kind::Pen};
         for (std::size_t i = 0; i < 6 && 5 + i < ws.graph.sketch.size(); ++i) CHECK(ws.graph.sketch[5 + i].kind == kinds[i]);
         CHECK(ws.graph.sketch.size() > 9 && ws.graph.sketch[9].text == "Max");
+        CHECK(ws.graph.sketch.size() > 8 && ws.graph.sketch[7].color == 2 && ws.graph.sketch[7].style == LineStyle::Thick && ws.graph.sketch[8].color == 0);
         // Elements: delete one, change the format of another
         r.key(pckey::F4); r.keys(pckey::Down, 11); r.key(pckey::Enter); r.type("1"); r.type("1");   // delete item 1 (tangent)
         CHECK(ws.graph.sketch.size() == 10 && ws.graph.sketch[0].kind == SketchItem::Kind::Normal);
@@ -420,6 +497,8 @@ int main() {
         CHECK(g->screen() == GA::Screen::Format);
         r.key(pckey::Down); r.key(pckey::Right); r.key(pckey::Esc);
         CHECK(ws.graph.sketch[0].color == 1);
+        r.key(pckey::F4); r.type("5"); r.type("3"); r.key(pckey::Enter); r.key(pckey::Esc);     // PlotOff
+        CHECK(ws.graph.sketch.size() == 11 && ws.graph.sketch[10].kind == SketchItem::Kind::PointOff);
         r.key(pckey::F4); r.type("1"); r.key(pckey::F1);          // Cls
         CHECK(ws.graph.sketch.empty());
     }
@@ -514,7 +593,20 @@ int main() {
         CHECK(ws.view.xmin == -6.3);
         r.key(pckey::F8); r.type("3"); r.enter("40");              // Fade 40 %
         CHECK(ws.graph.settings.fade == 40);
-        r.key(pckey::F10); r.keys(pckey::Down, 11); r.key(pckey::Left); r.key(pckey::Esc);    // Background: None
+        // BGV-WIN: the background file takes the current V-Window (manual 5-10)
+        ws.view.xmin = -3; ws.view.xmax = 3;
+        r.key(pckey::F8); r.type("4"); r.type("1"); r.key(pckey::F1);   // BGV-WIN > SAVE > Yes
+        CHECK(!r.error());
+        {
+            std::vector<std::uint8_t> bytes;
+            pict::Image back;
+            CHECK(files::readAll(card, "PICOCALC/PICT/PICT01.pcpict", bytes, 1 << 20) == files::Status::Ok);
+            CHECK(pict::parse(bytes.data(), bytes.size(), back).empty() && back.view.xmin == -3 && back.view.xmax == 3 && back.fade == 40);
+        }
+        r.key(pckey::F8); r.type("4"); r.type("2"); r.enter("BACK");    // BGV-WIN > SAVE•AS
+        CHECK(card.exists("PICOCALC/PICT/BACK.pcpict") && ws.graph.settings.background == BackgroundFile);
+        CHECK_EQ_STR(ws.graph.settings.backgroundFile, "PICOCALC/PICT/BACK.pcpict");
+        r.key(pckey::F10); r.keys(pckey::Down, 11); r.keys(pckey::Left, 21); r.key(pckey::Esc);    // Background: None
         CHECK(ws.graph.settings.background == 0);
         // Cls removes the recalled picture
         r.key(pckey::F4); r.type("1"); r.key(pckey::F1);

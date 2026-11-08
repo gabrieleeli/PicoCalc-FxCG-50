@@ -1,4 +1,4 @@
-# Graphics engine — v1.6.0
+# Graphics engine — v1.8.0
 
 Le note delle fasi precedenti (font 5×7, flush completo PIO-SPI) sono superate;
 restano consultabili nella cronologia Git e nei documenti storici elencati in
@@ -64,7 +64,35 @@ parentesi estensibili, segnaposto, cursore) con:
 
 Lo stesso layout disegna l'input dell'editor, i risultati di Run-Matrix (frazioni
 e radici esatte) e le formule delle altre modalità; le metriche sono un'unica
-fonte, quindi cursore e testo non possono disallinearsi.
+fonte, quindi cursore e testo non possono disallinearsi. I riferimenti alle
+funzioni di Graph (`@Y3`, `@XT2`) sono token atomici mostrati come `Y3`, `Xt2`.
+
+## Schermata dei grafici (GRAPH)
+
+Il motore dei grafici non disegna: produce polilinee in coordinate dello
+schermo (interi a 16 bit, con interruzioni) e bordi delle disequazioni
+([GRAPH_ENGINE.md](GRAPH_ENGINE.md)). `src/apps/graph_plot.cpp` le disegna sul
+`Canvas` con il clipping all'area 320×282 (y = 18…299):
+
+- **penne**: segmenti di Bresenham con un timbro quadrato per pixel, larghezza
+  1 (Thin), 2 (Normal), 3 (Broken) o 4 (Thick); il tratteggio segue la fase
+  lungo tutta la polilinea: Broken 7 pixel sì / 4 no, Dot 2/3, bordo delle
+  disequazioni strette 6/4; un punto isolato (Draw Type Plot) è un quadrato
+  di almeno 2 pixel;
+- **riempimenti**: tratteggio diagonale ogni 4 pixel, colore della funzione
+  schiarito (blend 110/255 sul bianco); con Union ogni disequazione usa una fase
+  diversa del tratteggio, con Intsect si riempie solo l'intersezione;
+- **area ∫dx**: colonne verticali piene dal grafico all'asse (o tra i due
+  grafici), colore schiarito (blend 90/255);
+- **livelli**: sfondo (Fade = blend verso il bianco) → riempimenti → griglia →
+  assi → immagine richiamata (bianco trasparente) → curve → SKETCH → punti →
+  testi; i riempimenti stanno sotto griglia e assi, che restano leggibili;
+- **immagini**: `pict::encode` comprime l'area del grafico in RLE RGB565 per
+  righe (PICTURE STORE), `pict::forEachSpan` la ridisegna come segmenti
+  orizzontali (sfondo, RECALL) senza decomprimerla in un buffer;
+- **disegno incrementale**: ogni ciclo ridisegna i livelli con i punti già
+  calcolati e una barra di avanzamento; l'aggiornamento a tile invia al display
+  solo le parti cambiate.
 
 ## UI kit
 
@@ -80,12 +108,15 @@ indicatore SHIFT arancione, nello stile della fx-CG50 ma con grafica propria.
 `font_smoke` (copertura glifi, misure, UTF-8 non valido), `vpam_ast_smoke`,
 `editor_test` (layout e cursore), `app_test` (rendering delle schermate su
 framebuffer host). Gli screenshot in `docs/screenshots/` sono prodotti dal
-simulatore con lo stesso codice del firmware.
+simulatore con lo stesso codice del firmware (`tests/sim/run_matrix.txt` per
+12–19, `tests/sim/graph.txt` per 06, 07 e 20–34). `graph_app_test` controlla
+anche singoli pixel del grafico (area ∫dx presente e poi cancellata).
 
 ## Limiti noti
 
 - Nessun anti-aliasing né font proporzionali; scale intere soltanto.
-- `arc` usa campionamento trigonometrico: adatto a elementi UI, non a grafici.
+- `arc` usa campionamento trigonometrico: adatto a elementi UI, non a grafici
+  (i grafici di funzioni usano il campionamento adattivo del motore GRAPH).
 - Poligoni pieni oltre 32 vertici ignorati per non allocare memoria.
 - Animazioni di transizione non ancora applicate alle schermate.
 - Resa reale dei colori sul pannello ST7365P non ancora verificata.

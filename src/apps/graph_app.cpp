@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <new>
 
 namespace fx::app {
 using namespace ui::theme;
@@ -105,7 +106,18 @@ bool GraphApp::tick(Context& ctx) {
         try { writeCapture(ctx); } catch (const std::exception& e) { captureReady_ = false; capture_ = pict::Image{}; ctx.toast(e.what(), 2500); }
         redraw = true;
     }
-    if (screen_ == Screen::Plot && !renderDone_) redraw = renderStep(ctx, 600) || redraw;
+    if (screen_ == Screen::Plot && !renderDone_) {
+        try {
+            redraw = renderStep(ctx, 600) || redraw;
+        } catch (const std::bad_alloc&) {
+            // Heap exhausted (pictures + curves): keep what is drawn and stop
+            // sampling, so that the next tick does not fail again.
+            for (auto& c : curves_) if (!c.done) c.done = c.truncated = true;
+            for (auto& c : sketchCurves_) if (!c.done) c.done = c.truncated = true;
+            renderDone_ = true;
+            throw MathError("Memory ERROR: memoria insufficiente, disegno parziale");
+        }
+    }
     if (screen_ == Screen::Plot && mode_ == Mode::Select) {
         const std::uint32_t phase = (ctx.now() - blinkStart_) / 300;
         if (phase != lastBlink_) { lastBlink_ = phase; redraw = true; }

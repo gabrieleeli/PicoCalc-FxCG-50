@@ -1,4 +1,4 @@
-# Motore matematico — v1.7.0
+# Motore matematico — v1.8.0
 
 Riferimenti storici: `archive/VPAM_SHARED_AST.md`, `archive/RUN_MATRIX_PHASE*.md` e
 `archive/math_engine_original.py` descrivono le versioni precedenti (vedi [README.md](README.md)).
@@ -63,8 +63,26 @@ Le lettere digitate vengono unite in parole note (`sinx`, `2pix`); le variabili 
 le lettere A–Z, `Ans`, `PreAns`, `θ` e le variabili legate dalle app (x, y, …).
 Letterali `0x`, `0b`, `0o` per Base-N; decimali periodici `0.1_6` = 0.1666…
 (nell'editor: modello "periodo" con la linea sopra le cifre). Nomi condivisi
-`xmin … tptch`, `tblstart/tblend/tblpitch` risolti dal workspace tramite
+`xmin … tptch`, `xdot`, `tblstart/tblend/tblpitch` risolti dal workspace tramite
 `EvalContext::names` (`NameResolver`): fuori da Run-Matrix danno Math ERROR.
+In GRAPH e TABLE anche `list1`…`list6` (grafici da lista).
+
+### Riferimenti tra funzioni di GRAPH (v1.8.0)
+
+Le funzioni composte (`Y2 = Y1(x)+1`, `Y3 = Y1(Y2(x))`) usano token atomici
+`@Y1`, `@R1`, `@XT1`, `@YT1`, `@X1` (inseriti da VARS GRAPH; nell'editor e nei
+testi appaiono come `Y1`, `r1`, `Xt1`, `Yt1`, `X1`). Il lexer li riconosce, il
+parser li tratta come chiamate con al più 3 argomenti e il valutatore li
+risolve tramite `EvalContext::functions` (`FunctionResolver`, implementato da
+`graph::GraphEngine`): il primo argomento posizionale lega la variabile della
+funzione (x, θ, T o y), gli argomenti `A=valore` legano temporaneamente le
+lettere A–Z. Profondità massima 5, contando anche i riferimenti dentro gli
+argomenti (`MaxFunctionReferenceDepth`): oltre (o con un ciclo) "Stack ERROR".
+Il valutatore esatto non li gestisce (risultato solo numerico).
+
+`rewriteIdentifiers(testo, mappa)` riscrive i nomi di un'espressione
+ri-emettendo i token (usato da CONVERT per scambiare x ↔ y e da Modify COPY
+per sostituire i coefficienti con i loro valori).
 
 ## Funzioni
 
@@ -90,8 +108,9 @@ Letterali `0x`, `0b`, `0o` per Base-N; decimali periodici `0.1_6` = 0.1666…
 
 | Funzione | Metodo | Note |
 |---|---|---|
-| ∫ | Gauss–Kronrod G7/K15 adattivo | tolleranza 1e-10, profondità 18, max 20 000 valutazioni |
-| d/dx, d²/dx² | estrapolazione di Ridders sulle differenze centrali | d²: Ridders annidato |
+| ∫ | Gauss–Kronrod G7/K15 adattivo | tolleranza 1e-10, profondità 18, max 20 000 valutazioni; anche per funzioni C++ (`integrateFunction`, usato da G-Solve ∫dx) |
+| d/dx, d²/dx² | estrapolazione di Ridders sulle differenze centrali | d²: Ridders annidato; `differentiateFunction` per TRACE, Tangent/Norm e MAX/MIN di GRAPH |
+| Radici, estremi, intersezioni di GRAPH | Brent–Dekker e minimizzazione di Brent | in `graph_solve.cpp`, vedi [GRAPH_ENGINE.md](GRAPH_ENGINE.md#g-solve) |
 | SOLVE | Newton con derivata di Ridders | 100 iterazioni, controllo di convergenza |
 | Σ, Π | somma/prodotto su indici interi | max 100 001 termini |
 | Polinomi (Equation) | Aberth–Ehrlich | radici complesse, grado 2–6 |
@@ -142,6 +161,8 @@ iterativo: la ricorsione dipende dall'annidamento, non dalla lunghezza.
 Misure con `-fstack-usage` sul target ARM: `evalNode` 32–80 byte,
 `evalChain` 104–128 byte, `callFunction` 80–128 byte; le funzioni con frame
 grandi (`applyFunction`, `ridders` ≈1,2 KB) non restano attive durante la ricorsione.
+Riferimenti tra funzioni di GRAPH (v1.8.0): `callReference` ≈230 byte per
+livello, al massimo 5 livelli.
 
 Valutatore esatto (v1.7.0, `arm-none-eabi-g++ -O3 -mcpu=cortex-m33`): `exactNode`
 80 byte, `exactChain` 152, `exactToken` 184, `exactCall` 216, `exactSum` 288;
@@ -165,6 +186,7 @@ Nucleo Run-Matrix: `evaluateEntry` 552 byte, `recalculateHistory` 432,
 | `statistics.hpp/.cpp` | statistiche, regressioni, distribuzioni, test |
 | `exact.hpp/.cpp` | razionali, radicali, multipli di π, letterali periodici, regole di visualizzazione |
 | `run_matrix.hpp/.cpp` | riga di Run-Matrix (→, →A~F, Pol/Rec), cronologia con ricalcolo, viste dei risultati |
+| `graph_engine.hpp/.cpp`, `graph_solve.hpp/.cpp` | motore dei grafici e G-Solve sullo stesso valutatore ([GRAPH_ENGINE.md](GRAPH_ENGINE.md)) |
 
 ## Non ancora disponibile
 

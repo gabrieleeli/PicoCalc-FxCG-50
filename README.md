@@ -8,16 +8,17 @@ calcolatrice grafica Casio fx-CG50, con chat AI (Claude e ChatGPT) tramite Wi-Fi
 > ogni modalità è reimplementata in modo indipendente. La documentazione Casio è
 > usata solo come riferimento di comportamento.
 
-![Menu principale](docs/screenshots/01_main_menu.png) ![Run-Matrix](docs/screenshots/12_run_matrix_exact.png) ![Graph](docs/screenshots/07_graph_integral.png)
+![Menu principale](docs/screenshots/01_main_menu.png) ![Run-Matrix](docs/screenshots/12_run_matrix_exact.png) ![Graph](docs/screenshots/22_graph_multi.png)
 
-## Stato (v1.7.0)
+## Stato (v1.8.0)
 
 | | Stato |
 |---|---|
 | Compilazione UF2 per RP2350 (Pico SDK 2.2.0, `pico2_w`) | ✅ compila, nessun warning nei sorgenti del progetto |
-| Test automatici host | ✅ 17 suite, 5347 controlli (incluso il test di architettura), tutti superati anche con AddressSanitizer/UBSan |
+| Test automatici host | ✅ 22 suite, 6540 controlli (incluso il test di architettura), tutti superati anche con AddressSanitizer/UBSan |
 | Test relay AI | ✅ 15 test (SDK ufficiali contro API simulate, TLS reale in loopback) |
-| **Prova su PicoCalc fisica** | ❌ **non ancora eseguita** — display, tastiera, flash, Wi-Fi e TLS sono implementati secondo i driver ufficiali ClockworkPi ma vanno collaudati |
+| Parità con la fx-CG50 | ❌ **non completa** — GRAPH: matrice voce per voce in [docs/GRAPH_PARITY.md](docs/GRAPH_PARITY.md) |
+| **Prova su PicoCalc fisica** | ❌ **non ancora eseguita** — display, tastiera, flash, microSD, Wi-Fi e TLS sono implementati secondo i driver ufficiali ClockworkPi ma vanno collaudati |
 
 Dettagli: [docs/BUILD_STATUS.md](docs/BUILD_STATUS.md) · stato per funzione:
 [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md) · ripresa del lavoro: [CONTINUE.md](CONTINUE.md).
@@ -28,8 +29,8 @@ Dettagli: [docs/BUILD_STATUS.md](docs/BUILD_STATUS.md) · stato per funzione:
 |---|---|---|
 | 1 | **Run-Matrix** | input naturale 2D (frazioni, frazioni miste, radici, potenze, ∫, d/dx, Σ, Π, \|x\|, logₐb, periodo); **risultati esatti** (frazioni, √, π) con S⇔D che non altera il valore, Frac Result d/c ↔ ab/c, sviluppo periodico; cronologia modificabile sul posto con ricalcolo; Ans/PreAns e A–Z che conservano la forma esatta, `→A~F`; relazioni e logica, Int÷/Rmdr; VARS (A–Z, V-WIN, TABLE); Base-N, DMS, complessi, Pol/Rec, copia/incolla, undo/redo — vedi [docs/RUN_MATRIX.md](docs/RUN_MATRIX.md) |
 | 2 | **Statistics** | liste 1–6, 1-Var/2-Var, 9 regressioni (ax+b, Med-Med, X², X³, X⁴, Log, Exp, ab^x, Power) con grafico e copia in GRAPH, scatter/xyLine/istogramma/box plot, distribuzioni (normale, binomiale, Poisson, t, χ², F), test Z/t e intervalli |
-| 5 | **Graph** | Y1–Y6: Y=, r= (polari), Y>, Y<, Y≥, Y≤ (con campitura), trace, zoom, V-Window, tangente/normale, G-Solve (radici, max, min, intercetta, intersezioni, ∫dx con area) |
-| 7 | **Table** | tabella dei valori con Start/End/Step |
+| 5 | **Graph** | Y1–Y20: Y=, r=, parametriche, X=, 8 tipi di disequazioni (Union/Intsect), intervalli, sovrapposizioni [A=…], grafici da lista, funzioni composte; TRACE, ZOOM (13 funzioni), V-Window con memorie, SKETCH, G-SOLVE (ROOT, MAX, MIN, Y-ICEPT, INTSECT, Y-CAL, X-CAL, ∫dx anche tra radici/intersezioni), Modify, memorie grafiche, PICT e sfondo, progetti `.pcgraph` sulla microSD — vedi [docs/GRAPH_PARITY.md](docs/GRAPH_PARITY.md) |
+| 7 | **Table** | tabella dei valori delle funzioni Y con Start/End/Step, dY/dX, GPH-CON/GPH-PLT |
 | A | **Equation** | sistemi lineari 2–6 incognite, polinomi di grado 2–6 (radici complesse), solver numerico f(x)=g(x), disequazioni polinomiali di grado 1–6 |
 | F | **Memory** | uso della memoria, cancellazione selettiva, salvataggio |
 | G | **System** | angolo, formato display, modo complesso, frazioni, retroilluminazione, Wi-Fi, relay AI |
@@ -89,6 +90,8 @@ Senza rete tutte le funzioni matematiche restano disponibili.
 ## Documentazione
 
 [ARCHITECTURE](docs/ARCHITECTURE.md) · [HARDWARE](docs/HARDWARE.md) ·
+[GRAPH_PARITY](docs/GRAPH_PARITY.md) · [GRAPH_ENGINE](docs/GRAPH_ENGINE.md) ·
+[STORAGE](docs/STORAGE.md) · [PCGRAPH_FORMAT](docs/PCGRAPH_FORMAT.md) ·
 [GRAPHICS_ENGINE](docs/GRAPHICS_ENGINE.md) · [MATH_ENGINE](docs/MATH_ENGINE.md) ·
 [AI_INTEGRATION](docs/AI_INTEGRATION.md) · [TESTING](docs/TESTING.md) ·
 [ROADMAP](docs/ROADMAP.md) · [CHANGELOG](docs/CHANGELOG.md) ·
@@ -99,4 +102,5 @@ Senza rete tutte le funzioni matematiche restano disponibili.
 Codice del progetto: GPL-3.0 (vedi `LICENSE`). Font: GNU Unifont (GPL-2.0-or-later)
 e Spleen (BSD-2-Clause). Linker script derivato dal Pico SDK (BSD-3-Clause).
 Configurazioni lwIP/mbedTLS derivate da pico-examples (BSD-3-Clause).
+FatFs R0.16 di ChaN (licenza FatFs, tipo BSD a una clausola) in `third_party/fatfs`.
 Casio e fx-CG50 sono marchi dei rispettivi proprietari; il progetto non è affiliato a Casio.

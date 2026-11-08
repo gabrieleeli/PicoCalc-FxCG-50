@@ -145,6 +145,9 @@ private:
 // ---------------------------------------------------------------- sampling
 constexpr std::int16_t PenUp = INT16_MIN;     // x value that starts a new polyline piece
 constexpr std::size_t MaxCurvePoints = 6000;   // points kept per plot (24 KB)
+// Points of all the plots of one graph screen together (96 KB of the ~194 KB
+// heap of the RP2350): the renderer shares this budget through Curve::limit.
+constexpr std::size_t MaxTotalCurvePoints = 24000;
 constexpr std::size_t MaxParamSteps = 20000;   // T/theta steps of one polar/parametric graph
 
 struct Curve {
@@ -152,6 +155,7 @@ struct Curve {
     std::vector<float> boundary;               // inequality: screen y per column (Y types) / x per row (X types), NaN = none
     std::size_t next{0}, steps{0};
     bool done{false}, truncated{false};
+    std::size_t limit{MaxCurvePoints};         // points allowed for this curve (<= MaxCurvePoints)
     // previous sample (connection to the next one)
     double prevV{}, prevSx{}, prevSy{};
     bool prevOk{false}, havePrev{false};
@@ -163,7 +167,8 @@ std::size_t sampleCount(const Plot& p, const Viewport& vp);
 double sampleParameter(const Plot& p, const Viewport& vp, std::size_t k);
 // Samples the next part of a plot. budget = evaluations allowed in this call
 // (decremented); returns true when the curve is complete. Plot draw type
-// (plotOnly) stores isolated points instead of connected lines.
+// (plotOnly) stores isolated points instead of connected lines. A curve that
+// reaches curve.limit points stops with truncated = true.
 bool sampleStep(const GraphEngine& engine, const Plot& p, const Viewport& vp, bool plotOnly, Curve& curve, int& budget);
 
 // ---------------------------------------------------------------- V-Window / ZOOM

@@ -323,7 +323,7 @@ private:
     graph::GraphEngine engine_;
     std::vector<graph::Curve> curves_;
     std::vector<std::string> pasted_;
-    bool built_{false}, renderDone_{false};
+    bool built_{false}, renderDone_{false}, truncationShown_{false};
     std::size_t renderPlot_{0};
     ViewWindow builtView_{};
     std::vector<ViewWindow> zoomStack_;                  // ZOOM PREVIOUS

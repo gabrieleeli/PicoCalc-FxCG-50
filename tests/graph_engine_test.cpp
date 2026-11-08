@@ -291,6 +291,14 @@ int main() {
         Curve partial; int budget = 50;
         CHECK(!sampleStep(r.engine, p[0], vp, false, partial, budget));
         CHECK(budget <= 0 && partial.next > 0 && partial.next < partial.steps);
+        // A curve stops at its point limit (the renderer shares MaxTotalCurvePoints)
+        Curve limited; limited.limit = 40;
+        int guard = 0;
+        while (!limited.done && guard++ < 1000) { int b = 1 << 30; sampleStep(r.engine, p[2], vp, false, limited, b); }
+        CHECK(limited.done && limited.truncated && limited.xy.size() / 2 <= 40 && limited.xy.capacity() / 2 <= 40);
+        Curve none; none.limit = 0;
+        { int b = 1 << 30; CHECK(sampleStep(r.engine, p[0], vp, false, none, b)); }
+        CHECK(none.truncated && none.xy.empty());
     }
     {
         // Polar and parametric graphs: steps over T, closed circle

@@ -1,10 +1,11 @@
-# Roadmap — dopo la v1.7.0
+# Roadmap — dopo la v1.8.0
 
 Il progetto **non** ha la parità con la Casio fx-CG50 e non va presentato come
 tale: le tabelle sotto elencano ciò che manca. Il documento storico
 `archive/CG50_PARITY_ROADMAP.md` descrive gli obiettivi delle versioni precedenti.
-Le release successive (v1.8.0, v1.9.0, v2.0.0) si creano solo quando i rispettivi
-incrementi sono completati e verificati.
+Le release successive (v1.9.0, v2.0.0) si creano solo quando i rispettivi
+incrementi sono completati e verificati. La matrice di parità di GRAPH è in
+[GRAPH_PARITY.md](GRAPH_PARITY.md).
 
 ## 1. Collaudo su hardware (priorità massima, richiede la PicoCalc)
 
@@ -13,11 +14,30 @@ Nessuna funzione è stata provata sulla PicoCalc. Procedura in
 (RGB666/RGB565, orientamento), tastiera (codici, ripetizione, tempi I2C), flash
 (salvataggio, blackout), batteria, Wi-Fi/TLS/relay, stabilità. Per Run-Matrix:
 tempi di risposta della valutazione esatta (fattorizzazione di radicandi grandi)
-e del ricalcolo della cronologia (40 righe).
+e del ricalcolo della cronologia (40 righe). Per GRAPH: tempi del disegno
+incrementale (600 valutazioni per ciclo), reattività della tastiera durante il
+disegno, colori delle curve e dei riempimenti sul pannello, memoria libera con
+20 grafici e immagini di sfondo. Per la microSD (SPI0, GP16–19, GP22):
+inizializzazione di schede SDHC e SDXC exFAT reali, clock massimo affidabile,
+estrazione durante il salvataggio, progetti scritti dal PC.
 
-## 2. Prossima sessione — Punto 3: Natural V.P.A.M. ↔ formato lineare
+## 2. Prossima sessione — v1.9.0 (proposta)
 
-Stato attuale (v1.7.0): editor e parser condividono `ast::Node`; l'editor produce
+La v1.8.0 ha completato il motore e la modalità GRAPH (vedi
+[GRAPH_PARITY.md](GRAPH_PARITY.md)); restano, in ordine di priorità:
+
+| # | Voce | Note |
+|---|---|---|
+| 1 | Collaudo hardware di GRAPH e della microSD | §1; aggiornare GRAPH_PARITY a TESTED ON HARDWARE solo dopo la prova |
+| 2 | TABLE completa | tabelle di r= e parametriche, Variable = LIST, ROW DELETE/INSERT/ADD, EDIT di x, LISTMEM, lista delle relazioni propria |
+| 3 | Dual Screen G+G (COPY, SWAP) e GtoT, Graph to Table | divisione dello schermo 320×320; richiede un viewport per metà schermo (già parametrico in `graph::Viewport`) |
+| 4 | Dyna Graph, Recursion, Conic Graphs | sul servizio GraphCore (`sampleStep`, `Viewport`, G-Solve); modelli dati già pronti |
+| 5 | FORMAT durante lo SKETCH, suffissi angolari °/ʳ/ᵍ | piccoli completamenti di GRAPH |
+| 6 | Punto 3: Natural V.P.A.M. ↔ formato lineare | descritto sotto, rimandato dalla v1.8.0 |
+
+### Punto 3: Natural V.P.A.M. ↔ formato lineare
+
+Stato attuale (v1.8.0): editor e parser condividono `ast::Node`; l'editor produce
 il testo lineare canonico (`ast::serialize`) e lo reimporta strutturalmente
 (`NaturalEditor::setExpression`); Run-Matrix usa solo questa pipeline. Da fare:
 
@@ -56,11 +76,12 @@ Stato e progetto di ogni modalità in [APPLICATIONS_ARCHITECTURE.md](APPLICATION
 | Modalità | Contenuto da realizzare |
 |---|---|
 | Statistics | regressioni sinusoidale e logistica; test χ², F, 2 campioni, ANOVA nell'interfaccia; grafici a torta e a barre |
-| Graph | grafici parametrici, X=f(y); servizio di plotting condiviso per Dyna/Recursion/Conic |
+| Graph | Dual Screen G+G/GtoT, Graph to Table, comandi grafici di Run-Matrix/programmi, FORMAT nello SKETCH (dettaglio in [GRAPH_PARITY.md](GRAPH_PARITY.md)) |
+| Table | r= e parametriche, Variable = LIST, editing delle righe, LISTMEM |
 | Equation | interfaccia per i sistemi di disequazioni; risultati esatti (servizio Exact) |
-| Recursion, Conic Graphs, Dyna Graph | modelli dati pronti (`app_models.hpp`); manca controller + UI |
+| Recursion, Conic Graphs, Dyna Graph | modelli dati pronti (`app_models.hpp`) e servizio GraphCore per il disegno; mancano controller e UI |
 | Financial | TVM (modello pronto), flussi di cassa, ammortamento |
-| Spreadsheet, eActivity, Program | modelli pronti; richiedono un'area file (SD o flash) e, per Program, l'interprete |
+| Spreadsheet, eActivity, Program | modelli pronti; l'area file su microSD esiste (servizio Files, v1.8.0); Program richiede l'interprete |
 | Geometry, Picture Plot, 3D Graph | modelli pronti; 3D usa `sample3DSurface()` esistente |
 | Link | trasferimento del record del workspace via USB seriale (formato proprio) |
 | Python | MicroPython come libreria con heap separato |
@@ -68,7 +89,9 @@ Stato e progetto di ogni modalità in [APPLICATIONS_ARCHITECTURE.md](APPLICATION
 
 ## 5. Piattaforma
 
-- Scheda SD (FAT) per programmi, documenti e backup del workspace.
+- microSD: driver SPI + FatFs presenti dalla v1.8.0 (progetti GRAPH, immagini);
+  da collaudare su hardware; da estendere a programmi, documenti e backup del
+  workspace; accesso multiblocco (CMD18/CMD25) per file grandi.
 - Gestione energetica: spegnimento del display, sospensione, risveglio da tastiera.
 - DMA e clock SPI più alto per il display, se il collaudo lo consente.
 - Animazioni di transizione tra le schermate (primitiva già presente).

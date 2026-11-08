@@ -267,13 +267,16 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
     const auto cn = r.u16(); if (cn > Workspace::MaxChatMessages) return false;
     for (std::uint16_t i = 0; i < cn && r.ok; ++i) { ChatMessage m; m.fromUser = r.u8() != 0; m.text = r.str(); ws.chat.push_back(std::move(m)); }
     if (!r.ok || r.i != r.n) return false;
-    if (version < 3 && v.xmin < v.xmax && v.ymin < v.ymax) {
+    if (version < 3) {
         // Older forms accepted values the v1.8.0 checks reject: keep the record
         // (the user's data) and repair only the window parameters.
-        v.xscl = std::abs(v.xscl); v.yscl = std::abs(v.yscl);
-        if (!std::isfinite(v.tstep) || v.tstep == 0 || v.tmin == v.tmax || (v.tmax - v.tmin) / v.tstep < 0) {
-            const ViewWindow d; v.tmin = d.tmin; v.tmax = d.tmax; v.tstep = d.tstep;
+        if (v.xmin < v.xmax && v.ymin < v.ymax) {
+            v.xscl = std::abs(v.xscl); v.yscl = std::abs(v.yscl);
+            if (!std::isfinite(v.tstep) || v.tstep == 0 || v.tmin == v.tmax || (v.tmax - v.tmin) / v.tstep < 0) {
+                const ViewWindow d; v.tmin = d.tmin; v.tmax = d.tmax; v.tstep = d.tstep;
+            }
         }
+        if (!validateView(v).empty()) v = ViewWindow{};
     }
     if (!validateView(v).empty()) return false;
     out = std::move(ws);

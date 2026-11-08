@@ -197,6 +197,7 @@ void GraphApp::ensureBuilt(Context& ctx) {
     sketchCurves_.assign(sketchPlots_.size(), graph::Curve{});
     renderPlot_ = 0;
     renderDone_ = false;
+    truncationShown_ = false;
     if (tableDraw(ctx)) { buildTableCurves(ctx); renderDone_ = true; }
 }
 
@@ -209,14 +210,23 @@ bool GraphApp::renderStep(Context& ctx, int budget) {
     const std::size_t total = plots.size() + sketchPlots_.size();
     auto plotAt = [&](std::size_t i) -> const graph::Plot& { return i < plots.size() ? plots[i] : sketchPlots_[i - plots.size()]; };
     auto curveAt = [&](std::size_t i) -> graph::Curve& { return i < plots.size() ? curves_[i] : sketchCurves_[i - plots.size()]; };
+    // All the curves share MaxTotalCurvePoints: a curve may use what the others left.
+    auto share = [&](graph::Curve& c) {
+        std::size_t used = 0;
+        for (const auto& k : curves_) used += k.xy.size() / 2;
+        for (const auto& k : sketchCurves_) used += k.xy.size() / 2;
+        const std::size_t others = used - c.xy.size() / 2;
+        c.limit = others >= graph::MaxTotalCurvePoints ? 0 : std::min(graph::MaxCurvePoints, graph::MaxTotalCurvePoints - others);
+    };
     if (ctx.ws.graph.settings.simulGraph) {
         // Simul Graph: every graph advances in the same tick.
         bool all = true;
-        const int share = std::max(24, budget / static_cast<int>(std::max<std::size_t>(1, total)));
+        const int each = std::max(24, budget / static_cast<int>(std::max<std::size_t>(1, total)));
         for (std::size_t i = 0; i < total; ++i) {
             graph::Curve& c = curveAt(i);
             if (c.done) continue;
-            int b = share;
+            int b = each;
+            share(c);
             graph::sampleStep(engine_, plotAt(i), vp, plotOnly && i < plots.size(), c, b);
             all = all && c.done;
         }
@@ -225,11 +235,19 @@ bool GraphApp::renderStep(Context& ctx, int budget) {
         // One graph after the other, in the order of the relation list.
         while (budget > 0 && renderPlot_ < total) {
             graph::Curve& c = curveAt(renderPlot_);
+            share(c);
             graph::sampleStep(engine_, plotAt(renderPlot_), vp, plotOnly && renderPlot_ < plots.size(), c, budget);
             if (c.done) ++renderPlot_;
         }
         renderDone_ = renderPlot_ >= total;
     }
+    if (!truncationShown_)
+        for (std::size_t i = 0; i < total; ++i)
+            if (curveAt(i).truncated) {
+                truncationShown_ = true;
+                ctx.toast("Memory ERROR: grafici troppo complessi, disegno parziale", 2500);
+                break;
+            }
     return true;
 }
 

@@ -1,4 +1,4 @@
-# Feature matrix — v1.7.0
+# Feature matrix — v1.8.0
 
 Stati (in italiano tra parentesi):
 
@@ -27,7 +27,7 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Pressione prolungata / ripetizione | TESTED ON HOST | ripetizione generata dallo STM32, long-press nel decoder |
 | Batteria e retroilluminazione | IMPLEMENTED | registri 0x05/0x0A/0x0B |
 | Storage flash A/B con CRC | TESTED ON HOST | test di interruzione di alimentazione; driver Pico da collaudare |
-| Scheda SD | NOT STARTED | |
+| microSD (SPI0 GP16–19, card detect GP22) | IMPLEMENTED | protocollo SD in SPI e FatFs R0.16 TESTED ON HOST con scheda simulata (`sd_fatfs_test`); bus SPI0 reale da collaudare ([STORAGE.md](STORAGE.md)) |
 | Wi-Fi CYW43 | IMPLEMENTED | da collaudare |
 | HTTPS (lwIP altcp_tls + mbedTLS, verifica obbligatoria) | IMPLEMENTED | parser HTTP TESTED ON HOST |
 | Gestione energetica / sospensione | NOT STARTED | |
@@ -111,10 +111,13 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Regressioni sinusoidale e logistica | NOT STARTED | |
 | Test χ², F, 2-campioni, ANOVA nell'interfaccia | NOT STARTED | ANOVA e t a 2 campioni esistono come API C++ |
 | Grafico a torta / a barre | NOT STARTED | |
-| Graph (Y=, r=, disequazioni) | TESTED ON HOST | |
-| Trace, Zoom, V-Window, Sketch, G-Solve, ∫dx | TESTED ON HOST | |
-| Grafici parametrici, impliciti | NOT STARTED | |
-| Table | TESTED ON HOST | |
+| Graph: 20 funzioni Y=, r=, Param, X=, 8 disequazioni, intervalli, sovrapposizioni, liste, funzioni composte | TESTED ON SIMULATOR | matrice completa in [GRAPH_PARITY.md](GRAPH_PARITY.md) |
+| Graph: TRACE, ZOOM (13 voci), V-Window e memorie, SKETCH (12 voci), G-SOLVE (ROOT…∫dx MIXED), Modify, memorie grafiche, PICT, sfondo | TESTED ON SIMULATOR / TESTED ON HOST | voce per voce in GRAPH_PARITY.md |
+| Graph: progetti `.pcgraph` su microSD (NEW/OPEN/SAVE/SAVE AS/RENAME/DELETE) | TESTED ON SIMULATOR | scheda simulata; formato in [PCGRAPH_FORMAT.md](PCGRAPH_FORMAT.md) |
+| Graph: Dual Screen G+G/GtoT, Graph to Table, comandi grafici di Run-Matrix | NOT STARTED | |
+| Grafici impliciti (f(x,y)=0) | NOT STARTED | non presenti nella modalità Graph della CG50 (Conic Graphs) |
+| Table: funzioni Y, dY/dX, SET, GPH-CON/GPH-PLT | TESTED ON SIMULATOR | |
+| Table: r= e parametriche, Variable LIST, editing delle righe, LISTMEM | NOT STARTED | |
 | Equation: sistemi 2–6, polinomi 2–6, solver | TESTED ON HOST | |
 | Disequazioni polinomiali 1–6 | TESTED ON HOST | |
 | Sistemi di disequazioni (interfaccia) | NOT STARTED | API `solveInequalitySystem` (grado ≤ 2) TESTED ON HOST |
@@ -136,7 +139,9 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Storia Run-Matrix (con forma esatta, vista, frazione mista) | TESTED ON HOST |
 | Lettura dei record v1.6.0 (formato versione 1) | TESTED ON HOST |
 | Liste statistiche | TESTED ON HOST |
-| Funzioni e V-Window di Graph, range di Table | TESTED ON HOST |
+| Stato di GRAPH (20 funzioni, V-Window, Setup, memorie V-Window e grafiche, SKETCH), range di Table — record v3 | TESTED ON HOST |
+| Lettura dei record v1.7.0 (versione 2) e correzione delle V-Window legacy | TESTED ON HOST |
+| Progetti `.pcgraph` e immagini `.pcpict`/BMP sulla microSD, scrittura atomica e recupero | TESTED ON HOST (scheda simulata) |
 | Coefficienti Equation | TESTED ON HOST |
 | Conversazioni AI (cancellabili da AI Chat e Memory) | TESTED ON HOST |
 | Programmi, file Python, documenti, matrici salvate | NOT STARTED |
