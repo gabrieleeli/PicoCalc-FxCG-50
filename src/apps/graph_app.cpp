@@ -171,7 +171,22 @@ void GraphApp::gsolve(Context& ctx, int kind) {
             const double a = ys[static_cast<std::size_t>(k - 1)], b = ys[static_cast<std::size_t>(k)], c = ys[static_cast<std::size_t>(k + 1)];
             if (!std::isfinite(a) || !std::isfinite(b) || !std::isfinite(c)) continue;
             if (mx ? (b >= a && b > c) : (b <= a && b < c)) {
-                const double x = golden(val, xs[static_cast<std::size_t>(k - 1)], xs[static_cast<std::size_t>(k + 1)], mx);
+                const double a = xs[static_cast<std::size_t>(k - 1)], b = xs[static_cast<std::size_t>(k + 1)];
+                double x = golden(val, a, b, mx);
+                // Golden section stalls near ~1e-8 on a flat extremum (f changes by ~dx^2);
+                // refine with secant steps on the (Ridders) derivative, kept inside [a, b].
+                try {
+                    double x0 = x, x1 = x + (b - a) * 1e-4;
+                    double d0 = differentiate(f, x0, mem), d1 = differentiate(f, x1, mem);
+                    for (int it = 0; it < 30 && d1 != d0; ++it) {
+                        const double x2 = x1 - d1 * (x1 - x0) / (d1 - d0);
+                        if (!(x2 > a && x2 < b) || !std::isfinite(x2)) break;
+                        x0 = x1; d0 = d1; x1 = x2; d1 = differentiate(f, x1, mem);
+                        if (std::abs(x1 - x0) <= 1e-14 * std::max(1.0, std::abs(x1))) break;
+                    }
+                    const double fx = val(x), f1 = val(x1);
+                    if (std::isfinite(f1) && (mx ? f1 >= fx : f1 <= fx)) x = x1;
+                } catch (const std::exception&) {}
                 solutions_.emplace_back(x, val(x));
             }
         }

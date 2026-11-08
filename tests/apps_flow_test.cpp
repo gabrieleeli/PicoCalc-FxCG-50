@@ -116,7 +116,7 @@ int main() {
     r.key(pckey::Esc);
     r.key(pckey::F5); r.type("3");                        // MIN
     CHECK(gr->solutions().size() == 1);
-    CHECK_NEAR(gr->solutions()[0].first, 0, 1e-6); CHECK_NEAR(gr->solutions()[0].second, -2, 1e-9);
+    CHECK_NEAR(gr->solutions()[0].first, 0, 1e-10); CHECK_NEAR(gr->solutions()[0].second, -2, 1e-12);
     r.key(pckey::Esc);
     r.key(pckey::F5); r.type("6"); r.key(pckey::Break); r.enter("0"); r.key(pckey::Break); r.enter("3"); r.key(pckey::F1);   // integral 0..3
     CHECK(!r.error());

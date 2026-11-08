@@ -202,7 +202,7 @@ void StatisticsApp::key(Context& ctx, const KeyEvent& ev) {
 
 void StatisticsApp::drawGraph(Context& ctx, gfx::Canvas& c) {
     const auto& L = ctx.ws.lists;
-    const int left = 30, right = ui::ScreenW - 8, top = ui::ContentTop + 8, bottom = ui::ContentBottom - 26;
+    const int left = 52, right = ui::ScreenW - 8, top = ui::ContentTop + 8, bottom = ui::ContentBottom - 26;
     const std::vector<double>& xs = L[0];
     std::vector<double> ys = (graph_ == GraphKind::Scatter || graph_ == GraphKind::XYLine || graph_ == GraphKind::Regression) ? L[1] : std::vector<double>{};
     double xmin = *std::min_element(xs.begin(), xs.end()), xmax = *std::max_element(xs.begin(), xs.end());
@@ -245,7 +245,7 @@ void StatisticsApp::drawGraph(Context& ctx, gfx::Canvas& c) {
                 if (prev && std::abs(y - py) < 400) c.line(px, py, x, y, col2);
                 px = x; py = y; prev = true;
             }
-            ui::text(c, left + 4, top + 2, stats::regFormula(reg_.type), col2, font::Face::Small);
+            ui::textRight(c, right - 4, bottom - 14, stats::regFormula(reg_.type), col2, font::Face::Small);
         }
         break;
     case GraphKind::XYLine: {
