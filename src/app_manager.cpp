@@ -78,7 +78,7 @@ void AppManager::key(const KeyEvent& ev) {
     }
     if (ev.is(Key::Menu) || (ev.is(Key::Exit) && ev.longPress)) { home(); return; }
     if (ev.is(Key::Shift)) { ctx_.shift_ = !ctx_.shift_; return; }
-    if (ev.is(Key::Setup) && activeId_ != AppId::System) { open(AppId::System); return; }
+    if (ev.is(Key::Setup) && activeId_ != AppId::System && !(active_ && active_->ownsSetup())) { open(AppId::System); return; }
     if (!active_) return;
     const bool shiftBefore = ctx_.shift_;
     try {

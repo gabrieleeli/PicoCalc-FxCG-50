@@ -66,7 +66,7 @@ const ConstInfo kConstants[] = {
 constexpr const char* kSpecialNames[] = {"ans","preans","theta"};
 // Variables owned by other applications (VARS menu), resolved through EvalContext::names.
 constexpr const char* kSystemNames[] = {"xmin","xmax","xscl","ymin","ymax","yscl","tmin","tmax","tptch",
-    "tblstart","tblend","tblpitch",nullptr};
+    "tblstart","tblend","tblpitch","xdot","list1","list2","list3","list4","list5","list6",nullptr};
 // Infix operator words (fx-CG50 And/Or/Xor, Int÷ and Rmdr) and their internal op codes.
 struct OpWord { const char* name; char op; };
 constexpr OpWord kOperatorWords[] = {{"and",'&'},{"or",'|'},{"xor",'x'},{"rmdr",'r'},{"intdiv",'q'}};
@@ -92,6 +92,15 @@ bool isConstantName(const std::string& lowerName){
     for(const char* s:kSpecialNames)if(lowerName==s)return true;
     return isSystemName(lowerName);
 }
+// Graph function reference word without '@': y|r|xt|yt|x followed by 1..20.
+bool referenceName(const std::string& low){
+    std::size_t k=0;while(k<low.size()&&std::isalpha(static_cast<unsigned char>(low[k])))++k;
+    const std::string kind=low.substr(0,k),num=low.substr(k);
+    if(kind!="y"&&kind!="r"&&kind!="xt"&&kind!="yt"&&kind!="x")return false;
+    if(num.empty()||num.size()>2||num[0]=='0')return false;
+    for(char c:num)if(!std::isdigit(static_cast<unsigned char>(c)))return false;
+    const int v=std::atoi(num.c_str());return v>=1&&v<=20;
+}
 
 // ---------------------------------------------------------------- lexer
 enum class TT { Num, Ident, Op, End };
@@ -108,6 +117,7 @@ public:
             const unsigned char c=static_cast<unsigned char>(s_[p_]);
             if(std::isdigit(c)||(c=='.'&&p_+1<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[p_+1])))){out.push_back(number());continue;}
             if(std::isalpha(c)||c=='_'){identifier(out);continue;}
+            if(c=='@'){reference(out);continue;}
             if(c>=0x80){utf8(out);continue;}
             if(c=='<'||c=='>'){
                 const bool eq=p_+1<s_.size()&&s_[p_+1]=='=';
@@ -150,6 +160,15 @@ private:
         std::string t=s_.substr(b,p_-b);
         if(std::count(t.begin(),t.end(),'.')>1)throw SyntaxError("Syntax ERROR: numero non valido");
         return {TT::Num,t,0};
+    }
+    // "@Y3", "@Xt2": reference to a graph function (VARS > GRAPH on the fx-CG50).
+    void reference(std::vector<Tok>& out){
+        std::size_t q=p_+1;
+        while(q<s_.size()&&std::isalpha(static_cast<unsigned char>(s_[q])))++q;
+        while(q<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[q])))++q;
+        const std::string low=lower(s_.substr(p_+1,q-p_-1));
+        if(!referenceName(low))throw SyntaxError("Syntax ERROR: riferimento a funzione non valido");
+        out.push_back({TT::Ident,"@"+low,0});p_=q;
     }
     void identifier(std::vector<Tok>& out){
         const std::size_t b=p_;
@@ -324,6 +343,16 @@ private:
         }
         if(k.type==TT::Ident){
             ++i_;
+            if(!k.text.empty()&&k.text[0]=='@'){
+                // Y1, Y1(x), Y1(Y2), Y1(A=2): optional arguments in parentheses.
+                auto call=ast::make(ast::Kind::Call,k.text);
+                if(eat('(')){
+                    if(!isOp(')')){do{call->children.push_back(expr());}while(eat(','));}
+                    if(!eat(')')&&peek().type!=TT::End)throw SyntaxError("Syntax ERROR: manca ) in un riferimento");
+                }
+                if(call->children.size()>3)throw SyntaxError("Argument ERROR: troppi argomenti nel riferimento");
+                return call;
+            }
             if(isFunctionName(k.text)){
                 auto call=ast::make(ast::Kind::Call,k.text);
                 const FnInfo* info=findFunction(k.text);
@@ -410,10 +439,12 @@ long long toIntArg(double v,const char* what){
 
 // Evaluation environment with a stack of calculus bindings that shadow the context.
 struct Env {
+    static constexpr int MaxLocal=16;
     const EvalContext& ctx;
-    Binding local[8]{};
+    Binding local[MaxLocal]{};
     int localCount{};
     std::uint8_t depth{};
+    std::uint8_t refDepth{};   // nested graph-function references
     std::uintptr_t stackBase{};
     bool decimal{};            // exact evaluation met a plain decimal literal
 };
@@ -431,7 +462,7 @@ void checkStack(const Env& env){
 struct LocalBind {
     Env& env;
     LocalBind(Env& e,const char* name,double v):env(e){
-        if(env.localCount>=8)throw MathError("Stack ERROR: troppi livelli di calcolo annidati");
+        if(env.localCount>=Env::MaxLocal)throw MathError("Stack ERROR: troppi livelli di calcolo annidati");
         env.local[env.localCount++]={name,v};
     }
     ~LocalBind(){--env.localCount;}
@@ -720,7 +751,51 @@ template<typename T> FXAI_NOINLINE T applyFunction(const ast::Node& n,const T* a
 bool isLazyFunction(const std::string& f){
     return f=="integral"||f=="integrate"||f=="derivative"||f=="diff"||f=="derivative2"||f=="sum"||f=="prod"||f=="solve";
 }
+// "Y1" as written by the user (for messages).
+std::string referenceLabel(const std::string& text){
+    std::string s=text.size()>1?text.substr(1):text;
+    if(!s.empty())s[0]=static_cast<char>(std::toupper(static_cast<unsigned char>(s[0])));
+    return s;
+}
+// Graph function reference: positional argument -> the function's own variable,
+// "A=v" arguments -> temporary value of a coefficient (memory is not changed).
+template<typename T> FXAI_NOINLINE T callReference(const ast::Node& n,Env& env){
+    const char* var=nullptr;
+    const ast::Node* body=env.ctx.functions?env.ctx.functions->function(n.text.substr(1),var):nullptr;
+    if(!body||!var)throw MathError("Math ERROR: "+referenceLabel(n.text)+" non definita");
+    // Every reference counts, also those nested in the arguments: Y1(Y2(Y3(Y4(Y5)))) is the limit.
+    if(env.refDepth>=MaxFunctionReferenceDepth)throw MathError("Stack ERROR: piu' di 5 funzioni composte");
+    ++env.refDepth;
+    struct DepthGuard{Env& e;~DepthGuard(){--e.refDepth;}} guard{env};
+    char names[3][2]={};double values[3]={};int assigned=0;
+    double positional=0;bool hasPositional=false;
+    for(const auto& c:n.children){
+        if(!c)throw SyntaxError("Syntax ERROR: argomento mancante");
+        const ast::Node* a=c.get();
+        while(a->kind==ast::Kind::Group&&a->children.size()==1&&a->children[0])a=a->children[0].get();
+        const ast::Node* lhs=a->kind==ast::Kind::Binary&&a->text=="="&&a->children.size()==2?a->children[0].get():nullptr;
+        if(lhs&&lhs->kind==ast::Kind::Token&&lhs->text.size()==1&&std::isalpha(static_cast<unsigned char>(lhs->text[0]))){
+            names[assigned][0]=static_cast<char>(std::tolower(static_cast<unsigned char>(lhs->text[0])));
+            values[assigned]=asReal<T>(evalNode<T>(*a->children[1],env),"coefficiente");
+            ++assigned;continue;
+        }
+        if(hasPositional)throw SyntaxError("Argument ERROR: "+referenceLabel(n.text)+" ha un solo argomento");
+        positional=asReal<T>(evalNode<T>(*c,env),"argomento");hasPositional=true;
+    }
+    if(!hasPositional&&!lookupBinding(env,var,positional))
+        throw MathError(std::string("Math ERROR: variabile ")+var+" non definita per "+referenceLabel(n.text));
+    LocalBind b0(env,var,positional);
+    // Assignments shadow the memory variables only while the body is evaluated.
+    if(assigned==0)return evalNode<T>(*body,env);
+    LocalBind b1(env,names[0],values[0]);
+    if(assigned==1)return evalNode<T>(*body,env);
+    LocalBind b2(env,names[1],values[1]);
+    if(assigned==2)return evalNode<T>(*body,env);
+    LocalBind b3(env,names[2],values[2]);
+    return evalNode<T>(*body,env);
+}
 template<typename T> FXAI_NOINLINE T callFunction(const ast::Node& n,Env& env){
+    if(!n.text.empty()&&n.text[0]=='@')return callReference<T>(n,env);
     if(isLazyFunction(n.text))return callCalculus<T>(n,env);
     const std::size_t count=n.children.size();
     if(count>3)throw SyntaxError("Argument ERROR: "+n.text+" numero di argomenti errato");
@@ -1198,6 +1273,7 @@ FXAI_NOINLINE bool exactSum(const ast::Node& n,Env& env,Value& out){
 FXAI_NOINLINE bool exactCall(const ast::Node& n,Env& env,Value& out){
     const std::string& f=n.text;
     if(f=="sum"||f=="prod")return exactSum(n,env,out);
+    if(!f.empty()&&f[0]=='@')return false;   // graph function references are evaluated numerically
     // Numerical calculus and random numbers have no exact value here.
     if(isLazyFunction(f)||f=="rand"||f=="ran"||f=="randint"||f=="rannorm"||f=="ranbin")return false;
     const std::size_t count=n.children.size();
@@ -1353,6 +1429,44 @@ double integrateAdaptive(const CompiledExpression& f,double a,double b,double to
 double differentiate(const CompiledExpression& f,double x,const CalculatorMemory* memory){
     auto g=[&](double v){return f(v,memory);};
     return ridders(g,x);
+}
+double integrateFunction(const std::function<double(double)>& f,double a,double b,double tolerance){
+    auto g=[&](double v){const double r=f(v);if(!std::isfinite(r))throw MathError("Math ERROR: funzione non definita nell'intervallo");return r;};
+    return integrateFn(g,a,b,tolerance);
+}
+double differentiateFunction(const std::function<double(double)>& f,double x){
+    auto g=[&](double v){return f(v);};
+    return ridders(g,x);
+}
+std::string rewriteIdentifiers(const std::string& expression,const std::function<std::string(const std::string&)>& map){
+    const std::vector<Tok> toks=Lexer(expression).run();
+    std::string out;
+    auto word=[](char c){return std::isalnum(static_cast<unsigned char>(c))||c=='_'||c=='@'||c=='.';};
+    auto append=[&](const std::string& t){
+        if(t.empty())return;
+        // Keep adjacent words and numbers apart ("sin x", "2 y").
+        if(!out.empty()&&word(out.back())&&word(t.front()))out+=' ';
+        out+=t;
+    };
+    for(const Tok& t:toks){
+        switch(t.type){
+        case TT::End: break;
+        case TT::Num: append(t.text); break;
+        case TT::Ident:{const std::string r=map(t.text);append(r.empty()?t.text:r);break;}
+        case TT::Op:
+            switch(t.op){
+            case 'l':append("<=");break; case 'g':append(">=");break; case 'n':append("\xE2\x89\xA0");break;
+            case '&':append(" and ");break; case '|':append(" or ");break; case 'x':append(" xor ");break;
+            case 'r':append(" Rmdr ");break; case 'q':append("Int\xC3\xB7");break; case 'd':append("\xC2\xB0");break;
+            default:append(std::string(1,t.op));break;
+            }
+            break;
+        }
+    }
+    return out;
+}
+bool isFunctionReferenceName(const std::string& lowerName) noexcept{
+    try{return referenceName(lowerName);}catch(...){return false;}
 }
 bool isReservedWord(const std::string& lowerName){return isFunctionName(lowerName)||isConstantName(lowerName)||operatorWord(lowerName)!=0;}
 void seedRandom(std::uint32_t seed) noexcept{g_rng=seed?seed:0x9E3779B9u;}

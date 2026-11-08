@@ -9,6 +9,12 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/point_a.cpp
   ${FXAI_ROOT}/src/editors.cpp
   ${FXAI_ROOT}/src/graph.cpp
+  ${FXAI_ROOT}/src/graph_model.cpp
+  ${FXAI_ROOT}/src/graph_engine.cpp
+  ${FXAI_ROOT}/src/graph_solve.cpp
+  ${FXAI_ROOT}/src/file_store.cpp
+  ${FXAI_ROOT}/src/graph_file.cpp
+  ${FXAI_ROOT}/src/pict.cpp
   ${FXAI_ROOT}/src/natural_editor.cpp
   ${FXAI_ROOT}/src/math_renderer.cpp
   ${FXAI_ROOT}/src/graphics_engine.cpp
@@ -34,6 +40,8 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/apps/equation_app.cpp
   ${FXAI_ROOT}/src/apps/statistics_app.cpp
   ${FXAI_ROOT}/src/apps/graph_app.cpp
+  ${FXAI_ROOT}/src/apps/graph_plot.cpp
+  ${FXAI_ROOT}/src/apps/graph_files.cpp
   ${FXAI_ROOT}/src/apps/table_app.cpp
   ${FXAI_ROOT}/src/apps/system_app.cpp
   ${FXAI_ROOT}/src/apps/memory_app.cpp

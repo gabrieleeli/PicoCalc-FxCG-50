@@ -1,516 +1,954 @@
-// GRAPH: function list (Y=, r=, Y>, Y<, Y>=, Y<=), plot with grid/axes,
-// TRACE, ZOOM, V-Window, SKETCH (tangent/normal) and G-SOLVE (roots, extrema,
-// y-intercept, intersections, integral with shaded area).
+// GRAPH: relation list Y1..Y20 (Y=, r=, Param, X=, Y/X inequalities), function
+// editor, TYPE/CONVERT, TOOL (STYLE, GPH-MEM, BUILT-IN, FORMAT, FILE), MODIFY,
+// V-Window with V-MEM/SQUARE, the Setup items of the graph screen, and the
+// pop-ups shared by every GRAPH screen. The plot screen is in graph_plot.cpp,
+// projects and pictures in graph_files.cpp.
 #include "apps.hpp"
 #include "math_renderer.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
-#include <limits>
 
 namespace fx::app {
 using namespace ui::theme;
 
 namespace {
-constexpr double kPi = 3.14159265358979323846;
-constexpr int W = GraphApp::PlotRight - GraphApp::PlotLeft;
-constexpr int H = GraphApp::PlotBottom - GraphApp::PlotTop;
-const float NaNf = std::numeric_limits<float>::quiet_NaN();
-const std::vector<std::string> kZoom = {"IN  (x0.5)", "OUT (x2)", "AUTO (scala Y)", "STD (-10..10)", "TRIG", "SQR (scala uguale)", "INITIAL"};
-const std::vector<std::string> kSolve = {"ROOT  (radici)", "MAX", "MIN", "Y-ICEPT", "ISECT (intersezione)", "\xE2\x88\xAB" "dx  (integrale)"};
-const std::vector<std::string> kSketch = {"Tangent (tangente)", "Normal (normale)", "Cancella"};
-bool sameView(const ViewWindow& a, const ViewWindow& b) {
-    return a.xmin == b.xmin && a.xmax == b.xmax && a.xscl == b.xscl && a.ymin == b.ymin && a.ymax == b.ymax &&
-           a.yscl == b.yscl && a.tmin == b.tmin && a.tmax == b.tmax && a.tstep == b.tstep && a.grid == b.grid;
+constexpr GraphType kTypeMenu[] = {GraphType::Y, GraphType::Polar, GraphType::Param, GraphType::X, GraphType::Y /* CONVERT */,
+                                   GraphType::YGreater, GraphType::YLess, GraphType::YGreaterEq, GraphType::YLessEq,
+                                   GraphType::XGreater, GraphType::XLess, GraphType::XGreaterEq, GraphType::XLessEq};
+constexpr GraphType kConvert[] = {GraphType::Y, GraphType::YGreater, GraphType::YLess, GraphType::YGreaterEq, GraphType::YLessEq,
+                                  GraphType::X, GraphType::XGreater, GraphType::XLess, GraphType::XGreaterEq, GraphType::XLessEq};
+// fx-CG50 built-in function types (shared with Dyna Graph, manual 5-42).
+constexpr const char* kBuiltIn[] = {"Ax+B", "A(x-B)^(2)+C", "Ax^(2)+Bx+C", "Ax^(3)+Bx^(2)+Cx+D", "Asin(Bx+C)", "Acos(Bx+C)", "Atan(Bx+C)"};
+constexpr const char* kBuiltInLabel[] = {"Y=AX+B", "Y=A(X-B)\xC2\xB2+C", "Y=AX\xC2\xB2+BX+C", "Y=AX\xC2\xB3+BX\xC2\xB2+CX+D", "Y=Asin(BX+C)", "Y=Acos(BX+C)", "Y=Atan(BX+C)"};
+enum WindowField { WXmin, WXmax, WXscl, WXdot, WYmin, WYmax, WYscl, WTmin, WTmax, WTstep, WCount };
+enum SetupField { SFunc, SDraw, SDeriv, SAngle, SCoord, SGrid, SAxes, SLabel, SDisplay, SGraphFunc, SSimul, SBack, SFade, SPlotCol, SSketch, SIneq, SCount };
+
+std::string numberText(double v) { return formatReal(v, {DisplayMode::Norm2, 0}); }
+FormField num(const char* l, double v) { return {l, numberText(v), FormField::Type::Number, {}, 0}; }
+FormField choice(const char* l, std::vector<std::string> c, int sel) {
+    sel = std::clamp(sel, 0, static_cast<int>(c.size()) - 1);
+    const std::string t = c[static_cast<std::size_t>(sel)];
+    return {l, t, FormField::Type::Choice, std::move(c), sel};
 }
-bool isInequality(GraphType t) { return t == GraphType::YGreater || t == GraphType::YLess || t == GraphType::YGreaterEq || t == GraphType::YLessEq; }
-FormField num(const char* l, double v) { return {l, formatReal(v, {DisplayMode::Norm2, 0}), FormField::Type::Number, {}, 0}; }
-// Golden-section search for an extremum of f on [a,b].
-template <typename F> double golden(F f, double a, double b, bool maximum) {
-    const double g = 0.6180339887498949;
-    double c = b - g * (b - a), d = a + g * (b - a);
-    for (int i = 0; i < 100 && std::abs(b - a) > 1e-12 * std::max(1.0, std::abs(a)); ++i) {
-        const double fc = f(c), fd = f(d);
-        if (maximum ? fc > fd : fc < fd) { b = d; } else { a = c; }
-        c = b - g * (b - a); d = a + g * (b - a);
+std::vector<std::string> colorNames() { std::vector<std::string> v; for (std::uint8_t i = 0; i < GraphColorCount; ++i) v.emplace_back(graphColorName(i)); return v; }
+std::vector<std::string> styleNames() { std::vector<std::string> v; for (std::uint8_t i = 0; i < LineStyleCount; ++i) v.emplace_back(lineStyleName(static_cast<LineStyle>(i))); return v; }
+std::vector<std::string> displayChoices() {
+    std::vector<std::string> v = {"Norm1", "Norm2"};
+    for (int i = 0; i <= 9; ++i) v.push_back("Fix" + std::to_string(i));
+    for (int i = 1; i <= 10; ++i) v.push_back("Sci" + std::to_string(i));
+    v.push_back("Eng");
+    return v;
+}
+int displayIndex(DisplayFormat f) {
+    switch (f.mode) {
+    case DisplayMode::Norm1: return 0;
+    case DisplayMode::Norm2: return 1;
+    case DisplayMode::Fix: return 2 + std::min<int>(f.digits, 9);
+    case DisplayMode::Sci: return 12 + std::clamp<int>(f.digits == 0 ? 10 : f.digits, 1, 10) - 1;
+    case DisplayMode::Eng: return 22;
     }
-    return 0.5 * (a + b);
+    return 0;
+}
+DisplayFormat displayFrom(int i) {
+    if (i <= 0) return {DisplayMode::Norm1, 0};
+    if (i == 1) return {DisplayMode::Norm2, 0};
+    if (i <= 11) return {DisplayMode::Fix, static_cast<std::uint8_t>(i - 2)};
+    if (i <= 21) return {DisplayMode::Sci, static_cast<std::uint8_t>(i - 11)};
+    return {DisplayMode::Eng, 0};
+}
+// Prefix of a relation-list line: "Y3", "r3", "Xt3"/"Yt3", "X3".
+std::string linePrefix(GraphType t, int fn, int sub) {
+    const std::string n = std::to_string(fn + 1);
+    if (t == GraphType::Polar) return "r" + n;
+    if (t == GraphType::Param) return (sub ? "Yt" : "Xt") + n;
+    if (isXType(t)) return "X" + n;
+    return "Y" + n;
+}
+// The relation sign shown after the prefix ("=", ">", "≥"...).
+std::string relation(GraphType t) {
+    const std::string l = graphTypeLabel(t);
+    return t == GraphType::Param ? "=" : l.substr(1);
+}
+const char* variableKey(GraphType t) {
+    if (t == GraphType::Polar) return "\xCE\xB8";
+    if (t == GraphType::Param) return "T";
+    if (isXType(t)) return "Y";
+    return "X";
 }
 } // namespace
 
-double GraphApp::pixelToX(const ViewWindow& v, int px) const { return v.xmin + (v.xmax - v.xmin) * (px - PlotLeft) / W; }
-
-void GraphApp::enter(Context& ctx) { cache_.valid = false; (void)ctx; if (screen_ != Screen::Plot) screen_ = Screen::List; menu_.close(); }
-
-int GraphApp::currentFunction(Context& ctx) const {
-    const auto& f = ctx.ws.functions;
-    if (traceFn_ >= 0 && traceFn_ < 6 && f[static_cast<std::size_t>(traceFn_)].selected && !f[static_cast<std::size_t>(traceFn_)].expr.empty() && f[static_cast<std::size_t>(traceFn_)].type != GraphType::Polar) return traceFn_;
-    for (int i = 0; i < 6; ++i) if (f[static_cast<std::size_t>(i)].selected && !f[static_cast<std::size_t>(i)].expr.empty() && f[static_cast<std::size_t>(i)].type != GraphType::Polar) return i;
-    return -1;
+// ---------------------------------------------------------------- lifecycle
+void GraphApp::enter(Context& ctx) {
+    built_ = false;                                  // functions and memory may have changed in other modes
+    menu_.close(); menuKind_ = Menu::None;
+    input_.ask = Ask::None; confirm_ = Confirm::None; copyTarget_ = -1;
+    loadBackground(ctx);
+    if (!ctx.ws.graph.overlay.empty() && overlayPath_ != ctx.ws.graph.overlay) {
+        try { recallPicture(ctx, ctx.ws.graph.overlay, false); } catch (const std::exception&) { overlay_ = {}; overlayPath_.clear(); }
+    }
+    if (tableDraw(ctx)) { screen_ = Screen::Plot; mode_ = Mode::View; return; }
+    if (screen_ == Screen::Plot) mode_ = Mode::View;
+    else if (screen_ != Screen::List) screen_ = Screen::List;
 }
-
-void GraphApp::refresh(Context& ctx) {
-    const auto& v = ctx.ws.view;
-    bool same = cache_.valid && sameView(cache_.view, v);
-    for (std::size_t i = 0; i < 6 && same; ++i) {
-        const auto& f = ctx.ws.functions[i];
-        same = cache_.expr[i] == f.expr && cache_.type[i] == f.type && cache_.on[i] == f.selected;
-    }
-    if (same) return;
-    cache_.view = v;
-    ctx.ws.apply();
-    for (std::size_t i = 0; i < 6; ++i) {
-        const auto& f = ctx.ws.functions[i];
-        cache_.expr[i] = f.expr; cache_.type[i] = f.type; cache_.on[i] = f.selected;
-        cache_.y[i].clear(); cache_.polar[i].clear();
-        if (!f.selected || f.expr.empty()) continue;
-        try {
-            if (f.type == GraphType::Polar) {
-                // r=f(theta) is evaluated in radians (theta range 0..2pi by default).
-                const AngleMode saved = angleMode();
-                setAngleMode(AngleMode::Radians);
-                const CompiledExpression r(f.expr, "theta");
-                const double step = v.tstep > 0 ? v.tstep : 0.05;
-                const int n = std::min(4000, static_cast<int>((v.tmax - v.tmin) / step) + 1);
-                for (int k = 0; k <= n; ++k) {
-                    const double t = v.tmin + k * step; double rv;
-                    if (r.tryEval(t, rv, &ctx.ws.memory)) cache_.polar[i].emplace_back(static_cast<float>(rv * std::cos(t)), static_cast<float>(rv * std::sin(t)));
-                    else cache_.polar[i].emplace_back(NaNf, NaNf);
-                }
-                setAngleMode(saved);
-            } else {
-                const CompiledExpression g(f.expr);
-                cache_.y[i].resize(W + 1);
-                for (int px = 0; px <= W; ++px) {
-                    double yv;
-                    cache_.y[i][static_cast<std::size_t>(px)] = g.tryEval(pixelToX(v, px), yv, &ctx.ws.memory) && std::isfinite(yv) ? static_cast<float>(yv) : NaNf;
-                }
-            }
-        } catch (const std::exception&) {
-            cache_.y[i].clear(); cache_.polar[i].clear();   // syntax error: function skipped (shown in the list)
-        }
-    }
-    cache_.valid = true;
+void GraphApp::leave(Context& ctx) {
+    ctx.ws.table.draw = TableRange::Draw::None;
+    // Release the sampled curves while other modes run (heap for TLS, lists...).
+    curves_.clear(); curves_.shrink_to_fit();
+    shade_.clear(); built_ = false;
+    capture_ = pict::Image{}; captureReady_ = capturePending_ = false;
 }
-
-void GraphApp::zoom(Context& ctx, int kind) {
-    ViewWindow& v = ctx.ws.view;
-    const double cx = trace_ ? pixelToX(v, traceX_) : 0.5 * (v.xmin + v.xmax), cy = 0.5 * (v.ymin + v.ymax);
-    const double hw = 0.5 * (v.xmax - v.xmin), hh = 0.5 * (v.ymax - v.ymin);
-    switch (kind) {
-    case 0: v.xmin = cx - hw / 2; v.xmax = cx + hw / 2; v.ymin = cy - hh / 2; v.ymax = cy + hh / 2; break;
-    case 1: v.xmin = cx - hw * 2; v.xmax = cx + hw * 2; v.ymin = cy - hh * 2; v.ymax = cy + hh * 2; break;
-    case 2: {
-        refresh(ctx);
-        std::vector<float> all;
-        for (const auto& ys : cache_.y) for (float y : ys) if (std::isfinite(y)) all.push_back(y);
-        if (all.empty()) throw MathError("Math ERROR: nessuna funzione da scalare");
-        std::sort(all.begin(), all.end());
-        double lo = all[all.size() / 20], hi = all[all.size() - 1 - all.size() / 20];
-        if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
-        const double pad = (hi - lo) * 0.08;
-        v.ymin = lo - pad; v.ymax = hi + pad;
-        break;
+bool GraphApp::tick(Context& ctx) {
+    bool redraw = false;
+    if (captureReady_) {
+        try { writeCapture(ctx); } catch (const std::exception& e) { captureReady_ = false; capture_ = pict::Image{}; ctx.toast(e.what(), 2500); }
+        redraw = true;
     }
-    case 3: v.xmin = -10; v.xmax = 10; v.xscl = 1; v.ymin = -10; v.ymax = 10; v.yscl = 1; break;
-    case 4: v.xmin = -3 * kPi; v.xmax = 3 * kPi; v.xscl = kPi / 2; v.ymin = -1.6; v.ymax = 1.6; v.yscl = 0.5; break;
-    case 5: { const double perPx = (v.xmax - v.xmin) / W; const double half = perPx * H / 2; v.ymin = cy - half; v.ymax = cy + half; break; }
-    default: v = ViewWindow{}; break;
+    if (screen_ == Screen::Plot && !renderDone_) redraw = renderStep(ctx, 600) || redraw;
+    if (screen_ == Screen::Plot && mode_ == Mode::Select) {
+        const std::uint32_t phase = (ctx.now() - blinkStart_) / 300;
+        if (phase != lastBlink_) { lastBlink_ = phase; redraw = true; }
     }
+    return redraw;
+}
+void GraphApp::finishRendering(Context& ctx) {
+    ensureBuilt(ctx);
+    for (int guard = 0; !renderDone_ && guard < 100000; ++guard) (void)renderStep(ctx, 1 << 20);
+}
+void GraphApp::changed(Context& ctx) {
+    built_ = false;
     ctx.markDirty();
-    cache_.valid = false;
+    ctx.ws.graph.projectModified = true;
 }
 
-void GraphApp::gsolve(Context& ctx, int kind) {
-    refresh(ctx);
-    const ViewWindow& v = ctx.ws.view;
-    solutions_.clear(); solutionIndex_ = 0; shadeIntegral_ = false;
-    const int fi = currentFunction(ctx);
-    if (fi < 0) throw MathError("Math ERROR: nessuna funzione Y= selezionata");
-    const CompiledExpression f(ctx.ws.functions[static_cast<std::size_t>(fi)].expr);
-    const CalculatorMemory* mem = &ctx.ws.memory;
-    auto val = [&](double x) { double y; return f.tryEval(x, y, mem) ? y : std::numeric_limits<double>::quiet_NaN(); };
-    auto bisect = [&](auto g, double a, double b) {
-        double ga = g(a);
-        for (int i = 0; i < 200 && b - a > 1e-13 * std::max(1.0, std::abs(a)); ++i) {
-            const double m = 0.5 * (a + b), gm = g(m);
-            if (!std::isfinite(gm)) break;
-            if ((gm < 0) == (ga < 0)) { a = m; ga = gm; } else b = m;
-        }
-        return 0.5 * (a + b);
-    };
-    traceFn_ = fi;
-    if (kind == 0 || kind == 4) {
-        int gi = -1;
-        if (kind == 4) {
-            for (int i = 0; i < 6; ++i) if (i != fi && ctx.ws.functions[static_cast<std::size_t>(i)].selected && !ctx.ws.functions[static_cast<std::size_t>(i)].expr.empty() && ctx.ws.functions[static_cast<std::size_t>(i)].type != GraphType::Polar) { gi = i; break; }
-            if (gi < 0) throw MathError("Math ERROR: ISECT richiede due funzioni selezionate");
-        }
-        const CompiledExpression g(gi >= 0 ? ctx.ws.functions[static_cast<std::size_t>(gi)].expr : std::string("0"));
-        auto diff = [&](double x) { double a, b; if (!f.tryEval(x, a, mem) || !g.tryEval(x, b, mem)) return std::numeric_limits<double>::quiet_NaN(); return a - b; };
-        double px = v.xmin, py = diff(px);
-        for (int k = 1; k <= 4 * W; ++k) {
-            const double x = v.xmin + (v.xmax - v.xmin) * k / (4.0 * W), y = diff(x);
-            if (std::isfinite(py) && std::isfinite(y)) {
-                if (py == 0) solutions_.emplace_back(px, val(px));
-                else if ((py < 0) != (y < 0) && y != 0) {
-                    const double r = bisect(diff, px, x);
-                    // Reject poles: the residual must be small compared with the bracketing values.
-                    if (std::abs(diff(r)) < 1e-6 * std::max({1.0, std::abs(py), std::abs(y)})) solutions_.emplace_back(r, val(r));
-                }
-            }
-            px = x; py = y;
-        }
-        solveLabel_ = kind == 0 ? "ROOT" : "ISCT";
-    } else if (kind == 1 || kind == 2) {
-        const bool mx = kind == 1;
-        const int N = 2 * W;
-        std::vector<double> xs(static_cast<std::size_t>(N + 1)), ys(static_cast<std::size_t>(N + 1));
-        for (int k = 0; k <= N; ++k) { xs[static_cast<std::size_t>(k)] = v.xmin + (v.xmax - v.xmin) * k / N; ys[static_cast<std::size_t>(k)] = val(xs[static_cast<std::size_t>(k)]); }
-        for (int k = 1; k < N; ++k) {
-            const double a = ys[static_cast<std::size_t>(k - 1)], b = ys[static_cast<std::size_t>(k)], c = ys[static_cast<std::size_t>(k + 1)];
-            if (!std::isfinite(a) || !std::isfinite(b) || !std::isfinite(c)) continue;
-            if (mx ? (b >= a && b > c) : (b <= a && b < c)) {
-                const double a = xs[static_cast<std::size_t>(k - 1)], b = xs[static_cast<std::size_t>(k + 1)];
-                double x = golden(val, a, b, mx);
-                // Golden section stalls near ~1e-8 on a flat extremum (f changes by ~dx^2);
-                // refine with secant steps on the (Ridders) derivative, kept inside [a, b].
-                try {
-                    double x0 = x, x1 = x + (b - a) * 1e-4;
-                    double d0 = differentiate(f, x0, mem), d1 = differentiate(f, x1, mem);
-                    for (int it = 0; it < 30 && d1 != d0; ++it) {
-                        const double x2 = x1 - d1 * (x1 - x0) / (d1 - d0);
-                        if (!(x2 > a && x2 < b) || !std::isfinite(x2)) break;
-                        x0 = x1; d0 = d1; x1 = x2; d1 = differentiate(f, x1, mem);
-                        if (std::abs(x1 - x0) <= 1e-14 * std::max(1.0, std::abs(x1))) break;
-                    }
-                    const double fx = val(x), f1 = val(x1);
-                    if (std::isfinite(f1) && (mx ? f1 >= fx : f1 <= fx)) x = x1;
-                } catch (const std::exception&) {}
-                solutions_.emplace_back(x, val(x));
-            }
-        }
-        solveLabel_ = mx ? "MAX" : "MIN";
-    } else if (kind == 3) {
-        const double y = val(0);
-        if (!std::isfinite(y)) throw MathError("Math ERROR: funzione non definita in x=0");
-        solutions_.emplace_back(0.0, y);
-        solveLabel_ = "Y-ICPT";
+// ---------------------------------------------------------------- relation list
+GraphType GraphApp::lineType(Context& ctx, int fn) const {
+    const GraphFunction& f = ctx.ws.functions[static_cast<std::size_t>(fn)];
+    return f.empty() ? ctx.ws.graph.settings.funcType : f.type;   // empty lines take the Func Type
+}
+std::vector<GraphApp::Line> GraphApp::lines(Context& ctx) const {
+    std::vector<Line> out;
+    out.reserve(MaxGraphFunctions + 4);
+    for (int i = 0; i < static_cast<int>(MaxGraphFunctions); ++i) {
+        out.push_back({i, 0});
+        if (lineType(ctx, i) == GraphType::Param) out.push_back({i, 1});
     }
-    if (solutions_.empty()) throw MathError("Math ERROR: nessuna soluzione nella finestra");
-    trace_ = false;
+    return out;
 }
 
+void GraphApp::beginEdit(Context& ctx, bool keep, char first) {
+    const auto ls = lines(ctx);
+    row_ = std::clamp(row_, 0, static_cast<int>(ls.size()) - 1);
+    const Line l = ls[static_cast<std::size_t>(row_)];
+    editFn_ = l.fn; editSub_ = l.sub; editNew_ = !keep;
+    editor_.clear();
+    const GraphFunction& f = ctx.ws.functions[static_cast<std::size_t>(l.fn)];
+    const std::string& text = l.sub ? f.expr2 : f.expr;
+    if (keep && !text.empty()) editor_.setExpression(text);
+    if (first) editor_.insert(first);
+    screen_ = Screen::Edit;
+}
+
+void GraphApp::storeEdit(Context& ctx) {
+    GraphFunction& f = ctx.ws.functions[static_cast<std::size_t>(editFn_)];
+    const GraphType wanted = ctx.ws.graph.settings.funcType;
+    const std::string text = editor_.empty() ? std::string() : editor_.toExpression();
+    if (!text.empty()) {
+        if (text.size() > MaxGraphExpression) throw MathError("Memory ERROR: espressione troppo lunga");
+        const graph::FunctionText t = graph::splitFunctionText(text);   // Syntax ERROR on a bad suffix
+        (void)parseExpression(t.body);                                   // syntax check before storing
+        if (editSub_ == 1 && (t.hasRange || t.overwrite)) throw SyntaxError("Syntax ERROR: intervallo e [A=] vanno dopo Xt");
+    }
+    // A new function cannot replace one of a different type (manual 5-13).
+    if (editNew_ && !f.empty() && f.type != wanted)
+        throw MathError(std::string("Argument ERROR: ") + linePrefix(f.type, editFn_, 0) + " ha un altro tipo (DELETE o CONVERT)");
+    if (f.empty()) f.type = wanted;
+    if (editSub_ == 1) f.expr2 = text; else f.expr = text;
+    if (f.type != GraphType::Param) f.expr2.clear();
+    if (!text.empty()) f.selected = true;
+    changed(ctx);
+    screen_ = Screen::List;
+    const auto ls = lines(ctx);
+    row_ = std::min(row_ + 1, static_cast<int>(ls.size()) - 1);
+}
+
+void GraphApp::listKey(Context& ctx, const KeyEvent& ev) {
+    auto ls = lines(ctx);
+    row_ = std::clamp(row_, 0, static_cast<int>(ls.size()) - 1);
+    const Line line = ls[static_cast<std::size_t>(row_)];
+    GraphFunction& f = ctx.ws.functions[static_cast<std::size_t>(line.fn)];
+    const int n = static_cast<int>(ls.size());
+    // Modify COPY: choose the destination line.
+    if (copyTarget_ >= 0) {
+        if (ev.is(Key::Up)) row_ = (row_ + n - 1) % n;
+        else if (ev.is(Key::Down)) row_ = (row_ + 1) % n;
+        else if (ev.is(Key::Exe)) { copyModified(ctx, line.fn); }
+        else if (ev.is(Key::Exit)) { copyTarget_ = -1; screen_ = Screen::Plot; mode_ = Mode::Modify; }
+        return;
+    }
+    if (ctx.shift()) {
+        // SHIFT layer: TRACE ZOOM V-WIN SKETCH G-SOLV G<->T (manual 5-2).
+        switch (ev.key) {
+        case Key::F1: showPlot(); haveOriginal_ = false; startTrace(ctx, Action::None); return;
+        case Key::F2: showPlot(); haveOriginal_ = false; key(ctx, {Key::F2}); return;
+        case Key::F3: returnScreen_ = Screen::List; openWindow(ctx); return;
+        case Key::F4: showPlot(); haveOriginal_ = false; key(ctx, {Key::F4}); return;
+        case Key::F5: showPlot(); haveOriginal_ = false; key(ctx, {Key::F5}); return;
+        case Key::F6: showPlot(); haveOriginal_ = false; return;
+        default: break;
+        }
+    }
+    switch (ev.key) {
+    case Key::Up: row_ = (row_ + n - 1) % n; return;
+    case Key::Down: row_ = (row_ + 1) % n; return;
+    case Key::PageUp: row_ = std::max(0, row_ - 6); return;
+    case Key::PageDown: row_ = std::min(n - 1, row_ + 6); return;
+    case Key::Home: row_ = 0; return;
+    case Key::End: row_ = n - 1; return;
+    case Key::F1: f.selected = !f.selected; changed(ctx); return;
+    case Key::F2: case Key::DelForward: case Key::Del:
+        if (f.empty()) return;
+        confirm(Confirm::DeleteFunction, "Eliminare " + linePrefix(f.type, line.fn, 0) + (f.type == GraphType::Param ? " e Yt" + std::to_string(line.fn + 1) : std::string()) + "?");
+        return;
+    case Key::F3: {
+        std::vector<std::string> items;
+        for (std::size_t i = 0; i < std::size(kTypeMenu); ++i) items.emplace_back(i == 4 ? "CONVERT \xE2\x96\xB6" : graphTypeLabel(kTypeMenu[i]));
+        showMenu(Menu::Type, "TYPE", items);
+        return;
+    }
+    case Key::F4: showMenu(Menu::Tool, "TOOL", {"STYLE \xE2\x96\xB6", "GPH-MEM \xE2\x96\xB6", "BUILT-IN \xE2\x96\xB6", "FORMAT", "FILE \xE2\x96\xB6"}); return;
+    case Key::F5: startModify(ctx, -1); return;
+    case Key::F6: showPlot(); haveOriginal_ = false; marks_.clear(); return;
+    case Key::Optn: showMenu(Menu::ListOptn, "OPTN", {"FORMAT", "FILE \xE2\x96\xB6", "V-WIN", "\xE2\x86\x92 TABLE"}); return;
+    case Key::Exe: case Key::Right: beginEdit(ctx, true); return;
+    case Key::Char:
+        if (ev.ctrl) {
+            if (ev.ch == 'v' || ev.ch == 'V') { if (ctx.clipboard) { beginEdit(ctx, false); editor_.paste(*ctx.clipboard); } }
+            return;
+        }
+        beginEdit(ctx, false, ev.ch);
+        return;
+    case Key::Exit: ctx.home(); return;
+    default: return;
+    }
+}
+
+void GraphApp::editKey(Context& ctx, const KeyEvent& ev) {
+    const GraphType t = lineType(ctx, editFn_);
+    switch (ev.key) {
+    case Key::Exe: storeEdit(ctx); return;
+    case Key::Exit: screen_ = Screen::List; return;
+    case Key::Char:
+        if (ev.ctrl) {
+            switch (ev.ch) {
+            case 'c': case 'C': ctx.clipboard = editor_.copyTree(); ctx.toast("Copiato"); return;
+            case 'v': case 'V': if (ctx.clipboard) editor_.paste(*ctx.clipboard); return;
+            case 'z': case 'Z': editor_.undo(); return;
+            case 'y': case 'Y': editor_.redo(); return;
+            default: return;
+            }
+        }
+        editor_.insert(ev.ch);
+        return;
+    case Key::Left: editor_.moveLeft(); return;
+    case Key::Right: editor_.moveRight(); return;
+    case Key::Up: editor_.moveUp(); return;
+    case Key::Down: editor_.moveDown(); return;
+    case Key::Home: editor_.moveHome(); return;
+    case Key::End: editor_.moveEnd(); return;
+    case Key::Del: editor_.backspace(); return;
+    case Key::DelForward: editor_.eraseForward(); return;
+    case Key::AC: editor_.clear(); return;
+    case Key::F1: editor_.insertFraction(); return;
+    case Key::F2: editor_.insertRadical(); return;
+    case Key::F3: editor_.insertPower(); return;
+    case Key::F4:
+        if (t == GraphType::Polar) editor_.insertText("theta");
+        else if (t == GraphType::Param) editor_.insert('t');
+        else if (isXType(t)) editor_.insert('y');
+        else editor_.insert('x');
+        return;
+    case Key::F5: editor_.insertAbs(); return;
+    case Key::F6: case Key::Optn:
+        showMenu(Menu::EditMore, "INSERISCI", {"[ ]  intervallo ,[a,b]", "[A=]  sovrapposizione", "List 1-6", "\xCF\x80", "\xCE\xB8", "x\xC2\xB2", "log\xE2\x82\x90" "b", "e^\xE2\x96\xA1", "d/dx", "\xE2\x88\xAB" "dx", "\xE2\x89\xA5  \xE2\x89\xA4  =", "GRAPH: Y r Xt Yt X"});
+        return;
+    case Key::Vars: showMenu(Menu::EditVars, "VARS GRAPH", {"Y  (Y=, Y>...)", "r  (polare)", "Xt (parametrica)", "Yt (parametrica)", "X  (X=, X>...)"}); return;
+    default: return;
+    }
+}
+
+// ---------------------------------------------------------------- V-Window
+void GraphApp::loadWindowForm(const ViewWindow& v) {
+    window_.fields = {num("Xmin", v.xmin), num("Xmax", v.xmax), num("Xscale", v.xscl), num("Xdot", viewXdot(v)),
+                      num("Ymin", v.ymin), num("Ymax", v.ymax), num("Yscale", v.yscl),
+                      num("T\xCE\xB8min", v.tmin), num("T\xCE\xB8max", v.tmax), num("T\xCE\xB8ptch", v.tstep)};
+    windowStart_ = v;
+    windowText_.clear();
+    for (const auto& f : window_.fields) windowText_.push_back(f.text);
+}
+void GraphApp::openWindow(Context& ctx) {
+    loadWindowForm(ctx.ws.view);
+    window_.selected = 0;
+    screen_ = Screen::Window;
+}
+bool GraphApp::applyWindow(Context& ctx) {
+    auto edited = [&](int i) { return window_.fields[static_cast<std::size_t>(i)].text != windowText_[static_cast<std::size_t>(i)]; };
+    auto val = [&](int i, double original) { return edited(i) ? window_.number(ctx, static_cast<std::size_t>(i)) : original; };
+    const ViewWindow s = windowStart_;
+    ViewWindow v = s;
+    v.xmin = val(WXmin, s.xmin); v.xmax = val(WXmax, s.xmax); v.xscl = val(WXscl, s.xscl);
+    v.ymin = val(WYmin, s.ymin); v.ymax = val(WYmax, s.ymax); v.yscl = val(WYscl, s.yscl);
+    v.tmin = val(WTmin, s.tmin); v.tmax = val(WTmax, s.tmax); v.tstep = val(WTstep, s.tstep);
+    // Changing Xdot moves Xmax (manual 5-6).
+    if (edited(WXdot) && !edited(WXmax)) v = graph::withXdot(v, window_.number(ctx, WXdot));
+    // Tθmax < Tθmin makes Tθptch negative (manual 5-6).
+    if (v.tstep != 0 && (v.tmax - v.tmin) * v.tstep < 0) v.tstep = -v.tstep;
+    const std::string err = validateView(v);
+    if (!err.empty()) throw MathError(err);
+    if (!(v == ctx.ws.view)) {
+        ctx.ws.view = v;
+        haveOriginal_ = false; zoomStack_.clear(); marks_.clear(); shade_.clear(); shadeIntegral_ = false;
+        ctx.markDirty(); ctx.ws.graph.projectModified = true;
+    }
+    loadWindowForm(v);
+    return true;
+}
+void GraphApp::windowKey(Context& ctx, const KeyEvent& ev) {
+    if (window_.editing()) {
+        const int field = window_.selected;
+        (void)window_.key(ctx, ev);
+        if (!window_.editing() && (field == WXmin || field == WXmax || field == WXdot)) {
+            // Keep Xdot and Xmax consistent while editing.
+            try {
+                const double xmin = window_.number(ctx, WXmin);
+                if (field == WXdot) {
+                    const double d = window_.number(ctx, WXdot);
+                    if (d > 0) window_.fields[WXmax].text = numberText(xmin + d * (graphgeo::Columns - 1));
+                } else {
+                    const double xmax = window_.number(ctx, WXmax);
+                    window_.fields[WXdot].text = numberText((xmax - xmin) / (graphgeo::Columns - 1));
+                    windowText_[WXdot] = window_.fields[WXdot].text;   // derived, not an edit of Xdot
+                }
+            } catch (const std::exception&) {}
+        }
+        return;
+    }
+    const AngleMode angle = ctx.ws.settings.angle;
+    auto current = [&]() { ViewWindow keep = ctx.ws.view; try { (void)applyWindow(ctx); } catch (...) { ctx.ws.view = keep; throw; } return ctx.ws.view; };
+    switch (ev.key) {
+    case Key::F1: loadWindowForm(graph::initialWindow(angle)); windowText_.assign(WCount, std::string()); return;
+    case Key::F2: { ViewWindow v = graph::trigWindow(windowStart_, angle); loadWindowForm(v); windowText_.assign(WCount, std::string()); return; }
+    case Key::F3: { ViewWindow v = graph::standardWindow(windowStart_); loadWindowForm(v); windowText_.assign(WCount, std::string()); return; }
+    case Key::F4: showMenu(Menu::VMem, "V-MEM", {"STORE", "RECALL"}); return;
+    case Key::F5: showMenu(Menu::Square, "SQUARE", {"Y-BASE (X corretto)", "X-BASE (Y corretto)"}); return;
+    case Key::F6:
+        if (!background_.empty()) confirm(Confirm::BgvLoad, "Caricare la V-Window dello sfondo?");
+        return;
+    case Key::Exit:
+        (void)current();
+        screen_ = returnScreen_;
+        if (screen_ == Screen::Plot) mode_ = Mode::View;
+        return;
+    default: break;
+    }
+    (void)window_.key(ctx, ev);
+}
+
+// ---------------------------------------------------------------- Setup
+void GraphApp::openSetup(Context& ctx) {
+    const GraphSettings& g = ctx.ws.graph.settings;
+    const Settings& s = ctx.ws.settings;
+    std::vector<std::string> types;
+    for (std::uint8_t i = 0; i < GraphTypeCount; ++i) types.emplace_back(graphTypeLabel(static_cast<GraphType>(i)));
+    std::vector<std::string> back = {"None"};
+    for (int i = 1; i <= pict::PictMemories; ++i) back.push_back("PICT " + std::to_string(i));
+    if (!g.backgroundFile.empty()) back.push_back(files::stem(g.backgroundFile.substr(g.backgroundFile.rfind('/') + 1)));
+    std::vector<std::string> fades;
+    for (int i = 0; i <= 100; i += 5) fades.push_back(std::to_string(i) + "%");
+    setup_.fields = {
+        choice("Func Type", types, static_cast<int>(g.funcType)),
+        choice("Draw Type", {"Connect", "Plot"}, g.plotDraw ? 1 : 0),
+        choice("Derivative", {"On", "Off"}, g.derivative ? 0 : 1),
+        choice("Angle", {"Deg", "Rad", "Gra"}, s.angle == AngleMode::Degrees ? 0 : s.angle == AngleMode::Radians ? 1 : 2),
+        choice("Coord", {"On", "Off"}, g.coord ? 0 : 1),
+        choice("Grid", {"On", "Off", "Line"}, g.grid == GridMode::On ? 0 : g.grid == GridMode::Off ? 1 : 2),
+        choice("Axes", {"On", "Off", "Scale"}, g.axes == AxesMode::On ? 0 : g.axes == AxesMode::Off ? 1 : 2),
+        choice("Label", {"On", "Off"}, g.label ? 0 : 1),
+        choice("Display", displayChoices(), displayIndex(s.display)),
+        choice("Graph Func", {"On", "Off"}, g.graphFunc ? 0 : 1),
+        choice("Simul Graph", {"On", "Off"}, g.simulGraph ? 0 : 1),
+        choice("Background", back, g.background == BackgroundFile ? static_cast<int>(back.size()) - 1 : g.background),
+        choice("Fade I/O", fades, g.fade / 5),
+        choice("Plot/LineCol", colorNames(), g.plotColor),
+        choice("Sketch Line", styleNames(), static_cast<int>(g.sketchLine)),
+        choice("Ineq Type", {"Intsect", "Union"}, g.ineqUnion ? 1 : 0),
+    };
+    setup_.selected = 0;
+    returnScreen_ = screen_ == Screen::Setup ? returnScreen_ : screen_;
+    screen_ = Screen::Setup;
+}
+void GraphApp::applySetup(Context& ctx) {
+    GraphSettings& g = ctx.ws.graph.settings;
+    Settings& s = ctx.ws.settings;
+    const auto& f = setup_.fields;
+    const std::uint8_t oldBack = g.background, oldFade = g.fade;
+    g.funcType = static_cast<GraphType>(f[SFunc].choice);
+    g.plotDraw = f[SDraw].choice == 1;
+    g.derivative = f[SDeriv].choice == 0;
+    s.angle = f[SAngle].choice == 0 ? AngleMode::Degrees : f[SAngle].choice == 1 ? AngleMode::Radians : AngleMode::Gradians;
+    g.coord = f[SCoord].choice == 0;
+    g.grid = f[SGrid].choice == 0 ? GridMode::On : f[SGrid].choice == 1 ? GridMode::Off : GridMode::Line;
+    g.axes = f[SAxes].choice == 0 ? AxesMode::On : f[SAxes].choice == 1 ? AxesMode::Off : AxesMode::Scale;
+    g.label = f[SLabel].choice == 0;
+    s.display = displayFrom(f[SDisplay].choice);
+    g.graphFunc = f[SGraphFunc].choice == 0;
+    g.simulGraph = f[SSimul].choice == 0;
+    const int b = f[SBack].choice;
+    g.background = b == 0 ? 0 : b <= pict::PictMemories ? static_cast<std::uint8_t>(b) : BackgroundFile;
+    g.fade = static_cast<std::uint8_t>(f[SFade].choice * 5);
+    g.plotColor = static_cast<std::uint8_t>(f[SPlotCol].choice);
+    g.sketchLine = static_cast<LineStyle>(f[SSketch].choice);
+    g.ineqUnion = f[SIneq].choice == 1;
+    ctx.ws.apply();
+    changed(ctx);
+    if (g.background != oldBack || g.fade != oldFade) {
+        background_ = pict::Image{}; backgroundPath_.clear();
+        try { loadBackground(ctx); } catch (const std::exception& e) { ctx.toast(e.what(), 2500); }
+        if (!background_.empty() && g.background != oldBack) confirm(Confirm::BgvLoad, "Caricare la V-Window dello sfondo?");
+    }
+}
+void GraphApp::setupKey(Context& ctx, const KeyEvent& ev) {
+    if (setup_.editing()) { (void)setup_.key(ctx, ev); return; }
+    if (ev.is(Key::Exit) || ev.is(Key::Setup) || ev.is(Key::Exe)) {
+        applySetup(ctx);
+        screen_ = returnScreen_;
+        if (screen_ == Screen::Plot) mode_ = Mode::View;
+        return;
+    }
+    if (ev.is(Key::F1) && setup_.selected == SBack) { applySetup(ctx); openFiles(ctx, Browse::Background); return; }
+    (void)setup_.key(ctx, ev);
+}
+
+// ---------------------------------------------------------------- FORMAT (line style and colour)
+void GraphApp::openFormat(Context& ctx, int function, int sketchItem) {
+    formatFn_ = function; formatSketch_ = sketchItem;
+    std::uint8_t color = 0; LineStyle style = LineStyle::Normal;
+    if (function >= 0) { const auto& f = ctx.ws.functions[static_cast<std::size_t>(function)]; color = f.color; style = f.style; }
+    else if (sketchItem >= 0 && sketchItem < static_cast<int>(ctx.ws.graph.sketch.size())) { const auto& s = ctx.ws.graph.sketch[static_cast<std::size_t>(sketchItem)]; color = s.color; style = s.style; }
+    else return;
+    format_.fields = {choice("Line Style", styleNames(), static_cast<int>(style)), choice("Line Color", colorNames(), color)};
+    format_.selected = 0;
+    formatReturn_ = screen_ == Screen::Edit ? Screen::List : screen_;
+    screen_ = Screen::Format;
+}
+void GraphApp::formatKey(Context& ctx, const KeyEvent& ev) {
+    if (ev.is(Key::Exit) || ev.is(Key::Exe)) {
+        const auto style = static_cast<LineStyle>(format_.fields[0].choice);
+        const auto color = static_cast<std::uint8_t>(format_.fields[1].choice);
+        if (formatFn_ >= 0) { auto& f = ctx.ws.functions[static_cast<std::size_t>(formatFn_)]; f.style = style; f.color = color; changed(ctx); }
+        else if (formatSketch_ >= 0 && formatSketch_ < static_cast<int>(ctx.ws.graph.sketch.size())) {
+            auto& s = ctx.ws.graph.sketch[static_cast<std::size_t>(formatSketch_)]; s.style = style; s.color = color;
+            ctx.markDirty(); ctx.ws.graph.projectModified = true;
+        }
+        screen_ = formatReturn_;
+        if (screen_ == Screen::Plot) mode_ = Mode::View;
+        return;
+    }
+    (void)format_.key(ctx, ev);
+}
+
+// ---------------------------------------------------------------- MODIFY (manual 5-38)
+void GraphApp::startModify(Context& ctx, int plot) {
+    ensureBuilt(ctx);
+    const auto& plots = engine_.plots();
+    int chosen = plot, fn = -1, count = 0;
+    std::string vars;
+    for (int i = 0; i < static_cast<int>(plots.size()); ++i) {
+        const auto& p = plots[static_cast<std::size_t>(i)];
+        if (p.pasted || p.function < 0 || p.variant != 0) continue;
+        std::string v = graph::GraphEngine::coefficients(*p.body, p.variable);
+        if (p.body2) for (char c : graph::GraphEngine::coefficients(*p.body2, p.variable)) if (v.find(c) == std::string::npos) v.push_back(c);
+        if (p.bindName[0]) v.erase(std::remove(v.begin(), v.end(), static_cast<char>(std::toupper(static_cast<unsigned char>(p.bindName[0])))), v.end());
+        if (v.empty()) continue;
+        ++count;
+        if (plot < 0 || plot == i) { chosen = i; fn = p.function; std::sort(v.begin(), v.end()); vars = v; }
+    }
+    if (count == 0) throw MathError("Argument ERROR: nessuna funzione con variabili (A..Z)");
+    if (count > 1 && plot < 0) throw MathError("Argument ERROR: piu' di una funzione con variabili");
+    if (vars.size() > 5) throw MathError("Argument ERROR: al massimo 5 variabili");
+    modify_.plot = chosen; modify_.function = fn; modify_.vars = vars; modify_.selected = 0;
+    if (!(modify_.step > 0)) modify_.step = 1;
+    screen_ = Screen::Plot; mode_ = Mode::Modify;
+    haveOriginal_ = false;
+}
+void GraphApp::modifyKey(Context& ctx, const KeyEvent& ev) {
+    const int n = static_cast<int>(modify_.vars.size());
+    switch (ev.key) {
+    case Key::Up: modify_.selected = (modify_.selected + n) % (n + 1); return;
+    case Key::Down: modify_.selected = (modify_.selected + 1) % (n + 1); return;
+    case Key::Left: case Key::Right: {
+        if (modify_.selected >= n) return;
+        const char v = modify_.vars[static_cast<std::size_t>(modify_.selected)];
+        const double d = (ev.is(Key::Left) ? -1 : 1) * modify_.step;
+        double nv = ctx.ws.memory.recall(v) + d;
+        if (std::abs(nv) < 1e-12 * std::max(1.0, std::abs(modify_.step))) nv = 0;
+        ctx.ws.memory.store(v, nv);
+        changed(ctx);
+        return;
+    }
+    case Key::F1: case Key::Optn: copyTarget_ = 0; screen_ = Screen::List; ctx.toast("Scegli la riga e premi EXE"); return;
+    case Key::Exit: mode_ = Mode::View; return;
+    case Key::Char:
+        if (!ev.ctrl && (std::isdigit(static_cast<unsigned char>(ev.ch)) || ev.ch == '-' || ev.ch == '.' || ev.ch == '(')) {
+            if (modify_.selected >= n) ask(Ask::ModifyStep, "Step:", std::string(1, ev.ch));
+            else ask(Ask::ModifyValue, std::string(1, modify_.vars[static_cast<std::size_t>(modify_.selected)]) + "=", std::string(1, ev.ch));
+        }
+        return;
+    case Key::Exe:
+        if (modify_.selected >= n) ask(Ask::ModifyStep, "Step:", numberText(modify_.step));
+        else ask(Ask::ModifyValue, std::string(1, modify_.vars[static_cast<std::size_t>(modify_.selected)]) + "=",
+                 numberText(ctx.ws.memory.recall(modify_.vars[static_cast<std::size_t>(modify_.selected)])));
+        return;
+    default: return;
+    }
+}
+void GraphApp::copyModified(Context& ctx, int fn) {
+    GraphFunction& dst = ctx.ws.functions[static_cast<std::size_t>(fn)];
+    if (dst.selected && dst.defined() && fn != modify_.function) throw MathError("Argument ERROR: Expression in use (espressione in uso)");
+    if (fn == modify_.function && dst.selected) throw MathError("Argument ERROR: Expression in use (espressione in uso)");
+    const GraphFunction& src = ctx.ws.functions[static_cast<std::size_t>(modify_.function)];
+    auto substitute = [&](const std::string& text) {
+        const graph::FunctionText t = graph::splitFunctionText(text);
+        return rewriteIdentifiers(t.body, [&](const std::string& id) -> std::string {
+            if (id.size() != 1) return {};
+            const char up = static_cast<char>(std::toupper(static_cast<unsigned char>(id[0])));
+            if (modify_.vars.find(up) == std::string::npos) return {};
+            char buf[40];
+            std::snprintf(buf, sizeof(buf), "(%.15g)", ctx.ws.memory.recall(up));
+            return buf;
+        });
+    };
+    GraphFunction copy = src;
+    copy.expr = substitute(src.expr);
+    if (src.type == GraphType::Param) copy.expr2 = substitute(src.expr2);
+    copy.selected = false;
+    dst = copy;
+    copyTarget_ = -1;
+    changed(ctx);
+    screen_ = Screen::Plot; mode_ = Mode::Modify;
+    ctx.toast("Copiato in " + linePrefix(copy.type, fn, 0));
+}
+
+// ---------------------------------------------------------------- menus, pop-ups, confirmations
+void GraphApp::showMenu(Menu m, const char* title, std::vector<std::string> items) {
+    menu_.show(title, std::move(items));
+    menuKind_ = m;
+}
+void GraphApp::ask(Ask a, const std::string& prompt, const std::string& initial, bool text) {
+    input_.ask = a; input_.prompt = prompt; input_.text = text;
+    input_.editor.clear();
+    if (!initial.empty()) input_.editor.insert(initial);
+}
+void GraphApp::confirm(Confirm c, const std::string& message) { confirm_ = c; confirmText_ = message; }
+
+void GraphApp::menuChoice(Context& ctx, Menu menu, int c) {
+    auto ls = lines(ctx);
+    const Line line = ls[static_cast<std::size_t>(std::clamp(row_, 0, static_cast<int>(ls.size()) - 1))];
+    GraphFunction& f = ctx.ws.functions[static_cast<std::size_t>(line.fn)];
+    switch (menu) {
+    case Menu::Type:
+        if (c == 4) {
+            std::vector<std::string> items;
+            for (GraphType t : kConvert) items.push_back(std::string("'") + graphTypeLabel(t));
+            showMenu(Menu::Convert, "CONVERT", items);
+            return;
+        }
+        ctx.ws.graph.settings.funcType = kTypeMenu[c];
+        changed(ctx);
+        return;
+    case Menu::Convert: {
+        const GraphType to = kConvert[c];
+        if (!f.defined()) throw MathError("Argument ERROR: riga vuota");
+        if (!isConvertible(f.type)) throw MathError("Argument ERROR: CONVERT solo per funzioni rettangolari e disequazioni");
+        if (isYType(f.type) != isYType(to)) {
+            // Y=f(x) <-> X=f(y): the variable changes with the type.
+            const graph::FunctionText t = graph::splitFunctionText(f.expr);
+            std::string body = rewriteIdentifiers(t.body, [](const std::string& id) -> std::string { return id == "x" ? "y" : id == "y" ? "x" : std::string(); });
+            const auto open = f.expr.find('[');
+            if (open != std::string::npos) { auto comma = f.expr.rfind(',', open); body += f.expr.substr(comma); }
+            f.expr = body;
+        }
+        f.type = to;
+        changed(ctx);
+        return;
+    }
+    case Menu::Tool:
+        switch (c) {
+        case 0: showMenu(Menu::Style, "STYLE", styleNames()); return;
+        case 1: showMenu(Menu::GMem, "GPH-MEM", {"STORE", "RECALL"}); return;
+        case 2: { std::vector<std::string> items(std::begin(kBuiltInLabel), std::end(kBuiltInLabel)); showMenu(Menu::BuiltIn, "BUILT-IN", items); return; }
+        case 3: openFormat(ctx, line.fn, -1); return;
+        default: showMenu(Menu::File, "FILE (progetto)", {"NEW", "OPEN", "SAVE", "SAVE AS", "RENAME", "DELETE"}); return;
+        }
+    case Menu::ListOptn:
+        switch (c) {
+        case 0: openFormat(ctx, line.fn, -1); return;
+        case 1: showMenu(Menu::File, "FILE (progetto)", {"NEW", "OPEN", "SAVE", "SAVE AS", "RENAME", "DELETE"}); return;
+        case 2: returnScreen_ = screen_; openWindow(ctx); return;
+        default: ctx.open(AppId::Table); return;
+        }
+    case Menu::Style: f.style = static_cast<LineStyle>(c); changed(ctx); return;
+    case Menu::GMem: ask(c == 0 ? Ask::GMemStore : Ask::GMemRecall, c == 0 ? "STORE G-Mem (1-20):" : "RECALL G-Mem (1-20):"); return;
+    case Menu::BuiltIn: {
+        if (!f.empty() && f.type != GraphType::Y) throw MathError("Argument ERROR: la riga contiene un altro tipo");
+        f.type = GraphType::Y; f.expr = kBuiltIn[c]; f.expr2.clear(); f.selected = true;
+        changed(ctx);
+        return;
+    }
+    case Menu::File:
+        switch (c) {
+        case 0:
+            if (ctx.ws.graph.projectModified) confirm(Confirm::NewProject, "Modifiche non salvate. Nuovo progetto?");
+            else newProject(ctx);
+            return;
+        case 1:
+            if (ctx.ws.graph.projectModified) confirm(Confirm::OpenProject, "Modifiche non salvate. Aprire un altro progetto?");
+            else openFiles(ctx, Browse::Projects);
+            return;
+        case 2:
+            if (ctx.ws.graph.project.empty()) ask(Ask::ProjectSaveAs, "SAVE AS (max 16):", {}, true);
+            else saveProject(ctx, ctx.ws.graph.project);
+            return;
+        case 3: ask(Ask::ProjectSaveAs, "SAVE AS (max 16):", ctx.ws.graph.project, true); return;
+        default: openFiles(ctx, Browse::Projects); return;      // RENAME / DELETE from the file list
+        }
+    case Menu::EditMore:
+        switch (c) {
+        case 0: editor_.insertText(",["); editor_.insertText(","); editor_.insertText("]"); editor_.moveLeft(); editor_.moveLeft(); return;
+        case 1: editor_.insertText(",[A="); editor_.insertText("]"); editor_.moveLeft(); return;
+        case 2: showMenu(Menu::EditList, "LIST", {"List 1", "List 2", "List 3", "List 4", "List 5", "List 6"}); return;
+        case 3: editor_.insertText("pi"); return;
+        case 4: editor_.insertText("theta"); return;
+        case 5: editor_.insertSquare(); return;
+        case 6: editor_.insertLogBase(); return;
+        case 7: editor_.insertExp(); return;
+        case 8: editor_.insertDerivative(); return;
+        case 9: editor_.insertIntegral(); return;
+        case 10: editor_.insertText(">="); return;
+        default: showMenu(Menu::EditVars, "VARS GRAPH", {"Y  (Y=, Y>...)", "r  (polare)", "Xt (parametrica)", "Yt (parametrica)", "X  (X=, X>...)"}); return;
+        }
+    case Menu::EditList: editor_.insertSymbol("List" + std::to_string(c + 1)); return;
+    case Menu::EditVars: {
+        const Ask refs[] = {Ask::RefY, Ask::RefR, Ask::RefXt, Ask::RefYt, Ask::RefX};
+        const char* names[] = {"Y", "r", "Xt", "Yt", "X"};
+        ask(refs[c], std::string(names[c]) + " numero (1-20):");
+        return;
+    }
+    case Menu::VMem: ask(c == 0 ? Ask::VMemStore : Ask::VMemRecall, c == 0 ? "STORE V-Win (1-6):" : "RECALL V-Win (1-6):"); return;
+    case Menu::Square: {
+        ViewWindow cur = ctx.ws.view;
+        try { (void)applyWindow(ctx); cur = ctx.ws.view; } catch (...) { throw; }
+        loadWindowForm(c == 0 ? graph::squareWindow(cur) : graph::squareXBase(cur));
+        windowText_.assign(WCount, std::string());
+        return;
+    }
+    default:
+        plotMenu(ctx, menu, c);              // plot-screen menus (graph_plot.cpp)
+        return;
+    }
+}
+
+void GraphApp::answer(Context& ctx, Ask a, const std::string& text) {
+    auto number = [&]() { return evalNumber(ctx, text); };
+    auto index = [&](int max) {
+        const double v = number();
+        if (v != std::floor(v) || v < 1 || v > max) throw MathError("Argument ERROR: numero da 1 a " + std::to_string(max));
+        return static_cast<int>(v);
+    };
+    switch (a) {
+    case Ask::GMemStore: storeGraphMemory(ctx, index(static_cast<int>(GraphMemories))); return;
+    case Ask::GMemRecall: recallGraphMemory(ctx, index(static_cast<int>(GraphMemories))); return;
+    case Ask::VMemStore: {
+        const int n = index(static_cast<int>(VWindowMemories));
+        (void)applyWindow(ctx);
+        ctx.ws.graph.vmem[static_cast<std::size_t>(n - 1)] = ctx.ws.view;
+        ctx.ws.graph.vmemUsed = static_cast<std::uint8_t>(ctx.ws.graph.vmemUsed | (1u << (n - 1)));
+        ctx.markDirty(); ctx.ws.graph.projectModified = true;
+        ctx.toast("V-Win" + std::to_string(n) + " memorizzata");
+        return;
+    }
+    case Ask::VMemRecall: {
+        const int n = index(static_cast<int>(VWindowMemories));
+        if (!(ctx.ws.graph.vmemUsed & (1u << (n - 1)))) throw MathError("Memory ERROR: V-Win" + std::to_string(n) + " vuota");
+        loadWindowForm(ctx.ws.graph.vmem[static_cast<std::size_t>(n - 1)]);
+        windowText_.assign(WCount, std::string());
+        return;
+    }
+    case Ask::RefY: case Ask::RefR: case Ask::RefXt: case Ask::RefYt: case Ask::RefX: {
+        const int n = index(static_cast<int>(MaxGraphFunctions));
+        const char* kind = a == Ask::RefY ? "Y" : a == Ask::RefR ? "R" : a == Ask::RefXt ? "XT" : a == Ask::RefYt ? "YT" : "X";
+        editor_.insertSymbol(std::string("@") + kind + std::to_string(n));
+        return;
+    }
+    case Ask::ModifyValue: {
+        const double v = number();
+        ctx.ws.memory.store(modify_.vars[static_cast<std::size_t>(modify_.selected)], v);
+        changed(ctx);
+        return;
+    }
+    case Ask::ModifyStep: {
+        const double v = number();
+        if (!(v > 0)) throw MathError("Argument ERROR: Step deve essere positivo");
+        modify_.step = v;
+        return;
+    }
+    default: break;
+    }
+    // Plot-screen and file questions.
+    pendingName_ = text;
+    if (plotAnswer(ctx, a, text)) return;
+    switch (a) {
+    case Ask::ProjectSaveAs: {
+        if (!files::validName(text, 16)) throw MathError("Argument ERROR: nome di 1-16 caratteri A-Z 0-9 _ -");
+        files::FileSystem* fs = fileSystem(ctx, true);
+        files::Entry e;
+        if (text != ctx.ws.graph.project && fs->stat(files::join(files::GraphFolder, text + files::ProjectExtension), e) == files::Status::Ok) {
+            confirm(Confirm::Overwrite, text + " esiste. Sovrascrivere?");
+            return;
+        }
+        saveProject(ctx, text);
+        return;
+    }
+    case Ask::ProjectRename: {
+        if (!files::validName(text, 16)) throw MathError("Argument ERROR: nome di 1-16 caratteri A-Z 0-9 _ -");
+        files::FileSystem* fs = fileSystem(ctx, true);
+        if (files_.entries.empty()) return;
+        const std::string from = files_.entries[static_cast<std::size_t>(files_.selected)].name;
+        const std::string ext = files_.purpose == Browse::Projects ? files::ProjectExtension : files::PictExtension;
+        const files::Status st = fs->rename(files::join(files_.folder, from), files::join(files_.folder, text + ext));
+        if (st != files::Status::Ok) throw MathError(std::string("Storage ERROR: ") + files::statusMessage(st));
+        if (files_.purpose == Browse::Projects && files::stem(from) == ctx.ws.graph.project) { ctx.ws.graph.project = text; ctx.markDirty(); }
+        openFiles(ctx, files_.purpose);
+        return;
+    }
+    default: return;
+    }
+}
+
+void GraphApp::confirmed(Context& ctx, Confirm c) {
+    switch (c) {
+    case Confirm::DeleteFunction: {
+        const auto ls = lines(ctx);
+        const Line line = ls[static_cast<std::size_t>(std::clamp(row_, 0, static_cast<int>(ls.size()) - 1))];
+        GraphFunction& f = ctx.ws.functions[static_cast<std::size_t>(line.fn)];
+        const std::uint8_t color = f.color; const LineStyle style = f.style;
+        f = emptyGraphFunction(static_cast<std::size_t>(line.fn));
+        f.color = color; f.style = style;
+        changed(ctx);
+        return;
+    }
+    case Confirm::NewProject: newProject(ctx); return;
+    case Confirm::OpenProject: openFiles(ctx, Browse::Projects); return;
+    case Confirm::Overwrite: saveProject(ctx, pendingName_); return;
+    case Confirm::DeleteFile: deleteFile(ctx); return;
+    case Confirm::ClearSketch:
+        ctx.ws.graph.sketch.clear(); ctx.ws.graph.overlay.clear(); overlay_ = pict::Image{}; overlayPath_.clear();
+        pasted_.clear(); marks_.clear(); changed(ctx);
+        return;
+    case Confirm::BgvLoad:
+        if (!background_.empty()) {
+            ViewWindow v = background_.view;
+            const ViewWindow cur = screen_ == Screen::Window ? windowStart_ : ctx.ws.view;
+            v.tmin = cur.tmin; v.tmax = cur.tmax; v.tstep = cur.tstep;    // T values are not taken (manual 5-11)
+            if (screen_ == Screen::Window) { loadWindowForm(v); windowText_.assign(WCount, std::string()); }
+            else if (validateView(v).empty()) { ctx.ws.view = v; ctx.markDirty(); ctx.ws.graph.projectModified = true; }
+        }
+        return;
+    case Confirm::BgvSave: bgvSave(ctx, backgroundPath_); return;
+    default: return;
+    }
+}
+
+// ---------------------------------------------------------------- key routing
 void GraphApp::key(Context& ctx, const KeyEvent& ev) {
-    auto& fns = ctx.ws.functions;
+    if (input_.ask != Ask::None) {
+        if (ev.is(Key::Exit)) { input_.ask = Ask::None; return; }
+        if (ev.is(Key::Exe)) {
+            const Ask a = input_.ask;
+            const std::string text = input_.editor.text();
+            input_.ask = Ask::None;
+            if (text.empty()) return;
+            answer(ctx, a, text);
+            return;
+        }
+        (void)input_.editor.key(ev);
+        return;
+    }
+    if (confirm_ != Confirm::None) {
+        const Confirm c = confirm_;
+        if (ev.is(Key::F1) || ev.is(Key::Exe) || ev.isChar('y') || ev.isChar('s')) { confirm_ = Confirm::None; confirmed(ctx, c); }
+        else if (ev.is(Key::F6) || ev.is(Key::Exit) || ev.isChar('n')) confirm_ = Confirm::None;
+        return;
+    }
     if (menu_.open) {
         const int choice = menu_.key(ev);
-        if (choice < 0) return;
-        if (menuKind_ == 1) zoom(ctx, choice);
-        else if (menuKind_ == 2) {
-            if (choice == 5) {
-                const ViewWindow& v = ctx.ws.view;
-                integral_.fields = {num("Lower", v.xmin + (v.xmax - v.xmin) * 0.25), num("Upper", v.xmin + (v.xmax - v.xmin) * 0.75)};
-                integral_.selected = 0; screen_ = Screen::Integral;
-            } else gsolve(ctx, choice);
-        } else if (menuKind_ == 3) { sketch_ = choice == 2 ? 0 : choice + 1; if (sketch_) trace_ = true; }
+        if (choice >= 0) { const Menu m = menuKind_; menuKind_ = Menu::None; menuChoice(ctx, m, choice); }
+        else if (choice == -2) menuKind_ = Menu::None;
+        return;
+    }
+    if (ev.is(Key::Setup)) {
+        if (screen_ == Screen::Setup) { applySetup(ctx); screen_ = returnScreen_; return; }
+        if (screen_ == Screen::Edit) screen_ = Screen::List;
+        openSetup(ctx);
         return;
     }
     switch (screen_) {
-    case Screen::List:
-        switch (ev.key) {
-        case Key::Up: row_ = (row_ + 5) % 6; return;
-        case Key::Down: row_ = (row_ + 1) % 6; return;
-        case Key::F1: fns[static_cast<std::size_t>(row_)].selected = !fns[static_cast<std::size_t>(row_)].selected; ctx.markDirty(); return;
-        case Key::F2: case Key::DelForward: fns[static_cast<std::size_t>(row_)].expr.clear(); ctx.markDirty(); return;
-        case Key::F3: { auto& t = fns[static_cast<std::size_t>(row_)].type; t = static_cast<GraphType>((static_cast<int>(t) + 1) % 6); ctx.markDirty(); return; }
-        case Key::F4: { auto& c = fns[static_cast<std::size_t>(row_)].color; c = static_cast<std::uint8_t>((c + 1) % 6); ctx.markDirty(); return; }
-        case Key::F5: {
-            const ViewWindow& v = ctx.ws.view;
-            window_.fields = {num("Xmin", v.xmin), num("Xmax", v.xmax), num("Xscale", v.xscl), num("Ymin", v.ymin), num("Ymax", v.ymax), num("Yscale", v.yscl),
-                              num("\xCE\xB8min", v.tmin), num("\xCE\xB8max", v.tmax), num("\xCE\xB8ptch", v.tstep),
-                              {"Griglia", v.grid ? "On" : "Off", FormField::Type::Choice, {"On", "Off"}, v.grid ? 0 : 1}};
-            window_.selected = 0; screen_ = Screen::Window; return;
-        }
-        case Key::F6: screen_ = Screen::Plot; trace_ = false; solutions_.clear(); cache_.valid = false; return;
-        case Key::Exe: case Key::Right:
-            editor_.clear();
-            if (!fns[static_cast<std::size_t>(row_)].expr.empty()) editor_.setExpression(fns[static_cast<std::size_t>(row_)].expr);
-            screen_ = Screen::Edit; return;
-        case Key::Char:
-            if (ev.ctrl) return;
-            editor_.clear(); editor_.insert(ev.ch); screen_ = Screen::Edit; return;
-        case Key::Exit: ctx.home(); return;
-        default: return;
-        }
-    case Screen::Edit:
-        switch (ev.key) {
-        case Key::Exe: {
-            const std::string text = editor_.empty() ? std::string() : editor_.toExpression();
-            if (!text.empty()) (void)parseExpression(text);       // syntax check before storing
-            fns[static_cast<std::size_t>(row_)].expr = text;
-            fns[static_cast<std::size_t>(row_)].selected = !text.empty();
-            ctx.markDirty(); screen_ = Screen::List; row_ = (row_ + 1) % 6; return;
-        }
-        case Key::Exit: screen_ = Screen::List; return;
-        case Key::Char: if (ev.ctrl) return; editor_.insert(ev.ch); return;
-        case Key::Left: editor_.moveLeft(); return;
-        case Key::Right: editor_.moveRight(); return;
-        case Key::Up: editor_.moveUp(); return;
-        case Key::Down: editor_.moveDown(); return;
-        case Key::Del: editor_.backspace(); return;
-        case Key::DelForward: editor_.eraseForward(); return;
-        case Key::AC: editor_.clear(); return;
-        case Key::F1: editor_.insertFraction(); return;
-        case Key::F2: editor_.insertRadical(); return;
-        case Key::F3: editor_.insertPower(); return;
-        case Key::F4: editor_.insertText(fns[static_cast<std::size_t>(row_)].type == GraphType::Polar ? "theta" : "x"); return;
-        case Key::F5: editor_.insertAbs(); return;
-        default: return;
-        }
-    case Screen::Window:
-        if (window_.editing()) { (void)window_.key(ctx, ev); return; }
-        if (ev.is(Key::Exit) || ev.is(Key::F6)) {
-            ViewWindow nv = ctx.ws.view;
-            nv.xmin = window_.number(ctx, 0); nv.xmax = window_.number(ctx, 1); nv.xscl = window_.number(ctx, 2);
-            nv.ymin = window_.number(ctx, 3); nv.ymax = window_.number(ctx, 4); nv.yscl = window_.number(ctx, 5);
-            nv.tmin = window_.number(ctx, 6); nv.tmax = window_.number(ctx, 7); nv.tstep = window_.number(ctx, 8);
-            nv.grid = window_.fields[9].choice == 0;
-            if (!(nv.xmin < nv.xmax) || !(nv.ymin < nv.ymax)) throw MathError("Argument ERROR: Xmin<Xmax e Ymin<Ymax");
-            if (!(nv.tstep > 0) || !(nv.tmin < nv.tmax)) throw MathError("Argument ERROR: θmin<θmax e θptch>0");
-            ctx.ws.view = nv; ctx.markDirty(); cache_.valid = false;
-            screen_ = ev.is(Key::F6) ? Screen::Plot : Screen::List; return;
-        }
-        if (ev.is(Key::F1)) { ctx.ws.view = ViewWindow{}; ctx.markDirty(); screen_ = Screen::List; key(ctx, {Key::F5}); return; }
-        (void)window_.key(ctx, ev);
-        return;
-    case Screen::Integral:
-        if (integral_.editing()) { (void)integral_.key(ctx, ev); return; }
-        if (ev.is(Key::Exit)) { screen_ = Screen::Plot; return; }
-        if (ev.is(Key::F1) || ev.is(Key::F6)) {
-            const int fi = currentFunction(ctx);
-            if (fi < 0) throw MathError("Math ERROR: nessuna funzione Y= selezionata");
-            intA_ = integral_.number(ctx, 0); intB_ = integral_.number(ctx, 1);
-            if (!(intA_ < intB_)) throw MathError("Argument ERROR: Lower<Upper");
-            ctx.ws.apply();
-            intValue_ = integrateAdaptive(CompiledExpression(fns[static_cast<std::size_t>(fi)].expr), intA_, intB_, 1e-10, &ctx.ws.memory);
-            traceFn_ = fi; shadeIntegral_ = true; solutions_.clear(); trace_ = false;
-            ctx.ws.memory.setAnswer(intValue_);
-            screen_ = Screen::Plot; return;
-        }
-        (void)integral_.key(ctx, ev);
-        return;
-    case Screen::Plot: {
-        ViewWindow& v = ctx.ws.view;
-        const double dx = (v.xmax - v.xmin) / 8, dy = (v.ymax - v.ymin) / 8;
-        if (!solutions_.empty()) {
-            if (ev.is(Key::Right)) { solutionIndex_ = (solutionIndex_ + 1) % static_cast<int>(solutions_.size()); return; }
-            if (ev.is(Key::Left)) { solutionIndex_ = (solutionIndex_ + static_cast<int>(solutions_.size()) - 1) % static_cast<int>(solutions_.size()); return; }
-            if (ev.is(Key::Exe) || ev.is(Key::Exit)) { solutions_.clear(); return; }
-        }
-        switch (ev.key) {
-        case Key::F1: trace_ = !trace_; sketch_ = 0; solutions_.clear(); if (trace_) { traceX_ = W / 2; if (currentFunction(ctx) >= 0) traceFn_ = currentFunction(ctx); } return;
-        case Key::F2: menu_.show("ZOOM", kZoom); menuKind_ = 1; return;
-        case Key::F3: screen_ = Screen::List; key(ctx, {Key::F5}); return;
-        case Key::F4: menu_.show("SKETCH", kSketch); menuKind_ = 3; return;
-        case Key::F5: menu_.show("G-SOLVE", kSolve); menuKind_ = 2; return;
-        case Key::F6: ctx.open(AppId::Table); return;
-        case Key::Exit: if (trace_) trace_ = false; else if (shadeIntegral_) shadeIntegral_ = false; else screen_ = Screen::List; return;
-        case Key::Left: if (trace_) traceX_ = std::max(0, traceX_ - (ev.ctrl ? 10 : 1)); else { v.xmin -= dx; v.xmax -= dx; cache_.valid = false; ctx.markDirty(); } return;
-        case Key::Right: if (trace_) traceX_ = std::min(W, traceX_ + (ev.ctrl ? 10 : 1)); else { v.xmin += dx; v.xmax += dx; cache_.valid = false; ctx.markDirty(); } return;
-        case Key::Up: case Key::Down:
-            if (trace_) {
-                // Next/previous drawable Y= function.
-                for (int k = 1; k <= 6; ++k) {
-                    const int i = (traceFn_ + (ev.is(Key::Up) ? 6 - k : k)) % 6;
-                    const auto& f = fns[static_cast<std::size_t>(i)];
-                    if (f.selected && !f.expr.empty() && f.type != GraphType::Polar) { traceFn_ = i; break; }
-                }
-            } else { const double s = ev.is(Key::Up) ? dy : -dy; v.ymin += s; v.ymax += s; cache_.valid = false; ctx.markDirty(); }
-            return;
-        case Key::Char:
-            if (ev.ch == '+') zoom(ctx, 0); else if (ev.ch == '-') zoom(ctx, 1);
-            return;
-        default: return;
-        }
-    }
+    case Screen::List: listKey(ctx, ev); return;
+    case Screen::Edit: editKey(ctx, ev); return;
+    case Screen::Window: windowKey(ctx, ev); return;
+    case Screen::Setup: setupKey(ctx, ev); return;
+    case Screen::Format: formatKey(ctx, ev); return;
+    case Screen::Files: filesKey(ctx, ev); return;
+    case Screen::Plot: plotKey(ctx, ev); return;
     }
 }
 
-void GraphApp::drawPlot(Context& ctx, gfx::Canvas& c) {
-    refresh(ctx);
-    const ViewWindow& v = ctx.ws.view;
-    auto sx = [&](double x) { return PlotLeft + static_cast<int>(std::lround((x - v.xmin) / (v.xmax - v.xmin) * W)); };
-    auto sy = [&](double y) { return PlotBottom - static_cast<int>(std::lround((y - v.ymin) / (v.ymax - v.ymin) * H)); };
-    c.setClip({PlotLeft, PlotTop, W + 1, H + 1});
-    // Grid dots at the scale marks (skipped when too dense).
-    if (v.grid && v.xscl > 0 && v.yscl > 0 && (v.xmax - v.xmin) / v.xscl < 80 && (v.ymax - v.ymin) / v.yscl < 80) {
-        for (double gx = std::ceil(v.xmin / v.xscl) * v.xscl; gx <= v.xmax; gx += v.xscl)
-            for (double gy = std::ceil(v.ymin / v.yscl) * v.yscl; gy <= v.ymax; gy += v.yscl) c.pixel(sx(gx), sy(gy), Faint);
-    }
-    // Axes with ticks.
-    const int ax = sx(0), ay = sy(0);
-    if (v.ymin <= 0 && v.ymax >= 0) {
-        c.hLine(PlotLeft, ay, W + 1, Ink);
-        if (v.xscl > 0 && (v.xmax - v.xmin) / v.xscl < 100) for (double gx = std::ceil(v.xmin / v.xscl) * v.xscl; gx <= v.xmax; gx += v.xscl) c.vLine(sx(gx), ay - 2, 5, Ink);
-    }
-    if (v.xmin <= 0 && v.xmax >= 0) {
-        c.vLine(ax, PlotTop, H + 1, Ink);
-        if (v.yscl > 0 && (v.ymax - v.ymin) / v.yscl < 100) for (double gy = std::ceil(v.ymin / v.yscl) * v.yscl; gy <= v.ymax; gy += v.yscl) c.hLine(ax - 2, sy(gy), 5, Ink);
-    }
-    // Integral shading.
-    if (shadeIntegral_ && traceFn_ >= 0 && !cache_.y[static_cast<std::size_t>(traceFn_)].empty()) {
-        const auto& ys = cache_.y[static_cast<std::size_t>(traceFn_)];
-        const std::uint16_t shade = gfx::Canvas::blend(Graph[ctx.ws.functions[static_cast<std::size_t>(traceFn_)].color], 0xFFFF, 90);
-        for (int px = std::max(0, sx(intA_)); px <= std::min(W, sx(intB_)); ++px) {
-            const float y = ys[static_cast<std::size_t>(px)];
-            if (!std::isfinite(y)) continue;
-            const int y0 = std::clamp(sy(0), PlotTop, PlotBottom), y1 = std::clamp(sy(y), PlotTop, PlotBottom);
-            c.vLine(PlotLeft + px, std::min(y0, y1), std::abs(y1 - y0) + 1, shade);
+// ---------------------------------------------------------------- drawing (non-plot screens)
+void GraphApp::drawList(Context& ctx, gfx::Canvas& c) {
+    ensureBuilt(ctx);
+    const auto ls = lines(ctx);
+    row_ = std::clamp(row_, 0, static_cast<int>(ls.size()) - 1);
+    const bool editing = screen_ == Screen::Edit;
+    const int rowH = 28, top = ui::ContentTop + 1;
+    const int panelH = editing ? 72 : 0;
+    const int visible = (ui::ContentBottom - top - panelH) / rowH;
+    if (row_ < firstRow_) firstRow_ = row_;
+    if (row_ >= firstRow_ + visible) firstRow_ = row_ - visible + 1;
+    for (int k = 0; k < visible && firstRow_ + k < static_cast<int>(ls.size()); ++k) {
+        const Line line = ls[static_cast<std::size_t>(firstRow_ + k)];
+        const GraphFunction& f = ctx.ws.functions[static_cast<std::size_t>(line.fn)];
+        const GraphType t = lineType(ctx, line.fn);
+        const int y = top + k * rowH;
+        const bool sel = firstRow_ + k == row_;
+        if (sel) c.rect(0, y, ui::ScreenW, rowH, copyTarget_ >= 0 ? rgb888To565(255, 220, 230) : SelectSoft, true);
+        const std::uint16_t col = [&] { const std::uint16_t pal[GraphColorCount] = {Graph[0], Graph[1], Graph[2], Graph[3], Graph[4], Graph[5], rgb888To565(225, 180, 0)}; return pal[f.color % GraphColorCount]; }();
+        c.rect(2, y + rowH / 2 - 7, 3, 14, col, true);
+        // Line style sample.
+        const int sy = y + rowH / 2;
+        switch (f.style) {
+        case LineStyle::Thick: c.rect(7, sy - 2, 9, 4, col, true); break;
+        case LineStyle::Thin: c.hLine(7, sy, 9, col); break;
+        case LineStyle::Broken: c.rect(7, sy - 1, 3, 3, col, true); c.rect(13, sy - 1, 3, 3, col, true); break;
+        case LineStyle::Dot: c.rect(7, sy, 2, 2, col, true); c.rect(11, sy, 2, 2, col, true); c.rect(15, sy, 1, 2, col, true); break;
+        default: c.rect(7, sy - 1, 9, 2, col, true); break;
         }
+        const std::string prefix = linePrefix(t, line.fn, line.sub);
+        const std::string rel = relation(t);
+        const int pw = font::measure(font::Face::Medium, prefix.c_str()).width;
+        const int rw = font::measure(font::Face::Medium, rel.c_str()).width;
+        ui::text(c, 20, sy - 8, prefix.c_str(), Ink);
+        const bool on = f.selected && f.defined();
+        if (on) c.rect(20 + pw, sy - 9, rw + 2, 18, Accent, true);     // highlighted "=" = drawn (CG50)
+        ui::text(c, 21 + pw, sy - 8, rel.c_str(), on ? 0xFFFF : Ink);
+        const std::string& text = line.sub ? f.expr2 : f.expr;
+        const int ex = 26 + pw + rw;
+        if (!text.empty()) {
+            NaturalEditor view;
+            try { view.setExpression(text); } catch (...) { view.clear(); view.insertText("?"); }
+            const auto sz = math::measure(view.root());
+            auto l = math::layout(view.root(), ex, sy - sz.height / 2 + sz.baseline, ui::ScreenW - ex - 4, rowH);
+            math::draw(c, l, Ink, Cursor, Placeholder);
+            if (!engine_.error(static_cast<std::size_t>(line.fn)).empty() && f.defined()) ui::textRight(c, ui::ScreenW - 3, y + 1, "ERROR", Error, font::Face::Small);
+        }
+        c.hLine(0, y + rowH - 1, ui::ScreenW, Grid);
     }
-    for (std::size_t i = 0; i < 6; ++i) {
-        const auto& f = ctx.ws.functions[i];
-        if (!f.selected || f.expr.empty()) continue;
-        const std::uint16_t col = Graph[f.color % 6];
-        if (f.type == GraphType::Polar) {
-            const auto& pts = cache_.polar[i];
-            for (std::size_t k = 1; k < pts.size(); ++k) {
-                if (!std::isfinite(pts[k - 1].first) || !std::isfinite(pts[k].first)) continue;
-                c.line(sx(pts[k - 1].first), sy(pts[k - 1].second), sx(pts[k].first), sy(pts[k].second), col);
-            }
-            continue;
-        }
-        const auto& ys = cache_.y[i];
-        if (ys.empty()) continue;
-        if (isInequality(f.type)) {
-            // Hatched region above (Y>, Y>=) or below (Y<, Y<=) the boundary.
-            const bool above = f.type == GraphType::YGreater || f.type == GraphType::YGreaterEq;
-            const std::uint16_t shade = gfx::Canvas::blend(col, 0xFFFF, 70);
-            for (int px = 0; px <= W; ++px) {
-                const float y = ys[static_cast<std::size_t>(px)];
-                if (!std::isfinite(y)) continue;
-                const int yb = std::clamp(sy(y), PlotTop, PlotBottom);
-                for (int yy = above ? PlotTop : yb; yy <= (above ? yb : PlotBottom); ++yy) if (((px + yy) & 3) == 0) c.pixel(PlotLeft + px, yy, shade);
-            }
-        }
-        const bool dashed = f.type == GraphType::YGreater || f.type == GraphType::YLess;
-        for (int px = 1; px <= W; ++px) {
-            const float a = ys[static_cast<std::size_t>(px - 1)], b = ys[static_cast<std::size_t>(px)];
-            if (!std::isfinite(a) || !std::isfinite(b)) continue;
-            const int ya = sy(a), yb = sy(b);
-            if (std::abs(yb - ya) > H) continue;               // asymptote: do not connect
-            if (dashed && (px / 4) % 2) continue;              // strict inequality: dashed boundary
-            c.line(PlotLeft + px - 1, ya, PlotLeft + px, yb, col);
-            c.line(PlotLeft + px - 1, ya + 1, PlotLeft + px, yb + 1, col);   // 2 px wide for legibility
-        }
+    ui::scrollBar(c, ui::ScreenW - 3, top, visible * rowH, static_cast<int>(ls.size()), visible, firstRow_);
+    if (editing) {
+        const int ey = ui::ContentBottom - panelH;
+        c.rect(0, ey, ui::ScreenW, panelH, StatusBg, true);
+        c.hLine(0, ey, ui::ScreenW, Faint);
+        const GraphType t = lineType(ctx, editFn_);
+        const std::string head = linePrefix(t, editFn_, editSub_) + relation(t);
+        ui::text(c, 4, ey + 4, head.c_str(), Accent, font::Face::Small);
+        const math::CursorTarget cur{editor_.activeRowPtr(), editor_.cursorIndex()};
+        const auto sz = math::measure(editor_.root());
+        auto l = math::layout(editor_.root(), 6, ey + 20 + sz.baseline, ui::ScreenW - 12, panelH - 22, math::Align::Left, &cur);
+        math::draw(c, l, Ink, Cursor, Placeholder);
+        const char* keys[6] = {"a/b", "\xE2\x88\x9A\xE2\x96\xA1", "\xE2\x96\xA1^", variableKey(t), "|\xE2\x96\xA1|", "INS \xE2\x96\xB6"};
+        ui::softKeys(c, keys);
+        return;
     }
-    c.resetClip();
-    // Trace / sketch / solutions overlays.
-    auto infoBox = [&](const std::string& top, const std::string& bottom) {
-        if (!top.empty()) { c.rect(0, PlotTop, ui::ScreenW, 15, 0xFFFF, true); ui::textFit(c, 3, PlotTop + 2, top, ui::ScreenW - 6, Ink, font::Face::Small); }
-        if (!bottom.empty()) { c.rect(0, PlotBottom - 14, ui::ScreenW, 15, 0xFFFF, true); ui::textFit(c, 3, PlotBottom - 12, bottom, ui::ScreenW - 6, Ink, font::Face::Small); }
-    };
-    const DisplayFormat df{DisplayMode::Norm1, 0};
-    if (trace_ && traceFn_ >= 0 && !cache_.y[static_cast<std::size_t>(traceFn_)].empty()) {
-        const double xv = pixelToX(v, traceX_);
-        double yv = std::numeric_limits<double>::quiet_NaN();
-        try { yv = CompiledExpression(ctx.ws.functions[static_cast<std::size_t>(traceFn_)].expr)(xv, &ctx.ws.memory); } catch (...) {}
-        const int px = PlotLeft + traceX_;
-        std::string bottom = "X=" + formatReal(xv, df) + "  Y=" + (std::isfinite(yv) ? formatReal(yv, df) : std::string("--"));
-        if (std::isfinite(yv)) {
-            const int py = sy(yv);
-            c.vLine(px, py - 6, 13, Error); c.hLine(px - 6, py, 13, Error);
-            if (sketch_) {
-                const double d = differentiate(CompiledExpression(ctx.ws.functions[static_cast<std::size_t>(traceFn_)].expr), xv, &ctx.ws.memory);
-                const double m = sketch_ == 1 ? d : (d == 0 ? std::numeric_limits<double>::infinity() : -1.0 / d);
-                c.setClip({PlotLeft, PlotTop, W + 1, H + 1});
-                if (std::isfinite(m)) c.line(sx(v.xmin), sy(yv + m * (v.xmin - xv)), sx(v.xmax), sy(yv + m * (v.xmax - xv)), Warn);
-                else c.vLine(px, PlotTop, H, Warn);
-                c.resetClip();
-                bottom = (sketch_ == 1 ? "Tangente y=" : "Normale y=") + formatReal(m, df) + "x+" + formatReal(yv - m * xv, df);
-            }
-        }
-        infoBox(std::string("Y") + std::to_string(traceFn_ + 1) + "=" + ctx.ws.functions[static_cast<std::size_t>(traceFn_)].expr, bottom);
-    } else if (!solutions_.empty()) {
-        const auto& s = solutions_[static_cast<std::size_t>(solutionIndex_)];
-        const int px = sx(s.first), py = sy(s.second);
-        c.circle(px, py, 4, Error, false); c.circle(px, py, 3, Error, false);
-        char idx[64]; std::snprintf(idx, sizeof(idx), "  [%d/%d \xE2\x97\x80\xE2\x96\xB6]", solutionIndex_ + 1, static_cast<int>(solutions_.size()));
-        infoBox(solveLabel_ + " Y" + std::to_string(traceFn_ + 1) + (solutions_.size() > 1 ? idx : ""), "X=" + formatReal(s.first, df) + "  Y=" + formatReal(s.second, df));
-    } else if (shadeIntegral_) {
-        infoBox("\xE2\x88\xAB" "dx Y" + std::to_string(traceFn_ + 1) + "  [" + formatReal(intA_, df) + ", " + formatReal(intB_, df) + "]", "\xE2\x88\xAB" "dx=" + formatReal(intValue_, ctx.ws.settings.display));
+    if (copyTarget_ >= 0) {
+        ui::toast(c, "COPY: scegli la riga, EXE");
+        const char* keys[6] = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
+        ui::softKeys(c, keys);
+        return;
+    }
+    if (ctx.shift()) {
+        const char* keys[6] = {"TRACE", "ZOOM", "V-WIN", "SKETCH", "G-SOLV", "G\xE2\x87\x94T"};
+        ui::softKeys(c, keys);
+    } else {
+        const char* keys[6] = {"SELECT", "DELETE", "TYPE", "TOOL", "MODIFY", "DRAW"};
+        ui::softKeys(c, keys);
+    }
+}
+
+void GraphApp::drawWindow(Context& ctx, gfx::Canvas& c) {
+    (void)ctx;
+    c.rect(0, ui::ContentTop, ui::ScreenW, 20, SelectSoft, true);
+    ui::text(c, 6, ui::ContentTop + 2, "View Window", Ink);
+    window_.draw(c, ui::ContentTop + 22, ui::ContentBottom - 2);
+    const char* keys[6] = {"INITIAL", "TRIG", "STANDRD", "V-MEM", "SQUARE", background_.empty() ? nullptr : "BGV-WIN"};
+    ui::softKeys(c, keys);
+}
+
+void GraphApp::drawPopups(Context& ctx, gfx::Canvas& c) {
+    (void)ctx;
+    if (input_.ask != Ask::None) {
+        const gfx::Rect r{20, 120, ui::ScreenW - 40, 58};
+        ui::panel(c, r, 0xFFFF, Accent);
+        ui::textFit(c, r.x + 8, r.y + 6, input_.prompt, r.w - 16, Accent, font::Face::Small);
+        c.rect(r.x + 6, r.y + 24, r.w - 12, 22, StatusBg, true);
+        input_.editor.draw(c, r.x + 10, r.y + 27, r.w - 20, Ink);
+    }
+    if (confirm_ != Confirm::None) {
+        const gfx::Rect r{16, 110, ui::ScreenW - 32, 80};
+        ui::panel(c, r, 0xFFFF, Warn);
+        std::string lines[3];
+        const std::size_t n = ui::wrapText(confirmText_, 34, lines, 3);
+        for (std::size_t i = 0; i < n; ++i) ui::text(c, r.x + 8, r.y + 6 + static_cast<int>(i) * 16, lines[i].c_str(), Ink);
+        ui::text(c, r.x + 8, r.y + r.h - 20, "F1/EXE: S\xC3\xAC   F6/EXIT: No", Muted, font::Face::Small);
     }
 }
 
 void GraphApp::draw(Context& ctx, gfx::Canvas& c) {
     ui::clear(c);
     ctx.drawStatus(c, "GRAPH");
-    const auto& fns = ctx.ws.functions;
     switch (screen_) {
-    case Screen::List: case Screen::Edit: {
-        const int top = ui::ContentTop + 2, rowH = screen_ == Screen::Edit ? 34 : 44;
-        for (int i = 0; i < 6; ++i) {
-            const auto& f = fns[static_cast<std::size_t>(i)];
-            const int y = top + i * rowH;
-            const bool sel = i == row_;
-            if (sel) c.rect(0, y, ui::ScreenW, rowH, SelectSoft, true);
-            c.rect(4, y + rowH / 2 - 6, 4, 12, Graph[f.color % 6], true);
-            char head[16]; std::snprintf(head, sizeof(head), "%s%d", f.type == GraphType::Polar ? "r" : "Y", i + 1);
-            const std::string label = std::string(head) + (graphTypeLabel(f.type) + 1);
-            // The '=' (or relation) is highlighted when the function is selected for drawing (CG50 style).
-            const int lw = font::measure(font::Face::Medium, label.c_str()).width;
-            if (f.selected && !f.expr.empty()) c.rect(12, y + rowH / 2 - 9, lw + 4, 18, Accent, true);
-            ui::text(c, 14, y + rowH / 2 - 8, label.c_str(), f.selected && !f.expr.empty() ? 0xFFFF : Ink);
-            if (!f.expr.empty()) {
-                NaturalEditor view;
-                try { view.setExpression(f.expr); } catch (...) { view.clear(); view.insertText("?"); }
-                const auto sz = math::measure(view.root());
-                auto l = math::layout(view.root(), 20 + lw, y + rowH / 2 - sz.height / 2 + sz.baseline, ui::ScreenW - 24 - lw, rowH);
-                math::draw(c, l, Ink, Cursor, Placeholder);
-                bool valid = true; try { (void)parseExpression(f.expr); } catch (...) { valid = false; }
-                if (!valid) ui::textRight(c, ui::ScreenW - 4, y + 2, "Syntax!", Error, font::Face::Small);
-            }
-        }
-        if (screen_ == Screen::Edit) {
-            const int ey = top + 6 * rowH + 2;
-            c.rect(0, ey, ui::ScreenW, ui::ContentBottom - ey, StatusBg, true);
-            c.hLine(0, ey, ui::ScreenW, Faint);
-            const math::CursorTarget cur{editor_.activeRowPtr(), editor_.cursorIndex()};
-            const auto sz = math::measure(editor_.root());
-            auto l = math::layout(editor_.root(), 6, ey + 4 + sz.baseline, ui::ScreenW - 12, ui::ContentBottom - ey - 4, math::Align::Left, &cur);
-            math::draw(c, l, Ink, Cursor, Placeholder);
-            const char* keys[6] = {"a/b", "\xE2\x88\x9A\xE2\x96\xA1", "\xE2\x96\xA1^", fns[static_cast<std::size_t>(row_)].type == GraphType::Polar ? "\xCE\xB8" : "X", "|\xE2\x96\xA1|", nullptr};
-            ui::softKeys(c, keys);
-        } else {
-            const char* keys[6] = {"SELECT", "DELETE", "TYPE", "COLOR", "V-WIN", "DRAW"};
-            ui::softKeys(c, keys);
-        }
-        break;
-    }
-    case Screen::Window: {
+    case Screen::List: case Screen::Edit: drawList(ctx, c); break;
+    case Screen::Plot: drawPlot(ctx, c); break;
+    case Screen::Window: drawWindow(ctx, c); break;
+    case Screen::Setup: {
         c.rect(0, ui::ContentTop, ui::ScreenW, 20, SelectSoft, true);
-        ui::text(c, 6, ui::ContentTop + 2, "View Window", Ink);
-        window_.draw(c, ui::ContentTop + 22, ui::ContentBottom - 2);
-        const char* keys[6] = {"INITIAL", nullptr, nullptr, nullptr, nullptr, "DRAW"};
+        ui::text(c, 6, ui::ContentTop + 2, "SET UP (Graph)", Ink);
+        setup_.draw(c, ui::ContentTop + 22, ui::ContentBottom - 2);
+        const char* keys[6] = {setup_.selected == SBack ? "OPEN" : nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
         ui::softKeys(c, keys);
         break;
     }
-    case Screen::Integral: {
+    case Screen::Format: {
         c.rect(0, ui::ContentTop, ui::ScreenW, 20, SelectSoft, true);
-        ui::text(c, 6, ui::ContentTop + 2, "\xE2\x88\xAB" "dx: limiti di integrazione", Ink);
-        integral_.draw(c, ui::ContentTop + 22, ui::ContentTop + 66);
-        const char* keys[6] = {"CALC", nullptr, nullptr, nullptr, nullptr, "CALC"};
+        const std::string title = formatFn_ >= 0 ? "FORMAT " + linePrefix(ctx.ws.functions[static_cast<std::size_t>(formatFn_)].type, formatFn_, 0) : std::string("FORMAT SKETCH");
+        ui::text(c, 6, ui::ContentTop + 2, title.c_str(), Ink);
+        format_.draw(c, ui::ContentTop + 24, ui::ContentTop + 70);
+        ui::text(c, 8, ui::ContentTop + 84, "\xE2\x97\x80 \xE2\x96\xB6 cambia, EXIT applica", Muted, font::Face::Small);
+        const char* keys[6] = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
         ui::softKeys(c, keys);
         break;
     }
-    case Screen::Plot: {
-        drawPlot(ctx, c);
-        const char* keys[6] = {trace_ ? "TRACE*" : "TRACE", "ZOOM", "V-WIN", "SKETCH", "G-SOLV", "G\xE2\x86\x94T"};
-        ui::softKeys(c, keys);
-        break;
-    }
+    case Screen::Files: drawFiles(ctx, c); break;
     }
     menu_.draw(c);
+    drawPopups(ctx, c);
 }
 } // namespace fx::app

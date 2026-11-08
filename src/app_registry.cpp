@@ -14,7 +14,7 @@ constexpr std::uint32_t Ui = s::Widgets | s::Editor | s::Format;
 
 const char* const kRunMatrixSrc[] = {"src/apps/run_matrix_app.cpp", "src/run_matrix.cpp", nullptr};
 const char* const kStatisticsSrc[] = {"src/apps/statistics_app.cpp", nullptr};
-const char* const kGraphSrc[] = {"src/apps/graph_app.cpp", nullptr};
+const char* const kGraphSrc[] = {"src/apps/graph_app.cpp", "src/apps/graph_plot.cpp", "src/apps/graph_files.cpp", nullptr};
 const char* const kTableSrc[] = {"src/apps/table_app.cpp", nullptr};
 const char* const kEquationSrc[] = {"src/apps/equation_app.cpp", nullptr};
 const char* const kMemorySrc[] = {"src/apps/memory_app.cpp", nullptr};
@@ -40,16 +40,17 @@ const AppInfo kApps[AppCount] = {
      "Foglio di calcolo con formule e riferimenti non ancora implementato.",
      s::Expression | Ui | s::Stats | s::Storage | s::Models, d::Settings | d::Memory | d::Lists, 0, nullptr},
     {AppId::Graph, "Graph", "5", rgb888To565(60, 70, 200), AppStatus::Available,
-     "Grafici di funzioni Y=, r=, disequazioni; trace, zoom, V-Window, sketch, G-Solve",
-     nullptr, s::Expression | Ui | s::MathRender | s::Storage, d::Settings | d::Memory | d::Functions | d::View,
+     "Grafici Y=, r=, parametrici, X=, disequazioni (Y1..Y20); trace, zoom, V-Window, sketch, G-Solve, modify, memorie, PICT, progetti .pcgraph su microSD",
+     nullptr, s::Expression | Ui | s::MathRender | s::Storage | s::GraphCore | s::Files,
+     d::Settings | d::Memory | d::Functions | d::View | d::Table | d::Lists | d::Graph,
      linkTo(AppId::Table), kGraphSrc},
     {AppId::DynaGraph, "Dyna Graph", "6", rgb888To565(40, 110, 220), AppStatus::Planned,
      "Famiglie di grafici al variare di un coefficiente (Start/End/Pitch), sulla V-Window di Graph",
      "Grafici dinamici con parametro variabile non ancora implementati.",
      s::Expression | Ui | s::MathRender | s::Storage | s::Models, d::Settings | d::Memory | d::View, 0, nullptr},
     {AppId::Table, "Table", "7", rgb888To565(120, 70, 200), AppStatus::Available,
-     "Tabelle di valori delle funzioni Y1..Y6 con Start/End/Step; G-CON/G-PLT verso Graph",
-     nullptr, s::Expression | Ui | s::Storage, d::Settings | d::Memory | d::Functions | d::View | d::Table,
+     "Tabelle di valori delle funzioni Y1..Y20 con Start/End/Step e dY/dX; GPH-CON/GPH-PLT verso Graph",
+     nullptr, s::Expression | Ui | s::Storage | s::GraphCore, d::Settings | d::Memory | d::Functions | d::View | d::Table | d::Lists | d::Graph,
      linkTo(AppId::Graph), kTableSrc},
     {AppId::Recursion, "Recursion", "8", rgb888To565(40, 60, 160), AppStatus::Planned,
      "Successioni an, an+1, an+2 (fino a tre), tabelle, grafici e diagrammi di fase",
@@ -126,14 +127,17 @@ const char* const kHUnits[] = {"point_a.hpp", nullptr};
 const char* const kHHelp[] = {"cheatsheet.hpp", nullptr};
 const char* const kHRunCore[] = {"run_matrix.hpp", nullptr};
 const char* const kHModels[] = {"app_models.hpp", nullptr};
+const char* const kHGraphCore[] = {"graph_model.hpp", "graph_engine.hpp", "graph_solve.hpp", nullptr};
+const char* const kHFiles[] = {"file_store.hpp", "graph_file.hpp", "pict.hpp", nullptr};
 const ServiceInfo kServices[service::Count] = {
     {s::Expression, "Expression", kHExpression}, {s::Exact, "Exact", kHExact}, {s::Editor, "Editor", kHEditor},
     {s::MathRender, "MathRender", kHRender}, {s::Format, "Format", kHFormat}, {s::Solvers, "Solvers", kHSolvers},
     {s::Stats, "Stats", kHStats}, {s::MathCore, "MathCore", kHMathCore}, {s::Widgets, "Widgets", kHWidgets},
     {s::Network, "Network", kHNetwork}, {s::Storage, "Storage", kHStorage}, {s::Units, "Units", kHUnits},
     {s::Help, "Help", kHHelp}, {s::RunCore, "RunCore", kHRunCore}, {s::Models, "Models", kHModels},
+    {s::GraphCore, "GraphCore", kHGraphCore}, {s::Files, "Files", kHFiles},
 };
-const char* const kDataNames[data::Count] = {"settings", "memory", "history", "functions", "view", "table", "lists", "equation", "chat"};
+const char* const kDataNames[data::Count] = {"settings", "memory", "history", "functions", "view", "table", "lists", "equation", "chat", "graph"};
 } // namespace
 
 const AppInfo& appInfo(AppId id) noexcept {

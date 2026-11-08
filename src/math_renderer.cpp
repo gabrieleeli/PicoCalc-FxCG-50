@@ -431,6 +431,12 @@ std::string displayToken(const std::string& t) {
         case '*': return "×"; case '/': return "÷"; case '-': return "−"; default: return t;
         }
     }
+    if (t.size() > 1 && t[0] == '@') {            // graph function reference: "@Y3" -> "Y3", "@XT2" -> "Xt2"
+        std::string r = t.substr(1);
+        for (std::size_t i = 1; i < r.size(); ++i) r[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(r[i])));
+        if (!r.empty()) r[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(r[0])));
+        return r;
+    }
     std::string low = t; for (char& ch : low) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
     for (std::size_t i = 0; i < sizeof(kGreekNames) / sizeof(kGreekNames[0]); ++i) if (low == kGreekNames[i]) return kGreekGlyphs[i];
     if (low == "ans") return "Ans";

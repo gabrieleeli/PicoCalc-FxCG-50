@@ -10,6 +10,7 @@
 
 namespace fx {
 namespace net { class ChatTransport; }
+namespace files { class FileSystem; }
 
 namespace app {
 
@@ -25,6 +26,7 @@ public:
     virtual std::size_t storageCapacity() = 0;  // bytes available for the workspace record
     virtual const char* name() = 0;
     virtual net::ChatTransport* chat() = 0;     // nullptr when networking is unavailable
+    virtual files::FileSystem* files() = 0;     // user files (microSD); nullptr when not available
 };
 
 class AppManager;
@@ -69,6 +71,9 @@ public:
     virtual void draw(Context& ctx, gfx::Canvas& canvas) = 0;
     // Periodic work (network polling...). Returns true when a redraw is needed.
     virtual bool tick(Context&) { return false; }
+    // True when the mode shows its own Setup items for SET UP (GRAPH, TABLE)
+    // instead of the global SYSTEM settings.
+    virtual bool ownsSetup() const { return false; }
 };
 
 // Routes input to the active application, handles the global keys (MENU,

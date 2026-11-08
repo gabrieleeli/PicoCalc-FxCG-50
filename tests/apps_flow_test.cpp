@@ -118,12 +118,17 @@ int main() {
     CHECK(gr->solutions().size() == 1);
     CHECK_NEAR(gr->solutions()[0].first, 0, 1e-10); CHECK_NEAR(gr->solutions()[0].second, -2, 1e-12);
     r.key(pckey::Esc);
-    r.key(pckey::F5); r.type("6"); r.key(pckey::Break); r.enter("0"); r.key(pckey::Break); r.enter("3"); r.key(pckey::F1);   // integral 0..3
+    r.key(pckey::F5); r.type("8"); r.type("1");          // G-SOLVE ∫dx > ∫dx: limits typed as numbers
+    r.enter("0"); r.enter("3");
     CHECK(!r.error());
     CHECK_NEAR(ws.memory.answer(), 3.0, 1e-9);            // ∫(x^2-2)dx from 0 to 3 = 9-6
-    r.key(pckey::F2); r.type("1");                        // ZOOM IN
+    CHECK_NEAR(gr->integralValue(), 3.0, 1e-9);
+    r.key(pckey::Esc);
+    r.key(pckey::F2); r.type("3"); r.key(pckey::Enter);    // ZOOM IN at the pointer (factor 2)
     CHECK_NEAR(ws.view.xmax - ws.view.xmin, 6.3, 1e-9);
-    r.key(pckey::F6);                                     // G<->T
+    r.key(pckey::F6);                                     // G<->T: back to the relation list
+    CHECK(gr->screen() == app::GraphApp::Screen::List);
+    r.key(pckey::F8); r.type("4");                        // OPTN > TABLE
     CHECK(r.fw.apps().activeId() == AppId::Table);
     r.home();
     // ---------------- SYSTEM, CONVERSION, MEMORY

@@ -5,6 +5,7 @@
 #include <complex>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <stdexcept>
 #include <string>
 
@@ -31,6 +32,25 @@ public:
     virtual bool resolve(const std::string& lowerName, double& out) const = 0;
 };
 
+// Graph functions referenced from an expression (fx-CG50 VARS > GRAPH):
+// "@Y1" = Y1(x), "@Y1(@Y2)" = composite Y1(Y2(x)), "@Y1(A=2)" = Y1 with the
+// coefficient A replaced by 2. The canonical text marks a reference with '@'
+// (typed letters "Y1" still mean Y*1, as on the calculator). Kinds: Y (Y= and
+// Y inequalities), R (r=), XT/YT (parametric), X (X= and X inequalities),
+// index 1..20. The GRAPH/TABLE engine implements the resolver; elsewhere a
+// reference is a Math ERROR.
+class FunctionResolver {
+public:
+    virtual ~FunctionResolver() = default;
+    // lowerName without '@' ("y3", "xt2"). Returns the parsed body and the name
+    // of the variable bound by the positional argument ("x", "theta", "t", "y"),
+    // or nullptr when the function is not defined.
+    virtual const ast::Node* function(const std::string& lowerName, const char*& variable) const = 0;
+};
+constexpr int MaxFunctionReferenceDepth = 5;       // fx-CG50: a composite function has at most 5 functions
+// True for a valid reference word without the '@' marker ("y1", "xt20", ...).
+bool isFunctionReferenceName(const std::string& lowerName) noexcept;
+
 // Facts about one evaluation that the caller may want to show.
 struct EvalInfo {
     bool numerical{};      // an iterative numerical method (integral, d/dx, SOLVE) produced the value
@@ -43,12 +63,13 @@ struct EvalContext {
     std::uint8_t bindingCount{};
     ComplexMode complexMode{ComplexMode::Real};
     const NameResolver* names{};
+    const FunctionResolver* functions{};
     EvalInfo* info{};
     EvalContext& bind(const char* name, double value);
 };
 
 // Shared variable names resolved through EvalContext::names
-// ("xmin", "xmax", ..., "tblstart"); nullptr-terminated.
+// ("xmin", "xmax", "xdot", ..., "tblstart", "list1".."list6"); nullptr-terminated.
 const char* const* systemVariableNames() noexcept;
 
 // Limits that keep parsing and evaluation within the 32 KB stack of the RP2350.
@@ -112,6 +133,17 @@ double inverseValue(const std::string& expression, double y, double xMin, double
 double integrateAdaptive(const CompiledExpression& f, double a, double b, double tolerance = 1e-10,
                          const CalculatorMemory* memory = nullptr);
 double differentiate(const CompiledExpression& f, double x, const CalculatorMemory* memory = nullptr);
+// The same numerical methods (adaptive Gauss-Kronrod G7/K15, Ridders) on any
+// callable; the callable throws (MathError) where the function is undefined.
+double integrateFunction(const std::function<double(double)>& f, double a, double b, double tolerance = 1e-10);
+double differentiateFunction(const std::function<double(double)>& f, double x);
+
+// Rewrites a linear expression token by token with the parser's own lexer:
+// every identifier (lower case: "x", "a", "sin", "theta") is passed to `map`,
+// which returns its replacement or an empty string to keep it. Used by GRAPH
+// to copy a Modify expression with its coefficient values and to swap x and y
+// when converting Y= <-> X=. Throws SyntaxError like the parser.
+std::string rewriteIdentifiers(const std::string& expression, const std::function<std::string(const std::string&)>& map);
 
 // True for function, constant and special names known to the parser
 // (lower-case input). The editor uses it to merge typed letters into words.

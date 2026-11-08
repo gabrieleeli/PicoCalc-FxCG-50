@@ -1,5 +1,6 @@
 #pragma once
 #include "expression.hpp"
+#include "graph_model.hpp"
 #include "math_engine.hpp"
 #include "memory.hpp"
 #include "number_format.hpp"
@@ -39,23 +40,15 @@ struct HistoryEntry {
     bool flipMixed{false};               // this result shows the other fraction format (ab/c <-> d/c)
 };
 
-enum class GraphType : std::uint8_t { Y = 0, Polar = 1, YGreater = 2, YLess = 3, YGreaterEq = 4, YLessEq = 5 };
-const char* graphTypeLabel(GraphType t) noexcept;   // "Y=", "r=", "Y>", ...
+// Graph functions, V-Window and the other GRAPH data: graph_model.hpp.
 
-struct GraphFunction {
-    std::string expr;
-    GraphType type{GraphType::Y};
-    bool selected{true};
-    std::uint8_t color{0};
+struct TableRange {
+    double start{-3}, end{3}, step{1};
+    // TABLE -> GRAPH request (not saved): draw the table points as a connected
+    // (GPH-CON) or plot-type (GPH-PLT) graph; GRAPH clears it on leaving.
+    enum class Draw : std::uint8_t { None = 0, Connect = 1, Plot = 2 };
+    Draw draw{Draw::None};
 };
-
-struct ViewWindow {
-    double xmin{-6.3}, xmax{6.3}, xscl{1}, ymin{-3.1}, ymax{3.1}, yscl{1};
-    double tmin{0}, tmax{6.283185307179586}, tstep{0.05235987755982988};
-    bool grid{true};
-};
-
-struct TableRange { double start{-3}, end{3}, step{1}; };
 
 struct EquationState {
     std::uint8_t unknowns{2};
@@ -82,8 +75,9 @@ struct Workspace final : NameResolver {
     Settings settings;
     CalculatorMemory memory;
     std::vector<HistoryEntry> history;
-    std::array<GraphFunction, 6> functions{};
+    std::array<GraphFunction, MaxGraphFunctions> functions{};
     ViewWindow view;
+    GraphState graph;
     TableRange table;
     std::array<std::vector<double>, ListCount> lists{};
     EquationState equation;

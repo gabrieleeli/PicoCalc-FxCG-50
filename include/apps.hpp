@@ -5,6 +5,9 @@
 #include "natural_editor.hpp"
 #include "line_editor.hpp"
 #include "app_widgets.hpp"
+#include "file_store.hpp"
+#include "graph_engine.hpp"
+#include "pict.hpp"
 #include "statistics.hpp"
 #include <array>
 #include <string>
@@ -143,65 +146,257 @@ private:
     bool hasReg_{false};
 };
 
+// GRAPH (fx-CG50 chapter 5): relation list Y1..Y20 with every graph type,
+// V-Window, Setup, Trace, Zoom, Sketch, G-Solve, Modify, graph and V-Window
+// memories, pictures and .pcgraph projects on the microSD card. The numerical
+// work is done by graph_engine.hpp / graph_solve.hpp; the curves are sampled
+// incrementally in tick() so the keyboard is never blocked.
 class GraphApp final : public App {
 public:
     AppId id() const override { return AppId::Graph; }
     void enter(Context& ctx) override;
+    void leave(Context& ctx) override;
     void key(Context& ctx, const KeyEvent& ev) override;
     void draw(Context& ctx, gfx::Canvas& c) override;
-    enum class Screen { List, Edit, Plot, Window, Integral };
+    bool tick(Context& ctx) override;
+    bool ownsSetup() const override { return true; }
+
+    enum class Screen : std::uint8_t { List, Edit, Plot, Window, Setup, Format, Files };
+    // Plot screen states: plain graph, Trace (cursor on a curve), free pointer,
+    // choice of a graph, G-Solve results, integral limits, Modify.
+    enum class Mode : std::uint8_t { View, Trace, Pointer, Select, Results, Integral, Modify };
     Screen screen() const noexcept { return screen_; }
-    // G-Solve results (x, y) for tests.
-    const std::vector<std::pair<double, double>>& solutions() const noexcept { return solutions_; }
-    void showPlot() noexcept { screen_ = Screen::Plot; }
-    static constexpr int PlotLeft = 0, PlotRight = 319, PlotTop = 18, PlotBottom = 299;
-private:
-    struct Cache {
-        bool valid{false};
-        ViewWindow view{};
-        std::array<std::string, 6> expr{};
-        std::array<GraphType, 6> type{};
-        std::array<bool, 6> on{};
-        std::array<std::vector<float>, 6> y{};         // per pixel column (NaN = undefined)
-        std::array<std::vector<std::pair<float, float>>, 6> polar{};
+    Mode mode() const noexcept { return mode_; }
+    void showPlot() noexcept { screen_ = Screen::Plot; mode_ = Mode::View; }
+    // G-Solve results (x, y) of the last analysis.
+    const std::vector<std::pair<double, double>>& solutions() const noexcept { return solutionXY_; }
+    double integralValue() const noexcept { return integral_.value; }
+    double areaValue() const noexcept { return integral_.area; }
+    bool rendering() const noexcept { return !renderDone_; }
+    void finishRendering(Context& ctx);                  // completes the sampling now (tests, PICT capture)
+    const graph::GraphEngine& engine() const noexcept { return engine_; }
+    const std::vector<graph::Curve>& curves() const noexcept { return curves_; }
+    bool cursor(double& x, double& y) const noexcept;    // trace/pointer position in graph coordinates
+    const std::string& infoText() const noexcept { return bottomText_; }   // coordinates line shown last
+    static constexpr int PlotLeft = graphgeo::Left, PlotRight = graphgeo::Right, PlotTop = graphgeo::Top, PlotBottom = graphgeo::Bottom;
+
+    // What the pointer, the trace cursor, the graph choice or a pop-up is for.
+    enum class Action : std::uint8_t {
+        None, ZoomBox, ZoomIn, ZoomOut, Pan,
+        Plot, PlotOn, PlotOff, PlotChg, Line, FLine, Circle, Vertical, Horizontal, Text, Pen,
+        Tangent, Normal, Inverse,
+        Root, Max, Min, YIcept, Isect, YCal, XCal, Integral, IntRoot, IntIsect, IntMixed,
+        Format, ModifyStart,
     };
-    void refresh(Context& ctx);
+    enum class Menu : std::uint8_t {
+        None, Type, Convert, Tool, Style, GMem, BuiltIn, File, ListOptn, EditMore, EditVars, EditList,
+        Zoom, Sketch, SketchPlot, SketchLine, SketchItems, SketchItem, Solve, SolveIntegral, PlotOptn,
+        Picture, PictureStore, PictureRecall, BgvWin, VMem, Square, Color, StyleSketch,
+    };
+    // Number / text pop-up purposes.
+    enum class Ask : std::uint8_t {
+        None, TraceValue, XValue, YValue, IntLower, IntUpper, ModifyValue, ModifyStep, GMemStore, GMemRecall,
+        VMemStore, VMemRecall, PictStore, PictRecall, PictSaveAs, BmpSaveAs, ProjectSaveAs, ProjectRename, SketchText,
+        RefY, RefR, RefXt, RefYt, RefX, Factor, FactorY, Fade, BgvSaveAs,
+    };
+    enum class Browse : std::uint8_t { Projects, Pictures, Background };
+    enum class Confirm : std::uint8_t { None, DeleteFunction, DeleteFile, Overwrite, NewProject, OpenProject, BgvLoad, BgvSave, ClearSketch };
+
+private:
+    struct Line { int fn; int sub; };                    // relation list line (sub 1 = Yt of a parametric pair)
+    struct Mark { double x, y; bool on; };               // dot placed with EXE during Trace/G-Solve
+    struct Solution { double x, y; std::string extra; };
+    struct IntegralState {
+        int stage{0};                                    // 0 lower limit, 1 upper limit, 2 result
+        int f{-1}, g{-1};                                // plots (g >= 0: between two graphs)
+        double lo{0}, hi{0}, value{0}, area{0};
+        bool hasArea{false};
+        std::vector<double> stops;                       // roots / intersections the pointer jumps between
+        int stop{0};
+    };
+    struct ModifyState { int plot{-1}; int function{-1}; std::string vars; int selected{0}; double step{1}; };
+    struct InputBox { Ask ask{Ask::None}; std::string prompt; LineEditor editor{40}; bool text{false}; };
+
+    // graph_app.cpp: screens other than the plot
+    std::vector<Line> lines(Context& ctx) const;
+    GraphType lineType(Context& ctx, int fn) const;
+    void listKey(Context& ctx, const KeyEvent& ev);
+    void editKey(Context& ctx, const KeyEvent& ev);
+    void storeEdit(Context& ctx);
+    void beginEdit(Context& ctx, bool keep, char first = 0);
+    void windowKey(Context& ctx, const KeyEvent& ev);
+    void openWindow(Context& ctx);
+    void loadWindowForm(const ViewWindow& v);
+    bool applyWindow(Context& ctx);
+    void setupKey(Context& ctx, const KeyEvent& ev);
+    void openSetup(Context& ctx);
+    void applySetup(Context& ctx);
+    void formatKey(Context& ctx, const KeyEvent& ev);
+    void openFormat(Context& ctx, int function, int sketchItem);
+    void menuChoice(Context& ctx, Menu menu, int choice);
+    void showMenu(Menu m, const char* title, std::vector<std::string> items);
+    void ask(Ask a, const std::string& prompt, const std::string& initial = {}, bool text = false);
+    void answer(Context& ctx, Ask a, const std::string& text);
+    void confirm(Confirm c, const std::string& message);
+    void confirmed(Context& ctx, Confirm c);
+    void changed(Context& ctx);                          // functions/view/settings changed: redraw everything
+    void drawList(Context& ctx, gfx::Canvas& c);
+    void drawWindow(Context& ctx, gfx::Canvas& c);
+    void drawPopups(Context& ctx, gfx::Canvas& c);
+    void startModify(Context& ctx, int plot);
+    void modifyKey(Context& ctx, const KeyEvent& ev);
+    void copyModified(Context& ctx, int fn);
+
+    // graph_plot.cpp: rendering and the plot screen
+    void ensureBuilt(Context& ctx);
+    bool renderStep(Context& ctx, int budget);
     void drawPlot(Context& ctx, gfx::Canvas& c);
-    int currentFunction(Context& ctx) const;
-    void gsolve(Context& ctx, int kind);
-    void zoom(Context& ctx, int kind);
-    double pixelToX(const ViewWindow& v, int px) const;
+    void drawLayers(Context& ctx, gfx::Canvas& c);       // background ... sketches (what PICT saves)
+    void drawOverlays(Context& ctx, gfx::Canvas& c);     // cursors, texts, results
+    void plotKey(Context& ctx, const KeyEvent& ev);
+    void traceKey(Context& ctx, const KeyEvent& ev);
+    void pointerKey(Context& ctx, const KeyEvent& ev);
+    void selectKey(Context& ctx, const KeyEvent& ev);
+    void resultsKey(Context& ctx, const KeyEvent& ev);
+    void integralKey(Context& ctx, const KeyEvent& ev);
+    void startTrace(Context& ctx, Action purpose);
+    void startPointer(Action purpose);
+    void startSelect(Context& ctx, Action purpose);
+    void selected(Context& ctx, int plot);
+    void solve(Context& ctx, Action what, int f, int g, double value);
+    void beginIntegral(Context& ctx, Action what, int f, int g);
+    void finishIntegral(Context& ctx);
+    void zoomTo(Context& ctx, const ViewWindow& v);
+    void zoomAction(Context& ctx, int choice);
+    void plotMenu(Context& ctx, Menu menu, int choice);
+    bool plotAnswer(Context& ctx, Ask a, const std::string& text);
+    void bgvSave(Context& ctx, const std::string& path);
+    void sketchAction(Context& ctx, Action a);
+    void pointerDone(Context& ctx);
+    void addSketch(Context& ctx, SketchItem item);
+    void pasteGraph(Context& ctx);
+    void traceMove(Context& ctx, int steps);
+    void traceSet(Context& ctx, double v);
+    bool tracePoint(double& x, double& y) const;
+    std::vector<int> drawablePlots(bool analysable) const;
+    bool tableDraw(Context& ctx) const;
+    void buildTableCurves(Context& ctx);
+
+    // graph_files.cpp: projects, memories, pictures
+    files::FileSystem* fileSystem(Context& ctx, bool required);
+    void newProject(Context& ctx);
+    void saveProject(Context& ctx, const std::string& name);
+    void openProject(Context& ctx, const std::string& name);
+    void openFiles(Context& ctx, Browse purpose);
+    void filesKey(Context& ctx, const KeyEvent& ev);
+    void drawFiles(Context& ctx, gfx::Canvas& c);
+    void storeGraphMemory(Context& ctx, int n);
+    void recallGraphMemory(Context& ctx, int n);
+    void storePicture(Context& ctx, const std::string& path);
+    void recallPicture(Context& ctx, const std::string& path, bool background);
+    void loadBackground(Context& ctx);
+    void writeCapture(Context& ctx);
+    void deleteFile(Context& ctx);
+
     Screen screen_{Screen::List};
-    int row_{0};
+    Screen returnScreen_{Screen::List};
+    Mode mode_{Mode::View};
+    Action action_{Action::None};
+    int row_{0}, firstRow_{0};
     NaturalEditor editor_;
-    Form window_;
-    Form integral_;
+    int editFn_{0}, editSub_{0};
+    bool editNew_{false};
+    Form window_, setup_, format_;
+    ViewWindow windowStart_{};
+    int formatFn_{-1}, formatSketch_{-1};
     PopupMenu menu_;
-    int menuKind_{0};                 // 1 ZOOM, 2 G-SOLVE, 3 SKETCH
-    bool trace_{false};
-    int traceX_{160};
-    int traceFn_{0};
-    int sketch_{0};                   // 1 tangent, 2 normal
-    std::vector<std::pair<double, double>> solutions_;
+    Menu menuKind_{Menu::None};
+    InputBox input_;
+    Confirm confirm_{Confirm::None};
+    std::string confirmText_;
+    int sketchSelected_{-1};
+    int copyTarget_{-1};                                 // Modify COPY: choosing the destination line
+
+    // rendering
+    graph::GraphEngine engine_;
+    std::vector<graph::Curve> curves_;
+    std::vector<std::string> pasted_;
+    bool built_{false}, renderDone_{false};
+    std::size_t renderPlot_{0};
+    ViewWindow builtView_{};
+    std::vector<ViewWindow> zoomStack_;                  // ZOOM PREVIOUS
+    ViewWindow original_{};                              // ZOOM ORIGINAL
+    bool haveOriginal_{false};
+    pict::Image overlay_, background_;
+    std::string overlayPath_, backgroundPath_;
+    bool capturePending_{false};
+    std::string capturePath_;
+    pict::Image capture_;
+    bool captureReady_{false}, captureBmp_{false};
+
+    // plot screen state
+    int cursorPlot_{0};
+    double cursorV_{0};
+    bool traceLines_{true};
+    int px_{160}, py_{159};                              // free pointer (screen pixels)
+    bool havePoint1_{false};
+    double p1x_{0}, p1y_{0};
+    std::vector<float> pen_;
+    bool penDown_{false};
+    std::vector<int> selectable_;
+    int selectIndex_{0}, firstChoice_{-1};
+    std::vector<Solution> solutions_;
+    std::vector<std::pair<double, double>> solutionXY_;
     int solutionIndex_{0};
     std::string solveLabel_;
+    int solvePlot_{-1};
+    IntegralState integral_;
     bool shadeIntegral_{false};
-    double intA_{0}, intB_{0}, intValue_{0};
-    Cache cache_;
+    std::vector<Mark> marks_;
+    ModifyState modify_;
+    std::string topText_, bottomText_;
+    std::uint32_t blinkStart_{0};
+
+    // files
+    struct FileList { std::vector<files::Entry> entries; int selected{0}, first{0}; Browse purpose{Browse::Projects}; std::string folder; std::string status; } files_;
+    std::string pendingName_;
+    std::vector<std::string> windowText_;                // V-Window texts when the form was filled
+    std::uint32_t lastBlink_{0};
+    std::vector<std::int16_t> shade_;                    // integral shading: column, y0, y1 triples
+    double factorX_{2};
+    bool panGrab_{false};
+    Screen formatReturn_{Screen::List};
+    std::vector<graph::Plot> sketchPlots_;               // SKETCH Inverse graphs (x = f(y))
+    std::vector<graph::Curve> sketchCurves_;
+    std::uint32_t lastMove_{0};
+    int speed_{1};                                       // pointer acceleration
+    std::uint64_t fingerprint_{0};                       // data the plots were built from
+    std::uint64_t sourceFingerprint(Context& ctx) const;
 };
 
+// TABLE: values of the Y= functions of the shared relation list (Y1..Y20,
+// evaluated by the GRAPH engine, so composite references and List graphs give
+// the same values as the graphs), with dY/dX columns when the Setup item
+// Derivative is On; GPH-CON / GPH-PLT draw the table in GRAPH.
 class TableApp final : public App {
 public:
     AppId id() const override { return AppId::Table; }
     void enter(Context& ctx) override;
+    void leave(Context& ctx) override;
     void key(Context& ctx, const KeyEvent& ev) override;
     void draw(Context& ctx, gfx::Canvas& c) override;
+    struct Column { int plot; bool derivative; };
+    const std::vector<Column>& columns() const noexcept { return cols_; }
+    const std::vector<double>& xs() const noexcept { return xs_; }
+    // Value shown in a cell (false: "ERROR"), from the shared evaluator.
+    bool cell(int row, int column, double& out) const;
 private:
     void rebuild(Context& ctx);
     bool setup_{false};
     Form form_;
     std::vector<double> xs_;
-    std::vector<int> fns_;
+    std::vector<Column> cols_;
+    graph::GraphEngine engine_;
     int row_{0}, firstRow_{0}, col_{0};
 };
 

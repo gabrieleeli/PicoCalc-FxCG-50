@@ -3,6 +3,7 @@
 // the integration tests; it is not evidence that the physical LCD works.
 #include "board_host.hpp"
 #include "board_port.hpp"
+#include "file_store.hpp"
 #include <cstdio>
 #include <cstring>
 #include <deque>
@@ -20,6 +21,8 @@ int battery = 87; bool isCharging = false;
 storage::RamFlash flash(128 * 1024);
 std::size_t flushes = 0, lastBytes = 0;
 fx::net::ChatTransport* transport = nullptr;
+fx::files::RamFileSystem card(16u * 1024u * 1024u);   // simulated microSD card
+fx::files::FileSystem* files = &card;
 
 // Minimal PNG writer (stored deflate blocks, no external dependency).
 std::uint32_t crcTable[256];
@@ -55,6 +58,7 @@ void setBacklight(std::uint8_t, std::uint8_t) {}
 std::size_t freeHeap() { return 256 * 1024; }
 storage::FlashDevice& storageFlash() { return flash; }
 fx::net::ChatTransport* chatTransport() { return transport; }
+fx::files::FileSystem* fileSystem() { return files; }
 const char* name() { return "host"; }
 std::size_t lastFlushBytes() { return lastBytes; }
 
@@ -64,6 +68,8 @@ void advance(std::uint32_t ms) { nowMs += ms; }
 std::size_t flushCount() { return flushes; }
 void setBattery(int p, bool c) { battery = p; isCharging = c; }
 void setChatTransport(fx::net::ChatTransport* t) { transport = t; }
+void setFileSystem(fx::files::FileSystem* fs) { files = fs; }
+fx::files::FileSystem& ramCard() { return card; }
 bool savePng(const std::string& path, int scale) {
     if (scale < 1) scale = 1;
     const int w = W * scale, h = H * scale;

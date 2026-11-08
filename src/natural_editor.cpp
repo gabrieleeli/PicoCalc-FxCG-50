@@ -176,6 +176,12 @@ void importInto(NaturalNode& target, const std::string& s, int depth) {
             target.children.insert(target.children.begin() + static_cast<std::ptrdiff_t>(operand.first), box);
             continue;
         }
+        if (c == '@') {                 // graph function reference (@Y3, @Xt2): one atomic token
+            std::size_t e = i + 1;
+            while (e < s.size() && std::isalpha(static_cast<unsigned char>(s[e]))) ++e;
+            while (e < s.size() && std::isdigit(static_cast<unsigned char>(s[e]))) ++e;
+            target.children.push_back(token(s.substr(i, e - i))); i = e; continue;
+        }
         if (c == '_') {                 // repeating digits of a decimal literal
             std::size_t e = i + 1; while (e < s.size() && std::isdigit(static_cast<unsigned char>(s[e]))) ++e;
             auto box = node(Kind::Call, "period");

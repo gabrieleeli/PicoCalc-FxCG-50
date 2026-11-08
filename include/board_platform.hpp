@@ -14,5 +14,6 @@ public:
     std::size_t storageCapacity() override { return board::storageFlash().size() / 2; }
     const char* name() override { return board::name(); }
     net::ChatTransport* chat() override { return board::chatTransport(); }
+    files::FileSystem* files() override { return board::fileSystem(); }
 };
 } // namespace fx

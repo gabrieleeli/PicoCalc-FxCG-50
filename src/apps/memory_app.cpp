@@ -18,7 +18,7 @@ void MemoryApp::key(Context& ctx, const KeyEvent& ev) {
             case 0: ws.history.clear(); break;
             case 1: { const Settings s = ws.settings; ws.memory.clearAll(); ws.settings = s; break; }
             case 2: for (auto& l : ws.lists) l.clear(); break;
-            case 3: for (std::size_t i = 0; i < ws.functions.size(); ++i) ws.functions[i] = GraphFunction{{}, GraphType::Y, true, static_cast<std::uint8_t>(i)}; break;
+            case 3: for (std::size_t i = 0; i < ws.functions.size(); ++i) ws.functions[i] = emptyGraphFunction(i); break;
             case 4: ws.equation = EquationState{}; break;
             case 5: ws.chat.clear(); break;
             default: break;

@@ -44,7 +44,9 @@ constexpr std::uint32_t Units      = 1u << 11;   // unit tables (point_a.hpp)
 constexpr std::uint32_t Help       = 1u << 12;   // symbol guide (cheatsheet.hpp)
 constexpr std::uint32_t RunCore    = 1u << 13;   // run_matrix.hpp  Run-Matrix calculation/history core
 constexpr std::uint32_t Models     = 1u << 14;   // app_models.hpp  data models of the planned modes
-constexpr std::uint32_t Count      = 15;
+constexpr std::uint32_t GraphCore  = 1u << 15;   // graph_model/graph_engine/graph_solve.hpp  plots, sampling, G-Solve, zoom
+constexpr std::uint32_t Files      = 1u << 16;   // file_store/graph_file/pict.hpp  microSD files, .pcgraph, .pcpict
+constexpr std::uint32_t Count      = 17;
 } // namespace service
 
 // Sections of fx::Workspace, the only channel through which modes exchange data.
@@ -58,7 +60,8 @@ constexpr std::uint32_t Table     = 1u << 5;     // Table range
 constexpr std::uint32_t Lists     = 1u << 6;     // List 1..6
 constexpr std::uint32_t Equation  = 1u << 7;     // Equation coefficients and solver
 constexpr std::uint32_t Chat      = 1u << 8;     // AI conversation
-constexpr std::uint32_t Count     = 9;
+constexpr std::uint32_t Graph     = 1u << 9;     // GRAPH Setup, V-Window/graph memories, sketches, project
+constexpr std::uint32_t Count     = 10;
 } // namespace data
 
 constexpr std::uint32_t linkTo(AppId id) noexcept { return 1u << static_cast<unsigned>(id); }

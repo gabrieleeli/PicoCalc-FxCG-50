@@ -181,7 +181,7 @@ void StatisticsApp::key(Context& ctx, const KeyEvent& ev) {
             auto& fns = ctx.ws.functions;
             std::size_t slot = fns.size() - 1;
             for (std::size_t i = 0; i < fns.size(); ++i) if (fns[i].expr.empty()) { slot = i; break; }
-            fns[slot] = {reg_.expression(), GraphType::Y, true, static_cast<std::uint8_t>(slot)};
+            fns[slot] = emptyGraphFunction(slot); fns[slot].expr = reg_.expression();
             ctx.markDirty();
             ctx.toast("Copiato in Y" + std::to_string(slot + 1));
             return;

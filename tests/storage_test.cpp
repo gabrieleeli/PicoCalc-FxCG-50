@@ -69,7 +69,7 @@ int main() {
         auto entry = [](const char* e, fx::Complex v) { fx::HistoryEntry h; h.expression = e; h.value = v; return h; };
         ws.history.push_back(entry("1+1", {2, 0}));
         ws.history.push_back(entry("sqrt(-4)", {0, 2}));
-        ws.functions[1] = {"x^2-1", fx::GraphType::YGreater, false, 3};
+        ws.functions[1] = {"x^2-1", fx::GraphType::YGreater, false, 3, fx::LineStyle::Normal, {}};
         ws.view.xmin = -10; ws.view.xmax = 10;
         ws.lists[0] = {1, 2, 3.5}; ws.lists[5] = {9};
         ws.equation.unknowns = 3; ws.equation.simultaneous[4] = 7; ws.equation.degree = 4; ws.equation.polynomial[0] = 1;

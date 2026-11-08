@@ -5,6 +5,7 @@
 #include <cstdint>
 
 namespace fx::net { class ChatTransport; }
+namespace fx::files { class FileSystem; }
 
 // Board support interface. Implemented by src/platform/pico/board_pico.cpp for
 // the PicoCalc (RP2350) and by src/platform/host/board_host.cpp for host tests
@@ -29,6 +30,8 @@ void setBacklight(std::uint8_t lcd, std::uint8_t keyboard);
 std::size_t freeHeap();
 storage::FlashDevice& storageFlash();
 fx::net::ChatTransport* chatTransport();   // nullptr when Wi-Fi is not available
+// User files: microSD (FatFs) on the PicoCalc, RAM card on the host.
+fx::files::FileSystem* fileSystem();
 const char* name();
 // Statistics for the System app (bytes sent to the LCD by the last present()).
 std::size_t lastFlushBytes();
