@@ -77,6 +77,7 @@ Nessuna voce è ancora TESTED ON HARDWARE: la PicoCalc fisica non è stata usata
 | Matrici come valori nel parser e editor MAT in Run-Matrix | NOT STARTED |
 | Vettori: somma, prodotto scalare/vettoriale, norma, angolo (API C++) | TESTED ON HOST |
 | Conversioni metriche (10 grandezze, prefissi SI) | TESTED ON HOST |
+| Limiti di lunghezza/annidamento e budget di stack ("Stack ERROR", "Memory ERROR") | TESTED ON HOST (budget del firmware verificato solo con `-fstack-usage`) |
 
 ## Modalità
 

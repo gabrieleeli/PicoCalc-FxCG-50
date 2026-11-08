@@ -6,9 +6,9 @@ Ultimo aggiornamento: v1.6.0, branch `claude/peaceful-euler-auyrm5`.
 ## 1. Stato attuale
 
 - **Firmware RP2350 compilabile**: `build/pico2w/picocalc_fxai.uf2` (≈2,0 MB UF2,
-  ≈1015 KB di immagine flash, 200 KB di heap, stack 32 KB). Pico SDK 2.2.0, board `pico2_w`.
+  ≈1019 KB di immagine flash, 200 KB di heap, stack 32 KB). Pico SDK 2.2.0, board `pico2_w`.
   La v1.5.4 di partenza **non compilava** (vedi `docs/BUILD_STATUS.md`).
-- **Test host**: 14 suite CTest, 4462 controlli, 0 errori; puliti anche con
+- **Test host**: 14 suite CTest, 4495 controlli, 0 errori; puliti anche con
   AddressSanitizer + UBSan. Relay AI: 15 test Python, tutti superati.
 - **Nessun test su hardware fisico**: display, tastiera, flash, Wi-Fi e TLS sono
   implementati seguendo i driver ufficiali ClockworkPi e il datasheet ST7365P, ma
@@ -22,7 +22,7 @@ Ultimo aggiornamento: v1.6.0, branch `claude/peaceful-euler-auyrm5`.
 |---|---|
 | Build | CMake firmware + CMake host (lib core unica, CTest), linker script con stack 32 KB |
 | HAL PicoCalc | LCD ST7365P su SPI1 25 MHz con init ufficiale (RGB666, INVON, MADCTL 0x48); tastiera STM32 I2C non bloccante; batteria/retroilluminazione; flash A/B ultimi 128 KB |
-| Motore matematico | parser→AST→valutatore unico, reale e complesso, priorità Casio, integrali Gauss-Kronrod, derivate Ridders, SOLVE, Σ/Π, Base-N, DMS |
+| Motore matematico | parser→AST→valutatore unico, reale e complesso, priorità Casio, integrali Gauss-Kronrod, derivate Ridders, SOLVE, Σ/Π, Base-N, DMS; limiti di token/annidamento e budget di stack (Stack ERROR invece del crash) |
 | Editor V.P.A.M. | frazioni, radici, potenze, indici, |x|, log_a b, e^x, 10^x, ∫, d/dx, Σ, Π; undo/redo; copia/incolla; cursore allineato al renderer |
 | Grafica | font Unifont 8×16 + Spleen 6×12, layout matematico 2D, aggiornamento LCD a tile (solo le zone cambiate) |
 | App | Main Menu, Run-Matrix, Statistics, Graph, Table, Equation (sistemi, polinomi, solver, disequazioni), System/Set Up, Memory, Conversion, AI Chat, Symbols |
@@ -40,26 +40,29 @@ collaudo su hardware. Dettaglio in `docs/FEATURE_MATRIX.md` e `docs/ROADMAP.md`.
 
 ## 4. Ultima operazione eseguita
 
-1. Commit `2fb13c9` (AI chat completa) + test tutti verdi.
-2. Catturati 13 screenshot con il simulatore (galleria per la documentazione).
-3. In corso: scrittura della documentazione completa (README, BUILD_STATUS,
-   FEATURE_MATRIX, ARCHITECTURE, HARDWARE, GRAPHICS_ENGINE, MATH_ENGINE,
-   AI_INTEGRATION, TESTING, ROADMAP, CHANGELOG, INSTALLATION), pacchetto zip
-   con sorgenti + UF2, tentativo di push.
+1. Correzione dello stack del valutatore (commit "Bound parser/evaluator/editor
+   stack use"): sul target ARM ogni livello di `evalNode` occupava ~1,3 KB, quindi
+   una somma di ~25 termini avrebbe superato lo stack da 32 KB. Ora i frame
+   ricorsivi sono di 32–128 byte, le catene sono iterative e ci sono limiti
+   espliciti (dettagli in `docs/MATH_ENGINE.md`).
+2. Documentazione completa in `docs/` (indice in `docs/README.md`; i documenti
+   storici sono conservati e marcati come tali), `relay/README.md`.
+3. `scripts/make_release.sh`: zip dei sorgenti (git archive) + UF2 + SHA256SUMS.
+4. UF2 ricompilato, test host (normali e ASan/UBSan) e test del relay rieseguiti.
+5. Push ritentato: ancora 403 (vedi §6).
 
 ## 5. Prossimi passaggi esatti
 
-1. Completare/aggiornare i documenti in `docs/` e `README.md` (se mancanti).
-2. Rigenerare UF2 e test: comandi in §7.
-3. Creare lo zip: `scripts/make_release.sh` (se presente) oppure `git archive` + UF2.
-4. `git push -u origin claude/peaceful-euler-auyrm5` dopo aver dato accesso al repo.
-5. **Collaudo hardware** (priorità massima dopo il rilascio):
+1. Dare accesso al repository (vedi §6) e poi
+   `git push -u origin claude/peaceful-euler-auyrm5`.
+2. Pacchetto di release: `scripts/build_pico2w.sh && scripts/make_release.sh`.
+3. **Collaudo hardware** (priorità massima):
    - flash dell'UF2 con build `-DFXAI_DISPLAY_CALIBRATION_SCREEN=ON` per verificare
      colori/orientamento; se i colori sono errati provare `-DFXAI_LCD_RGB565=ON`
      o verificare il bit BGR di MADCTL;
    - verificare tutti i tasti (log su USB seriale), batteria, salvataggio dopo riavvio;
    - avviare il relay e provare AI Chat su Wi-Fi reale.
-6. Prossime funzionalità consigliate: matrici nel parser (Run-Matrix MAT), Recursion,
+4. Prossime funzionalità consigliate: matrici nel parser (Run-Matrix MAT), Recursion,
    Conic Graphs, Financial (TVM), 3D Graph, poi integrazione MicroPython.
 
 ## 6. Problemi noti / da verificare
@@ -88,8 +91,9 @@ tests/run_host_tests.sh --sanitize
 ```
 
 ```bash
-# Firmware UF2
+# Firmware UF2 e pacchetto di release (dist/)
 scripts/build_pico2w.sh
+scripts/make_release.sh
 ```
 
 ```bash

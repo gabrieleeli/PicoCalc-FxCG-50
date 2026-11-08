@@ -1,5 +1,56 @@
 # Changelog
 
+## v1.6.0 — 2026-11-08 — prima build RP2350 per PicoCalc + Pico 2 W
+
+Prima versione che **compila per l'RP2350** (UF2 verificato con `picotool`). Non
+ancora provata sulla PicoCalc fisica. Dettagli in [BUILD_STATUS.md](BUILD_STATUS.md).
+
+### Piattaforma
+- Driver riscritti secondo i sorgenti ufficiali ClockworkPi: LCD ST7365P su SPI1
+  hardware a 25 MHz con la sequenza di init ufficiale (RGB666, `INVON`, gamma),
+  tastiera STM32 su I2C1 con STOP + attesa di 16 ms (macchina a stati non bloccante),
+  batteria e retroilluminazione via registri STM32.
+- Aggiornamento parziale del display a tile 16×16 senza secondo framebuffer.
+- Eccezioni C++ abilitate, `lwipopts.h`/`mbedtls_config.h`, linker script con
+  stack da 32 KB.
+- Storage flash A/B con CRC-32 e `flash_safe_execute`, autosalvataggio.
+- Simulatore host con screenshot PNG; build host con CMake/CTest.
+
+### Interfaccia
+- Framework di app (`AppManager`) con tasti globali MENU, EXIT lungo, SHIFT, SET UP,
+  finestre di errore in stile CG50, toast.
+- Font GNU Unifont 8×16 e Spleen 6×12; barra di stato e tasti funzione F1–F6.
+- Menu principale a icone con 23 modalità; quelle non realizzate sono marcate e
+  aprono una spiegazione.
+
+### Matematica
+- Pipeline unica tokenizer → AST → valutatore (reale e complesso) al posto dei due
+  parser precedenti; priorità Casio, funzioni prefisse, costanti, Base-N, DMS,
+  Pol/Rec, ∫/d/dx/d²/dx²/Σ/Π/SOLVE.
+- Editor Natural con undo/redo, copia/incolla, scorrimento, metriche uniche con il
+  renderer (cursore allineato).
+- Limiti contro l'esaurimento dello stack: 320 token, 32 livelli di annidamento,
+  12 modelli annidati e 400 nodi nell'editor, budget di stack di 16 KB per
+  valutazione; catene lunghe (`1+2+…+n`) valutate in modo iterativo.
+
+### Modalità
+- Nuove: Statistics, Graph, Table, Equation, System, Memory, Conversion, AI Chat.
+- Run-Matrix con storia, OPTN, VARS, S⇔D, numeri complessi.
+
+### AI
+- Relay Python con SDK ufficiali Anthropic (`claude-opus-5-5`, fallback lato server
+  sui rifiuti) e OpenAI; token per dispositivo, limiti, TLS.
+- Client firmware Wi-Fi + HTTPS con verifica obbligatoria del certificato.
+
+### Test
+- 14 suite host, 4495 controlli, anche con ASan/UBSan; 15 test del relay.
+
+### Correzioni rispetto alla v1.5.4
+- Vedi la tabella "Audit della v1.5.4" in [BUILD_STATUS.md](BUILD_STATUS.md).
+- Rimossi i moduli sostituiti (vecchio `ui.cpp`, `graph_renderer`,
+  `window_manager`, `widget_system`, PIO-SPI, frontend SDL); i loro test sono stati
+  portati sulle nuove API.
+
 ## v1.5.2-dev — Casio-style 20-mode launcher
 - Sostituita la griglia generica 3x3 con una griglia 4x5 che riproduce le 20 modalità visibili nell'immagine di riferimento FX-CG50: Run-Matrix, Statistics, eActivity, Spreadsheet, Graph, Dyna Graph, Table, Recursion, Conic Graphs, Equation, Program, Financial, E-CON4, Link, Memory, System, Geometry, Picture Plot, 3D Graph e Conversion.
 - Ogni modalità ha un riquadro dedicato con colore, pittogramma compatto, etichetta e badge del tasto (1–9, A–K), ispirati alle icone originali.

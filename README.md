@@ -15,7 +15,7 @@ calcolatrice grafica Casio fx-CG50, con chat AI (Claude e ChatGPT) tramite Wi-Fi
 | | Stato |
 |---|---|
 | Compilazione UF2 per RP2350 (Pico SDK 2.2.0, `pico2_w`) | ✅ compila, nessun warning nei sorgenti del progetto |
-| Test automatici host | ✅ 14 suite, 4462 controlli, anche con AddressSanitizer/UBSan |
+| Test automatici host | ✅ 14 suite, 4495 controlli, anche con AddressSanitizer/UBSan |
 | Test relay AI | ✅ 15 test (SDK ufficiali contro API simulate, TLS reale in loopback) |
 | **Prova su PicoCalc fisica** | ❌ **non ancora eseguita** — display, tastiera, flash, Wi-Fi e TLS sono implementati secondo i driver ufficiali ClockworkPi ma vanno collaudati |
 

@@ -32,6 +32,7 @@ avrebbero impedito il funzionamento sulla PicoCalc:
 | 9 | Test basati su `assert`: con `NDEBUG` tutti i controlli sparivano | macro `CHECK` sempre attive |
 | 10 | `binomialPmf` andava in overflow (`nCr` a 64 bit) per n > ~60 | forma log-gamma |
 | 11 | Due parser diversi (uno a stringa, uno AST con ~10 funzioni) | pipeline unica tokenizer → AST → valutatore |
+| 12 | Nessun limite di lunghezza/annidamento: sul target ARM ogni livello del valutatore occupava ~1,3 KB di stack, quindi una somma di ~25 termini avrebbe superato lo stack da 32 KB (misurato con `-fstack-usage`) | frame ricorsivi ridotti a 32–128 byte, catene valutate in modo iterativo, limiti di token/annidamento, budget di stack con "Stack ERROR" |
 
 ## Risultati di build (firmware)
 
@@ -43,7 +44,7 @@ cmake --build build/pico2w
 | Voce | Valore |
 |---|---|
 | Output | `build/pico2w/picocalc_fxai.uf2` (≈2,0 MB, famiglia `rp2350-arm-s`) |
-| Immagine flash | ≈1015 KB su 4096 KB (include firmware CYW43, lwIP, mbedTLS) |
+| Immagine flash | ≈1019 KB su 4096 KB (include firmware CYW43, lwIP, mbedTLS) |
 | Area dati utente | ultimi 128 KB della flash (2 slot A/B), nessuna sovrapposizione con l'immagine |
 | RAM statica | ≈261 KB (di cui 200 KB framebuffer 320×320 RGB565) |
 | Heap | ≈200 KB (`__end__` → `0x20078000`) |
@@ -59,8 +60,8 @@ cmake --build build/pico2w
 
 | Suite | Controlli |
 |---|---|
-| expression_test | 125 |
-| editor_test | 150 |
+| expression_test | 142 |
+| editor_test | 166 |
 | math_engine_test | 108 |
 | storage_test | 727 |
 | app_test | 62 |
@@ -73,7 +74,7 @@ cmake --build build/pico2w
 | animation_smoke | 6 |
 | cheatsheet_smoke | 343 |
 | vpam_ast_smoke | 13 |
-| **Totale** | **4462 controlli, 0 errori** (con e senza sanitizer) |
+| **Totale** | **4495 controlli, 0 errori** (con e senza sanitizer) |
 
 Relay AI (`cd relay && python -m unittest discover -s tests`): **15 test superati**.
 

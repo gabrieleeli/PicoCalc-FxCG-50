@@ -77,7 +77,10 @@ principale.
 - Stack di 32 KB in SRAM (linker script `src/platform/pico/memmap_picocalc.ld`).
 - Heap ≈200 KB per AST, liste, storia e mbedTLS (handshake TLS ~50–60 KB).
 - Limiti espliciti: storia 40 voci, liste 255 elementi, chat 30 messaggi,
-  risposta HTTP 16 KB, Σ/Π 100001 termini, tabella 500 righe, annidamento AST 32.
+  risposta HTTP 16 KB, Σ/Π 100001 termini, tabella 500 righe.
+- Limiti contro l'esaurimento dello stack: espressioni di 320 token e 32 livelli
+  annidati, editor con 12 modelli annidati e 400 nodi, budget di 16 KB per
+  valutazione (vedi [MATH_ENGINE.md](MATH_ENGINE.md)).
 
 ## Struttura delle cartelle
 
