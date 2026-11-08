@@ -1,6 +1,7 @@
 // SYSTEM / SET UP: angle unit, display format, complex mode, exact results, Frac Result (d/c, ab/c),
 // backlights, Wi-Fi and AI relay configuration, device information and reset.
 #include "apps.hpp"
+#include "diagnostics.hpp"
 #include "net.hpp"
 #include <algorithm>
 #include <cstdio>
@@ -91,9 +92,17 @@ void SystemApp::key(Context& ctx, const KeyEvent& ev) {
         confirmReset_ = false; return;
     }
     if (info_) { if (ev.is(Key::Exit) || ev.is(Key::F1)) info_ = false; return; }
+    if (diag_) {
+        if (ev.is(Key::Exit) || ev.is(Key::F1)) diag_ = false;
+        else if (ev.is(Key::F2)) runDiagnostics(ctx);
+        else if (ev.is(Key::Up)) diagTop_ = std::max(0, diagTop_ - 1);
+        else if (ev.is(Key::Down)) diagTop_ = std::min(std::max(0, static_cast<int>(diagLines_.size()) - 1), diagTop_ + 1);
+        return;
+    }
     if (form_.editing()) { (void)form_.key(ctx, ev); return; }
     switch (ev.key) {
     case Key::F1: info_ = true; return;
+    case Key::F2: apply(ctx); runDiagnostics(ctx); return;
     case Key::F5: confirmReset_ = true; return;
     case Key::F6: apply(ctx); ctx.toast("Impostazioni salvate"); return;
     case Key::Exit: apply(ctx); ctx.home(); return;
@@ -104,10 +113,42 @@ void SystemApp::key(Context& ctx, const KeyEvent& ev) {
     if (consumed && (ev.is(Key::Left) || ev.is(Key::Right))) apply(ctx);
 }
 
+// DIAG: microSD and GRAPH self-tests, also printed on the USB serial port.
+void SystemApp::runDiagnostics(Context& ctx) {
+    diag_ = true; diagTop_ = 0; diagLines_.clear();
+    const diag::Clock clock = [&ctx]() { return ctx.now(); };
+    std::printf("[DIAG] PicoCalc FX %s on %s, free RAM %u KB\n", FXAI_VERSION_STRING, ctx.platform.name(), static_cast<unsigned>(ctx.platform.freeHeap() / 1024));
+    diagLines_.emplace_back(true, std::string("RAM libera prima dei test: ") + std::to_string(ctx.platform.freeHeap() / 1024) + " KB");
+    for (const auto& l : diag::testStorage(ctx.platform.files(), clock)) diagLines_.emplace_back(l.ok, "SD  " + l.text);
+    for (const auto& l : diag::testGraph(ctx.ws, clock)) diagLines_.emplace_back(l.ok, "GPH " + l.text);
+    diagLines_.emplace_back(true, std::string("RAM libera dopo i test: ") + std::to_string(ctx.platform.freeHeap() / 1024) + " KB");
+    std::printf("[DIAG] end\n");
+}
+
 void SystemApp::draw(Context& ctx, gfx::Canvas& c) {
     ui::clear(c);
     ctx.drawStatus(c, "SYSTEM / SET UP");
     const int top = ui::ContentTop + 1;
+    if (diag_) {
+        c.rect(0, top, ui::ScreenW, 18, SelectSoft, true);
+        int fails = 0;
+        for (const auto& l : diagLines_) fails += l.first ? 0 : 1;
+        const std::string head = fails ? "DIAGNOSTICA: " + std::to_string(fails) + " errori" : std::string("DIAGNOSTICA: tutto OK");
+        ui::text(c, 6, top + 2, head.c_str(), fails ? Error : Ink);
+        int y = top + 22;
+        for (int i = diagTop_; i < static_cast<int>(diagLines_.size()) && y < ui::ContentBottom - 26; ++i) {
+            const auto& l = diagLines_[static_cast<std::size_t>(i)];
+            std::string wrapped[3];
+            const std::size_t n = ui::wrapText(l.second, 49, wrapped, 3);
+            ui::text(c, 4, y, l.first ? "+" : "!", l.first ? Accent : Error, font::Face::Small);
+            for (std::size_t k = 0; k < n; ++k) { ui::text(c, 14, y, wrapped[k].c_str(), l.first ? Ink : Error, font::Face::Small); y += 13; }
+            y += 2;
+        }
+        ui::text(c, 6, ui::ContentBottom - 22, "Risultati anche su USB seriale: righe [DIAG]", Muted, font::Face::Small);
+        const char* k[6] = {"BACK", "RIPETI", nullptr, nullptr, nullptr, nullptr};
+        ui::softKeys(c, k);
+        return;
+    }
     if (info_) {
         const auto blob = serializeWorkspace(ctx.ws);
         char buf[96];
@@ -129,7 +170,7 @@ void SystemApp::draw(Context& ctx, gfx::Canvas& c) {
         return;
     }
     form_.draw(c, top + 2, ui::ContentBottom - 2);
-    const char* k[6] = {"INFO", nullptr, nullptr, nullptr, "RESET", "SAVE"};
+    const char* k[6] = {"INFO", "DIAG", nullptr, nullptr, "RESET", "SAVE"};
     ui::softKeys(c, k);
     if (confirmReset_) ui::errorBox(c, "RESET", "Cancellare variabili, storia, liste, funzioni e impostazioni? EXE = conferma");
 }

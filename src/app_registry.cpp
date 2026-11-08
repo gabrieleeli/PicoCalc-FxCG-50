@@ -85,7 +85,7 @@ const AppInfo kApps[AppCount] = {
      nullptr, s::Widgets | s::Storage, AllData, 0, kMemorySrc},
     {AppId::System, "System", "G", rgb888To565(60, 130, 150), AppStatus::Available,
      "Impostazioni (SET UP), retroilluminazione, Wi-Fi, relay AI, informazioni e reset",
-     nullptr, Ui | s::Network | s::Storage, AllData /* RESET clears the whole workspace */, 0, kSystemSrc},
+     nullptr, Ui | s::Network | s::Storage | s::Diag, AllData /* RESET clears the whole workspace */, 0, kSystemSrc},
     {AppId::Geometry, "Geometry", "H", rgb888To565(50, 110, 210), AppStatus::Planned,
      "Costruzioni geometriche (punti, rette, circonferenze, poligoni) e misure",
      "Costruzioni geometriche interattive non ancora implementate.",
@@ -129,13 +129,14 @@ const char* const kHRunCore[] = {"run_matrix.hpp", nullptr};
 const char* const kHModels[] = {"app_models.hpp", nullptr};
 const char* const kHGraphCore[] = {"graph_model.hpp", "graph_engine.hpp", "graph_solve.hpp", nullptr};
 const char* const kHFiles[] = {"file_store.hpp", "graph_file.hpp", "pict.hpp", nullptr};
+const char* const kHDiag[] = {"diagnostics.hpp", nullptr};
 const ServiceInfo kServices[service::Count] = {
     {s::Expression, "Expression", kHExpression}, {s::Exact, "Exact", kHExact}, {s::Editor, "Editor", kHEditor},
     {s::MathRender, "MathRender", kHRender}, {s::Format, "Format", kHFormat}, {s::Solvers, "Solvers", kHSolvers},
     {s::Stats, "Stats", kHStats}, {s::MathCore, "MathCore", kHMathCore}, {s::Widgets, "Widgets", kHWidgets},
     {s::Network, "Network", kHNetwork}, {s::Storage, "Storage", kHStorage}, {s::Units, "Units", kHUnits},
     {s::Help, "Help", kHHelp}, {s::RunCore, "RunCore", kHRunCore}, {s::Models, "Models", kHModels},
-    {s::GraphCore, "GraphCore", kHGraphCore}, {s::Files, "Files", kHFiles},
+    {s::GraphCore, "GraphCore", kHGraphCore}, {s::Files, "Files", kHFiles}, {s::Diag, "Diag", kHDiag},
 };
 const char* const kDataNames[data::Count] = {"settings", "memory", "history", "functions", "view", "table", "lists", "equation", "chat", "graph"};
 } // namespace

@@ -3,6 +3,7 @@
 #include "fatfs_store.hpp"
 #include "ff.h"
 #include "diskio.h"
+#include <cstdio>
 #include <cstring>
 #include <vector>
 
@@ -52,7 +53,7 @@ Status map(FRESULT r) {
     case FR_NO_FILE: case FR_NO_PATH: return Status::NotFound;
     case FR_EXIST: return Status::Exists;
     case FR_INVALID_NAME: case FR_INVALID_DRIVE: return Status::InvalidName;
-    case FR_NO_FILESYSTEM: return Status::Corrupt;
+    case FR_NO_FILESYSTEM: return Status::Unformatted;     // no FAT/exFAT volume (blank or other file system)
     case FR_DENIED: return Status::Full;                // directory or volume full when creating
     default: return Status::IoError;
     }
@@ -122,92 +123,121 @@ Status FatFsFileSystem::ensureMounted() {
 }
 Status FatFsFileSystem::status() { return ensureMounted(); }
 
-Status FatFsFileSystem::list(const std::string& dir, std::vector<Entry>& out) {
+template <typename Op> Status FatFsFileSystem::withVolume(Op op) {
     Status st = ensureMounted();
     if (st != Status::Ok) return st;
-    DIR d{};
-    FRESULT r = f_opendir(&d, fatPath(dir).c_str());
-    if (r != FR_OK) return map(r);
-    out.clear();
-    for (;;) {
-        FILINFO fno{};
-        r = f_readdir(&d, &fno);
-        if (r != FR_OK) { f_closedir(&d); return map(r); }
-        if (fno.fname[0] == 0) break;
-        if (std::strcmp(fno.fname, ".") == 0 || std::strcmp(fno.fname, "..") == 0) continue;
-        out.push_back({fno.fname, static_cast<std::uint32_t>(fno.fsize), (fno.fattrib & AM_DIR) != 0});
+    st = op();
+    if (st == Status::IoError && !device_.ready() && device_.present()) {
+        unmount();
+        st = ensureMounted();
+        if (st == Status::Ok) st = op();
     }
-    f_closedir(&d);
-    return Status::Ok;
+    return st;
+}
+
+Status FatFsFileSystem::list(const std::string& dir, std::vector<Entry>& out) {
+    return withVolume([&]() -> Status {
+        DIR d{};
+        FRESULT r = f_opendir(&d, fatPath(dir).c_str());
+        if (r != FR_OK) return map(r);
+        out.clear();
+        for (;;) {
+            FILINFO fno{};
+            r = f_readdir(&d, &fno);
+            if (r != FR_OK) { f_closedir(&d); return map(r); }
+            if (fno.fname[0] == 0) break;
+            if (std::strcmp(fno.fname, ".") == 0 || std::strcmp(fno.fname, "..") == 0) continue;
+            out.push_back({fno.fname, static_cast<std::uint32_t>(fno.fsize), (fno.fattrib & AM_DIR) != 0});
+        }
+        f_closedir(&d);
+        return Status::Ok;
+    });
 }
 Status FatFsFileSystem::stat(const std::string& path, Entry& out) {
-    Status st = ensureMounted();
-    if (st != Status::Ok) return st;
-    const std::string p = fatPath(path);
-    if (p == "/") { out = {"", 0, true}; return Status::Ok; }
-    FILINFO fno{};
-    const FRESULT r = f_stat(p.c_str(), &fno);
-    if (r != FR_OK) return map(r);
-    out = {fno.fname, static_cast<std::uint32_t>(fno.fsize), (fno.fattrib & AM_DIR) != 0};
-    return Status::Ok;
+    return withVolume([&]() -> Status {
+        const std::string p = fatPath(path);
+        if (p == "/") { out = {"", 0, true}; return Status::Ok; }
+        FILINFO fno{};
+        const FRESULT r = f_stat(p.c_str(), &fno);
+        if (r != FR_OK) return map(r);
+        out = {fno.fname, static_cast<std::uint32_t>(fno.fsize), (fno.fattrib & AM_DIR) != 0};
+        return Status::Ok;
+    });
 }
 Status FatFsFileSystem::openRead(const std::string& path, std::unique_ptr<Reader>& out) {
-    Status st = ensureMounted();
-    if (st != Status::Ok) return st;
-    auto r = std::make_unique<FatReader>();
-    const FRESULT res = f_open(&r->fil, fatPath(path).c_str(), FA_READ);
-    if (res != FR_OK) return map(res);
-    r->open = true;
-    out = std::move(r);
-    return Status::Ok;
+    return withVolume([&]() -> Status {
+        auto r = std::make_unique<FatReader>();
+        const FRESULT res = f_open(&r->fil, fatPath(path).c_str(), FA_READ);
+        if (res != FR_OK) return map(res);
+        r->open = true;
+        out = std::move(r);
+        return Status::Ok;
+    });
 }
 Status FatFsFileSystem::openWrite(const std::string& path, std::unique_ptr<Writer>& out) {
-    Status st = ensureMounted();
-    if (st != Status::Ok) return st;
-    auto w = std::make_unique<FatWriter>();
-    const FRESULT res = f_open(&w->fil, fatPath(path).c_str(), FA_WRITE | FA_CREATE_ALWAYS);
-    if (res != FR_OK) return map(res);
-    w->open = true;
-    out = std::move(w);
-    return Status::Ok;
+    return withVolume([&]() -> Status {
+        auto w = std::make_unique<FatWriter>();
+        const FRESULT res = f_open(&w->fil, fatPath(path).c_str(), FA_WRITE | FA_CREATE_ALWAYS);
+        if (res != FR_OK) return map(res);
+        w->open = true;
+        out = std::move(w);
+        return Status::Ok;
+    });
 }
 Status FatFsFileSystem::remove(const std::string& path) {
-    Status st = ensureMounted();
-    if (st != Status::Ok) return st;
-    const FRESULT r = f_unlink(fatPath(path).c_str());
-    return r == FR_DENIED ? Status::IoError : map(r);   // non-empty directory or read-only file
+    return withVolume([&]() -> Status {
+        const FRESULT r = f_unlink(fatPath(path).c_str());
+        return r == FR_DENIED ? Status::IoError : map(r);   // non-empty directory or read-only file
+    });
 }
 Status FatFsFileSystem::rename(const std::string& from, const std::string& to) {
-    Status st = ensureMounted();
-    if (st != Status::Ok) return st;
-    return map(f_rename(fatPath(from).c_str(), fatPath(to).c_str()));
+    return withVolume([&]() -> Status {
+        return map(f_rename(fatPath(from).c_str(), fatPath(to).c_str()));
+    });
 }
 Status FatFsFileSystem::makeDirs(const std::string& path) {
-    Status st = ensureMounted();
-    if (st != Status::Ok) return st;
-    const std::string p = fatPath(path);
-    for (std::size_t i = 1; i <= p.size(); ++i) {
-        if (i != p.size() && p[i] != '/') continue;
-        const std::string part = p.substr(0, i);
-        const FRESULT r = f_mkdir(part.c_str());
-        if (r == FR_EXIST) {
-            FILINFO fno{};
-            if (f_stat(part.c_str(), &fno) != FR_OK || !(fno.fattrib & AM_DIR)) return Status::Exists;
-            continue;
+    return withVolume([&]() -> Status {
+        const std::string p = fatPath(path);
+        for (std::size_t i = 1; i <= p.size(); ++i) {
+            if (i != p.size() && p[i] != '/') continue;
+            const std::string part = p.substr(0, i);
+            const FRESULT r = f_mkdir(part.c_str());
+            if (r == FR_EXIST) {
+                FILINFO fno{};
+                if (f_stat(part.c_str(), &fno) != FR_OK || !(fno.fattrib & AM_DIR)) return Status::Exists;
+                continue;
+            }
+            if (r != FR_OK) return map(r);
         }
-        if (r != FR_OK) return map(r);
-    }
-    return Status::Ok;
+        return Status::Ok;
+    });
 }
 Status FatFsFileSystem::freeSpace(std::uint64_t& bytes) {
-    Status st = ensureMounted();
-    if (st != Status::Ok) return st;
-    DWORD clusters = 0;
-    FATFS* fs = nullptr;
-    const FRESULT r = f_getfree("", &clusters, &fs);
-    if (r != FR_OK) return map(r);
-    bytes = static_cast<std::uint64_t>(clusters) * fs->csize * sd::BlockDevice::SectorSize;
-    return Status::Ok;
+    return withVolume([&]() -> Status {
+        DWORD clusters = 0;
+        FATFS* fs = nullptr;
+        const FRESULT r = f_getfree("", &clusters, &fs);
+        if (r != FR_OK) return map(r);
+        bytes = static_cast<std::uint64_t>(clusters) * fs->csize * sd::BlockDevice::SectorSize;
+        return Status::Ok;
+    });
+}
+std::string FatFsFileSystem::describe() {
+    if (ensureMounted() != Status::Ok) return name();
+    const char* fsType = "?";
+    switch (volume_->fs.fs_type) {
+    case FS_FAT12: fsType = "FAT12"; break;
+    case FS_FAT16: fsType = "FAT16"; break;
+    case FS_FAT32: fsType = "FAT32"; break;
+    case FS_EXFAT: fsType = "exFAT"; break;
+    default: break;
+    }
+    char buf[96];
+    const unsigned cluster = static_cast<unsigned>(volume_->fs.csize * sd::BlockDevice::SectorSize);
+    std::snprintf(buf, sizeof(buf), "%s %.2f GB, %s, cluster %u %s", device_.kind(),
+                  static_cast<double>(device_.sectors()) * sd::BlockDevice::SectorSize / 1e9, fsType,
+                  cluster >= 1024 ? cluster / 1024 : cluster, cluster >= 1024 ? "KB" : "byte");
+    return buf;
 }
 Status FatFsFileSystem::format() {
 #if FF_USE_MKFS

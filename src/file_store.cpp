@@ -63,6 +63,7 @@ const char* statusMessage(Status s) noexcept {
     case Status::InvalidName: return "nome non valido";
     case Status::TooLarge: return "file troppo grande";
     case Status::NotSupported: return "operazione non supportata";
+    case Status::Unformatted: return "scheda non formattata o file system non supportato: formattarla in FAT32 o exFAT dal computer";
     }
     return "errore";
 }
@@ -82,7 +83,8 @@ std::string stem(const std::string& name) {
     return dot == std::string::npos || dot == 0 ? name : name.substr(0, dot);
 }
 
-Status readAll(FileSystem& fs, const std::string& path, std::vector<std::uint8_t>& out, std::size_t maxBytes) {
+namespace {
+Status readOnce(FileSystem& fs, const std::string& path, std::vector<std::uint8_t>& out, std::size_t maxBytes) {
     Entry e;
     Status st = fs.stat(path, e);
     if (st != Status::Ok) return st;
@@ -102,6 +104,14 @@ Status readAll(FileSystem& fs, const std::string& path, std::vector<std::uint8_t
     }
     out.swap(data);
     return Status::Ok;
+}
+} // namespace
+
+Status readAll(FileSystem& fs, const std::string& path, std::vector<std::uint8_t>& out, std::size_t maxBytes) {
+    // A transient read error (the card re-initialised after a removal, a data
+    // error token) is retried once from the start: reading has no side effects.
+    const Status st = readOnce(fs, path, out, maxBytes);
+    return st == Status::IoError ? readOnce(fs, path, out, maxBytes) : st;
 }
 
 Status writeAtomic(FileSystem& fs, const std::string& path, const std::function<Status(Writer&)>& producer) {

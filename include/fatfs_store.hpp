@@ -25,6 +25,7 @@ public:
     Status rename(const std::string& from, const std::string& to) override;
     Status makeDirs(const std::string& path) override;
     Status freeSpace(std::uint64_t& bytes) override;
+    std::string describe() override;
     // Creates a new FAT/exFAT volume (host builds with FXAI_FATFS_MKFS only).
     Status format();
     bool mounted() const noexcept { return mounted_; }
@@ -32,6 +33,10 @@ private:
     struct Volume;
     Status ensureMounted();
     void unmount();
+    // Runs op on the mounted volume; after an I/O error that left the card
+    // not ready (removed and inserted again, lost synchronisation) the card is
+    // initialised, the volume re-mounted and op tried once more.
+    template <typename Op> Status withVolume(Op op);
     sd::BlockDevice& device_;
     std::unique_ptr<Volume> volume_;
     bool mounted_{false};

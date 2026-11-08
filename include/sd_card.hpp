@@ -35,6 +35,7 @@ public:
     virtual bool read(std::uint64_t lba, std::uint8_t* dst, std::uint32_t count) = 0;
     virtual bool write(std::uint64_t lba, const std::uint8_t* src, std::uint32_t count) = 0;
     virtual bool sync() = 0;
+    virtual const char* kind() const { return "disk"; }   // for the diagnostics
 };
 
 class SdCard final : public BlockDevice {
@@ -51,6 +52,7 @@ public:
     bool write(std::uint64_t lba, const std::uint8_t* src, std::uint32_t count) override;
     bool sync() override;
     Type type() const noexcept { return type_; }
+    const char* kind() const override { return type_ == Type::SDHC ? "SDHC/SDXC" : type_ == Type::SDv2 ? "SDSC v2" : type_ == Type::SDv1 ? "SDSC v1" : "SD"; }
     void reset() noexcept { type_ = Type::None; sectors_ = 0; }
     std::uint32_t errors() const noexcept { return errors_; }
 private:

@@ -6,6 +6,7 @@
 #include "file_store.hpp"
 #include "graph_file.hpp"
 #include "sd_card.hpp"
+#include "sim_sd_card.hpp"
 #include "test_util.hpp"
 #include <cstring>
 #include <deque>
@@ -15,118 +16,7 @@
 using namespace fx;
 
 namespace {
-// SD card in SPI mode, simulated byte by byte as seen on MISO/MOSI.
-class SimCard final : public sd::SpiBus {
-public:
-    enum class Kind { SDHC, SDv2, SDv1 };
-    SimCard(Kind k, std::size_t sectors) : kind_(k), data_(sectors * 512, 0), sectors_(sectors) {}
-    bool present{true};
-    bool rejectWrites{false};
-    int busyBytes{3};
-    int readyPolls{3};                       // ACMD41 answers "idle" this many times
-    std::uint32_t clock{0};
-    std::size_t commands{0};
-    void setClock(std::uint32_t hz) override { clock = hz; }
-    void select(bool s) override { selected_ = s; if (!s) { out_.clear(); cmdLen_ = 0; } }
-    bool cardPresent() override { return present; }
-    std::uint32_t millis() override { return ++now_; }
-    std::uint8_t transfer(std::uint8_t in) override {
-        if (!present || !selected_) return 0xFF;
-        // Pending response bytes (R1 of CMD24 included) go out before the card waits for data.
-        if (rx_ != Rx::Data && cmdLen_ == 0 && !out_.empty()) { const std::uint8_t b = out_.front(); out_.pop_front(); return b; }
-        if (rx_ == Rx::Token) { if (in == 0xFE) { rx_ = Rx::Data; wbuf_.clear(); } return 0xFF; }
-        if (rx_ == Rx::Data) {
-            wbuf_.push_back(in);
-            if (wbuf_.size() == 514) {           // 512 data bytes + CRC
-                rx_ = Rx::None;
-                if (rejectWrites) out_.push_back(0x0D);
-                else {
-                    std::memcpy(data_.data() + waddr_ * 512, wbuf_.data(), 512);
-                    out_.push_back(0x05);
-                    for (int i = 0; i < busyBytes; ++i) out_.push_back(0x00);
-                }
-            }
-            return 0xFF;
-        }
-        if (cmdLen_ == 0 && !out_.empty()) { const std::uint8_t b = out_.front(); out_.pop_front(); return b; }
-        if (cmdLen_ == 0) { if ((in & 0xC0) == 0x40) cmd_[cmdLen_++] = in; return 0xFF; }
-        cmd_[cmdLen_++] = in;
-        if (cmdLen_ == 6) { cmdLen_ = 0; execute(); }
-        return 0xFF;
-    }
-    std::vector<std::uint8_t>& data() { return data_; }
-private:
-    enum class Rx { None, Token, Data };
-    void r1(std::uint8_t v) { out_.push_back(0xFF); out_.push_back(v); }
-    void execute() {
-        ++commands;
-        const std::uint8_t c = cmd_[0] & 0x3F;
-        const std::uint32_t arg = (static_cast<std::uint32_t>(cmd_[1]) << 24) | (cmd_[2] << 16) | (cmd_[3] << 8) | cmd_[4];
-        const bool app = app_;
-        app_ = false;
-        const std::uint8_t idle = idle_ ? 0x01 : 0x00;
-        switch (c) {
-        case 0: if (cmd_[5] != 0x95) { r1(0x09); return; } idle_ = true; polls_ = readyPolls; r1(0x01); return;
-        case 8:
-            if (kind_ == Kind::SDv1) { r1(0x05); return; }
-            if (cmd_[5] != 0x87) { r1(0x09); return; }
-            r1(idle); out_.insert(out_.end(), {0x00, 0x00, static_cast<std::uint8_t>((arg >> 8) & 0x0F), static_cast<std::uint8_t>(arg)});
-            return;
-        case 55: app_ = true; r1(idle); return;
-        case 41:
-            if (!app) { r1(0x04 | idle); return; }
-            if (kind_ == Kind::SDHC && !(arg & 0x40000000)) { r1(0x01); return; }   // SDHC needs HCS
-            if (polls_ > 0) { --polls_; r1(0x01); return; }
-            idle_ = false; r1(0x00); return;
-        case 58: r1(idle); out_.insert(out_.end(), {static_cast<std::uint8_t>(0x80 | (kind_ == Kind::SDHC ? 0x40 : 0)), 0xFF, 0x80, 0x00}); return;
-        case 16: r1(arg == 512 ? idle : static_cast<std::uint8_t>(0x40 | idle)); return;
-        case 9: {
-            if (idle_) { r1(0x01); return; }
-            std::uint8_t csd[16]{};
-            if (kind_ == Kind::SDHC) {
-                const std::uint32_t csize = static_cast<std::uint32_t>(sectors_ / 1024 - 1);
-                csd[0] = 0x40; csd[7] = static_cast<std::uint8_t>((csize >> 16) & 0x3F); csd[8] = static_cast<std::uint8_t>(csize >> 8); csd[9] = static_cast<std::uint8_t>(csize);
-            } else {
-                // capacity = (C_SIZE+1) * 2^(C_SIZE_MULT+2) * 2^READ_BL_LEN with READ_BL_LEN = 9, MULT = 7
-                const std::uint32_t csize = static_cast<std::uint32_t>(sectors_ / 512 - 1);
-                csd[5] = 9; csd[6] = static_cast<std::uint8_t>((csize >> 10) & 0x03); csd[7] = static_cast<std::uint8_t>(csize >> 2);
-                csd[8] = static_cast<std::uint8_t>((csize & 0x03) << 6); csd[9] = 0x03; csd[10] = 0x80;
-            }
-            r1(0x00); out_.push_back(0xFF); out_.push_back(0xFE);
-            out_.insert(out_.end(), csd, csd + 16); out_.push_back(0xAB); out_.push_back(0xCD);
-            return;
-        }
-        case 17: {
-            const std::uint64_t lba = kind_ == Kind::SDHC ? arg : arg / 512;
-            if (idle_ || lba >= sectors_ || (kind_ != Kind::SDHC && arg % 512)) { r1(0x20); return; }
-            r1(0x00); out_.push_back(0xFF); out_.push_back(0xFF); out_.push_back(0xFE);
-            out_.insert(out_.end(), data_.begin() + static_cast<std::ptrdiff_t>(lba * 512), data_.begin() + static_cast<std::ptrdiff_t>(lba * 512 + 512));
-            out_.push_back(0x12); out_.push_back(0x34);
-            return;
-        }
-        case 24: {
-            const std::uint64_t lba = kind_ == Kind::SDHC ? arg : arg / 512;
-            if (idle_ || lba >= sectors_) { r1(0x20); return; }
-            waddr_ = lba; rx_ = Rx::Token; r1(0x00);
-            return;
-        }
-        case 13: r1(0x00); out_.push_back(0x00); return;
-        default: r1(0x04 | idle); return;
-        }
-    }
-    Kind kind_;
-    std::vector<std::uint8_t> data_;
-    std::size_t sectors_;
-    std::deque<std::uint8_t> out_;
-    std::uint8_t cmd_[6]{};
-    int cmdLen_{0};
-    bool selected_{false}, idle_{true}, app_{false};
-    int polls_{0};
-    Rx rx_{Rx::None};
-    std::vector<std::uint8_t> wbuf_;
-    std::uint64_t waddr_{0};
-    std::uint32_t now_{0};
-};
+using test::SimCard;
 
 std::string readText(files::FileSystem& fs, const std::string& path) {
     std::vector<std::uint8_t> d;
@@ -223,7 +113,7 @@ int main() {
     {
         sd::RamDisk disk(32768);                                   // 16 MB
         files::FatFsFileSystem fs(disk);
-        CHECK(fs.status() == files::Status::Corrupt);              // not formatted
+        CHECK(fs.status() == files::Status::Unformatted);              // not formatted
         CHECK(fs.format() == files::Status::Ok && fs.mounted());
         exercise(fs, "RAM");
         // Card removed and inserted again: re-mounted, data kept
@@ -249,7 +139,7 @@ int main() {
         SimCard card(SimCard::Kind::SDHC, 32768);
         sd::SdCard sdc(card);
         files::FatFsFileSystem fs(sdc);
-        CHECK(fs.status() == files::Status::Corrupt);
+        CHECK(fs.status() == files::Status::Unformatted);
         CHECK(fs.format() == files::Status::Ok);
         exercise(fs, "SD");
         card.present = false;
@@ -264,6 +154,100 @@ int main() {
         sd::SdCard sdc(card);
         files::FatFsFileSystem fs(sdc);
         CHECK(fs.status() == files::Status::NoCard);
+    }
+    // ---------------------------------------------------------------- unformatted card, faults and recovery
+    {
+        SimCard card(SimCard::Kind::SDHC, 32768);                  // blank card: no file system
+        sd::SdCard sdc(card);
+        files::FatFsFileSystem fs(sdc);
+        CHECK(fs.status() == files::Status::Unformatted);
+        CHECK(std::string(files::statusMessage(files::Status::Unformatted)).find("formattat") != std::string::npos);
+        CHECK(fs.format() == files::Status::Ok);
+        const std::string text(1500, 'p');
+        auto write = [&](const char* path) { return files::writeAtomic(fs, path, reinterpret_cast<const std::uint8_t*>(text.data()), text.size()); };
+        CHECK(fs.makeDirs(files::GraphFolder) == files::Status::Ok);
+        CHECK(write("PICOCALC/GRAPH/A.pcgraph") == files::Status::Ok);
+        // Card taken out and put back between two operations (the card-detect
+        // switch was never seen open): the card lost power and is no longer in
+        // SPI mode. The operation re-initialises the card and re-mounts the volume.
+        card.powerCycle();
+        CHECK(readText(fs, "PICOCALC/GRAPH/A.pcgraph") == text);
+        card.powerCycle();
+        CHECK(write("PICOCALC/GRAPH/B.pcgraph") == files::Status::Ok);
+        CHECK(readText(fs, "PICOCALC/GRAPH/B.pcgraph") == text);
+        // A read error (data error token) is reported, the next operation works
+        card.failReads = 1000;
+        std::vector<std::uint8_t> data;
+        CHECK(files::readAll(fs, "PICOCALC/GRAPH/A.pcgraph", data, 1 << 20) == files::Status::IoError);
+        card.failReads = 0;
+        CHECK(readText(fs, "PICOCALC/GRAPH/A.pcgraph") == text);
+        // A transient read error is absorbed by one retry
+        card.failReads = 1;
+        CHECK(readText(fs, "PICOCALC/GRAPH/B.pcgraph") == text);
+        // Rejected writes: the save fails and the previous file stays intact
+        card.rejectWrites = true;
+        const std::string other(900, 'q');
+        CHECK(files::writeAtomic(fs, "PICOCALC/GRAPH/A.pcgraph", reinterpret_cast<const std::uint8_t*>(other.data()), other.size()) != files::Status::Ok);
+        card.rejectWrites = false;
+        CHECK(files::recover(fs, files::GraphFolder) == files::Status::Ok);
+        CHECK(readText(fs, "PICOCALC/GRAPH/A.pcgraph") == text);
+        std::vector<files::Entry> list;
+        CHECK(fs.list(files::GraphFolder, list) == files::Status::Ok && list.size() == 2);   // no .tmp/.bak left
+    }
+    // ---------------------------------------------------------------- sizes, names, folders, full card (whole SD stack)
+    {
+        SimCard card(SimCard::Kind::SDHC, 4096);                   // 2 MB card: FAT12, small enough to fill
+        sd::SdCard sdc(card);
+        files::FatFsFileSystem fs(sdc);
+        CHECK(fs.format() == files::Status::Ok);
+        auto bytes = [](std::size_t n) { std::vector<std::uint8_t> v(n); for (std::size_t i = 0; i < n; ++i) v[i] = static_cast<std::uint8_t>(i * 131 + n); return v; };
+        // sector and cluster boundaries, written and read back byte for byte
+        for (std::size_t n : {std::size_t{0}, std::size_t{1}, std::size_t{511}, std::size_t{512}, std::size_t{513}, std::size_t{4095}, std::size_t{4096}, std::size_t{4097}, std::size_t{65536}, std::size_t{300000}}) {
+            const auto data = bytes(n);
+            const std::string path = "SIZES/F" + std::to_string(n) + ".bin";
+            CHECK(fs.makeDirs("SIZES") == files::Status::Ok);
+            CHECK(files::writeAtomic(fs, path, data.data(), data.size()) == files::Status::Ok);
+            std::vector<std::uint8_t> back;
+            CHECK(files::readAll(fs, path, back, 1 << 20) == files::Status::Ok && back == data);
+        }
+        // nested folders and navigation
+        CHECK(fs.makeDirs("A/B/C/D") == files::Status::Ok);
+        const auto small = bytes(100);
+        CHECK(files::writeAtomic(fs, "A/B/C/D/deep.pcgraph", small.data(), small.size()) == files::Status::Ok);
+        std::vector<files::Entry> list;
+        CHECK(fs.list("A/B", list) == files::Status::Ok && list.size() == 1 && list[0].directory && list[0].name == "C");
+        CHECK(fs.list("/A//B/C/", list) == files::Status::Ok && list.size() == 1);   // tolerant paths
+        CHECK(fs.makeDirs("A/B/C/D/deep.pcgraph") == files::Status::Exists);        // a file is not a folder
+        // many files in one folder (the directory grows over several clusters)
+        CHECK(fs.makeDirs("MANY") == files::Status::Ok);
+        for (int i = 0; i < 150; ++i) CHECK(files::writeAtomic(fs, "MANY/PROJECT_" + std::to_string(i) + ".pcgraph", small.data(), small.size()) == files::Status::Ok);
+        CHECK(fs.list("MANY", list) == files::Status::Ok && list.size() == 150);
+        // names: case-only rename, long names, invalid characters
+        CHECK(fs.rename("MANY/PROJECT_0.pcgraph", "MANY/project_0.pcgraph") == files::Status::Ok);
+        files::Entry e;
+        CHECK(fs.stat("MANY/project_0.pcgraph", e) == files::Status::Ok && e.size == 100);
+        CHECK(fs.rename("MANY/PROJECT_1.pcgraph", "MANY/PROJECT_2.pcgraph") == files::Status::Exists);
+        CHECK(files::writeAtomic(fs, "MANY/A_VERY_LONG_PROJECT_NAME_1234567890.pcgraph", small.data(), small.size()) == files::Status::Ok);
+        CHECK(fs.openWrite("MANY/bad*name.pcgraph", *std::make_unique<std::unique_ptr<files::Writer>>()) == files::Status::InvalidName);
+        // full card: a save that does not fit fails without touching the old file
+        std::uint64_t freeBytes = 0;
+        CHECK(fs.freeSpace(freeBytes) == files::Status::Ok && freeBytes > 0 && freeBytes < 2u * 1024 * 1024);
+        const auto first = bytes(10000);
+        CHECK(files::writeAtomic(fs, "KEEP.pcgraph", first.data(), first.size()) == files::Status::Ok);
+        const auto filler = bytes(static_cast<std::size_t>(freeBytes));
+        CHECK(files::writeAtomic(fs, "FILLER.bin", filler.data(), filler.size()) == files::Status::Full);
+        const auto larger = bytes(static_cast<std::size_t>(freeBytes));
+        CHECK(files::writeAtomic(fs, "KEEP.pcgraph", larger.data(), larger.size()) == files::Status::Full);
+        CHECK(files::recover(fs, "") == files::Status::Ok);
+        std::vector<std::uint8_t> back;
+        CHECK(files::readAll(fs, "KEEP.pcgraph", back, 1 << 20) == files::Status::Ok && back == first);
+        CHECK(fs.stat("FILLER.bin", e) == files::Status::NotFound && fs.stat("KEEP.pcgraph.tmp", e) == files::Status::NotFound);
+        // the space is given back: the same file fits after deleting others
+        for (int i = 2; i < 150; ++i) (void)fs.remove("MANY/PROJECT_" + std::to_string(i) + ".pcgraph");
+        CHECK(fs.remove("SIZES/F300000.bin") == files::Status::Ok);
+        const auto medium = bytes(250000);
+        CHECK(files::writeAtomic(fs, "KEEP.pcgraph", medium.data(), medium.size()) == files::Status::Ok);
+        CHECK(files::readAll(fs, "KEEP.pcgraph", back, 1 << 20) == files::Status::Ok && back == medium);
     }
     return testutil::finish("sd_fatfs_test");
 }

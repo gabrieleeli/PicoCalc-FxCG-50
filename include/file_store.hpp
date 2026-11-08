@@ -16,7 +16,7 @@
 
 namespace fx::files {
 
-enum class Status : std::uint8_t { Ok = 0, NoCard, NotFound, Exists, Full, IoError, Corrupt, InvalidName, TooLarge, NotSupported };
+enum class Status : std::uint8_t { Ok = 0, NoCard, NotFound, Exists, Full, IoError, Corrupt, InvalidName, TooLarge, NotSupported, Unformatted };
 const char* statusMessage(Status s) noexcept;   // text for the error boxes ("No SD card", ...)
 
 struct Entry { std::string name; std::uint32_t size{}; bool directory{}; };
@@ -37,6 +37,8 @@ class FileSystem {
 public:
     virtual ~FileSystem() = default;
     virtual const char* name() const noexcept = 0;
+    // Medium and volume for the diagnostics ("SDHC 31.9 GB, FAT32"); status() first.
+    virtual std::string describe() { return name(); }
     // Ok when a card is inserted and mounted (mounts on demand, re-mounts after a change).
     virtual Status status() = 0;
     virtual Status list(const std::string& dir, std::vector<Entry>& out) = 0;

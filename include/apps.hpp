@@ -410,11 +410,17 @@ public:
     void leave(Context& ctx) override;
     void key(Context& ctx, const KeyEvent& ev) override;
     void draw(Context& ctx, gfx::Canvas& c) override;
+    const std::vector<std::pair<bool, std::string>>& diagnostics() const noexcept { return diagLines_; }
 private:
     void apply(Context& ctx);
+    void runDiagnostics(Context& ctx);
     Form form_;
     bool info_{false};
     bool confirmReset_{false};
+    // DIAG: self-tests for the validation on the PicoCalc (diagnostics.hpp)
+    bool diag_{false};
+    int diagTop_{0};
+    std::vector<std::pair<bool, std::string>> diagLines_;
 };
 
 class MemoryApp final : public App {

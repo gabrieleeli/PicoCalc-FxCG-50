@@ -15,6 +15,10 @@ void SdCard::deselect() {
 bool SdCard::fail() {
     ++errors_;
     deselect();
+    // No answer or a data error: the card may have been removed and inserted
+    // again (it is no longer in SPI mode) or have lost synchronisation. It is
+    // marked not ready, so the next access initialises it again.
+    reset();
     return false;
 }
 bool SdCard::waitReady(std::uint32_t timeoutMs) {

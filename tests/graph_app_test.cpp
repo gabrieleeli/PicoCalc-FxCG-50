@@ -6,11 +6,13 @@
 #include "board_host.hpp"
 #include "board_platform.hpp"
 #include "board_port.hpp"
+#include "fatfs_store.hpp"
 #include "file_store.hpp"
 #include "firmware.hpp"
 #include "graph_engine.hpp"
 #include "graph_file.hpp"
 #include "pict.hpp"
+#include "sim_sd_card.hpp"
 #include "test_util.hpp"
 #include <cmath>
 #include <string>
@@ -820,6 +822,113 @@ int main() {
         CHECK(r.fw.saves() == saves);
         CHECK(r.fw.apps().context().toastText().find("Memoria flash piena") != std::string::npos);
         ws.chat.clear();
+    }
+    // ================================================================ 12.4 on the whole microSD stack
+    // GRAPH -> files::FileSystem -> FatFs -> SD protocol (SPI) -> simulated SDHC card.
+    {
+        test::SimCard sim(test::SimCard::Kind::SDHC, 65536);          // 32 MB
+        sd::SdCard sdc(sim);
+        files::FatFsFileSystem sdfs(sdc);
+        CHECK(sdfs.format() == files::Status::Ok);
+        board::host::setFileSystem(&sdfs);
+        g = r.graphWith({"x^3-4x", "2sin(x)"});
+        ws.functions[2] = {"3cos(t)", GraphType::Param, true, 3, LineStyle::Thick, "1.5sin(2t)"};
+        ws.functions[3] = {"x^2-5", GraphType::YGreaterEq, true, 4, LineStyle::Broken, {}};
+        ws.functions[1].selected = false;
+        ws.view = {-4, 4, 1, -6, 6, 2, 0, 2 * kPi, 0.05};
+        ws.graph.settings.derivative = true; ws.graph.settings.grid = GridMode::Line;
+        ws.graph.vmem[2] = ws.view; ws.graph.vmemUsed = 4;
+        r.key(pckey::F4); r.type("5"); r.type("4"); r.enter("SDCYCLE");   // 1-2. create and SAVE AS
+        CHECK(!r.error() && ws.graph.project == "SDCYCLE");
+        const Workspace saved = ws;
+        r.fw.saveNow();
+        // 3. close: leave GRAPH, start a new project, restart the firmware
+        r.home(); r.type("5");
+        r.key(pckey::F4); r.type("5"); r.type("1");
+        CHECK(ws.functions[0].empty());
+        sim.powerCycle();                                                  // the card was taken out meanwhile
+        {
+            Rig again;
+            Workspace& w = again.ws();
+            again.type("5");
+            GA* g2 = again.graph();
+            // 4. reopen from the card
+            again.key(pckey::F4); again.type("5"); again.type("2");
+            CHECK(g2 && g2->screen() == GA::Screen::Files);
+            again.key(pckey::F1);
+            CHECK(!again.error() && w.graph.project == "SDCYCLE");
+            for (std::size_t i = 0; i < MaxGraphFunctions; ++i) {
+                const auto &a = saved.functions[i], &b = w.functions[i];
+                CHECK(a.expr == b.expr && a.expr2 == b.expr2 && a.type == b.type && a.selected == b.selected && a.color == b.color && a.style == b.style);
+            }
+            CHECK(w.view == saved.view && w.graph.settings.derivative && w.graph.settings.grid == GridMode::Line);
+            CHECK(w.graph.vmemUsed == 4 && w.graph.vmem[2] == saved.view);
+            // 5. modify and 6. save again
+            again.key(pckey::Home);
+            again.key(pckey::Down); again.key(pckey::F1);                // Y2 selected again
+            w.view.xmax = 5;
+            again.key(pckey::F4); again.type("5"); again.type("3");      // SAVE
+            CHECK(!again.error() && !w.graph.projectModified);
+        }
+        // 7. reopen and check that the changes persisted
+        sim.powerCycle();
+        graphfile::Project p;
+        std::vector<std::uint8_t> data;
+        CHECK(files::readAll(sdfs, "PICOCALC/GRAPH/SDCYCLE.pcgraph", data, 1 << 20) == files::Status::Ok);
+        CHECK_EQ_STR(graphfile::decode(std::string(data.begin(), data.end()), p), "");
+        CHECK(p.functions[1].selected && p.view.xmax == 5 && p.functions[2].expr2 == "1.5sin(2t)" && p.functions[3].type == GraphType::YGreaterEq);
+        std::vector<files::Entry> list;
+        CHECK(sdfs.list(files::GraphFolder, list) == files::Status::Ok && list.size() == 1);   // no .tmp / .bak left
+        // A card that is not formatted: a clear message
+        test::SimCard blank(test::SimCard::Kind::SDHC, 8192);
+        sd::SdCard blankCard(blank);
+        files::FatFsFileSystem blankFs(blankCard);
+        board::host::setFileSystem(&blankFs);
+        r.key(pckey::F4); r.type("5"); r.type("4"); r.enter("X");        // SAVE AS
+        CHECK(r.error() && r.errorTitle() == "Storage ERROR" && r.fw.apps().errorDetail().find("non formattata") != std::string::npos);
+        r.closeError();
+    }
+    // ================================================================ SYSTEM > DIAG (hardware self-tests)
+    {
+        test::SimCard sim(test::SimCard::Kind::SDHC, 65536);
+        sd::SdCard sdc(sim);
+        files::FatFsFileSystem sdfs(sdc);
+        CHECK(sdfs.format() == files::Status::Ok);
+        board::host::setFileSystem(&sdfs);
+        const auto functionsBefore = ws.functions;
+        r.home(); r.type("G");                                           // SYSTEM
+        auto* sys = dynamic_cast<app::SystemApp*>(r.fw.apps().active());
+        CHECK(sys != nullptr);
+        if (sys) {
+            r.key(pckey::F2);                                            // DIAG
+            const auto& lines = sys->diagnostics();
+            int fails = 0;
+            bool card = false, readOk = false, solve = false;
+            for (const auto& l : lines) {
+                if (!l.first) { ++fails; std::printf("  diag: %s\n", l.second.c_str()); }
+                if (l.second.find("SDHC/SDXC") != std::string::npos && l.second.find("FAT") != std::string::npos) card = true;
+                if (l.second.find("dati identici") != std::string::npos) readOk = true;
+                if (l.second.find("radici") != std::string::npos) solve = true;
+            }
+            CHECK(fails == 0 && card && readOk && solve && lines.size() >= 12);
+            std::vector<files::Entry> list;
+            CHECK(sdfs.list("PICOCALC", list) == files::Status::Ok);
+            bool left = false;
+            for (const auto& e : list) if (e.name == "DIAG") left = true;
+            CHECK(!left);                                                // nothing of the test stays on the card
+            bool same = true;
+            for (std::size_t i = 0; i < ws.functions.size(); ++i)
+                same = same && ws.functions[i].expr == functionsBefore[i].expr && ws.functions[i].type == functionsBefore[i].type;
+            CHECK(same);                                                 // the user's functions are untouched
+            // no card: the test says so
+            sim.present = false;
+            r.key(pckey::F2);
+            bool absent = false;
+            for (const auto& l : sys->diagnostics()) if (!l.first && l.second.find("assente") != std::string::npos) absent = true;
+            CHECK(absent);
+            sim.present = true;
+            r.key(pckey::Esc); r.key(pckey::Esc);
+        }
     }
     board::host::setFileSystem(&board::host::ramCard());
     return testutil::finish("graph_app_test");

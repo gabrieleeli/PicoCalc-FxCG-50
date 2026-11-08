@@ -17,7 +17,7 @@ add_library(fxai_core STATIC ${FXAI_CORE_SOURCES})
 target_include_directories(fxai_core PUBLIC ${FXAI_INCLUDE_DIR})
 target_compile_definitions(fxai_core PUBLIC FXAI_VERSION_STRING="${FXAI_VERSION_STRING}" FXAI_FATFS_MKFS=1)
 
-add_library(fxai_host_board STATIC ${FXAI_ROOT}/src/platform/host/board_host.cpp)
+add_library(fxai_host_board STATIC ${FXAI_ROOT}/src/platform/host/board_host.cpp ${FXAI_ROOT}/src/platform/host/file_disk.cpp)
 target_link_libraries(fxai_host_board PUBLIC fxai_core)
 
 enable_testing()
@@ -37,3 +37,15 @@ target_compile_definitions(architecture_test PRIVATE FXAI_SOURCE_ROOT="${FXAI_RO
 
 add_executable(picocalc_sim ${FXAI_ROOT}/src/platform/host/simulator.cpp)
 target_link_libraries(picocalc_sim PRIVATE fxai_core fxai_host_board)
+target_include_directories(picocalc_sim PRIVATE ${FXAI_ROOT}/src/platform/host)
+
+# microSD image tool and the interoperability test with independent FAT/exFAT
+# tools (dosfstools, exfatprogs, mtools); skipped when they are not installed.
+add_executable(sd_image_tool ${FXAI_ROOT}/tools/sd_image_tool.cpp)
+target_link_libraries(sd_image_tool PRIVATE fxai_core fxai_host_board)
+target_include_directories(sd_image_tool PRIVATE ${FXAI_ROOT}/src/platform/host)
+find_program(FXAI_MKFS_FAT mkfs.fat PATHS /usr/sbin /sbin)
+find_program(FXAI_MCOPY mcopy)
+if(FXAI_MKFS_FAT AND FXAI_MCOPY)
+  add_test(NAME sd_interop_test COMMAND bash ${CMAKE_CURRENT_LIST_DIR}/sd_interop_test.sh $<TARGET_FILE:sd_image_tool> ${CMAKE_CURRENT_BINARY_DIR}/sd_interop)
+endif()

@@ -46,7 +46,8 @@ constexpr std::uint32_t RunCore    = 1u << 13;   // run_matrix.hpp  Run-Matrix c
 constexpr std::uint32_t Models     = 1u << 14;   // app_models.hpp  data models of the planned modes
 constexpr std::uint32_t GraphCore  = 1u << 15;   // graph_model/graph_engine/graph_solve.hpp  plots, sampling, G-Solve, zoom
 constexpr std::uint32_t Files      = 1u << 16;   // file_store/graph_file/pict.hpp  microSD files, .pcgraph, .pcpict
-constexpr std::uint32_t Count      = 17;
+constexpr std::uint32_t Diag       = 1u << 17;   // diagnostics.hpp  hardware self-tests (microSD, GRAPH timing)
+constexpr std::uint32_t Count      = 18;
 } // namespace service
 
 // Sections of fx::Workspace, the only channel through which modes exchange data.

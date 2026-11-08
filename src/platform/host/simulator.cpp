@@ -6,12 +6,18 @@
 //   hold <NAME>      long press (first HOLD report)
 //   wait <ms>        advance the simulated clock
 //   shot <file.png>  save a screenshot (2x scale)
+// The microSD card is a 16 MB RAM card; with PICOCALC_SD_IMAGE=<file> it is a
+// FAT/exFAT disk image instead (for example a copy of a real card), used
+// through the same FatFs code as the firmware.
 #include "board_host.hpp"
 #include "board_platform.hpp"
 #include "board_port.hpp"
+#include "fatfs_store.hpp"
+#include "file_disk.hpp"
 #include "firmware.hpp"
 #include "keyboard_input.hpp"
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -38,6 +44,13 @@ int main(int argc, char** argv) {
     std::istream* in = &std::cin;
     if (std::string(argv[2]) != "-") { file.open(argv[2]); if (!file) { std::fprintf(stderr, "cannot open %s\n", argv[2]); return 2; } in = &file; }
     board::init();
+    const char* image = std::getenv("PICOCALC_SD_IMAGE");
+    static board::host::FileDisk disk(image ? image : "");
+    static fx::files::FatFsFileSystem imageFs(disk);
+    if (image) {
+        if (imageFs.status() != fx::files::Status::Ok) { std::fprintf(stderr, "cannot mount %s: %s\n", image, fx::files::statusMessage(imageFs.status())); return 2; }
+        board::host::setFileSystem(&imageFs);
+    }
     fx::BoardPlatform platform;
     fx::Firmware fw(platform, board::storageFlash());
     fw.boot();

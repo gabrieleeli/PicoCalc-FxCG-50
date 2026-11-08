@@ -94,6 +94,7 @@ public:
     Context& context() noexcept { return ctx_; }
     bool errorShown() const noexcept { return !errorTitle_.empty(); }
     const std::string& errorTitle() const noexcept { return errorTitle_; }
+    const std::string& errorDetail() const noexcept { return errorDetail_; }
     // Shows an fx-CG50 error box; the next key closes it.
     void showError(const std::string& what);
     bool needsFullRedraw() noexcept { const bool r = fullRedraw_; fullRedraw_ = false; return r; }
