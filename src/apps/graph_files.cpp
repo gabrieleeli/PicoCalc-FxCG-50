@@ -49,7 +49,8 @@ void GraphApp::saveProject(Context& ctx, const std::string& name) {
     if (!files::validName(name, 16)) throw MathError("Argument ERROR: nome di 1-16 caratteri A-Z 0-9 _ -");
     files::FileSystem* fs = fileSystem(ctx, true);
     const Workspace& ws = ctx.ws;
-    graphfile::Project p;
+    auto holder = std::make_unique<graphfile::Project>();      // ~2 KB: not on the 32 KB stack
+    graphfile::Project& p = *holder;
     p.functions = ws.functions;
     p.view = ws.view;
     p.angle = ws.settings.angle;
@@ -78,7 +79,8 @@ void GraphApp::openProject(Context& ctx, const std::string& name) {
     const files::Status st = files::readAll(*fs, files::join(files::GraphFolder, name + files::ProjectExtension), data, graphfile::MaxProjectBytes);
     if (st == files::Status::TooLarge) throw MathError("Storage ERROR: progetto troppo grande");
     check(st);
-    graphfile::Project p;
+    auto holder = std::make_unique<graphfile::Project>();
+    graphfile::Project& p = *holder;
     const std::string err = graphfile::decode(std::string(data.begin(), data.end()), p);
     if (!err.empty()) throw MathError("Storage ERROR: " + name + " non valido (" + err + ")");
     Workspace& ws = ctx.ws;

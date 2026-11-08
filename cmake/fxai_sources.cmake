@@ -15,6 +15,10 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/file_store.cpp
   ${FXAI_ROOT}/src/graph_file.cpp
   ${FXAI_ROOT}/src/pict.cpp
+  ${FXAI_ROOT}/src/sd_card.cpp
+  ${FXAI_ROOT}/src/fatfs_store.cpp
+  ${FXAI_ROOT}/third_party/fatfs/ff.c
+  ${FXAI_ROOT}/third_party/fatfs/ffunicode.c
   ${FXAI_ROOT}/src/natural_editor.cpp
   ${FXAI_ROOT}/src/math_renderer.cpp
   ${FXAI_ROOT}/src/graphics_engine.cpp
@@ -49,6 +53,8 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/apps/ai_chat_app.cpp
   ${FXAI_ROOT}/src/ai_protocol.cpp
 )
-set(FXAI_INCLUDE_DIR ${FXAI_ROOT}/include)
+set(FXAI_INCLUDE_DIR ${FXAI_ROOT}/include ${FXAI_ROOT}/third_party/fatfs)
+# FatFs is vendored unmodified (third_party/fatfs, 1-clause BSD): its own warnings are not ours.
+set_source_files_properties(${FXAI_ROOT}/third_party/fatfs/ff.c ${FXAI_ROOT}/third_party/fatfs/ffunicode.c PROPERTIES COMPILE_OPTIONS "-w")
 file(READ ${FXAI_ROOT}/VERSION FXAI_VERSION_RAW)
 string(STRIP "${FXAI_VERSION_RAW}" FXAI_VERSION_STRING)

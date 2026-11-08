@@ -8,6 +8,7 @@
 #include "board_port.hpp"
 #include "file_store.hpp"
 #include "firmware.hpp"
+#include "graph_engine.hpp"
 #include "graph_file.hpp"
 #include "pict.hpp"
 #include "test_util.hpp"
@@ -313,7 +314,19 @@ int main() {
         r.key(pckey::F5); r.type("8"); r.type("1"); r.enter("-2"); r.enter("0");   // ∫dx from -2 to 0 (manual 5-59)
         CHECK_NEAR(g->integralValue(), 4, 1e-10);
         CHECK_NEAR(ws.memory.answer(), 4, 1e-10);
-        r.key(pckey::Esc); r.key(pckey::Esc);
+        // The shaded region stays on the graph after EXIT; the next G-Solve
+        // redraws the graph without it.
+        auto shadePixel = [&](double x, double y) {
+            const graph::Viewport vp(ws.view);
+            const int sx = static_cast<int>(std::lround(vp.screenX(x))), sy = static_cast<int>(std::lround(vp.screenY(y)));
+            return board::graphics().pixels()[sy * ui::ScreenW + sx];
+        };
+        r.key(pckey::Esc); r.settle();
+        CHECK(g->mode() == GA::Mode::View && shadePixel(-1, 1) != 0xFFFF);      // under the curve, inside [-2, 0]
+        CHECK(shadePixel(1, 1) == 0xFFFF);                                        // outside the interval
+        r.key(pckey::F5); r.type("2"); r.settle();                               // MAX
+        CHECK(g->mode() == GA::Mode::Results && shadePixel(-1, 1) == 0xFFFF);
+        r.key(pckey::Esc);
         // ∫dx with the pointer: lower then upper, EXE
         r.key(pckey::F5); r.type("8"); r.type("1");
         r.key(pckey::Enter); r.keys(pckey::Right, 10); r.key(pckey::Enter);

@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 
 #ifndef FXAI_VERSION_STRING
 #define FXAI_VERSION_STRING "dev"
@@ -199,7 +200,9 @@ std::string decode(const std::string& text, Project& out) {
     std::vector<std::string> lines;
     std::string err = open(text, "PCGRAPH", lines);
     if (!err.empty()) return err;
-    Project p;
+    // On the heap: a project with 20 functions is about 2 KB (32 KB stack on the RP2350).
+    auto holder = std::make_unique<Project>();
+    Project& p = *holder;
     std::uint32_t seen = 0;
     bool haveView = false, ended = false;
     for (std::size_t li = 1; li < lines.size(); ++li) {

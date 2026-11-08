@@ -41,11 +41,13 @@ int main(int argc, char** argv) {
     fx::BoardPlatform platform;
     fx::Firmware fw(platform, board::storageFlash());
     fw.boot();
+    // Like the firmware main loop: keys, then frames while the active mode
+    // still has work (e.g. GRAPH draws its curves incrementally).
     auto pump = [&]() {
         std::uint16_t raw;
         while (board::pollKey(raw)) fw.rawKey(raw);
         board::host::advance(20);
-        if (fw.step()) { fw.draw(board::graphics()); board::present(); }
+        for (int i = 0; i < 2000 && fw.step(); ++i) { fw.draw(board::graphics()); board::present(); board::host::advance(2); }
     };
     pump();
     std::string line;

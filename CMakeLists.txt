@@ -38,6 +38,7 @@ add_executable(picocalc_fxai
   ${FXAI_CORE_SOURCES}
   src/platform/pico/board_pico.cpp
   src/platform/pico/net_pico.cpp
+  src/platform/pico/sd_spi_pico.cpp
   src/platform/pico/main_pico.cpp)
 target_include_directories(picocalc_fxai PRIVATE ${FXAI_INCLUDE_DIR}
   ${CMAKE_CURRENT_LIST_DIR}/src/platform/pico/config ${CMAKE_CURRENT_BINARY_DIR}/generated)

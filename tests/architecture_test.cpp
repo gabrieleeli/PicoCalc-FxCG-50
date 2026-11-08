@@ -209,10 +209,12 @@ int main() {
                                                 "graphics_engine.hpp", "font_renderer.hpp"};
         const char* engine[] = {"expression.hpp", "exact.hpp", "expression_ast.hpp", "memory.hpp", "math_engine.hpp", "number_format.hpp",
                                 "solvers.hpp", "statistics.hpp", "run_matrix.hpp", "workspace.hpp", "storage.hpp", "app_models.hpp",
-                                "graph_model.hpp", "graph_engine.hpp", "graph_solve.hpp", "file_store.hpp", "graph_file.hpp", "pict.hpp"};
+                                "graph_model.hpp", "graph_engine.hpp", "graph_solve.hpp", "file_store.hpp", "graph_file.hpp", "pict.hpp",
+                                "sd_card.hpp", "fatfs_store.hpp"};
         const char* engineSrc[] = {"src/expression.cpp", "src/exact.cpp", "src/memory.cpp", "src/math_engine.cpp", "src/number_format.cpp",
                                    "src/solvers.cpp", "src/statistics.cpp", "src/run_matrix.cpp", "src/workspace.cpp", "src/storage.cpp", "src/app_models.cpp",
-                                   "src/graph_model.cpp", "src/graph_engine.cpp", "src/graph_solve.cpp", "src/file_store.cpp", "src/graph_file.cpp", "src/pict.cpp"};
+                                   "src/graph_model.cpp", "src/graph_engine.cpp", "src/graph_solve.cpp", "src/file_store.cpp", "src/graph_file.cpp", "src/pict.cpp",
+                                   "src/sd_card.cpp", "src/fatfs_store.cpp"};
         for (const char* h : engine)
             for (const auto& inc : includesOf(codeOnly(readFile(std::string("include/") + h))))
                 ::testutil::report(appLayer.count(inc) == 0, "engine header independent of the UI", h, 0, inc);

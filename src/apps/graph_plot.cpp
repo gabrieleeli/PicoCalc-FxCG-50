@@ -1,12 +1,13 @@
 // GRAPH plot screen: incremental rendering of the curves sampled by the graph
-// engine, the layers of the graph screen (background picture, grid, axes,
-// recalled picture, inequality regions, curves, sketches) and the interactive
+// engine, the layers of the graph screen (background picture, inequality
+// regions, grid, axes, recalled picture, curves, sketches) and the interactive
 // tools: TRACE, ZOOM, SKETCH, G-SOLVE, PAN, paste and Modify display.
 // Every value shown comes from the shared evaluator through the engine.
 #include "apps.hpp"
 #include "graph_solve.hpp"
 #include "math_renderer.hpp"
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <limits>
@@ -124,6 +125,26 @@ bool isTType(GraphType t) { return t == GraphType::Polar || t == GraphType::Para
 std::string relationText(const graph::Plot& p) {
     if (p.type == GraphType::Param || p.type == GraphType::Polar) return "=";
     return std::string(graphTypeLabel(p.type)).substr(1);
+}
+// The editor exports a power box as "(base)^(exp)": for the one-line info text a
+// base made of one name or number loses its parentheses ("(x)^(3)" -> "x^(3)").
+std::string compactPowers(const std::string& s) {
+    std::string out;
+    out.reserve(s.size());
+    for (std::size_t i = 0; i < s.size(); ++i) {
+        if (s[i] == '(') {
+            std::size_t j = i + 1;
+            while (j < s.size() && (std::isalnum(static_cast<unsigned char>(s[j])) || s[j] == '.' || s[j] == '_')) ++j;
+            const bool before = i > 0 && (std::isalnum(static_cast<unsigned char>(s[i - 1])) || s[i - 1] == '_');
+            if (!before && j > i + 1 && j + 1 < s.size() && s[j] == ')' && s[j + 1] == '^') {
+                out.append(s, i + 1, j - i - 1);
+                i = j;                                   // skip ")" too
+                continue;
+            }
+        }
+        out.push_back(s[i]);
+    }
+    return out;
 }
 } // namespace
 
@@ -271,7 +292,51 @@ void GraphApp::drawLayers(Context& ctx, gfx::Canvas& c) {
             c.hLine(L + x, T + y, n, shown);
         });
     }
-    // 2) grid
+    // 2) inequality regions: Union fills each region, Intsect only the common one (manual 5-3)
+    const auto& plots = engine_.plots();
+    std::vector<int> ineq;
+    for (int i = 0; i < static_cast<int>(plots.size()) && i < static_cast<int>(curves_.size()); ++i)
+        if (isInequality(plots[static_cast<std::size_t>(i)].type) && !curves_[static_cast<std::size_t>(i)].boundary.empty()) ineq.push_back(i);
+    auto inside = [&](int i, int x, int y) {
+        const graph::Plot& p = plots[static_cast<std::size_t>(i)];
+        const auto& bd = curves_[static_cast<std::size_t>(i)].boundary;
+        const bool yType = isYType(p.type);
+        const std::size_t k = static_cast<std::size_t>(yType ? x - L : y - T);
+        if (k >= bd.size() || std::isnan(bd[k])) return false;
+        const float b = bd[k];
+        const bool strict = isStrictInequality(p.type), greater = isGreaterInequality(p.type);
+        if (yType) return greater ? (strict ? y < b - 0.5f : y <= b) : (strict ? y > b + 0.5f : y >= b);
+        return greater ? (strict ? x > b + 0.5f : x >= b) : (strict ? x < b - 0.5f : x <= b);
+    };
+    if (!ineq.empty()) {
+        if (gs.ineqUnion || ineq.size() == 1) {
+            for (std::size_t n = 0; n < ineq.size(); ++n) {
+                const int i = ineq[n];
+                const std::uint16_t col = gfx::Canvas::blend(graphColor(plots[static_cast<std::size_t>(i)].color), 0xFFFF, 110);
+                for (int x = L; x <= R; ++x)
+                    for (int y = T; y <= B; ++y)
+                        if (((x - y + static_cast<int>(n)) & 3) == 0 && inside(i, x, y)) c.pixel(x, y, col);
+            }
+        } else {
+            const std::uint16_t col = gfx::Canvas::blend(graphColor(plots[static_cast<std::size_t>(ineq[0])].color), 0xFFFF, 110);
+            for (int x = L; x <= R; ++x)
+                for (int y = T; y <= B; ++y) {
+                    if (((x - y) & 3) != 0) continue;
+                    bool all = true;
+                    for (int i : ineq) if (!inside(i, x, y)) { all = false; break; }
+                    if (all) c.pixel(x, y, col);
+                }
+        }
+    }
+    // 3) integral shading
+    if (shadeIntegral_ && !shade_.empty() && integral_.f >= 0 && integral_.f < static_cast<int>(plots.size())) {
+        const std::uint16_t col = gfx::Canvas::blend(graphColor(plots[static_cast<std::size_t>(integral_.f)].color), 0xFFFF, 90);
+        for (std::size_t i = 0; i + 2 < shade_.size(); i += 3) {
+            const int y0 = std::clamp<int>(shade_[i + 1], T, B), y1 = std::clamp<int>(shade_[i + 2], T, B);
+            c.vLine(shade_[i], std::min(y0, y1), std::abs(y1 - y0) + 1, col);
+        }
+    }
+    // 4) grid, drawn over the fills so the axes stay readable
     double fx = 0, fy = 0; int nx = 0, ny = 0;
     const bool xt = graph::tickRange(v.xmin, v.xmax, v.xscl, 200, fx, nx) && v.xscl / vp.xdot() >= 4;
     const bool yt = graph::tickRange(v.ymin, v.ymax, v.yscl, 200, fy, ny) && v.yscl / vp.ydot() >= 4;
@@ -282,7 +347,7 @@ void GraphApp::drawLayers(Context& ctx, gfx::Canvas& c) {
         if (xt) for (int i = 0; i < nx; ++i) c.vLine(static_cast<int>(std::lround(vp.screenX(fx + i * v.xscl))), T, Rows, Faint);
         if (yt) for (int j = 0; j < ny; ++j) c.hLine(L, static_cast<int>(std::lround(vp.screenY(fy + j * v.yscl))), Cols, Faint);
     }
-    // 3) axes, ticks, scale values and labels. An axis outside the window is
+    // 5) axes, ticks, scale values and labels. An axis outside the window is
     // indicated on the edge closest to the origin (manual 5-6).
     if (gs.axes != AxesMode::Off) {
         const bool xIn = v.ymin <= 0 && v.ymax >= 0, yIn = v.xmin <= 0 && v.xmax >= 0;
@@ -324,55 +389,11 @@ void GraphApp::drawLayers(Context& ctx, gfx::Canvas& c) {
             if (xIn && yIn) ui::text(c, ax - 8, ay + 2, "O", Ink, font::Face::Small);
         }
     }
-    // 4) recalled picture: behind the graphs, white is transparent
+    // 6) recalled picture: behind the graphs, white is transparent
     if (!overlay_.empty()) {
         pict::forEachSpan(overlay_, [&](int x, int y, int n, std::uint16_t col) {
             if (col != pict::Transparent && y < Rows) c.hLine(L + x, T + y, n, col);
         });
-    }
-    // 5) inequality regions: Union fills each region, Intsect only the common one (manual 5-3)
-    const auto& plots = engine_.plots();
-    std::vector<int> ineq;
-    for (int i = 0; i < static_cast<int>(plots.size()) && i < static_cast<int>(curves_.size()); ++i)
-        if (isInequality(plots[static_cast<std::size_t>(i)].type) && !curves_[static_cast<std::size_t>(i)].boundary.empty()) ineq.push_back(i);
-    auto inside = [&](int i, int x, int y) {
-        const graph::Plot& p = plots[static_cast<std::size_t>(i)];
-        const auto& bd = curves_[static_cast<std::size_t>(i)].boundary;
-        const bool yType = isYType(p.type);
-        const std::size_t k = static_cast<std::size_t>(yType ? x - L : y - T);
-        if (k >= bd.size() || std::isnan(bd[k])) return false;
-        const float b = bd[k];
-        const bool strict = isStrictInequality(p.type), greater = isGreaterInequality(p.type);
-        if (yType) return greater ? (strict ? y < b - 0.5f : y <= b) : (strict ? y > b + 0.5f : y >= b);
-        return greater ? (strict ? x > b + 0.5f : x >= b) : (strict ? x < b - 0.5f : x <= b);
-    };
-    if (!ineq.empty()) {
-        if (gs.ineqUnion || ineq.size() == 1) {
-            for (std::size_t n = 0; n < ineq.size(); ++n) {
-                const int i = ineq[n];
-                const std::uint16_t col = gfx::Canvas::blend(graphColor(plots[static_cast<std::size_t>(i)].color), 0xFFFF, 110);
-                for (int x = L; x <= R; ++x)
-                    for (int y = T; y <= B; ++y)
-                        if (((x - y + static_cast<int>(n)) & 3) == 0 && inside(i, x, y)) c.pixel(x, y, col);
-            }
-        } else {
-            const std::uint16_t col = gfx::Canvas::blend(graphColor(plots[static_cast<std::size_t>(ineq[0])].color), 0xFFFF, 110);
-            for (int x = L; x <= R; ++x)
-                for (int y = T; y <= B; ++y) {
-                    if (((x - y) & 3) != 0) continue;
-                    bool all = true;
-                    for (int i : ineq) if (!inside(i, x, y)) { all = false; break; }
-                    if (all) c.pixel(x, y, col);
-                }
-        }
-    }
-    // 6) integral shading
-    if (shadeIntegral_ && !shade_.empty() && integral_.f >= 0 && integral_.f < static_cast<int>(plots.size())) {
-        const std::uint16_t col = gfx::Canvas::blend(graphColor(plots[static_cast<std::size_t>(integral_.f)].color), 0xFFFF, 90);
-        for (std::size_t i = 0; i + 2 < shade_.size(); i += 3) {
-            const int y0 = std::clamp<int>(shade_[i + 1], T, B), y1 = std::clamp<int>(shade_[i + 2], T, B);
-            c.vLine(shade_[i], std::min(y0, y1), std::abs(y1 - y0) + 1, col);
-        }
     }
     // 7) curves
     for (std::size_t i = 0; i < plots.size() && i < curves_.size(); ++i)
@@ -448,7 +469,7 @@ void GraphApp::drawOverlays(Context& ctx, gfx::Canvas& c) {
     auto plotTitle = [&](int i) {
         if (i < 0 || i >= static_cast<int>(plots.size())) return std::string();
         const graph::Plot& p = plots[static_cast<std::size_t>(i)];
-        std::string s = p.label + relationText(p) + formatNatural(p.text);
+        std::string s = p.label + relationText(p) + formatNatural(compactPowers(p.text));
         if (p.type == GraphType::Param && p.body2) s = p.label + "," + "Yt" + p.label.substr(2) + " (parametrica)";
         if (!p.detail.empty()) s += "  [" + p.detail + "]";
         return s;
@@ -544,7 +565,12 @@ void GraphApp::drawOverlays(Context& ctx, gfx::Canvas& c) {
         if (!solutions_.empty()) {
             const Solution& s = solutions_[static_cast<std::size_t>(solutionIndex_)];
             const int sx = static_cast<int>(std::lround(vp.screenX(s.x))), sy = static_cast<int>(std::lround(vp.screenY(s.y)));
-            if (vp.inside(sx, sy, 6)) { c.circle(sx, sy, 5, Error, false); c.circle(sx, sy, 4, Error, false); cross(sx, sy, Error); }
+            if (vp.inside(sx, sy, 6)) {
+                c.setClip({L, T, Cols, Rows});                 // never over the status bar
+                c.circle(sx, sy, 5, Error, false); c.circle(sx, sy, 4, Error, false);
+                c.resetClip();
+                cross(sx, sy, Error);
+            }
             char idx[32];
             std::snprintf(idx, sizeof(idx), "  [%d/%d]", solutionIndex_ + 1, static_cast<int>(solutions_.size()));
             topText_ = solveLabel_ + "  " + (solvePlot_ >= 0 && solvePlot_ < static_cast<int>(plots.size()) ? plots[static_cast<std::size_t>(solvePlot_)].label : std::string()) + (solutions_.size() > 1 ? idx : "");
@@ -1360,6 +1386,7 @@ void GraphApp::plotMenu(Context& ctx, Menu menu, int c) {
     case Menu::Solve: {
         static const Action acts[] = {Action::Root, Action::Max, Action::Min, Action::YIcept, Action::Isect, Action::YCal, Action::XCal};
         if (c == 7) { showMenu(Menu::SolveIntegral, "\xE2\x88\xAB" "dx", {"\xE2\x88\xAB" "dx", "ROOT", "INTSECT", "MIXED"}); return; }
+        shadeIntegral_ = false; shade_.clear();      // a new G-Solve redraws the graph without the old shading
         startSelect(ctx, acts[c]);
         return;
     }
