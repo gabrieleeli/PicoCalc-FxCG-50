@@ -20,13 +20,13 @@
 
 ## Versioni e branch
 
-Ogni versione ha un branch `version/<n>` e un tag `v<n>`; non vanno modificati
-dopo il rilascio. Lo sviluppo nuovo avviene in branch separati.
+Ogni versione ha un branch `version/<n>`; non va modificato dopo il rilascio.
+Lo sviluppo nuovo avviene in branch separati.
 
 | Branch / tag | Contenuto |
 |---|---|
-| `version/v1.5.4` · `v1.5.4` | codice originale caricato (non compilava per RP2350) |
-| `version/v1.6.0` · `v1.6.0` | prima build RP2350, modalità complete della v1.6.0, relay AI |
+| `version/v1.5.4` | codice originale caricato (non compilava per RP2350) |
+| `version/v1.6.0` | prima build RP2350, modalità complete della v1.6.0, relay AI |
 
 ## Documenti storici (versioni ≤ 1.5.4)
 
