@@ -49,8 +49,8 @@ const AppInfo kApps[AppCount] = {
      "Grafici dinamici con parametro variabile non ancora implementati.",
      s::Expression | Ui | s::MathRender | s::Storage | s::Models, d::Settings | d::Memory | d::View, 0, nullptr},
     {AppId::Table, "Table", "7", rgb888To565(120, 70, 200), AppStatus::Available,
-     "Tabelle di valori delle funzioni Y1..Y20 con Start/End/Step e dY/dX; GPH-CON/GPH-PLT verso Graph",
-     nullptr, s::Expression | Ui | s::Storage | s::GraphCore, d::Settings | d::Memory | d::Functions | d::View | d::Table | d::Lists | d::Graph,
+     "Tabelle di Y=, r= e parametriche (Y1..Y20) da range o lista, derivate, EDIT/ROW, LISTMEM; GPH-CON/GPH-PLT verso Graph",
+     nullptr, s::Expression | Ui | s::MathRender | s::Storage | s::GraphCore, d::Settings | d::Memory | d::Functions | d::View | d::Table | d::Lists | d::Graph,
      linkTo(AppId::Graph), kTableSrc},
     {AppId::Recursion, "Recursion", "8", rgb888To565(40, 60, 160), AppStatus::Planned,
      "Successioni an, an+1, an+2 (fino a tre), tabelle, grafici e diagrammi di fase",
@@ -127,7 +127,7 @@ const char* const kHUnits[] = {"point_a.hpp", nullptr};
 const char* const kHHelp[] = {"cheatsheet.hpp", nullptr};
 const char* const kHRunCore[] = {"run_matrix.hpp", nullptr};
 const char* const kHModels[] = {"app_models.hpp", nullptr};
-const char* const kHGraphCore[] = {"graph_model.hpp", "graph_engine.hpp", "graph_solve.hpp", nullptr};
+const char* const kHGraphCore[] = {"graph_model.hpp", "graph_engine.hpp", "graph_solve.hpp", "table_model.hpp", nullptr};
 const char* const kHFiles[] = {"file_store.hpp", "graph_file.hpp", "pict.hpp", nullptr};
 const char* const kHDiag[] = {"diagnostics.hpp", nullptr};
 const ServiceInfo kServices[service::Count] = {

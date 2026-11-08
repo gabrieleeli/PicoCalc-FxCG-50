@@ -7,6 +7,7 @@
 #include "app_widgets.hpp"
 #include "file_store.hpp"
 #include "graph_engine.hpp"
+#include "table_model.hpp"
 #include "pict.hpp"
 #include "statistics.hpp"
 #include <array>
@@ -388,19 +389,60 @@ public:
     void leave(Context& ctx) override;
     void key(Context& ctx, const KeyEvent& ev) override;
     void draw(Context& ctx, gfx::Canvas& c) override;
-    struct Column { int plot; bool derivative; };
-    const std::vector<Column>& columns() const noexcept { return cols_; }
-    const std::vector<double>& xs() const noexcept { return xs_; }
-    // Value shown in a cell (false: "ERROR"), from the shared evaluator.
-    bool cell(int row, int column, double& out) const;
+    bool ownsSetup() const override { return true; }   // SETUP: Variable, Derivative, Angle
+    // Table relation list (manual 5-32), function editor, range form,
+    // Setup, the number table (manual 5-33..5-35).
+    enum class Screen : std::uint8_t { List, Edit, Set, Setup, Table };
+    Screen screen() const noexcept { return screen_; }
+    const std::vector<table::Column>& columns() const noexcept { return cols_; }
+    int row() const noexcept { return row_; }
+    int column() const noexcept { return col_; }        // -1: the variable column (x, θ, T)
+    // Value of a cell of the generated table (column -1: the variable); false: "ERROR".
+    bool cell(Context& ctx, int row, int column, double& out);
+    std::string cellText(Context& ctx, int row, int column);
 private:
-    void rebuild(Context& ctx);
-    bool setup_{false};
-    Form form_;
-    std::vector<double> xs_;
-    std::vector<Column> cols_;
+    enum class Menu : std::uint8_t { None, Type, Style, Row, Optn };
+    enum class Ask : std::uint8_t { None, EditValue, ListMem };
+    enum class Confirm : std::uint8_t { None, DeleteFunction, DeleteTable };
+    struct Line { int fn; int sub; };                    // relation list line (sub 1 = Yt of a parametric pair)
+    std::vector<Line> lines(Context& ctx) const;
+    GraphType lineType(Context& ctx, int fn) const;
+    bool ensure(Context& ctx);                           // engine and columns up to date with the workspace
+    std::uint64_t fingerprint(Context& ctx) const;
+    void generate(Context& ctx);                         // TABLE (F6): rows from the range or the list
+    void listKey(Context& ctx, const KeyEvent& ev);
+    void editKey(Context& ctx, const KeyEvent& ev);
+    void tableKey(Context& ctx, const KeyEvent& ev);
+    void formKey(Context& ctx, const KeyEvent& ev);
+    void beginEdit(Context& ctx, bool keep, char first = 0);
+    void storeEdit(Context& ctx);
+    void menuChoice(Context& ctx, int choice);
+    void answer(Context& ctx);
+    void openSet(Context& ctx);
+    void openSetup(Context& ctx);
+    void drawList(Context& ctx, gfx::Canvas& c);
+    void drawTable(Context& ctx, gfx::Canvas& c);
+    Screen screen_{Screen::List}, formReturn_{Screen::List};
+    int listRow_{0}, listFirst_{0};
+    int row_{0}, col_{-1}, firstRow_{0}, firstCol_{0};
+    // relation list editing
+    NaturalEditor editor_;
+    int editFn_{-1}, editSub_{0};
+    bool editNew_{false};
+    // engine and columns of the table type
     graph::GraphEngine engine_;
-    int row_{0}, firstRow_{0}, col_{0};
+    std::vector<table::Column> cols_;
+    std::uint64_t fingerprint_{0};
+    bool built_{false};
+    std::string buildError_;
+    Form form_;
+    PopupMenu menu_;
+    Menu menuKind_{Menu::None};
+    Ask ask_{Ask::None};
+    std::string askPrompt_;
+    NaturalEditor input_;
+    Confirm confirm_{Confirm::None};
+    std::string confirmText_;
 };
 
 class SystemApp final : public App {

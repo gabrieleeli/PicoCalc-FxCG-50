@@ -12,6 +12,7 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/graph_model.cpp
   ${FXAI_ROOT}/src/graph_engine.cpp
   ${FXAI_ROOT}/src/graph_solve.cpp
+  ${FXAI_ROOT}/src/table_model.cpp
   ${FXAI_ROOT}/src/diagnostics.cpp
   ${FXAI_ROOT}/src/file_store.cpp
   ${FXAI_ROOT}/src/graph_file.cpp

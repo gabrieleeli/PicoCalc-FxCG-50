@@ -60,6 +60,7 @@ void GraphApp::saveProject(Context& ctx, const std::string& name) {
     p.sketch = ws.graph.sketch;
     p.overlay = ws.graph.overlay;
     p.tableStart = ws.table.start; p.tableEnd = ws.table.end; p.tableStep = ws.table.step;
+    p.tableFromList = ws.table.variable == TableRange::Variable::List; p.tableList = ws.table.list; p.tableFunc = ws.table.funcType;
     const std::string text = graphfile::encode(p);
     if (text.size() > graphfile::MaxProjectBytes) throw MathError("Memory ERROR: progetto troppo grande");
     check(fs->makeDirs(files::GraphFolder));
@@ -97,6 +98,8 @@ void GraphApp::openProject(Context& ctx, const std::string& name) {
     ws.graph.overlay = p.overlay;
     ws.graph.project = name;
     ws.table.start = p.tableStart; ws.table.end = p.tableEnd; ws.table.step = p.tableStep;
+    ws.table.variable = p.tableFromList ? TableRange::Variable::List : TableRange::Variable::Range; ws.table.list = p.tableList; ws.table.funcType = p.tableFunc;
+    ws.table.rows.clear(); ws.table.generated = false;      // the table of the opened project is generated again in TABLE
     ws.apply();
     pasted_.clear(); marks_.clear(); zoomStack_.clear(); haveOriginal_ = false; shadeIntegral_ = false; shade_.clear();
     overlay_ = pict::Image{}; overlayPath_.clear(); background_ = pict::Image{}; backgroundPath_.clear();

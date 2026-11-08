@@ -27,6 +27,9 @@ struct Project {
     std::vector<SketchItem> sketch;
     std::string overlay;                 // picture recalled behind the graphs
     double tableStart{-3}, tableEnd{3}, tableStep{1};
+    bool tableFromList{false};                                         // TABLE Setup "Variable": range or list
+    std::uint8_t tableList{0};                                         // List 1..6 (0-based)
+    GraphType tableFunc{GraphType::Y};                                 // Table Func: Y=, r=, Param
     Project();
 };
 

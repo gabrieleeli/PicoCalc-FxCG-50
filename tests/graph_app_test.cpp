@@ -636,16 +636,20 @@ int main() {
     {
         g = r.graphWith({"x^2", "2x"});
         ws.table = TableRange{};
-        r.key(pckey::F8); r.type("4");                             // OPTN > TABLE
+        r.key(pckey::F8); r.type("4");                             // OPTN > TABLE: the table relation list
         auto* t = r.table();
-        CHECK(t && t->columns().size() == 2 && t->xs().size() == 7);
+        auto& tctx = r.fw.apps().context();
+        CHECK(t && t->screen() == app::TableApp::Screen::List);
+        r.key(pckey::F6);                                          // TABLE
+        CHECK(t && t->screen() == app::TableApp::Screen::Table && t->columns().size() == 2 && ws.table.rows.size() == 7);
         double v = 0;
-        CHECK(t && t->cell(0, 0, v) && v == 9 && t->cell(6, 1, v) && v == 6);
+        CHECK(t && t->cell(tctx, 0, 0, v) && v == 9 && t->cell(tctx, 6, 1, v) && v == 6);
         r.home(); r.type("5");
         ws.graph.settings.derivative = true;
-        r.home(); r.type("7");
+        r.home(); r.type("7");                                     // the generated table is shown again
         t = r.table();
-        CHECK(t && t->columns().size() == 4 && t->cell(1, 1, v) && near(v, -4, 1e-9));   // d(x^2)/dx at -2
+        CHECK(t && t->screen() == app::TableApp::Screen::Table);
+        CHECK(t && t->cell(tctx, 1, 1, v) && near(v, -4, 1e-9) && t->columns().size() == 4);   // d(x^2)/dx at -2
         ws.graph.settings.derivative = false;
         r.key(pckey::F5);                                          // GPH-CON
         g = r.graph();

@@ -48,6 +48,13 @@ struct TableRange {
     // (GPH-CON) or plot-type (GPH-PLT) graph; GRAPH clears it on leaving.
     enum class Draw : std::uint8_t { None = 0, Connect = 1, Plot = 2 };
     Draw draw{Draw::None};
+    // Variable of the table (Setup "Variable", manual 5-32): the table range or a list.
+    enum class Variable : std::uint8_t { Range = 0, List = 1 };
+    Variable variable{Variable::Range};
+    std::uint8_t list{0};                    // List 1..6 (0-based) when variable == List
+    GraphType funcType{GraphType::Y};        // Table Func: Y=, r= or Param, one type per table (manual 5-34)
+    std::vector<double> rows;                // the generated table: values of x / θ / T, editable (ROW, EDIT)
+    bool generated{false};                   // false: TABLE shows the relation list (no table)
 };
 
 struct EquationState {

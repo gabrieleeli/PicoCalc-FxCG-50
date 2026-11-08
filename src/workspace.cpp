@@ -49,8 +49,10 @@ constexpr std::uint32_t Magic = 0x46584157;   // "WAXF"
 // Version 2 (v1.7.0) adds exact values, the Frac Result setting and complex Ans;
 // version 3 (v1.8.0) the GRAPH data: 20 functions with line style and the
 // parametric Yt, Setup items, V-Window/graph memories, sketches, overlay and
-// project name. Version 1 (v1.6.0) and 2 records are still accepted.
-constexpr std::uint16_t Version = 3;
+// project name. Version 1 (v1.6.0), 2 and 3 records are still accepted.
+// Version 4 (v1.8.0, TABLE completion) adds the table variable, the table
+// function type and the generated (possibly edited) rows.
+constexpr std::uint16_t Version = 4;
 constexpr std::size_t LegacyFunctions = 6;
 
 struct Writer {
@@ -147,6 +149,9 @@ std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws) {
     }
     w.str(g.overlay); w.str(g.project); w.u8(g.projectModified ? 1 : 0);
     w.f64(ws.table.start); w.f64(ws.table.end); w.f64(ws.table.step);
+    w.u8(static_cast<std::uint8_t>(ws.table.variable)); w.u8(ws.table.list); w.u8(static_cast<std::uint8_t>(ws.table.funcType));
+    w.u8(ws.table.generated ? 1 : 0);
+    w.u16(static_cast<std::uint16_t>(ws.table.rows.size())); for (double d : ws.table.rows) w.f64(d);
     for (const auto& l : ws.lists) { w.u16(static_cast<std::uint16_t>(l.size())); for (double d : l) w.f64(d); }
     const EquationState& e = ws.equation;
     w.u8(e.unknowns); for (double d : e.simultaneous) w.f64(d);
@@ -254,6 +259,19 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
         ws.graph.settings.grid = r.u8() != 0 ? GridMode::On : GridMode::Off;   // v1/v2 kept the grid in the V-Window
     }
     ws.table.start = r.f64(); ws.table.end = r.f64(); ws.table.step = r.f64();
+    if (version >= 4) {
+        const std::uint8_t var = r.u8(), list = r.u8(), type = r.u8(), generated = r.u8();
+        if (var > 1 || list >= ws.lists.size() || type >= GraphTypeCount) return false;
+        ws.table.variable = static_cast<TableRange::Variable>(var);
+        ws.table.list = list;
+        ws.table.funcType = static_cast<GraphType>(type);
+        if (ws.table.funcType != GraphType::Y && ws.table.funcType != GraphType::Polar && ws.table.funcType != GraphType::Param) return false;
+        ws.table.generated = generated != 0;
+        const auto n = r.u16();
+        if (n > 999) return false;
+        ws.table.rows.resize(n);
+        for (double& d : ws.table.rows) { d = r.f64(); if (!std::isfinite(d)) return false; }
+    }
     for (auto& l : ws.lists) {
         const auto n = r.u16(); if (n > Workspace::MaxListLength) return false;
         l.resize(n); for (auto& d : l) d = r.f64();

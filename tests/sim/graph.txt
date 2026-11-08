@@ -1,4 +1,4 @@
-# GRAPH v1.8.0 screenshots (docs/screenshots/06, 07, 20-34), produced with the same
+# GRAPH and TABLE v1.8.0 screenshots (docs/screenshots/06, 07, 20-37), produced with the same
 # code as the firmware:
 #   build/host/picocalc_sim docs/screenshots tests/sim/graph.txt
 #
@@ -235,6 +235,7 @@ shot 31_graph_files.png
 key EXIT
 key OPTN
 type 6
+key F6
 shot 32_table_derivative.png
 key F5
 wait 200
@@ -262,3 +263,27 @@ key RIGHT
 wait 200
 shot 28_graph_modify.png
 key EXIT
+# ---- scene 6: TABLE (manual 5-32..5-35): relation list, SET, EDIT of x
+key MENU
+type 7
+key F1
+shot 35_table_list.png
+key F5
+type -1
+key EXE
+type 1
+key EXE
+type 0.25
+key EXE
+key EXIT
+key F6
+key DOWN
+key DOWN
+key F4
+type 3/7
+shot 37_table_edit.png
+key EXE
+key RIGHT
+shot 36_table_values.png
+key EXIT
+

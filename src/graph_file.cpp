@@ -190,6 +190,8 @@ std::string encode(const Project& p) {
     for (std::size_t i = 0; i < VWindowMemories; ++i)
         if (p.vmemUsed & (1u << i)) s += "vmem" + std::to_string(i + 1) + "=" + viewText(p.vmem[i]) + "\n";
     s += "table=" + number(p.tableStart) + ";" + number(p.tableEnd) + ";" + number(p.tableStep) + "\n";
+    s += std::string("tablevar=") + (p.tableFromList ? "List" + std::to_string(p.tableList + 1) : std::string("Range")) + "\n";
+    s += std::string("tablefunc=") + graphTypeName(p.tableFunc) + "\n";
     if (!p.overlay.empty()) s += "overlay=" + escape(p.overlay) + "\n";
     for (std::size_t i = 0; i < p.functions.size(); ++i) if (!p.functions[i].empty()) s += functionLine(i, p.functions[i]);
     for (const auto& item : p.sketch) s += sketchLine(item);
@@ -243,6 +245,14 @@ std::string decode(const std::string& text, Project& out) {
         } else if (key == "table") {
             double t[3]; ok = numbers(value, ';', 3, t) && t[2] > 0 && t[0] <= t[1];
             if (ok) { p.tableStart = t[0]; p.tableEnd = t[1]; p.tableStep = t[2]; }
+        } else if (key == "tablevar") {
+            if (value == "Range") p.tableFromList = false;
+            else if (value.size() == 5 && value.compare(0, 4, "List") == 0 && value[4] >= '1' && value[4] <= '6') {
+                p.tableFromList = true;
+                p.tableList = static_cast<std::uint8_t>(value[4] - '1');
+            } else ok = false;
+        } else if (key == "tablefunc") {
+            ok = parseGraphTypeName(value, p.tableFunc) && (p.tableFunc == GraphType::Y || p.tableFunc == GraphType::Polar || p.tableFunc == GraphType::Param);
         } else if (key == "overlay") ok = unescape(value, p.overlay) && p.overlay.size() <= 64;
         else if (key == "s") {
             if (p.sketch.size() >= MaxSketchItems) return "troppi elementi SKETCH";

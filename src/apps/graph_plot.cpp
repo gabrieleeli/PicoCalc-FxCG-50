@@ -6,6 +6,7 @@
 #include "apps.hpp"
 #include "graph_solve.hpp"
 #include "math_renderer.hpp"
+#include "table_model.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -253,23 +254,24 @@ bool GraphApp::renderStep(Context& ctx, int budget) {
 
 // TABLE GPH-CON / GPH-PLT: the table points of the selected Y functions.
 void GraphApp::buildTableCurves(Context& ctx) {
+    // The rows of the generated table (range, list or edited values) and the
+    // functions of the table type, as TABLE shows them (table_model).
     const graph::Viewport vp(ctx.ws.view);
     const TableRange& t = ctx.ws.table;
     const bool connect = t.draw == TableRange::Draw::Connect;
     const auto& plots = engine_.plots();
-    const double count = t.step > 0 ? std::floor((t.end - t.start) / t.step + 1e-9) + 1 : 0;
     for (std::size_t i = 0; i < plots.size(); ++i) {
         graph::Curve& c = curves_[i];
         c = graph::Curve{};
         c.done = true;
-        if (!isYType(plots[i].type) || count < 1 || count > 500) continue;
+        const graph::Plot& p = plots[i];
+        if (p.type != t.funcType || p.pasted || p.variant != 0 || !t.generated) continue;
         bool have = false;
         double px = 0, py = 0;
-        for (int k = 0; k < static_cast<int>(count); ++k) {
-            const double x = t.start + k * t.step;
-            double y;
-            if (!engine_.eval(plots[i], x, y)) { have = false; continue; }
-            const double sx = vp.screenX(x), sy = std::clamp(vp.screenY(y), -1e6, 1e6);
+        for (double v : t.rows) {
+            double x, y;
+            if (!table::point(engine_, p, v, x, y)) { have = false; continue; }
+            const double sx = std::clamp(vp.screenX(x), -1e6, 1e6), sy = std::clamp(vp.screenY(y), -1e6, 1e6);
             if (connect && have) {
                 double a = px, b = py, e = sx, f = sy;
                 if (vp.clip(a, b, e, f, 3)) {
