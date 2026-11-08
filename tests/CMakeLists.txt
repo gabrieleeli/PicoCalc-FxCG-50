@@ -23,7 +23,7 @@ target_link_libraries(fxai_host_board PUBLIC fxai_core)
 enable_testing()
 set(FXAI_TESTS
   expression_test exact_test run_matrix_test architecture_test editor_test math_engine_test storage_test app_test apps_flow_test solvers_test statistics_test ai_test
-  graph_engine_test graph_solve_test graph_file_test graph_app_test sd_fatfs_test
+  graph_engine_test graph_solve_test graph_file_test graph_app_test sd_fatfs_test graph_verify_test
   graphics_smoke font_smoke animation_smoke cheatsheet_smoke vpam_ast_smoke)
 foreach(t ${FXAI_TESTS})
   add_executable(${t} ${CMAKE_CURRENT_LIST_DIR}/${t}.cpp)

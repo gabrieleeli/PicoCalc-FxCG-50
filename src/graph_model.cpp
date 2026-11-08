@@ -98,6 +98,11 @@ std::string validateSketch(const SketchItem& s) {
     } else if (!s.path.empty()) return "tracciato inatteso";
     return {};
 }
+std::size_t sketchPenPoints(const std::vector<SketchItem>& items) noexcept {
+    std::size_t n = 0;
+    for (const auto& s : items) if (s.kind == SketchItem::Kind::Pen) n += s.path.size() / 2;
+    return n;
+}
 std::size_t graphMemoryBytes(const GraphState& g) noexcept {
     std::size_t n = 0;
     for (const auto& m : g.gmem) n += m.size();

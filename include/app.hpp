@@ -43,6 +43,7 @@ public:
     bool dirty() const noexcept { return dirty_; }
     void clearDirty() noexcept { dirty_ = false; }
     void toast(const std::string& message, std::uint32_t durationMs = 1600);
+    const std::string& toastText() const noexcept { return toast_; }   // message shown now (empty: none)
     bool shift() const noexcept { return shift_; }
     void setShift(bool on) noexcept { shift_ = on; }
     std::uint32_t now() { return platform.millis(); }

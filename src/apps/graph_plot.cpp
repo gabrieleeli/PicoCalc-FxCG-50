@@ -331,15 +331,15 @@ void GraphApp::drawLayers(Context& ctx, gfx::Canvas& c) {
             for (std::size_t n = 0; n < ineq.size(); ++n) {
                 const int i = ineq[n];
                 const std::uint16_t col = gfx::Canvas::blend(graphColor(plots[static_cast<std::size_t>(i)].color), 0xFFFF, 110);
+                // only the pixels of the hatch pattern ((x - y + n) % 4 == 0): a quarter of the area
                 for (int x = L; x <= R; ++x)
-                    for (int y = T; y <= B; ++y)
-                        if (((x - y + static_cast<int>(n)) & 3) == 0 && inside(i, x, y)) c.pixel(x, y, col);
+                    for (int y = T + (((x + static_cast<int>(n) - T) % 4) + 4) % 4; y <= B; y += 4)
+                        if (inside(i, x, y)) c.pixel(x, y, col);
             }
         } else {
             const std::uint16_t col = gfx::Canvas::blend(graphColor(plots[static_cast<std::size_t>(ineq[0])].color), 0xFFFF, 110);
             for (int x = L; x <= R; ++x)
-                for (int y = T; y <= B; ++y) {
-                    if (((x - y) & 3) != 0) continue;
+                for (int y = T + ((x - T) % 4 + 4) % 4; y <= B; y += 4) {
                     bool all = true;
                     for (int i : ineq) if (!inside(i, x, y)) { all = false; break; }
                     if (all) c.pixel(x, y, col);
@@ -912,7 +912,8 @@ void GraphApp::pointerKey(Context& ctx, const KeyEvent& ev) {
             return;
         }
         px_ = std::clamp(px_ + dx, L, R); py_ = std::clamp(py_ + dy, T, B);
-        if (action_ == Action::Pen && penDown_ && pen_.size() < 2 * MaxPenPoints) {
+        if (action_ == Action::Pen && penDown_ &&
+            pen_.size() < 2 * std::min(MaxPenPoints, MaxSketchPenPoints - std::min(MaxSketchPenPoints, sketchPenPoints(ctx.ws.graph.sketch)))) {
             const graph::Viewport vp(ctx.ws.view);
             pen_.push_back(static_cast<float>(vp.mathX(px_))); pen_.push_back(static_cast<float>(vp.mathY(py_)));
         }
@@ -993,7 +994,11 @@ void GraphApp::pointerDone(Context& ctx) {
     case Action::Horizontal: s.kind = SketchItem::Kind::Horizontal; addSketch(ctx, s); return;
     case Action::Text: ask(Ask::SketchText, "Testo (max 32):", {}, true); return;
     case Action::Pen:
-        if (!penDown_) { penDown_ = true; pen_ = {static_cast<float>(x), static_cast<float>(y)}; return; }
+        if (!penDown_) {
+            if (sketchPenPoints(ctx.ws.graph.sketch) + 2 > MaxSketchPenPoints)
+                throw MathError("Memory ERROR: punti PEN esauriti (1200 in totale, Cls o Elementi per cancellare)");
+            penDown_ = true; pen_ = {static_cast<float>(x), static_cast<float>(y)}; return;
+        }
         penDown_ = false;
         if (pen_.size() >= 4) { s.kind = SketchItem::Kind::Pen; s.path = pen_; addSketch(ctx, s); }
         pen_.clear();

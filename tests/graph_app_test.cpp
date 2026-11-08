@@ -454,6 +454,19 @@ int main() {
         r.draw();
         r.key(pckey::F5); r.type("1");
         CHECK(r.error()); r.closeError();
+        // ∫dx across a pole: Math ERROR (no meaningless number), the graph stays usable;
+        // ROOT does not report the pole of 1/(x-1)
+        g = r.graphWith({"1/(x-1)"});
+        r.draw();
+        r.key(pckey::F5); r.type("8"); r.type("1"); r.enter("0"); r.enter("2");
+        CHECK(r.error() && r.errorTitle() == "Math ERROR"); r.closeError();
+        r.key(pckey::Esc);
+        r.key(pckey::F5); r.type("8"); r.type("1"); r.enter("2"); r.enter("3");
+        CHECK(!r.error() && std::abs(g->integralValue() - std::log(2.0)) < 1e-10);
+        r.key(pckey::Esc); r.key(pckey::Esc);
+        r.key(pckey::F5); r.type("1");
+        CHECK(r.error()); r.closeError();
+        CHECK(g->mode() != GA::Mode::Results || g->solutions().empty());
     }
     // ================================================================ SKETCH
     {
@@ -772,6 +785,41 @@ int main() {
         const Workspace& w2 = again.fw.workspace();
         CHECK(w2.functions[0].expr == "x^3" && w2.functions[1].type == GraphType::Param && w2.functions[1].expr2 == "t^2" && w2.functions[1].style == LineStyle::Thin);
         CHECK(w2.graph.settings.grid == GridMode::Line && w2.graph.sketch.size() == 1 && w2.graph.vmemUsed == 1);
+        // PEN strokes share 1200 points (the GRAPH state must fit the 64 KB flash record)
+        SketchItem pen; pen.kind = SketchItem::Kind::Pen;
+        for (int i = 0; i < 400; ++i) { pen.path.push_back(0.01f * static_cast<float>(i)); pen.path.push_back(0.0f); }
+        ws.graph.sketch = {pen, pen, pen};
+        CHECK(sketchPenPoints(ws.graph.sketch) == MaxSketchPenPoints);
+        r.draw();
+        r.key(pckey::F4); r.keys(pckey::Down, 9); r.key(pckey::Enter);   // PEN
+        r.key(pckey::Enter);                                            // pen down: no points left
+        CHECK(r.error() && r.errorTitle() == "Memory ERROR"); r.closeError();
+        r.key(pckey::Esc);
+        ws.graph.sketch.pop_back();                                     // 800 used: a stroke stops at 400
+        r.key(pckey::F4); r.keys(pckey::Down, 9); r.key(pckey::Enter);
+        r.key(pckey::Enter); r.steps(pckey::Right, 3); r.key(pckey::Enter); r.key(pckey::Esc);
+        CHECK(!r.error() && ws.graph.sketch.size() == 3 && sketchPenPoints(ws.graph.sketch) <= MaxSketchPenPoints);
+        // Worst case of the GRAPH state with these limits: 20 functions, 20 full
+        // graph memories, 64 sketch items and all PEN points still fit the record.
+        {
+            Workspace big;
+            for (std::size_t i = 0; i < big.functions.size(); ++i) big.functions[i] = {std::string(400, '1'), GraphType::Y, true, 0, LineStyle::Normal, {}};
+            for (auto& m : big.graph.gmem) m = std::string(MaxGraphMemoryBytes / GraphMemories, 'x');
+            SketchItem t; t.kind = SketchItem::Kind::Text; t.text = std::string(MaxSketchText, 'a');
+            big.graph.sketch.assign(MaxSketchItems - 3, t);
+            for (int i = 0; i < 3; ++i) big.graph.sketch.push_back(pen);
+            const std::size_t bytes = serializeWorkspace(big).size();
+            CHECK(bytes < 60 * 1024);
+            if (bytes >= 60 * 1024) std::printf("  worst GRAPH workspace: %zu bytes\n", bytes);
+        }
+        // A record larger than the flash slot: the autosave says why
+        const auto saves = r.fw.saves();
+        for (std::size_t i = 0; i < Workspace::MaxChatMessages; ++i) ws.chat.push_back({false, std::string(3000, 'c')});
+        r.fw.apps().context().markDirty();
+        board::host::advance(3000); r.settle();
+        CHECK(r.fw.saves() == saves);
+        CHECK(r.fw.apps().context().toastText().find("Memoria flash piena") != std::string::npos);
+        ws.chat.clear();
     }
     board::host::setFileSystem(&board::host::ramCard());
     return testutil::finish("graph_app_test");

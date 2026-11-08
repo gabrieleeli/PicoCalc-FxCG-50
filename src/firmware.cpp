@@ -1,6 +1,7 @@
 #include "firmware.hpp"
 #include "apps.hpp"
 #include "expression.hpp"
+#include <cstdio>
 
 namespace fx {
 struct Firmware::Apps {
@@ -63,7 +64,19 @@ bool Firmware::step() {
     const bool appChanged = manager_.activeId() != lastApp_;
     lastApp_ = manager_.activeId();
     if (ctx.dirty() && (appChanged || platform_.millis() - lastInput_ > AutosaveDelayMs)) {
-        if (!saveNow()) { ctx.clearDirty(); ctx.toast("Errore salvataggio flash"); redraw_ = true; }
+        if (!saveNow()) {
+            ctx.clearDirty();
+            // A record larger than the slot can never be saved: say why and how to fix it.
+            const std::size_t bytes = serializeWorkspace(ws_).size(), room = store_.capacity();
+            char msg[112];
+            if (bytes > room)
+                std::snprintf(msg, sizeof(msg), "Memoria flash piena: %u KB > %u KB (cancella memorie grafiche, SKETCH, chat)",
+                              static_cast<unsigned>((bytes + 1023) / 1024), static_cast<unsigned>(room / 1024));
+            else
+                std::snprintf(msg, sizeof(msg), "Errore salvataggio flash");
+            ctx.toast(msg, 4000);
+            redraw_ = true;
+        }
     }
     const bool r = redraw_;
     return r;

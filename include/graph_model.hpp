@@ -135,10 +135,14 @@ struct SketchItem {
 };
 constexpr std::size_t MaxSketchItems = 64;
 constexpr std::size_t MaxPenPoints = 400;            // x,y pairs per freehand stroke
+// All PEN strokes together (9.6 KB): keeps the GRAPH state well inside the
+// 64 KB flash record and the .pcgraph limit (64 strokes x 400 points would be 205 KB).
+constexpr std::size_t MaxSketchPenPoints = 1200;
 constexpr std::size_t MaxSketchText = 32;
 const char* sketchKindName(SketchItem::Kind k) noexcept;   // "Plot", "PlotOff", "Line", ...
 bool parseSketchKindName(const std::string& name, SketchItem::Kind& out) noexcept;
 std::string validateSketch(const SketchItem& s);
+std::size_t sketchPenPoints(const std::vector<SketchItem>& items) noexcept;   // x,y pairs of all PEN strokes
 
 constexpr std::size_t VWindowMemories = 6;           // V-Win1..V-Win6
 constexpr std::size_t GraphMemories = 20;            // G-Mem1..G-Mem20

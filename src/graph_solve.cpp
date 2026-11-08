@@ -2,7 +2,9 @@
 #include "expression.hpp"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <limits>
+#include <string>
 
 namespace fx::graph {
 namespace {
@@ -217,12 +219,92 @@ std::vector<double> findValue(const RealFunction& f, double y, double a, double 
     return findRoots(d, a, b, n);
 }
 
+namespace {
+// True when |f| grows at least like 1/|t - x| approaching x (a non-integrable
+// singularity): each step 10 times closer must make |f| about 10 times larger
+// (exponent >= 0.95). An integrable singularity such as 1/sqrt|t - x| grows
+// only ~3.2 times per step.
+bool divergesAt(const RealFunction& f, double x) {
+    const double s = std::max(1.0, std::abs(x));
+    double prev = 0;
+    for (int k = 0; k < 4; ++k) {
+        const double d = s * std::pow(10.0, -3 - k);
+        double m = 0;
+        for (double t : {x - d, x + d}) { const double y = value(f, t); if (std::isfinite(y)) m = std::max(m, std::abs(y)); }
+        if (k > 0 && !(m >= 8.9 * prev)) return false;
+        prev = m;
+    }
+    return prev > 0;
+}
+// Breakpoints of [lo, hi] for the quadrature; throws on a pole or an undefined
+// point. Interior local maxima of |f| that stand out from the typical values
+// are located with Brent: a divergent one is a pole (error), an integrable one
+// (1/sqrt|x|, narrow peaks) becomes a breakpoint. Jumps (int x, piecewise
+// functions) are located by bisection and become breakpoints too: Gauss-Kronrod
+// converges quickly on each smooth piece instead of stalling at the jump.
+std::vector<double> breakpoints(const RealFunction& f, double lo, double hi) {
+    const Samples s = sample(f, lo, hi, 1280);
+    const std::size_t n = s.y.size();
+    std::vector<double> mags(n), steps;
+    for (std::size_t k = 0; k < n; ++k) {
+        if (!std::isfinite(s.y[k])) throw MathError("Math ERROR: funzione non definita nell'intervallo");
+        mags[k] = std::abs(s.y[k]);
+        if (k) steps.push_back(std::abs(s.y[k] - s.y[k - 1]));
+    }
+    auto median = [](std::vector<double> v) { std::nth_element(v.begin(), v.begin() + static_cast<std::ptrdiff_t>(v.size() / 2), v.end()); return v[v.size() / 2]; };
+    const double typical = std::max(median(mags), 1e-300);
+    const double typicalStep = median(steps);
+    std::vector<double> cuts;
+    int tested = 0;
+    for (std::size_t k = 1; k + 1 < n && tested < 64; ++k) {
+        if (!(mags[k] >= mags[k - 1] && mags[k] >= mags[k + 1] && mags[k] > 8 * typical)) continue;
+        ++tested;
+        auto g = [&](double t, double& r) { const double v = value(f, t); r = std::abs(v); return std::isfinite(v); };
+        double x = s.x[k];
+        if (!brentExtremum(g, s.x[k - 1], s.x[k + 1], -1.0, x))
+            throw MathError("Math ERROR: funzione non definita nell'intervallo");
+        if (divergesAt(f, x)) {
+            char where[48];
+            std::snprintf(where, sizeof(where), "%.6g", x);
+            throw MathError(std::string("Math ERROR: integrale divergente (polo in x=") + where + ")");
+        }
+        if (x > lo && x < hi) cuts.push_back(x);
+    }
+    tested = 0;
+    for (std::size_t k = 1; k < n && tested < 256; ++k) {
+        const double jump = std::abs(s.y[k] - s.y[k - 1]);
+        if (!(jump > 20 * typicalStep + 1e-12 * std::max(1.0, s.scale))) continue;
+        ++tested;
+        // Bisect towards the larger difference: it shrinks on a continuous
+        // stretch and stays at the jump.
+        double a = s.x[k - 1], b = s.x[k], ya = s.y[k - 1], yb = s.y[k];
+        for (int i = 0; i < 60 && b - a > 4 * Eps * std::max(1.0, std::abs(a)); ++i) {
+            const double m = 0.5 * (a + b), ym = value(f, m);
+            if (!std::isfinite(ym)) throw MathError("Math ERROR: funzione non definita nell'intervallo");
+            if (std::abs(ym - ya) >= std::abs(yb - ym)) { b = m; yb = ym; } else { a = m; ya = ym; }
+        }
+        if (std::abs(yb - ya) >= 0.5 * jump && a > lo && a < hi) cuts.push_back(0.5 * (a + b));
+    }
+    std::sort(cuts.begin(), cuts.end());
+    cuts.erase(std::unique(cuts.begin(), cuts.end(), [&](double u, double v) { return v - u <= 1e-12 * std::max(1.0, std::abs(u)); }), cuts.end());
+    return cuts;
+}
+} // namespace
+
 double integrate(const RealFunction& f, double a, double b) {
     if (a == b) return 0;
-    // An undefined point or a pole found by a coarse scan makes the integral undefined.
+    // An undefined point or a pole inside the interval makes the integral
+    // undefined (the CG50 reports Math ERROR); the adaptive quadrature alone
+    // would return a finite but meaningless value across a pole.
     const double lo = std::min(a, b), hi = std::max(a, b);
     for (int k = 0; k <= 64; ++k) (void)strict(f, lo + (hi - lo) * k / 64);
-    return integrateFunction([&](double x) { return strict(f, x); }, a, b, 1e-10);
+    std::vector<double> cuts = breakpoints(f, lo, hi);
+    cuts.insert(cuts.begin(), lo);
+    cuts.push_back(hi);
+    double total = 0;
+    for (std::size_t i = 1; i < cuts.size(); ++i)
+        total += integrateFunction([&](double x) { return strict(f, x); }, cuts[i - 1], cuts[i], 1e-10);
+    return a < b ? total : -total;
 }
 
 double area(const RealFunction& f, double a, double b) {
