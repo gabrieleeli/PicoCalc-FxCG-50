@@ -1,47 +1,28 @@
 #pragma once
-// On-device diagnostics (System -> Test). Each test returns a few text lines
-// for the screen (also printed on USB stdio). Tests that need hardware report
-// "solo su dispositivo" in host builds; the allocator stress kernel is portable
-// and host-tested.
-
-#include <cstddef>
+// Self-tests for the validation on the PicoCalc (SYSTEM > DIAG): the microSD
+// card (detection, initialisation, mounting, write / read / verify / delete
+// with timings) and GRAPH (sampling and G-Solve times of a fixed set of
+// graphs). Every result is a line of text shown on the screen and printed on
+// the USB serial port ("[DIAG] ...") so that it can be sent back as a report.
+// The user's data is not touched: the card test uses its own folder
+// PICOCALC/DIAG and removes it, the graph test its own functions.
+#include "file_store.hpp"
 #include <cstdint>
+#include <functional>
+#include <string>
+#include <vector>
+
+namespace fx {
+struct Workspace;
+}
 
 namespace fx::diag {
-
-enum class Test : std::uint8_t {
-    PsramInfo,
-    PsramPattern,
-    AllocatorStress,
-    DualCoreStress,
-    FlashPsram,
-    Framebuffer,
-    WiFi,
-    Storage,
-    SdCard,
-    Count
+struct Line {
+    bool ok;
+    std::string text;
 };
-inline constexpr std::size_t kTestCount = static_cast<std::size_t>(Test::Count);
+using Clock = std::function<std::uint32_t()>;   // milliseconds
 
-struct Result {
-    bool ran{};
-    bool passed{};
-    std::uint8_t lineCount{};
-    char lines[8][52]{};
-    std::uint32_t elapsedUs{};
-};
-
-const char* name(Test test) noexcept;
-Result run(Test test) noexcept;
-
-struct StressStats {
-    std::size_t operations{};
-    std::size_t allocations{};
-    std::size_t failures{};    // allocation requests refused (expected under pressure)
-    std::size_t corruptions{}; // pattern mismatches (must be 0)
-    std::size_t peakLive{};
-};
-// Random alloc/free with pattern verification on every policy available.
-StressStats allocatorStress(std::uint32_t seed, std::size_t operations, std::size_t maxBlock) noexcept;
-
+std::vector<Line> testStorage(files::FileSystem* fs, const Clock& now);
+std::vector<Line> testGraph(Workspace& ws, const Clock& now);
 } // namespace fx::diag

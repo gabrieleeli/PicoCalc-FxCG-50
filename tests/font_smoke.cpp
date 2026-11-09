@@ -1,6 +1,8 @@
 #include "font_renderer.hpp"
 #include <array>
-#include <cassert>
+#include "test_util.hpp"
+#undef assert
+#define assert(x) CHECK(x)
 #include <cstdint>
 int main(){
     std::array<std::uint16_t,80*32> fb{};
@@ -21,4 +23,5 @@ int main(){
     font::drawText(canvas,0,0,"MMMM",gfx::palette::Red,1,80);
     for(int y=0;y<32;++y)for(int x=0;x<80;++x)
         if(x>=3||y>=3) assert(fb[static_cast<std::size_t>(y)*80+x]!=gfx::palette::Red);
+    return testutil::finish("font_smoke");
 }

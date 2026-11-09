@@ -46,14 +46,16 @@ void drawGlyph(gfx::Canvas& canvas,int x,int y,char c,std::uint16_t color,int sc
     for(int col=0;col<5;++col) for(int row=0;row<7;++row) if(g[col]&(1u<<row))
         canvas.rect(x+col*scale,y+row*scale,scale,scale,color,true);
 }
-int nextCodepoint(const unsigned char*& p){
+}
+std::uint32_t nextCodepoint(const unsigned char*& p) noexcept {
     const unsigned char c=*p++; if(c<0x80)return c;
     if((c&0xE0)==0xC0){const unsigned char b=*p; if((b&0xC0)==0x80){++p;return ((c&0x1F)<<6)|(b&0x3F);} return '?';}
     if((c&0xF0)==0xE0){if(!p[0]||!p[1])return '?';const unsigned char b=p[0],d=p[1];if((b&0xC0)==0x80&&(d&0xC0)==0x80){p+=2;return ((c&0x0F)<<12)|((b&0x3F)<<6)|(d&0x3F);}return '?';}
     if((c&0xF8)==0xF0){for(int i=0;i<3&&(*p&0xC0)==0x80;++i)++p;return '?';}
     return '?';
 }
-const std::uint8_t* mathGlyph(int cp){
+namespace {
+const std::uint8_t* mathGlyph(std::uint32_t cp){
     static const std::uint8_t pi[5]={0x7F,0x40,0x40,0x40,0x7F};
     static const std::uint8_t root[5]={0x38,0x70,0x7F,0x01,0x01};
     static const std::uint8_t multiply[5]={0x22,0x14,0x08,0x14,0x22};
@@ -71,7 +73,7 @@ const std::uint8_t* mathGlyph(int cp){
     case 0x222B:return integral;case 0x221E:return infinity;case 0x2264:return le;
     case 0x2265:return ge;case 0x221B:return cbrt;case 0x221C:return fourthRoot;default:return nullptr;}
 }
-char mapMath(int cp){
+char mapMath(std::uint32_t cp){
     switch(cp){case 0x221A:return 'V'; case 0x00D7:return 'x';
     case 0x00F7:return '/';case 0x2264:return '<';case 0x2265:return '>';
     case 0x221E:return '8';
@@ -88,7 +90,7 @@ TextMetrics measure(const char* text,int scale) noexcept {
     scale=std::clamp(scale,1,3);
     int line=0,maxLine=0,lines=1;
     const auto* p=reinterpret_cast<const unsigned char*>(text);
-    while(*p){int cp=nextCodepoint(p);if(cp=='\n'){maxLine=std::max(maxLine,line);line=0;++lines;}else line+=6*scale;}
+    while(*p){std::uint32_t cp=nextCodepoint(p);if(cp=='\n'){maxLine=std::max(maxLine,line);line=0;++lines;}else line+=6*scale;}
     maxLine=std::max(maxLine,line);return {maxLine,lines*9*scale-2*scale};
 }
 TextMetrics drawText(gfx::Canvas& canvas,int x,int y,const char* text,std::uint16_t color,int scale,int maxWidth) noexcept {
@@ -97,7 +99,7 @@ TextMetrics drawText(gfx::Canvas& canvas,int x,int y,const char* text,std::uint1
     const int origin=x,limit=maxWidth>0?x+maxWidth:canvas.width();
     int maxLine=0,lines=1;
     const auto* p=reinterpret_cast<const unsigned char*>(text);
-    while(*p){int cp=nextCodepoint(p);if(cp=='\n'){maxLine=std::max(maxLine,x-origin);x=origin;y+=9*scale;++lines;continue;}
+    while(*p){std::uint32_t cp=nextCodepoint(p);if(cp=='\n'){maxLine=std::max(maxLine,x-origin);x=origin;y+=9*scale;++lines;continue;}
         if(x+5*scale>limit) break;
         if(const auto* special=mathGlyph(cp)){
             for(int col=0;col<5;++col)for(int row=0;row<7;++row)if(special[col]&(1u<<row))
@@ -106,5 +108,80 @@ TextMetrics drawText(gfx::Canvas& canvas,int x,int y,const char* text,std::uint1
         x+=6*scale;
     }
     maxLine=std::max(maxLine,x-origin);return {maxLine,lines*9*scale-2*scale};
+}
+
+namespace {
+const BitmapFont* fontFor(Face face) noexcept {
+    switch(face){case Face::Small:return &kSmall;case Face::Medium:return &kMedium;default:return nullptr;}
+}
+const std::uint8_t* lookup(const BitmapFont& f,std::uint32_t cp) noexcept {
+    std::size_t lo=0,hi=f.count;
+    while(lo<hi){const std::size_t mid=(lo+hi)/2;if(f.codepoints[mid]<cp)lo=mid+1;else hi=mid;}
+    if(lo<f.count&&f.codepoints[lo]==cp)return f.bits+lo*static_cast<std::size_t>(f.height);
+    return nullptr;
+}
+// Draws one code point in the requested face, falling back to the legacy 5x7
+// math glyphs (and finally to '?') when the face has no glyph for it.
+void drawCodepoint(gfx::Canvas& c,Face face,int x,int y,std::uint32_t cp,std::uint16_t color) noexcept {
+    if(face==Face::Tiny){
+        if(const auto* special=mathGlyph(cp)){for(int col=0;col<5;++col)for(int row=0;row<7;++row)if(special[col]&(1u<<row))c.pixel(x+col,y+row,color);}
+        else drawGlyph(c,x,y,mapMath(cp),color,1);
+        return;
+    }
+    const BitmapFont& f=*fontFor(face);
+    const std::uint8_t* rows=lookup(f,cp);
+    if(!rows&&face==Face::Small){
+        // Legacy glyphs are 5x7: align their bottom row with the Small baseline.
+        const int top=y+f.baseline-7;
+        if(const auto* special=mathGlyph(cp)){for(int col=0;col<5;++col)for(int row=0;row<7;++row)if(special[col]&(1u<<row))c.pixel(x+col,top+row,color);return;}
+        const char mapped=mapMath(cp);
+        if(mapped!='?'||cp=='?'){rows=lookup(f,static_cast<unsigned char>(mapped));}
+    }
+    if(!rows)rows=lookup(f,'?');
+    if(!rows)return;
+    for(int r=0;r<f.height;++r){const std::uint8_t bits=rows[r];if(!bits)continue;
+        int run=-1;
+        for(int b=0;b<=f.width;++b){const bool on=b<f.width&&(bits&(0x80u>>b));
+            if(on&&run<0)run=b;else if(!on&&run>=0){c.hLine(x+run,y+r,b-run,color);run=-1;}}
+    }
+}
+}
+std::size_t glyphCount(const char* text) noexcept {
+    if(!text)return 0;
+    std::size_t n=0;
+    const auto* p=reinterpret_cast<const unsigned char*>(text);
+    while(*p){(void)nextCodepoint(p);++n;}
+    return n;
+}
+int advance(Face face) noexcept {const auto* f=fontFor(face);return f?f->width:6;}
+int lineHeight(Face face) noexcept {const auto* f=fontFor(face);return f?f->height:9;}
+int baseline(Face face) noexcept {const auto* f=fontFor(face);return f?f->baseline:7;}
+bool hasGlyph(Face face,std::uint32_t cp) noexcept {
+    if(face==Face::Tiny)return mathGlyph(cp)!=nullptr||(cp>=0x20&&cp<0x7F);
+    return lookup(*fontFor(face),cp)!=nullptr;
+}
+TextMetrics measure(Face face,const char* text) noexcept {
+    if(!text)return {};
+    int line=0,maxLine=0,lines=1;const int adv=advance(face);
+    const auto* p=reinterpret_cast<const unsigned char*>(text);
+    while(*p){const std::uint32_t cp=nextCodepoint(p);if(cp=='\n'){maxLine=std::max(maxLine,line);line=0;++lines;}else line+=adv;}
+    maxLine=std::max(maxLine,line);return {maxLine,lines*lineHeight(face)};
+}
+std::size_t drawClipped(gfx::Canvas& canvas,Face face,int x,int y,const char* text,std::uint16_t color,int maxWidth) noexcept {
+    if(!text)return 0;
+    const int adv=advance(face),origin=x,limit=maxWidth>0?x+maxWidth:canvas.width();
+    std::size_t drawn=0;const auto* p=reinterpret_cast<const unsigned char*>(text);
+    while(*p){const std::uint32_t cp=nextCodepoint(p);
+        if(cp=='\n'){x=origin;y+=lineHeight(face);continue;}
+        if(x+adv>limit)break;
+        if(cp!=' ')drawCodepoint(canvas,face,x,y,cp,color);
+        x+=adv;++drawn;}
+    return drawn;
+}
+TextMetrics draw(gfx::Canvas& canvas,Face face,int x,int y,const char* text,std::uint16_t color,int maxWidth) noexcept {
+    if(!text)return {};
+    (void)drawClipped(canvas,face,x,y,text,color,maxWidth);
+    const auto m=measure(face,text);
+    return {maxWidth>0?std::min(m.width,maxWidth):m.width,m.height};
 }
 } // namespace font

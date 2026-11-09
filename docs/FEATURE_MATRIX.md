@@ -1,117 +1,161 @@
-# Feature matrix (truthful implementation status)
+# Feature matrix — v1.8.0 (dopo il collaudo software di GRAPH, microSD e TABLE)
 
-Legend: **Core tested** = algorithm implemented and covered by native C++ smoke tests; **Partial** = algorithm exists but not complete calculator-mode integration; **Prototype** = visual/algorithm prototype only; **Not implemented** = no usable implementation yet.
+Stati (in italiano tra parentesi):
 
-| Area | Current capability | Status |
+| Stato | Significato |
+|---|---|
+| **NOT STARTED** (mancante) | nessun codice |
+| **IN PROGRESS** (in sviluppo) | codice parziale o solo modello dati |
+| **IMPLEMENTED** (implementata) | codice presente, senza test automatici dedicati |
+| **TESTED ON HOST** (testata su host) | test automatici su PC superati (stesso sorgente del firmware) |
+| **TESTED ON SIMULATOR** (testata su simulatore) | in più, flusso verificato nel simulatore host con screenshot (`docs/screenshots/`) |
+| **TESTED ON HARDWARE** (testata su hardware) | provata sulla PicoCalc fisica |
+| **COMPLETE** | testata su hardware e con la funzionalità CG50 corrispondente completa |
+
+Nessuna voce è TESTED ON HARDWARE: la PicoCalc fisica non è stata usata.
+Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
+
+## Piattaforma e hardware
+
+| Funzione | Stato | Note |
 |---|---|---|
-| Arithmetic / scientific | Existing parser plus RunMatrixSession (Ans/PreAns, A-Z and 64-entry history), SI prefix/constants/unit-conversion APIs | Core tested backend subset; Natural V.P.A.M. 2D editor and full catalog remain partial |
-| Combinatorics | factorial, nPr, nCr | Core (overflow edge cases still need hardening) |
-| Fractions | normalized rational representation, add/subtract/multiply/divide, decimal approximation, improper/mixed formatting | Core tested API; Natural V.P.A.M. 2D editor and exact expression algebra still partial |
-| Angle and coordinates | DEG/RAD/GRA conversion, polar/rectangular coordinates, decimal/sexagesimal | Core |
-| Number systems | signed conversion bases 2..36, prime factorization, AND/OR/XOR/NOT and fixed-width shifts | Core tested APIs; interactive Base-N mode not integrated |
-| Equations | stable quadratic roots including complex roots; Gaussian linear systems; bisection and Newton SOLVE callbacks | Core algorithms; general equation editor, quartic roots and inequality solver not implemented |
-| Complex | arithmetic, power, square root, exp/log, sin/cos/tan, argument and formatter | Core tested APIs; parser and complex-mode UI integration still partial |
-| Matrices / vectors | add/subtract/multiply/scale/transpose/trace/determinant/inverse/RREF/solve; vector add/subtract/scale/dot/cross/norm/angle | Core tested APIs; MatrixEditor remains 4x4 and full application UI is not implemented |
-| Calculus | expression-bound 5-point numerical derivative, Simpson integral, bracket scan for roots and Newton SOLVE | Core tested APIs; root tangencies, robust bracketing and UI still partial |
-| Statistics | mean, variance, standard deviation, median, quartiles, descriptive summary, linear and polynomial regression degrees 1..4 | Core algorithms; weighted frequencies and all regression families not complete |
-| Probability | normal PDF/CDF/inverse CDF; binomial and Poisson PMF/CDF | Core algorithms; t, chi-square, F distributions, tests, intervals and ANOVA not implemented |
-| Spreadsheet | 5 columns x 45 rows, numeric cell storage, sum and average | Core data model; formula parser, cell references, editing UI and persistence not implemented |
-| Tables / graphing | 2D sampling and 3D projection prototype | Prototype; no complete CG50 graph suite; 3D surface evaluation is not yet full z=f(x,y) |
-| UI / Graphics Engine | 320x320 RGB565 canvas; pixel/line/rect/rounded rect/circle/arc/polygon/bitmap/layer/blend/clip; shared 5×7 bitmap font at 1×–3× and selected math glyphs | Graphics/font primitives host-tested; full Greek set, proportional fonts, math layout, launcher focus, multi-app routing and physical LCD validation remain partial |
-| LCD hardware | ST7365P-compatible init sequence, RGB565 framebuffer, PIO-SPI transfer and flush code present in `board_port.cpp` | Driver source implemented; panel timing/orientation/color and physical operation not validated; DMA path not claimed |
-| Keyboard | I2C1 at 10 kHz; register 0x09 FIFO read; host-tested decoder for state/keycode, arrows, editing keys, Enter/Esc and F1–F6 | Application mapping and event flow implemented; physical keyboard test pending |
-| AI | ChatGPT / Claude relay placeholder | Not implemented; no API network requests |
-| SD / persistence | — | Not implemented |
+| Build UF2 RP2350 (Pico SDK 2.2.0) | TESTED ON HOST | build eseguita, `picotool info` verificato |
+| Driver LCD ST7365P (SPI1, init ufficiale, RGB666) | IMPLEMENTED | da collaudare; opzione RGB565 |
+| Aggiornamento parziale LCD (tile 16×16) | TESTED ON HOST | `TileDiff`, test in app_test |
+| DMA per il flush LCD | NOT STARTED | non conveniente: il collo di bottiglia è il bus SPI (vedi HARDWARE.md) |
+| Tastiera STM32 I2C (FIFO, stati, modificatori) | IMPLEMENTED | decoder TESTED ON HOST; trasporto I2C da collaudare |
+| Pressione prolungata / ripetizione | TESTED ON HOST | ripetizione generata dallo STM32, long-press nel decoder |
+| Batteria e retroilluminazione | IMPLEMENTED | registri 0x05/0x0A/0x0B |
+| Storage flash A/B con CRC | TESTED ON HOST | test di interruzione di alimentazione; driver Pico da collaudare |
+| microSD (SPI0 GP16–19, card detect GP22) | IMPLEMENTED | protocollo SD, recupero dopo estrazione/errori e FatFs TESTED ON HOST con scheda simulata (`sd_fatfs_test`); volumi FAT16/FAT32/exFAT verificati con fsck.fat, fsck.exfat e mtools (`sd_interop_test`); bus SPI0 reale da collaudare ([STORAGE.md](STORAGE.md), [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md)) |
+| Diagnostica sul dispositivo (SYSTEM → DIAG: microSD, tempi GRAPH, log USB) | TESTED ON HOST | prova eseguita nel simulatore e nei test; serve per il collaudo fisico |
+| Wi-Fi CYW43 | IMPLEMENTED | da collaudare |
+| HTTPS (lwIP altcp_tls + mbedTLS, verifica obbligatoria) | IMPLEMENTED | parser HTTP TESTED ON HOST |
+| Gestione energetica / sospensione | NOT STARTED | |
 
-The new v0.3 parser expands scientific expression coverage, but this is not full parity with FX-991CW. The FX-991CW's official feature list includes spreadsheet, equation/inequality, distribution and Math Box modes; only the specifically listed core algorithms above are implemented here. The PicoCalc firmware is not yet a flashable, hardware-validated UF2.
+## Interfaccia
 
-## v0.4 — nuovi moduli
 | Funzione | Stato |
 |---|---|
-| Memoria A-Z, Ans, PreAns, M | Implementata nel core; non persistente |
-| Richiamo variabili nelle espressioni | Implementato |
-| Formatter matematica naturale Unicode | Parziale; non impaginazione 2D tipografica |
-| Editor matrici MatA–MatD, fino a 4×4 | Modello dati implementato; UI statica, input da tastiera da integrare |
-| Editor liste statistiche List1–List6 | Modello dati implementato; UI statica, input da tastiera da integrare |
-| Statistiche descrittive e regressione lineare da liste | Implementate |
-| ANOVA a una via | Implementata |
-| Test t a un campione, appaiato e due campioni (Welch/pooled) | Implementati |
-| Intervallo di confidenza t per una media | Implementato |
-| Test t indipendente, Z, χ², F e intervalli Z | Da implementare |
+| Menu principale a icone (23 modalità, accesso diretto 1–9/A–N) | TESTED ON SIMULATOR (accesso diretto verificato da architecture_test) |
+| Registro delle modalità (stato, servizi, dati, collegamenti) e test di architettura | TESTED ON HOST |
+| Barra di stato (angolo, display, complessi, Frac Result, batteria, Wi-Fi, SHIFT) | TESTED ON SIMULATOR |
+| Tasti funzione F1–F6 stile CG50, SHIFT one-shot | TESTED ON HOST |
+| Finestre di errore stile CG50 (Math/Syntax/Non-Real ERROR) | TESTED ON HOST |
+| Menu popup, form, liste di risultati, griglie di celle | TESTED ON HOST |
+| Font Unifont 8×16 e Spleen 6×12 (greco, simboli matematici) | TESTED ON HOST |
+| Animazioni di transizione | IN PROGRESS (primitiva `ui::Animation`, non usata nelle schermate) |
+| Simulatore host con screenshot PNG | TESTED ON HOST |
 
-## Algebra (v0.5)
-| Funzione | Stato motore | Interfaccia/tastiera |
+## Editor Natural V.P.A.M. e renderer 2D
+
+| Funzione | Stato |
+|---|---|
+| Frazioni, radici quadrate e n-esime, potenze, indici, parentesi | TESTED ON HOST |
+| \|x\|, logₐb, eˣ, 10ˣ, x², x⁻¹ | TESTED ON HOST |
+| ∫ dx, d/dx, Σ, Π come modelli 2D | TESTED ON HOST |
+| Navigazione dentro/fuori dai modelli, su/giù tra campi | TESTED ON HOST |
+| Parole atomiche (sin, π, θ, Ans) | TESTED ON HOST |
+| Undo / redo, copia / incolla (Ctrl+Z/Y/C/V) | TESTED ON HOST |
+| Frazione mista `□ □/□`, radice con indice modificabile, periodo (linea sopra le cifre) | TESTED ON SIMULATOR |
+| Selezione parziale con il cursore | NOT STARTED (copia/incolla dell'intera espressione) |
+| Scorrimento orizzontale dell'input | TESTED ON HOST |
+| Matrici/vettori come modelli 2D modificabili | NOT STARTED (solo rendering del nodo Matrix) |
+
+## Motore matematico
+
+| Funzione | Stato |
+|---|---|
+| Aritmetica, priorità Casio (moltiplicazione implicita prioritaria) | TESTED ON HOST |
+| Funzioni prefisse senza parentesi (sin 2x) | TESTED ON HOST |
+| Trigonometriche, inverse, iperboliche e inverse; Deg/Rad/Gra | TESTED ON HOST |
+| Valori esatti a multipli di 90°/100 gon | TESTED ON HOST |
+| ln, log, log₂, logₐb, exp, radici, potenze razionali di negativi | TESTED ON HOST |
+| n!, nCr, nPr (senza overflow), gcd, lcm, mod, int, intg, frac, round | TESTED ON HOST |
+| rand(), randint() | TESTED ON HOST |
+| Variabili A–Z, Ans, PreAns, memorizzazione con →, anche →A~F | TESTED ON HOST |
+| Forma esatta conservata in Ans/PreAns/A–Z | TESTED ON HOST |
+| Variabili di altre modalità via workspace (VARS: V-WIN, TABLE) | TESTED ON SIMULATOR |
+| Costanti matematiche e fisiche | TESTED ON HOST |
+| Numeri complessi nel parser (a+bi, r∠θ, arg, conj, re, im) | TESTED ON HOST |
+| Formati Norm1/Norm2/Fix/Sci/Eng (10 cifre) | TESTED ON HOST |
+| Aritmetica esatta: razionali, radicali a√b/c (≤ 2 termini), multipli di π | TESTED ON HOST |
+| Valutazione esatta sullo stesso AST (trigonometria ai multipli di 30°/45°, radici, log esatti, n!, nCr…) | TESTED ON HOST |
+| S⇔D con valore interno preservato; regole di visualizzazione CG50 (10 caratteri, limiti radicali e π) | TESTED ON SIMULATOR |
+| Frac Result d/c ↔ ab/c (impostazione e per risultato) | TESTED ON SIMULATOR |
+| Numeri periodici: vista del periodo e input periodico | TESTED ON SIMULATOR |
+| Arrotondamento di visualizzazione come la calcolatrice (mantissa 15 cifre, per eccesso a metà) | TESTED ON HOST |
+| Operatori relazionali e logici (= ≠ < > ≤ ≥, And, Or, Xor, Not) | TESTED ON HOST |
+| Int÷, Rmdr, MOD_Exp, RndFix, RanNorm#, RanBin# | TESTED ON HOST |
+| Simboli ingegneristici (k, M, m, µ…), Simp manuale | NOT STARTED |
+| Base-N (letterali 0x/0b/0o, visualizzazione Hex/Bin/Oct) | TESTED ON HOST |
+| Modalità Base-N intera (Mode Hex/Bin/Oct) con operatori bit a bit | NOT STARTED (viste Hex/Bin/Oct dei risultati presenti) |
+| Sessagesimale (dms, °, visualizzazione DMS) | TESTED ON HOST |
+| Pol / Rec | TESTED ON HOST |
+| Integrali (Gauss-Kronrod adattivo), derivate (Ridders), d²/dx² | TESTED ON HOST |
+| Σ, Π, SOLVE nel parser | TESTED ON HOST |
+| Derivate/integrali simbolici, limiti | NOT STARTED |
+| Matrici: somma, prodotto, det, inversa, trasposta, traccia, RREF, sistemi (API C++) | TESTED ON HOST |
+| Matrici come valori nel parser e editor MAT in Run-Matrix | NOT STARTED |
+| Vettori: somma, prodotto scalare/vettoriale, norma, angolo (API C++) | TESTED ON HOST |
+| Conversioni metriche (10 grandezze, prefissi SI) | TESTED ON HOST |
+| Limiti di lunghezza/annidamento e budget di stack ("Stack ERROR", "Memory ERROR") | TESTED ON HOST (budget del firmware verificato solo con `-fstack-usage`) |
+
+## Modalità
+
+| Modalità | Stato | Note |
 |---|---|---|
-| Equazioni lineari | Implementata | Da collegare |
-| Equazioni quadratiche | Implementata | Da collegare |
-| Disequazioni lineari e quadratiche | Implementata | Da collegare |
-| Sistemi quadrati di equazioni lineari | Implementati | Da collegare |
-| Sistemi di disequazioni in una variabile | Implementati | Da collegare |
-| Unione/intersezione di insiemi soluzione | Implementate | Da collegare |
+| Run-Matrix | TESTED ON SIMULATOR | forme esatte, S⇔D, frazioni miste, periodo, cronologia modificabile con ricalcolo, OPTN, VARS, Base-N, DMS (dettagli in RUN_MATRIX.md) |
+| Run-Matrix: cronologia modificabile sul posto con ricalcolo delle righe successive | TESTED ON SIMULATOR | |
+| Run-Matrix: matrici/vettori/liste (MAT/VCT/List) | NOT STARTED | API C++ esistenti |
+| Statistics | TESTED ON HOST | liste, 1/2-Var, 9 regressioni, grafici, DIST, test Z/t, intervalli |
+| Regressioni sinusoidale e logistica | NOT STARTED | |
+| Test χ², F, 2-campioni, ANOVA nell'interfaccia | NOT STARTED | ANOVA e t a 2 campioni esistono come API C++ |
+| Grafico a torta / a barre | NOT STARTED | |
+| Graph: 20 funzioni Y=, r=, Param, X=, 8 disequazioni, intervalli, sovrapposizioni, liste, funzioni composte | TESTED ON SIMULATOR | matrice completa in [GRAPH_PARITY.md](GRAPH_PARITY.md) |
+| Graph: TRACE, ZOOM (13 voci), V-Window e memorie, SKETCH (12 voci), G-SOLVE (ROOT…∫dx MIXED), Modify, memorie grafiche, PICT, sfondo | TESTED ON SIMULATOR / TESTED ON HOST | voce per voce in GRAPH_PARITY.md |
+| Graph: progetti `.pcgraph` su microSD (NEW/OPEN/SAVE/SAVE AS/RENAME/DELETE) | TESTED ON SIMULATOR | scheda simulata; formato in [PCGRAPH_FORMAT.md](PCGRAPH_FORMAT.md) |
+| Graph: Dual Screen G+G/GtoT, Graph to Table, comandi grafici di Run-Matrix | NOT STARTED | |
+| Grafici impliciti (f(x,y)=0) | NOT STARTED | non presenti nella modalità Graph della CG50 (Conic Graphs) |
+| Table: lista delle relazioni, Y=/r=/Param, SET, Variable Range/List, derivate, celle di 6 caratteri | TESTED ON SIMULATOR | [TABLE.md](TABLE.md), screenshot 32, 35–37 |
+| Table: EDIT, ROW DELETE/INSERT/ADD, DELETE, LISTMEM, GPH-CON/GPH-PLT dalle righe | TESTED ON HOST | `table_test` |
+| Table: Dual Screen T+G | NOT STARTED | sessione v1.9.0 |
+| Equation: sistemi 2–6, polinomi 2–6, solver | TESTED ON HOST | |
+| Disequazioni polinomiali 1–6 | TESTED ON HOST | |
+| Sistemi di disequazioni (interfaccia) | NOT STARTED | API `solveInequalitySystem` (grado ≤ 2) TESTED ON HOST |
+| System / Set Up | TESTED ON HOST | |
+| Memory | TESTED ON HOST | |
+| Conversion | TESTED ON HOST | |
+| AI Chat (Claude / ChatGPT) | TESTED ON HOST | con trasporto simulato; rete reale da collaudare |
+| Symbols (guida) | TESTED ON HOST | |
+| eActivity, Spreadsheet, Dyna Graph, Recursion, Conic Graphs | IN PROGRESS | solo architettura e modello dati (`app_models.hpp`, testato); nessuna interfaccia; schermata "non disponibile" |
+| Program, Financial, Link, Geometry, Picture Plot, 3D Graph | IN PROGRESS | idem |
+| E-CON4 | NOT STARTED | richiede un data logger esterno: non realizzabile sulla PicoCalc (stato External) |
+| Python (MicroPython) | NOT STARTED | richiede l'integrazione del runtime come libreria (modello dei file di script definito) |
 
-## Compatibilità app fx-991CW — sintesi v0.9
-Le 13 app ufficiali sono: Calculate, Statistics, Distribution, Spreadsheet, Table, Equation, Inequality, Complex, Base-N, Matrix, Vector, Ratio e Math Box. Nel progetto esistono primitive o algoritmi iniziali per 11 aree; Ratio e Math Box non hanno ancora un'implementazione utilizzabile. Nessuna delle 13 è ancora completa come flusso applicativo con tastiera, menu, input, output e test di compatibilità.
+## Persistenza
 
-Le lacune principali sono: renderer Natural Textbook Display 2D; memoria persistente, undo/replay; conversioni metriche e costanti scientifiche; rapporti; casualità e sommatoria; modalità complesse completa; operatori logici Base-N; foglio di calcolo con formule/editor; app Table completa; solver generale, polinomi fino al 4° grado e disequazioni fino al 4° grado; regressioni e distribuzioni statistiche complete; Math Box; editor e navigazione hardware.
-
-## v1.2 — Punto A backend increment
-
-The point-A numerical backend is expanded and host-tested. See `POINT_A_COMPLETION.md` for API details and the exact remaining work. Do not mark Run-Matrix parity complete: the 2D natural editor, UI flows, parser-complex integration, full catalogs and device tests remain open.
-
-## v1.3 — Natural V.P.A.M. editor increment
-| Funzione | Stato verificato |
+| Dato | Stato |
 |---|---|
-| Albero strutturato righe/token/frazioni/radicali/potenze/indici/gruppi | Implementato nel modello host |
-| Navigazione logica cursore sinistra/destra/su/giù e cancellazione | API implementate e testate host; non collegate ai codici fisici I2C |
-| Layout 2D con frazioni, radicali, apici/indici e cursore | Primitive di layout implementate e testate; font/posizionamento hardware non validati |
-| Serializzazione in espressione per frazioni/radicali/potenze/gruppi | Implementata e valutata nei test host tramite parser esistente |
-| Variabili con indice (es. x₁) | Rendering/modello parziale; non valutabili finché il parser non supporta identificatori indicizzati |
-| UI drawNaturalEditor | Collegamento alle primitive `board::*` compilato isolatamente; non integrato nel flusso principale |
+| Impostazioni, variabili, Ans | TESTED ON HOST |
+| Storia Run-Matrix (con forma esatta, vista, frazione mista) | TESTED ON HOST |
+| Lettura dei record v1.6.0 (formato versione 1) | TESTED ON HOST |
+| Liste statistiche | TESTED ON HOST |
+| Stato di GRAPH (20 funzioni, V-Window, Setup, memorie V-Window e grafiche, SKETCH) e di TABLE (range, variabile, tipo, righe) — record v4 | TESTED ON HOST |
+| Lettura dei record v3 (GRAPH v1.8.0 prima di TABLE) | TESTED ON HOST |
+| Record oltre la capacità della flash: messaggio "Memoria flash piena" con la dimensione | TESTED ON HOST |
+| Lettura dei record v1.7.0 (versione 2) e correzione delle V-Window legacy | TESTED ON HOST |
+| Progetti `.pcgraph` e immagini `.pcpict`/BMP sulla microSD, scrittura atomica e recupero | TESTED ON HOST (scheda simulata, pila completa GraphApp → FatFs → SD) |
+| Coefficienti Equation | TESTED ON HOST |
+| Conversazioni AI (cancellabili da AI Chat e Memory) | TESTED ON HOST |
+| Programmi, file Python, documenti, matrici salvate | NOT STARTED |
 
-Non segnare Natural V.P.A.M. come completo: tastiera fisica, scroll/wrap, selezione, undo/redo, tipografia matematica completa e test PicoCalc restano aperti.
+## Relay AI
 
-
-## v1.4 — keyboard + Run-Matrix integration
-| Funzione | Stato verificato |
+| Funzione | Stato |
 |---|---|
-| Decoder FIFO STM32 PicoCalc | Host-tested: state nel byte alto, keycode nel byte basso; press/hold processati, release ignorato |
-| Mappatura tasti Run-Matrix | Host-tested: frecce, Backspace/Delete, Enter, Esc, ASCII, F1–F6 |
-| Flusso launcher/Run-Matrix | Controller host-tested: apertura, modifica, valutazione, risultato/errore, ritorno |
-| Input Natural V.P.A.M. | Host-tested: frazione `1/3`, `sqrt(9)`, `2^3` e gruppo `(2+3)` inseriti da tasti funzione e valutati; pedice visualizzabile ma parser non supportato |
-| Tastiera/display/Pico 2 W fisici | Non verificati |
-
-Il dettaglio dei codici e delle limitazioni è in `PICOCALC_KEYBOARD_RUN_MATRIX.md`. Non segnare la parità Run-Matrix come completa: scrolling, undo/redo, selezione/clipboard, modificatori, catalogo comandi e prove hardware restano da fare.
-
-
-## 2026-11-07 — Graphics Engine increment
-| Funzione | Stato verificato |
-|---|---|
-| Canvas RGB565 senza allocazioni | Implementato; framebuffer fornito dal driver |
-| Primitive geometriche e clipping | Implementate e testate host |
-| Bitmap, livelli statici e chiave trasparente | Implementati e testati host |
-| Alpha blending RGB565 | Implementato e testato host |
-| Font condivisi e simboli matematici | Da implementare nella fase font |
-| Dirty rectangles / DMA | Da implementare dopo verifica del pannello |
-| Launcher interattivo e router multi-app | Parziale; Home e Run-Matrix sono i soli flussi integrati nel main corrente |
-
-
-| Font renderer | Stato verificato |
-|---|---|
-| ASCII bitmap 5×7, scala 1×/2×/3×, newline, misurazione e clipping | Implementato e testato host |
-| π, √, ×, ÷, Σ, θ, ∫, ∞, ≤, ≥ | Glifi dedicati implementati e testati nel renderer |
-| Greco completo, font proporzionali e stili matematici | Da implementare |
-
-## Graphics/UI status at v1.4.2
-
-| Component | Status | Notes |
-|---|---|---|
-| RGB565 canvas and primitives | Implemented | Host-tested; shared framebuffer |
-| Bitmap font renderer | Implemented | Compact 5x7 font with selected math glyphs |
-| Natural math layout | Partial | Fractions, radicals, powers, subscripts, groups; Matrix node display only |
-| Launcher navigation | Partial | 3x3 selection; RUN-MATRIX and GRAPH open |
-| Shared widgets | Foundation | Panel, title bar, popup, selection primitives |
-| Graph renderer | Partial | Cartesian function sampling, grid, axes, trace, zoom |
-| Partial LCD flush | Implemented in source | Not physically verified on the panel |
-| Animation timeline | Foundation | Non-blocking timing primitive; screen transitions not yet wired |
-| Matrix/Statistics app keyboard workflows | Not complete | Existing data editor APIs remain; UI controllers are next |
-| Pico 2 W UF2 | Not verified | Pico SDK path/toolchain absent in build environment |
+| Claude (Anthropic SDK, `claude-opus-5-5`, fallback server-side sui rifiuti) | TESTED ON HOST (API simulata) |
+| ChatGPT (OpenAI SDK, modello configurato dall'operatore) | TESTED ON HOST (API simulata) |
+| Token per dispositivo (hash SHA-256), limiti di dimensione e frequenza | TESTED ON HOST |
+| TLS integrato con verifica del certificato | TESTED ON HOST |
+| Prova con chiavi reali | NOT STARTED (richiede chiavi e credito dell'utente) |

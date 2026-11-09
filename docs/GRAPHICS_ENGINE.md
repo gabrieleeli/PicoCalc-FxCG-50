@@ -1,122 +1,141 @@
-# Graphics engine — fase 2
+# Graphics engine — v1.8.0
 
-## Architettura
+Le note delle fasi precedenti (font 5×7, flush completo PIO-SPI) sono superate;
+restano consultabili nella cronologia Git e nei documenti storici elencati in
+[README.md](README.md).
 
-`gfx::Canvas` è un renderer RGB565 indipendente dall'hardware. Riceve un puntatore al buffer posseduto dal chiamante e non alloca memoria, non copia il framebuffer e non dipende da Pico SDK, SDL o filesystem. Il driver PicoCalc possiede ancora il framebuffer statico 320×320 e pubblica il canvas con `board::graphics()`.
+## Componenti
 
-Le API legacy `board::clear`, `board::pixel` e `board::rect` restano disponibili e delegano al canvas: le schermate esistenti non devono essere riscritte per adottare il nuovo motore.
+| Modulo | Ruolo |
+|---|---|
+| `graphics_engine.hpp/.cpp` (`gfx::Canvas`) | primitive RGB565 su un buffer posseduto dal chiamante: pixel, linee (anche tratteggiate), rettangoli pieni/arrotondati, cerchi, ellissi, archi, poligoni (≤32 vertici), polilinee, Bézier, bitmap/livelli con colore trasparente, alpha blending, gradiente verticale, rettangolo punteggiato, clipping |
+| `gfx::TileDiff` | rileva i tile 16×16 cambiati con hash FNV-1a e li unisce in rettangoli |
+| `font_renderer.hpp/.cpp` + `font_data.cpp` | font bitmap UTF-8 a cella fissa con ricerca binaria dei code point |
+| `math_renderer.hpp/.cpp` | layout a box del Natural Display (frazioni, radici, potenze, ∫, Σ, …) |
+| `ui_kit.hpp/.cpp` | tema e widget CG50: barra di stato, tasti funzione, righe di lista, popup, finestre di errore, toast, testo a capo |
+| `animation_system.hpp` | primitiva `ui::Animation` (inizio/durata/progresso); non ancora usata nelle schermate |
 
-## Funzionalità implementate
+Nessun modulo dipende dal Pico SDK: lo stesso codice disegna sul framebuffer del
+firmware e su quello del simulatore host (`picocalc_sim`, screenshot PNG).
 
-- Pixel e lettura pixel entro clipping.
-- Linee Bresenham, linee orizzontali e verticali.
-- Rettangoli pieni e vuoti, rettangoli arrotondati.
-- Cerchi pieni e vuoti, archi.
-- Poligoni pieni e vuoti (massimo 32 vertici, buffer temporaneo sullo stack).
-- Blit RGB565 e livelli bitmap statici con chiave trasparente opzionale.
-- Alpha blending RGB565 a 8 bit.
-- Clip rettangolare impostabile e ripristinabile.
-- Palette base condivisa.
+## Framebuffer e aggiornamento del display
 
-## Vincoli di memoria e prestazioni
+- Un solo framebuffer statico 320×320 RGB565 (204 800 byte), posseduto dalla porta
+  board e pubblicato con `board::graphics()`.
+- Ogni frame l'app attiva ridisegna tutto lo schermo; `board::present()` chiama
+  `TileDiff::diff()` (400 hash, 1,6 KB) e invia solo i rettangoli cambiati.
+  Se i rettangoli sono troppi viene inviato il loro rettangolo contenitore.
+- Sul Pico ogni riga è convertita in RGB666 (`gfx::rgb565ToRgb666`) perché il
+  driver ufficiale configura il pannello con `COLMOD 0x66`; con
+  `-DFXAI_LCD_RGB565=ON` i pixel vengono inviati a 16 bit.
+- `board::invalidate()` forza un invio completo (dopo l'init o la schermata di
+  calibrazione).
 
-Il canvas non possiede il framebuffer: sul target viene riutilizzato quello già presente in `board_port.cpp` (320×320×2 = 204.800 byte). Nessuna seconda copia del framebuffer viene creata. Le primitive lavorano direttamente sul buffer; il clipping viene applicato durante il disegno. Il riempimento dei poligoni usa un array locale fisso da 32 intersezioni.
+## Font
 
-Il flush LCD continua a inviare l'intero framebuffer tramite PIO-SPI. Dirty rectangles, DMA, font scalabili e rendering matematico 2D sono attività successive e non sono dichiarate implementate in questa fase.
+| Face | Font | Cella | Uso |
+|---|---|---|---|
+| `Medium` | GNU Unifont 8×16 (baseline 14) | 8×16 | testo principale, espressioni |
+| `Small` | Spleen 6×12 (baseline 9) + simboli Unifont ridotti | 6×12 | barra di stato, tasti funzione, esponenti, indici |
+| `Tiny` | font storico 5×7 (ASCII + simboli matematici) | 6×9 | compatibilità con le API precedenti |
 
-## API essenziale
+Se `Small` non ha un glifo, usa il simbolo 5×7 allineato alla propria baseline;
+il fallback finale è `?`.
 
-```cpp
-auto& canvas = board::graphics();
-canvas.setClip({8, 32, 304, 280});
-canvas.roundedRect(12, 40, 100, 48, 6, gfx::palette::Panel, true);
-canvas.line(12, 100, 300, 100, gfx::palette::Cyan);
-canvas.resetClip();
-board::present();
-```
+I set includono ASCII, Latin-1, greco maiuscolo/minuscolo e i simboli matematici
+usati dalle modalità (√ ∫ Σ Π ∞ ≤ ≥ ≠ → ⇔ ∠ ° ′ ″ × ÷ ±, apici e pedici). I dati
+sono generati da `tools/gen_fonts.py`; `font_smoke` verifica che ogni carattere
+usato nei testi dell'interfaccia abbia un glifo.
 
-`gfx::Canvas` è anche testabile su host con un array RGB565 locale. I test sono in `tests/graphics_smoke.cpp`.
+## Math renderer (Natural Display)
+
+`fx::math::layout()` riceve l'albero dell'editor (`NaturalNode`) e produce una
+lista di operazioni (`NaturalDrawOp`: testo, linea di frazione, segno di radice,
+parentesi estensibili, segnaposto, cursore) con:
+
+- frazioni con linea centrata sull'asse matematico;
+- radici quadrate e n-esime con indice in Small;
+- potenze e indici in Small, con innalzamento proporzionale alla base;
+- modelli ∫ab, d/dx, d²/dx², Σ, Π con limiti sopra/sotto;
+- parentesi e |x| che crescono con il contenuto;
+- segnaposto (quadratini) per i campi vuoti;
+- posizione del cursore (`CursorTarget`) anche fuori dall'area visibile, usata
+  dall'editor per lo scorrimento orizzontale.
+
+Lo stesso layout disegna l'input dell'editor, i risultati di Run-Matrix (frazioni
+e radici esatte) e le formule delle altre modalità; le metriche sono un'unica
+fonte, quindi cursore e testo non possono disallinearsi. I riferimenti alle
+funzioni di Graph (`@Y3`, `@XT2`) sono token atomici mostrati come `Y3`, `Xt2`.
+
+## Schermata dei grafici (GRAPH)
+
+Il motore dei grafici non disegna: produce polilinee in coordinate dello
+schermo (interi a 16 bit, con interruzioni) e bordi delle disequazioni
+([GRAPH_ENGINE.md](GRAPH_ENGINE.md)). `src/apps/graph_plot.cpp` le disegna sul
+`Canvas` con il clipping all'area 320×282 (y = 18…299):
+
+- **penne**: segmenti di Bresenham con un timbro quadrato per pixel, larghezza
+  1 (Thin), 2 (Normal), 3 (Broken) o 4 (Thick); il tratteggio segue la fase
+  lungo tutta la polilinea: Broken 7 pixel sì / 4 no, Dot 2/3, bordo delle
+  disequazioni strette 6/4; un punto isolato (Draw Type Plot) è un quadrato
+  di almeno 2 pixel;
+- **riempimenti**: tratteggio diagonale ogni 4 pixel, colore della funzione
+  schiarito (blend 110/255 sul bianco); con Union ogni disequazione usa una fase
+  diversa del tratteggio, con Intsect si riempie solo l'intersezione; il ciclo
+  visita solo i pixel del motivo (un quarto dell'area, stessa immagine);
+- **area ∫dx**: colonne verticali piene dal grafico all'asse (o tra i due
+  grafici), colore schiarito (blend 90/255);
+- **livelli**: sfondo (Fade = blend verso il bianco) → riempimenti → griglia →
+  assi → immagine richiamata (bianco trasparente) → curve → SKETCH → punti →
+  testi; i riempimenti stanno sotto griglia e assi, che restano leggibili;
+- **immagini**: `pict::encode` comprime l'area del grafico in RLE RGB565 per
+  righe (PICTURE STORE), `pict::forEachSpan` la ridisegna come segmenti
+  orizzontali (sfondo, RECALL) senza decomprimerla in un buffer;
+- **disegno incrementale**: ogni ciclo ridisegna i livelli con i punti già
+  calcolati e una barra di avanzamento; l'aggiornamento a tile invia al display
+  solo le parti cambiate.
+
+## Schermata delle tabelle (TABLE)
+
+`src/apps/table_app.cpp`: intestazione con la variabile (X, θ, T) e i titoli
+delle colonne con il colore della funzione; colonna della variabile larga 58 px
+e 4 colonne di funzioni di 64 px; righe di 18 px (circa 12 visibili) con il
+font Medium; celle di al massimo 6 caratteri allineate a destra (`ERROR` in
+rosso), selezione blu, barra di scorrimento; sotto, il valore completo della
+cella selezionata. La lista delle relazioni di TABLE usa lo stesso layout
+naturale di GRAPH (righe di 28 px, "=" evidenziato per le funzioni nella
+tabella, righe di altri tipi in grigio) e l'editor naturale in un pannello in
+basso. Le celle sono calcolate solo per le righe visibili a ogni ridisegno.
+
+## Diagnostica (SYSTEM → DIAG)
+
+Lista di righe con "+" (riuscita) o "!" (errore, in rosso), testo a capo su 49
+caratteri, intestazione "DIAGNOSTICA: tutto OK / N errori"; le stesse righe
+vanno sulla seriale USB.
+
+## UI kit
+
+Costanti di schermo: barra di stato 18 px, tasti funzione 20 px, riga 16 px.
+Il tema (`ui::theme`) usa sfondo bianco, selezione blu, errori rossi e
+indicatore SHIFT arancione, nello stile della fx-CG50 ma con grafica propria.
+`ui::errorBox` mostra il titolo (Math ERROR, Syntax ERROR, …), il dettaglio e
+"Press:[EXIT]".
+
+## Test
+
+`graphics_smoke` (primitive, clipping, blending, TileDiff, conversione RGB666),
+`font_smoke` (copertura glifi, misure, UTF-8 non valido), `vpam_ast_smoke`,
+`editor_test` (layout e cursore), `app_test` (rendering delle schermate su
+framebuffer host). Gli screenshot in `docs/screenshots/` sono prodotti dal
+simulatore con lo stesso codice del firmware (`tests/sim/run_matrix.txt` per
+12–19, `tests/sim/graph.txt` per 06, 07 e 20–37). `graph_app_test` controlla
+anche singoli pixel del grafico (area ∫dx presente e poi cancellata).
 
 ## Limiti noti
 
-- La primitiva `arc` usa campionamento trigonometrico e va usata per elementi UI non critici, non per ogni frame di animazione.
-- I poligoni pieni oltre 32 vertici vengono ignorati intenzionalmente per evitare allocazioni dinamiche.
-- Il blending è simulato e scrive il colore risultante nel framebuffer; non esiste alpha hardware.
-- I livelli sono viste bitmap non proprietarie: l'ordinamento e la vita dei buffer restano responsabilità dell'applicazione.
-- Non è ancora disponibile un renderer testuale condiviso: il font ASCII 5×7 resta nel driver ed è oggetto della fase font.
-
-## Font renderer condiviso — primo incremento fase 3
-
-`font_renderer.hpp/.cpp` separa il font bitmap dal driver LCD. `font::drawText`
-renderizza il set ASCII 5×7 a scala intera 1×–3×, gestisce newline e larghezza
-massima e usa il clipping del canvas. `font::measure` restituisce misure coerenti
-con la spaziatura del font. Sono presenti glifi dedicati per π, √, ×, ÷, Σ, θ,
-∫, ∞, ≤ e ≥; i caratteri non presenti hanno fallback `?`.
-
-`board::text()` delega ora a questo modulo, quindi le schermate correnti usano il
-renderer condiviso senza modifiche alle loro chiamate. Il font resta volutamente
-compatto: il ridimensionamento è nearest-neighbour, non una famiglia di font
-proporzionale. Il Math Layout Engine e il set greco esteso sono ancora da fare.
-
-## Incremento v1.4.2 — layout, launcher, graph e dirty regions
-
-- `math_renderer.hpp/.cpp`: layout ricorsivo separato dall'editor; misurazione
-  e disegno di righe, frazioni, radicali, potenze, pedici, gruppi e contenitori
-  matrice (per le matrici, il nodo atteso contiene righe `Row`). Limiti di
-  profondità e dimensione per evitare layout patologici. Il rendering naturale
-  delle schermate RUN-MATRIX e Natural Editor usa ora questo renderer; la
-  geometria del cursore continua a provenire dall'editor.
-- `run_matrix.cpp`: il launcher ora mantiene una selezione 3×3, navigabile con
-  frecce; EXE apre RUN-MATRIX o GRAPH. ESC riporta al launcher. Le altre tile
-  sono ancora non collegate a un controller applicativo.
-- `graph_renderer.hpp/.cpp`: disegna griglia, assi, funzione cartesiana e
-  cursore; usa `fx::evaluate` per campionare l'espressione, zoom centrato e pan
-  disponibile nell'API. L'interfaccia attuale usa frecce per trace e zoom.
-- `widget_system.hpp/.cpp`: primitive condivise per pannelli, title bar, popup
-  e selezione.
-- `animation_system.hpp/.cpp`: timeline non bloccante basata su timestamp;
-  il componente è testato ma non ancora collegato alle transizioni delle app.
-- `Canvas` accumula il bounding box delle scritture. `board::present()` invia
-  soltanto l'area modificata; per regioni parziali riemette RAMWR per riga per
-  non dipendere dalla persistenza del comando durante il toggle CS.
-- `KEY_TAB` è trattato come alias logico di MENU/indietro. Il firmware tastiera
-  standard espone ESC ma non un codice dedicato MENU nel set di codici
-  documentato; non viene inventato un codice hardware.
-
-### Test aggiunti
-
-`math_renderer_smoke`, `graph_renderer_smoke`, `launcher_smoke`,
-`widget_smoke`, `animation_smoke` e verifica dirty rectangle sono inclusi in
-`tests/run_host_tests.sh`.
-
-### Limiti residui
-
-- Il nodo Matrix è predisposto per la visualizzazione ma non esiste ancora un
-  comando editor per creare/modificare matrici naturali e il parser non valuta
-  il nodo Matrix.
-- I tile STAT, EQUATION, MATRIX, VECTOR, BASE-N, AI e 3D non hanno ancora un
-  controller interattivo collegato. Le API degli editor restano presenti.
-- Il cursore del layout resta gestito dall'editor precedente; la selezione del
-  cursore dentro strutture annidate richiede un successivo consolidamento.
-- Popup/widget e timeline animazioni sono primitive condivise; non tutte le
-  schermate li utilizzano e non è ancora implementata una transizione animata.
-- Dirty rectangles sono implementati nel driver ma il percorso UI corrente
-  chiama spesso `clear()`, che correttamente marca l'intero display come dirty.
-- Nessuna validazione del pannello fisico, orientamento o colori su hardware.
-
-## Phase 2 — 2D engine consolidation (incremental)
-
-The shared `gfx::Canvas` now additionally provides:
-
-- `dashedLine()` with deterministic dash/gap lengths.
-- `ellipse()` for outline and filled ellipses using a midpoint rasterizer.
-- `polyline()` and bounded-degree Bézier curves (2–8 control points).
-- `Transform2D` affine translation, scaling, rotation and transformed polylines.
-- RGB888/RGB565 conversion helpers and RGB565 byte swapping.
-- A fixed-capacity dirty-region list (`consumeDirtyRegions()`). Touching/overlapping
-  regions are merged; if the list fills, it safely collapses to one bounding region.
-- Cohen–Sutherland line clipping before Bresenham rasterization, avoiding work
-  proportional to very distant off-screen endpoints.
-
-The legacy `dirtyRect()` / `consumeDirty()` union API remains available for existing
-callers. The dirty-region API is allocation-free and has a capacity of 16 rectangles.
+- Nessun anti-aliasing né font proporzionali; scale intere soltanto.
+- `arc` usa campionamento trigonometrico: adatto a elementi UI, non a grafici
+  (i grafici di funzioni usano il campionamento adattivo del motore GRAPH).
+- Poligoni pieni oltre 32 vertici ignorati per non allocare memoria.
+- Animazioni di transizione non ancora applicate alle schermate.
+- Resa reale dei colori sul pannello ST7365P non ancora verificata.

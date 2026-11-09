@@ -1,4 +1,8 @@
 build/
 build-*/
 *.uf2
+*.o
+__pycache__/
+*.pyc
+/dist/
 .vscode/

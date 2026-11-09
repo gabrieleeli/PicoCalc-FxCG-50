@@ -11,6 +11,7 @@
 namespace fx {
 enum class AngleMode { Radians, Degrees, Gradians };
 void setAngleMode(AngleMode mode);
+AngleMode angleMode() noexcept;
 double toRadians(double x);
 double fromRadians(double x);
 double factorial(unsigned n);

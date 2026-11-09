@@ -1,48 +1,42 @@
+// The editor, the parser, the evaluator and the renderer share one AST type.
 #include "expression.hpp"
-#include "natural_editor.hpp"
 #include "math_renderer.hpp"
-#include <cassert>
+#include "natural_editor.hpp"
+#include "test_util.hpp"
 #include <cmath>
-#include <iostream>
 #include <stdexcept>
 
 int main() {
     using fx::ast::Kind;
     // Parser creates typed nodes (not a serialized string wrapper).
     auto parsed = fx::parseExpression("(1+2)*3^2");
-    assert(parsed && parsed->kind == Kind::Binary && parsed->text == "*");
-    assert(parsed->children[0]->kind == Kind::Group);
-    assert(parsed->children[1]->kind == Kind::Binary);
-    assert(std::abs(fx::evaluate(*parsed) - 27.0) < 1e-12);
-    assert(!fx::ast::serialize(*parsed).empty());
-
+    CHECK(parsed && parsed->kind == Kind::Binary && parsed->text == "*");
+    CHECK(parsed->children[0]->kind == Kind::Group);
+    CHECK(parsed->children[1]->kind == Kind::Binary);
+    CHECK_NEAR(fx::evaluate(*parsed), 27.0, 1e-12);
+    CHECK(!fx::ast::serialize(*parsed).empty());
+    // Incomplete template nodes are rejected.
     auto incomplete = fx::ast::make(Kind::Fraction);
-    bool rejected = false;
-    try { (void)fx::evaluate(*incomplete); }
-    catch (const std::runtime_error&) { rejected = true; }
-    assert(rejected);
-
-    // Editor imports the parsed tree into its editable shared AST.
+    CHECK_THROWS_AS(fx::evaluate(*incomplete), std::runtime_error);
+    // Editor imports text into structured template boxes.
     fx::NaturalEditor editor;
     editor.setExpression("sqrt(16)+x^2");
-    assert(editor.root().kind == Kind::Row);
-    assert(editor.root().children.size() == 1);
-    assert(std::abs(fx::evaluate(editor.root(), 3.0) - 13.0) < 1e-12);
-
-    // Renderer consumes that exact editor tree and emits drawing operations.
+    CHECK(editor.root().kind == Kind::Row);
+    CHECK(editor.root().children.size() == 3);
+    CHECK(editor.root().children[0]->kind == Kind::Radical);
+    CHECK(editor.root().children[2]->kind == Kind::Power);
+    CHECK_NEAR(fx::evaluate(editor.root(), 3.0), 13.0, 1e-12);
+    // Renderer consumes that exact editor tree.
     auto rendered = fx::math::layout(editor.root(), 2, 20, 300, 100);
-    assert(!rendered.ops.empty());
-    assert(rendered.size.width > 0);
-
-    // Fraction/power nodes remain directly evaluable without serialize().
+    CHECK(!rendered.ops.empty() && rendered.size.width > 0);
+    // Fraction nodes are directly evaluable.
     auto row = fx::ast::make(Kind::Row);
     auto frac = fx::ast::make(Kind::Fraction);
-    auto numerator = fx::ast::make(Kind::Row);
-    auto denominator = fx::ast::make(Kind::Row);
+    auto numerator = fx::ast::make(Kind::Row), denominator = fx::ast::make(Kind::Row);
     numerator->children.push_back(fx::ast::make(Kind::Token, "1"));
     denominator->children.push_back(fx::ast::make(Kind::Token, "2"));
     frac->children = {numerator, denominator};
     row->children.push_back(frac);
-    assert(std::abs(fx::evaluate(*row) - 0.5) < 1e-12);
-    std::cout << "VPAM AST end-to-end tests: PASS\n";
+    CHECK_NEAR(fx::evaluate(*row), 0.5, 1e-12);
+    return testutil::finish("vpam_ast_smoke");
 }

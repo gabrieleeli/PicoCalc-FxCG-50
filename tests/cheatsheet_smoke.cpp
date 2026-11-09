@@ -1,9 +1,12 @@
 #include "cheatsheet.hpp"
-#include <cassert>
+#include "test_util.hpp"
+#undef assert
+#define assert(x) CHECK(x)
 #include <cstring>
 int main() {
     using namespace fx::help;
-    static_assert(PageCount == 16);
+    static_assert(PageCount == 17);
+    assert(std::strcmp(pages[16].title, "CONFRONTI E FRAZIONI") == 0);
     assert(std::strcmp(pages[0].title, "ARITMETICA") == 0);
     assert(std::strcmp(pages[2].title, "LETTERE GRECHE") == 0);
     assert(std::strcmp(pages[3].title, "COSTANTI MATEMATICHE") == 0);
@@ -21,4 +24,5 @@ int main() {
             assert(page.entries[i].example && page.entries[i].example[0]);
         }
     }
+    return testutil::finish("cheatsheet_smoke");
 }

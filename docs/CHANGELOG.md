@@ -1,59 +1,212 @@
 # Changelog
 
-## 1.9.0 — Pimoroni Pico Plus 2 W (PSRAM 8 MB + flash 16 MB), memoria multi-pool
+## v1.8.0 (continuazione) — collaudo di GRAPH e microSD, completamento di TABLE
 
-Base: `main` / `version/v1.5.4` (scelta esplicita). Le modifiche dei branch
-`version/v1.6.0`–`version/v1.8.0` non sono incluse. Branch: `version/v1.9.0`.
+Sullo stesso branch `version/v1.8.0`. Verifiche su PC; **nessuna prova sulla
+PicoCalc fisica** (procedura in [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md)).
+Rapporto: [reports/SESSIONE_v1.8.0_COLLAUDO_TABLE.md](reports/SESSIONE_v1.8.0_COLLAUDO_TABLE.md).
 
-- **Versione**: `VERSION` era fermo a `1.5.3-dev`; ora `1.9.0` ed è l'unica
-  sorgente della versione (CMake → `FXAI_VERSION` → firmware, schermata System,
-  `pico_set_program_version`).
-- **Build reale**: il firmware v1.5 non era mai stato compilato per ARM (eccezioni
-  C++ disabilitate dall'SDK, `lwipopts.h` mancante, errori nel driver LCD:
-  `constexpr pio0`, `pio_sm_is_tx_stalled` inesistente, `glyph()` non dichiarata).
-  Ora compila senza warning per entrambe le schede con Pico SDK 2.2.0.
-- **Selezione scheda**: `FXAI_BOARD=PICO2W|PICO_PLUS_2W` prima dell'import
-  dell'SDK; definizioni `FXAI_BOARD_*`, `FXAI_HAS_PSRAM`, `FXAI_FLASH_SIZE`;
-  `scripts/build.sh --board ...` con directory e UF2 separati
-  (`build_pico2w.sh` resta come alias); `include/board_config.hpp` con pin
-  PicoCalc invariati e capacità dal board header SDK (ADC su GPIO40–47 sul
-  RP2350B documentato).
-- **Driver PSRAM APS6404L** (QMI CS1, GPIO47 dal board header) portato da
-  SparkFun `sfe_psram.c` (MIT): ID, reset, QPI, timing M1 da `clk_sys`,
-  `0xEB/0x38`, `WRITABLE_M1`; self-test data/address bus, pattern casuali,
-  percorso cached/non cached; in caso di errore PSRAM disabilitata e avvio
-  solo in SRAM; riapplicazione del timing dopo cambi di `clk_sys`.
-- **Memoria multi-pool**: `mem::alloc/tryAlloc/free/stats`, pool SRAM (heap),
-  PSRAM_BOARD (TLSF), PSRAM_PICOCALC (stub); policy PREFER_PSRAM/SRAM_ONLY/
-  PSRAM_ONLY/PREFER_SRAM; adattatori `std::pmr`; `operator new` globale
-  instradato per soglia o `mem::PlacementScope`; thread-safe su due core.
-- **Carico in PSRAM**: cronologia, matrici, liste, foglio di calcolo, campioni e
-  layer dei grafici, mesh/z-buffer 3D, snapshot finestre, buffer AI.
-- **Limiti dinamici** (`include/limits.hpp`): window manager (8/8 → dinamico
-  16/64), dirty regions, poligoni (32 → 256/4096), matrici (4×4 → 40/999),
-  liste (6×256 → 26×999/1M), foglio (45×5 → 999×26 sparso), cronologia
-  (30 → 30/10 000), funzioni Y= (1 → 20/64), 3D (pittore/z-buffer), buffer AI;
-  limiti strutturali mantenuti e aggiunti (profondità parser prima illimitata).
-- **"Memoria insufficiente"** con rollback e senza abort (anche il messaggio è
-  scritto senza allocare); `PICO_MALLOC_PANIC=0`.
-- **Stack**: stack applicativo core 0 da 32 KiB in SRAM (prima 2 KiB in
-  SCRATCH_Y) con MSPLIM; core 1 8 KiB con guardia SDK; handler HardFault in
-  SRAM con stack d'emergenza e report al riavvio.
-- **Flash**: partizioni da `PICO_FLASH_SIZE_BYTES`, LittleFS v2.11.3,
-  scritture solo via `flash_safe_execute()` con buffer SRAM, verifica/ripristino
-  di QMI M1 nella zona sicura, test "PSRAM dopo scrittura flash"; `-Os/-O2`,
-  gc-sections, LTO sperimentale (solo sorgenti app), controllo dimensione.
-- **Grafica**: grafici 2D multi-funzione con cache campioni/layer e
-  sovracampionamento; grafico 3D (z-buffer o pittore); framebuffer in SRAM di
-  default con `FXAI_FRAMEBUFFER_IN_PSRAM`; benchmark `present()` on-device.
-- **System**: schermate Memoria (SRAM/PSRAM/Flash, picchi, stack), Limiti e
-  Test diagnostici (PSRAM, allocatore 1/2 core, flash+PSRAM, framebuffer,
-  Wi-Fi con scansione, LittleFS, SD).
-- **Periferiche**: `wifiConnect()` attiva la modalità STA; probe SD
-  (`FXAI_ENABLE_SD`); Bluetooth LE opzionale (`FXAI_ENABLE_BT`, default OFF).
-- **Test**: suite host ristrutturata (libreria comune) + 8 nuove suite; CTest
-  in `desktop/CMakeLists.txt` (emulatore SDL2 opzionale). Nessun test su
-  hardware reale eseguito: vedi `docs/PICO_PLUS_2W.md` §11.
+### GRAPH
+- `graph_verify_test`: ogni punto disegnato entro 1 pixel dalla curva vera
+  (18 casi Y= e X=, r=, Param), discontinuità, domini, G-Solve, derivate e
+  integrali contro valori analitici.
+- Corretto: ∫dx attraverso un polo dava un numero senza senso → "Math ERROR:
+  integrale divergente"; integrali di funzioni a salto imprecisi (4,500001)
+  → divisione ai salti e ai picchi integrabili.
+- Corretto: tratti PEN illimitati potevano rendere impossibile il salvataggio
+  del workspace in flash → 1200 punti in totale; messaggio "Memoria flash
+  piena" con la dimensione.
+- Tratteggio delle disequazioni 4 volte più rapido (immagine identica).
+
+### microSD
+- Corretto: dopo l'estrazione e il reinserimento della scheda tra due
+  operazioni ogni accesso falliva → reinizializzazione, nuovo montaggio e un
+  nuovo tentativo; lettura ripetuta dopo un errore transitorio.
+- Corretto: scheda non formattata segnalata come file danneggiato → stato
+  `Unformatted` con istruzioni.
+- Test sull'intera pila (GraphApp → FatFs → protocollo SD → scheda simulata),
+  guasti, dimensioni, cartelle, scheda piena; `sd_interop_test` con
+  fsck.fat/fsck.exfat/mtools; `tools/sd_image_tool`; simulatore con
+  `PICOCALC_SD_IMAGE`.
+- SYSTEM → F2 DIAG: test della microSD e tempi di GRAPH sul dispositivo,
+  stampati anche sulla seriale USB.
+
+### TABLE
+- Riscritta: lista delle relazioni propria (SELECT, DELETE, TYPE Y=/r=/Param,
+  STYLE, SET, TABLE), Setup (Variable Range/List, Derivative, Angle), fino a
+  999 righe, celle di 6 caratteri, EDIT, ROW DELETE/INSERT/ADD, DELETE,
+  LISTMEM, GPH-CON/GPH-PLT dalle righe effettive — [TABLE.md](TABLE.md).
+- Corretti: lettura fuori dai limiti dopo un intervallo non valido; modulo SET
+  che non si chiudeva con valori errati.
+- Workspace versione 4 (righe e impostazioni della tabella), `.pcgraph` con
+  `tablevar`/`tablefunc`.
+
+### Test
+- 25 test CTest (24 suite, 7169 controlli + 41 di interoperabilità), anche con
+  ASan/UBSan; UF2 senza warning (3 012 096 byte).
+
+## v1.8.0 — 2026-11-08 — Sessione GRAPH
+
+Branch `version/v1.8.0` (creato da `version/v1.7.0`, commit `72285e9`).
+Non ancora provata sulla PicoCalc fisica. Parità con la fx-CG50 **non**
+completa: elenco voce per voce in [GRAPH_PARITY.md](GRAPH_PARITY.md).
+
+### Motore GRAPH (nuovo, `graph_model`, `graph_engine`, `graph_solve`)
+- Modello separato dall'interfaccia: 20 funzioni, 12 tipi (Y=, r=, Param,
+  X=, Y>/Y</Y≥/Y≤, X>/X</X≥/X≤), stili e colori, V-Window con T e Xdot,
+  Setup della modalità, memorie, SKETCH.
+- Viewport con clipping di Liang–Barsky; campionamento adattivo incrementale
+  con rilevamento di poli, salti e bordi di dominio; Draw Type Plot; bordi
+  delle disequazioni; limite di 6000 punti per curva e 24 000 in totale.
+- Intervalli `[a,b]`, sovrapposizioni `[A=…]`, grafici da lista, funzioni
+  composte (`Y1(x)`, ≤ 5 livelli) tramite `FunctionResolver` nel valutatore
+  condiviso; grafici incollati (≤ 10).
+- G-Solve con Brent–Dekker, minimizzazione di Brent, derivata di Ridders,
+  Gauss–Kronrod adattivo e area divisa alle radici.
+- ZOOM BOX/FACTOR/IN/OUT/AUTO/ORIGINAL/SQUARE/ROUND/INTEGER/PREVIOUS e preset
+  TRIG/STANDRD/INITIAL.
+
+### Modalità GRAPH (riscritta)
+- Lista delle relazioni Y1–Y20 con TYPE (13 voci, CONVERT), TOOL (STYLE,
+  GPH-MEM, BUILT-IN, FORMAT, FILE), MODIFY, DRAW; editor naturale con VARS
+  GRAPH e riferimenti.
+- V-Window a 10 campi con INITIAL/TRIG/STANDRD, V-MEM, SQUARE, BGV-WIN; Setup
+  proprio della modalità (16 voci) aperto dal tasto SETUP dentro GRAPH.
+- Disegno incrementale non bloccante (600 valutazioni per ciclo), Simul Graph,
+  livelli (sfondo con Fade, riempimenti Union/Intsect, area ∫dx, griglia,
+  assi con scala ed etichette, immagine richiamata, curve, SKETCH, punti).
+- TRACE con valore digitato, cambio grafico, derivata, linee ausiliarie e
+  punti con etichetta; ZOOM; PAN; SKETCH (Cls, Tangent, Norm, Inverse,
+  Plot/PlotOn/PlotOff/PlotChg, Line/F-Line, Circle, Vertical, Horz, PEN,
+  Text, elenco degli elementi); G-SOLVE completo con ∫dx ROOT/INTSECT/MIXED;
+  Modify con COPY; 20 memorie grafiche; PICTURE STORE/SAVE•AS/RECALL/OPEN,
+  esportazione BMP, immagine di sfondo.
+- Progetti `.pcgraph` sulla microSD: NEW, OPEN, SAVE, SAVE AS, RENAME,
+  DELETE, file manager con spazio libero; errori di scheda assente/piena/
+  danneggiata come "Storage ERROR".
+- TABLE sullo stesso motore: colonne dY/dX, GPH-CON/GPH-PLT, → TABLE e
+  GRAPH tra le due modalità.
+
+### File e microSD (nuovo)
+- Interfaccia `files::FileSystem`, scrittura atomica con verifica CRC e
+  recupero dopo interruzione, scheda in RAM con iniezione di guasti.
+- Formati documentati: `.pcgraph` (testo con CRC-32), `PCGMEM`, `.pcpict`
+  (RLE RGB565), BMP ([PCGRAPH_FORMAT.md](PCGRAPH_FORMAT.md)).
+- Protocollo SD in SPI (SDSC/SDHC/SDXC), FatFs R0.16 in `third_party/fatfs`,
+  bus SPI0 della PicoCalc (GP16–19, card detect GP22).
+
+### Persistenza
+- Workspace versione 3 (stato GRAPH); lettura delle versioni 1 e 2 con
+  correzione delle V-Window che non superano i nuovi controlli.
+
+### Correzioni
+- Le funzioni composte contano anche i riferimenti dentro gli argomenti; i
+  riempimenti non coprono più gli assi; un nuovo G-Solve cancella l'area ∫dx
+  precedente; i marcatori dei risultati non escono dall'area del grafico;
+  heap esaurito durante il disegno → "Memory ERROR" senza ripetizioni.
+
+### Test
+- Nuove suite `graph_engine_test`, `graph_solve_test`, `graph_file_test`,
+  `graph_app_test`, `sd_fatfs_test`: 22 suite, 6540 controlli, tutti superati
+  anche con ASan/UBSan. Screenshot 06, 07, 20–34 da `tests/sim/graph.txt`.
+- UF2 compilato senza warning nei sorgenti del progetto (2 874 880 byte,
+  `picotool info` verificato); stack dei frame di GRAPH misurato con
+  `-fstack-usage`.
+
+## v1.7.0 — 2026-11-08 — Sessione 1: audit, architettura delle applicazioni, Run-Matrix
+
+Branch `version/v1.7.0` (partito da `claude/peaceful-euler-auyrm5` = v1.6.0 + documentazione).
+Non ancora provata sulla PicoCalc fisica.
+
+### Architettura
+- Registro delle 23 modalità (`app_registry.hpp/.cpp`): stato (Available / Planned /
+  External), responsabilità, servizi condivisi, sezioni del workspace, collegamenti
+  consentiti, file sorgente. Usato da launcher, AppManager e test.
+- Modelli dati iniziali delle modalità future (`app_models.hpp/.cpp`): Recursion,
+  Dyna Graph, Conic Graphs (con classificazione), 3D Graph, Financial, Spreadsheet
+  (riferimenti di cella), file di Program/Python/eActivity, Geometry, Picture Plot.
+- `SymbolsApp` in un modulo proprio; `docs/APPLICATIONS_ARCHITECTURE.md`.
+- `architecture_test`: verifica registro ↔ sorgenti ↔ firmware, separazione delle
+  app (Run-Matrix solo calcoli e risultati), stratificazione motore/UI, assenza di
+  cicli di include.
+
+### Motore matematico
+- Aritmetica esatta (`exact.hpp/.cpp`): razionali, radicali con due termini,
+  multipli di π; valutatore esatto sullo stesso AST del parser.
+- Operatori relazionali e logici, Int÷, Rmdr, MOD_Exp, RndFix, RanNorm#, RanBin#,
+  frazioni miste, decimali periodici, variabili condivise (Xmin…, TblStart…).
+- Arrotondamento di Fix/Sci come la calcolatrice (0.125 → 0.13 in Fix2).
+
+### Run-Matrix
+- Risultati esatti (frazioni, √, π) con le regole di visualizzazione della CG50;
+  S⇔D che non altera il valore; Ans e A–Z conservano la forma esatta.
+- Frac Result d/c / ab/c (System) e conversione per singolo risultato; modello di
+  frazione mista; vista e input dei numeri periodici; radice con indice modificabile.
+- Cronologia: modifica sul posto con ricalcolo delle righe successive, riuso di
+  espressione o risultato, eliminazione; →A~F; VARS per categorie (A–Z, Ans,
+  V-WIN, TABLE); OPTN con LOGIC, RELAZIONI e RISULTATO; "≈" sui risultati numerici;
+  barra di scorrimento della cronologia; indicatore d/c / ab/c nella barra di stato.
+
+### Persistenza
+- Formato del workspace versione 2 (valori esatti, Frac Result, Ans complesso);
+  i record v1.6.0 (versione 1) vengono ancora letti.
+
+### Test
+- Nuove suite `exact_test`, `run_matrix_test`, `architecture_test`; 17 suite in
+  totale, tutte superate anche con ASan/UBSan. Screenshot 12–19 dal simulatore.
+- UF2 compilato senza warning nei sorgenti del progetto; stack dei nuovi frame
+  misurato con `-fstack-usage` sul target.
+
+## v1.6.0 — 2026-11-08 — prima build RP2350 per PicoCalc + Pico 2 W
+
+Prima versione che **compila per l'RP2350** (UF2 verificato con `picotool`). Non
+ancora provata sulla PicoCalc fisica. Dettagli in [BUILD_STATUS.md](BUILD_STATUS.md).
+
+### Piattaforma
+- Driver riscritti secondo i sorgenti ufficiali ClockworkPi: LCD ST7365P su SPI1
+  hardware a 25 MHz con la sequenza di init ufficiale (RGB666, `INVON`, gamma),
+  tastiera STM32 su I2C1 con STOP + attesa di 16 ms (macchina a stati non bloccante),
+  batteria e retroilluminazione via registri STM32.
+- Aggiornamento parziale del display a tile 16×16 senza secondo framebuffer.
+- Eccezioni C++ abilitate, `lwipopts.h`/`mbedtls_config.h`, linker script con
+  stack da 32 KB.
+- Storage flash A/B con CRC-32 e `flash_safe_execute`, autosalvataggio.
+- Simulatore host con screenshot PNG; build host con CMake/CTest.
+
+### Interfaccia
+- Framework di app (`AppManager`) con tasti globali MENU, EXIT lungo, SHIFT, SET UP,
+  finestre di errore in stile CG50, toast.
+- Font GNU Unifont 8×16 e Spleen 6×12; barra di stato e tasti funzione F1–F6.
+- Menu principale a icone con 23 modalità; quelle non realizzate sono marcate e
+  aprono una spiegazione.
+
+### Matematica
+- Pipeline unica tokenizer → AST → valutatore (reale e complesso) al posto dei due
+  parser precedenti; priorità Casio, funzioni prefisse, costanti, Base-N, DMS,
+  Pol/Rec, ∫/d/dx/d²/dx²/Σ/Π/SOLVE.
+- Editor Natural con undo/redo, copia/incolla, scorrimento, metriche uniche con il
+  renderer (cursore allineato).
+- Limiti contro l'esaurimento dello stack: 320 token, 32 livelli di annidamento,
+  12 modelli annidati e 400 nodi nell'editor, budget di stack di 16 KB per
+  valutazione; catene lunghe (`1+2+…+n`) valutate in modo iterativo.
+
+### Modalità
+- Nuove: Statistics, Graph, Table, Equation, System, Memory, Conversion, AI Chat.
+- Run-Matrix con storia, OPTN, VARS, S⇔D, numeri complessi.
+
+### AI
+- Relay Python con SDK ufficiali Anthropic (`claude-opus-5-5`, fallback lato server
+  sui rifiuti) e OpenAI; token per dispositivo, limiti, TLS.
+- Client firmware Wi-Fi + HTTPS con verifica obbligatoria del certificato.
+
+### Test
+- 14 suite host, 4495 controlli, anche con ASan/UBSan; 15 test del relay.
+
+### Correzioni rispetto alla v1.5.4
+- Vedi la tabella "Audit della v1.5.4" in [BUILD_STATUS.md](BUILD_STATUS.md).
+- Rimossi i moduli sostituiti (vecchio `ui.cpp`, `graph_renderer`,
+  `window_manager`, `widget_system`, PIO-SPI, frontend SDL); i loro test sono stati
+  portati sulle nuove API.
 
 ## v1.5.2-dev — Casio-style 20-mode launcher
 - Sostituita la griglia generica 3x3 con una griglia 4x5 che riproduce le 20 modalità visibili nell'immagine di riferimento FX-CG50: Run-Matrix, Statistics, eActivity, Spreadsheet, Graph, Dyna Graph, Table, Recursion, Conic Graphs, Equation, Program, Financial, E-CON4, Link, Memory, System, Geometry, Picture Plot, 3D Graph e Conversion.

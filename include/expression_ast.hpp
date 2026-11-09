@@ -25,7 +25,7 @@ inline bool validShape(const Node& n) noexcept {
     case Kind::Fraction: case Kind::Power: case Kind::Subscript: case Kind::Binary: return count==2;
     case Kind::Radical: case Kind::Group: case Kind::Unary: return count==1;
     case Kind::Call: return !n.text.empty() && count>=1;
-    case Kind::Calculus: return (n.text=="derivative"&&count==2)||((n.text=="integral"||n.text=="sum")&&count==3);
+    case Kind::Calculus: return (n.text=="derivative"&&count==2)||((n.text=="integral"||n.text=="sum"||n.text=="prod")&&count==3);
     }
     return false;
 }
@@ -43,7 +43,10 @@ inline std::string serialize(const Node& n) {
     case Kind::Power: return "("+child(0)+")^("+child(1)+")";
     case Kind::Binary: return "("+child(0)+")"+n.text+"("+child(1)+")";
     case Kind::Unary: return n.text+"("+child(0)+")";
-    case Kind::Call: { std::string out=n.text+"("; for(std::size_t i=0;i<n.children.size();++i){if(i)out+=",";out+=child(i);} return out+")"; }
+    case Kind::Call: {
+        // Repeating digits of a decimal (editor overline template): "0.1" + "_6" = 0.1666...
+        if(n.text=="period"&&n.children.size()==1) return "_"+child(0);
+        std::string out=n.text+"("; for(std::size_t i=0;i<n.children.size();++i){if(i)out+=",";out+=child(i);} return out+")"; }
     case Kind::Group: return "("+child(0)+")";
     case Kind::Subscript: throw std::runtime_error("Gli indici non sono ancora valutabili");
     case Kind::Matrix: throw std::runtime_error("Le matrici non sono ancora collegate al valutatore scalare");

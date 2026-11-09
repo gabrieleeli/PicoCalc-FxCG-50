@@ -95,6 +95,12 @@ public:
                 std::uint16_t transparent = 0x0000, bool useTransparent = false) noexcept;
     void drawLayer(const Layer& layer) noexcept;
     void blendPixel(int x, int y, std::uint16_t color, std::uint8_t alpha) noexcept;
+    // Vertical two-colour gradient (used for CG50-style icons and bars).
+    void verticalGradient(int x, int y, int width, int height, std::uint16_t top,
+                          std::uint16_t bottom) noexcept;
+    // 1-pixel dotted rectangle outline (VPAM empty-slot placeholder).
+    void dottedRect(int x, int y, int width, int height, std::uint16_t color) noexcept;
+    const std::uint16_t* pixels() const noexcept { return pixels_; }
     static std::uint16_t blend(std::uint16_t foreground, std::uint16_t background,
                                std::uint8_t alpha) noexcept;
 private:
@@ -106,6 +112,34 @@ private:
     void markDirty(Rect r) noexcept;
     bool inside(int x, int y) const noexcept;
 };
+
+// Detects which 16x16 tiles of a framebuffer changed since the previous call by
+// comparing per-tile FNV-1a hashes. This enables partial LCD updates without a
+// second 200 KB shadow framebuffer: the UI can redraw a full frame and only the
+// changed tiles are transmitted. Changed tiles are merged into rectangles.
+class TileDiff {
+public:
+    static constexpr int Tile = 16;
+    static constexpr int MaxTilesX = 20, MaxTilesY = 20;   // up to 320x320
+    void invalidate() noexcept { valid_ = false; }
+    // Returns the number of rectangles written to out (<= maxOut). When the
+    // merged list would exceed maxOut, a single bounding rectangle is returned.
+    std::size_t diff(const std::uint16_t* pixels, int width, int height,
+                     Rect* out, std::size_t maxOut) noexcept;
+private:
+    std::uint32_t hashes_[MaxTilesX * MaxTilesY]{};
+    bool valid_{};
+};
+
+// RGB565 -> RGB666 byte expansion used by 18-bit SPI panels (ST7365P 3Ah=66h).
+inline void rgb565ToRgb666(std::uint16_t c, std::uint8_t out[3]) noexcept {
+    const auto r = static_cast<std::uint8_t>((c >> 11U) & 0x1FU);
+    const auto g = static_cast<std::uint8_t>((c >> 5U) & 0x3FU);
+    const auto b = static_cast<std::uint8_t>(c & 0x1FU);
+    out[0] = static_cast<std::uint8_t>((r << 3U) | (r >> 2U));
+    out[1] = static_cast<std::uint8_t>((g << 2U) | (g >> 4U));
+    out[2] = static_cast<std::uint8_t>((b << 3U) | (b >> 2U));
+}
 
 namespace palette {
 constexpr std::uint16_t Black=0x0000, White=0xFFFF, Navy=0x000F, Blue=0x001F;

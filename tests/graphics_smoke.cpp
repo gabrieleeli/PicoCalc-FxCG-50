@@ -1,6 +1,8 @@
 #include "graphics_engine.hpp"
 #include <array>
-#include <cassert>
+#include "test_util.hpp"
+#undef assert
+#define assert(x) CHECK(x)
 #include <cstdint>
 #include <initializer_list>
 
@@ -100,4 +102,5 @@ int main() {
     c.line(-1000000000,12,1000000000,12,gfx::palette::Blue);
     assert(c.getPixel(0,12)==gfx::palette::Blue);
     assert(c.getPixel(W-1,12)==gfx::palette::Blue);
+    return testutil::finish("graphics_smoke");
 }

@@ -1,41 +1,38 @@
 #pragma once
+#include "graphics_engine.hpp"
+#include "storage.hpp"
 #include <cstddef>
 #include <cstdint>
-#include "graphics_engine.hpp"
+
+namespace fx::net { class ChatTransport; }
+namespace fx::files { class FileSystem; }
+
+// Board support interface. Implemented by src/platform/pico/board_pico.cpp for
+// the PicoCalc (RP2350) and by src/platform/host/board_host.cpp for host tests
+// and the screenshot simulator.
 namespace board {
 void init();
 gfx::Canvas& graphics() noexcept;
-void clear(uint16_t rgb565);
-void text(int x,int y,const char* s,uint16_t rgb565);
-void rect(int x,int y,int w,int h,uint16_t rgb565,bool filled=false);
-void pixel(int x,int y,uint16_t rgb565);
+// Sends the 16x16 tiles that changed since the previous call to the LCD.
 void present();
-int readKey();
-bool wifiConnect(const char* ssid,const char* password);
-
-// --- Additions (v1.9.0) -------------------------------------------------------
-struct FramebufferInfo {
-    std::uint16_t* pixels{};
-    std::size_t bytes{};
-    bool inPsram{};     // placement actually obtained (FXAI_FRAMEBUFFER_IN_PSRAM may fall back)
-    bool requestedPsram{};
-};
-FramebufferInfo framebuffer() noexcept;
-// Duration of the last present() (microseconds) and of the last full-frame flush.
-std::uint32_t lastPresentUs() noexcept;
-std::uint32_t lastFullFrameUs() noexcept;
-// Forces a full-frame transfer and returns its duration in microseconds.
-std::uint32_t benchmarkFullPresent();
-// Full-frame transfer of an arbitrary 320x320 RGB565 buffer (SRAM or PSRAM).
-std::uint32_t benchmarkPresentFrom(const std::uint16_t* pixels);
-// Wi-Fi state for diagnostics (string owned by the board layer).
-const char* wifiStatus() noexcept;
-bool wifiReady() noexcept;
-// Changes clk_sys and re-derives every clock-dependent setting: PSRAM QMI M1
-// timing (psram::reapplyTiming) and the LCD PIO SPI divider. Must be called
-// while core 1 is idle. Returns false if the frequency is not achievable.
-bool setSystemClockKhz(std::uint32_t khz);
-// Powers the radio up in STA mode (firmware download over the CYW43 SPI bus)
-// and counts scan results; -1 on failure.
-int wifiScan(unsigned timeoutMs);
-}
+// Forces a full-frame transfer on the next present().
+void invalidate();
+// Non-blocking keyboard poll: returns true and the FIFO word (state<<8 | key).
+bool pollKey(std::uint16_t& raw);
+// Runs periodic hardware work (keyboard I2C state machine, battery, Wi-Fi).
+void service();
+// Sleeps until the next scheduler tick (a few milliseconds).
+void idle();
+std::uint32_t millis();
+int batteryPercent();          // -1 when unknown
+bool charging();
+void setBacklight(std::uint8_t lcd, std::uint8_t keyboard);
+std::size_t freeHeap();
+storage::FlashDevice& storageFlash();
+fx::net::ChatTransport* chatTransport();   // nullptr when Wi-Fi is not available
+// User files: microSD (FatFs) on the PicoCalc, RAM card on the host.
+fx::files::FileSystem* fileSystem();
+const char* name();
+// Statistics for the System app (bytes sent to the LCD by the last present()).
+std::size_t lastFlushBytes();
+} // namespace board

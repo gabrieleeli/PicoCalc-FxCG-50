@@ -1,130 +1,178 @@
+// SD card SPI-mode protocol (SD Physical Layer Simplified Specification).
 #include "sd_card.hpp"
-
-#include "board_config.hpp"
-
-#if FXAI_ON_DEVICE && FXAI_ENABLE_SD
-#include "hardware/gpio.h"
-#include "hardware/spi.h"
-#include "pico/time.h"
-#endif
+#include <cstring>
 
 namespace fx::sd {
-
-#if FXAI_ON_DEVICE && FXAI_ENABLE_SD
 namespace {
-namespace cfg = board::config;
-spi_inst_t* const kSpi = spi0;
+constexpr std::uint8_t CMD0 = 0, CMD8 = 8, CMD9 = 9, CMD12 = 12, CMD13 = 13, CMD16 = 16, CMD17 = 17, CMD24 = 24, CMD55 = 55, CMD58 = 58, ACMD41 = 41;
+constexpr std::uint8_t TokenStart = 0xFE;
+} // namespace
 
-std::uint8_t xfer(std::uint8_t out) {
-    std::uint8_t in = 0xFF;
-    spi_write_read_blocking(kSpi, &out, &in, 1);
-    return in;
+void SdCard::deselect() {
+    bus_.select(false);
+    (void)bus_.transfer(0xFF);             // the card releases MISO after one more byte
 }
-void select(bool on) { gpio_put(cfg::kSdCs, on ? 0 : 1); }
-
-// Sends a command and returns the R1 response (0xFF on timeout).
-std::uint8_t command(std::uint8_t cmd, std::uint32_t arg, std::uint8_t crc) {
-    xfer(0xFF);
-    const std::uint8_t frame[6] = {static_cast<std::uint8_t>(0x40u | cmd), static_cast<std::uint8_t>(arg >> 24),
-                                   static_cast<std::uint8_t>(arg >> 16), static_cast<std::uint8_t>(arg >> 8),
-                                   static_cast<std::uint8_t>(arg), crc};
-    for (std::uint8_t b : frame) xfer(b);
-    for (int i = 0; i < 10; ++i) {
-        const std::uint8_t r = xfer(0xFF);
-        if ((r & 0x80u) == 0) return r;
+bool SdCard::fail() {
+    ++errors_;
+    deselect();
+    // No answer or a data error: the card may have been removed and inserted
+    // again (it is no longer in SPI mode) or have lost synchronisation. It is
+    // marked not ready, so the next access initialises it again.
+    reset();
+    return false;
+}
+bool SdCard::waitReady(std::uint32_t timeoutMs) {
+    const std::uint32_t start = bus_.millis();
+    do {
+        if (bus_.transfer(0xFF) == 0xFF) return true;
+    } while (bus_.millis() - start < timeoutMs);
+    return false;
+}
+std::uint8_t SdCard::command(std::uint8_t cmd, std::uint32_t arg) {
+    bus_.select(true);
+    if (cmd != CMD0 && !waitReady(500)) return 0xFF;
+    // CRC is only checked for CMD0 and CMD8 in SPI mode.
+    const std::uint8_t crc = cmd == CMD0 ? 0x95 : cmd == CMD8 ? 0x87 : 0x01;
+    const std::uint8_t frame[6] = {static_cast<std::uint8_t>(0x40 | cmd), static_cast<std::uint8_t>(arg >> 24), static_cast<std::uint8_t>(arg >> 16),
+                                   static_cast<std::uint8_t>(arg >> 8), static_cast<std::uint8_t>(arg), crc};
+    bus_.write(frame, sizeof(frame));
+    if (cmd == CMD12) (void)bus_.transfer(0xFF);    // stuff byte after STOP_TRANSMISSION
+    for (int i = 0; i < 10; ++i) {                  // NCR: up to 8 bytes before R1
+        const std::uint8_t r = bus_.transfer(0xFF);
+        if (!(r & 0x80)) return r;
     }
     return 0xFF;
 }
-
-void release() {
-    select(false);
-    xfer(0xFF);
+std::uint8_t SdCard::appCommand(std::uint8_t cmd, std::uint32_t arg) {
+    const std::uint8_t r = command(CMD55, 0);
+    if (r > 1) return r;
+    deselect();
+    return command(cmd, arg);
 }
-} // namespace
-
-ProbeResult probe() noexcept {
-    ProbeResult r;
-    r.enabled = true;
-    gpio_init(cfg::kSdDetect);
-    gpio_set_dir(cfg::kSdDetect, GPIO_IN);
-    gpio_pull_up(cfg::kSdDetect);
-    sleep_us(50);
-    r.cardDetected = !gpio_get(cfg::kSdDetect); // active low
-    if (!r.cardDetected) { r.error = "nessuna scheda inserita"; return r; }
-
-    spi_init(kSpi, 400'000); // identification mode: <= 400 kHz
-    gpio_set_function(cfg::kSdSck, GPIO_FUNC_SPI);
-    gpio_set_function(cfg::kSdMosi, GPIO_FUNC_SPI);
-    gpio_set_function(cfg::kSdMiso, GPIO_FUNC_SPI);
-    gpio_pull_up(cfg::kSdMiso);
-    gpio_init(cfg::kSdCs);
-    gpio_set_dir(cfg::kSdCs, GPIO_OUT);
-    select(false);
-    for (int i = 0; i < 10; ++i) xfer(0xFF); // >= 74 clocks with CS high
-
-    select(true);
-    std::uint8_t r1 = 0xFF;
-    for (int i = 0; i < 10 && r1 != 0x01; ++i) r1 = command(0, 0, 0x95); // GO_IDLE_STATE
-    if (r1 != 0x01) { release(); spi_deinit(kSpi); r.error = "nessuna risposta a CMD0"; return r; }
-
-    r1 = command(8, 0x000001AAu, 0x87); // SEND_IF_COND
-    bool v2 = false;
-    if (r1 == 0x01) {
-        std::uint8_t r7[4];
-        for (auto& b : r7) b = xfer(0xFF);
-        v2 = r7[2] == 0x01 && r7[3] == 0xAA;
-        if (!v2) { release(); spi_deinit(kSpi); r.error = "tensione non supportata (CMD8)"; return r; }
-    }
-    r.version = v2 ? 2 : 1;
-
-    const absolute_time_t until = make_timeout_time_ms(1000);
+bool SdCard::receive(std::uint8_t* dst, std::size_t n, std::uint32_t timeoutMs) {
+    const std::uint32_t start = bus_.millis();
+    std::uint8_t token;
     do {
-        command(55, 0, 0x65);                       // APP_CMD
-        r1 = command(41, v2 ? 0x40000000u : 0u, 0x77); // SD_SEND_OP_COND (HCS)
-    } while (r1 != 0x00 && !time_reached(until));
-    if (r1 != 0x00) { release(); spi_deinit(kSpi); r.error = "timeout ACMD41"; return r; }
-    r.initialized = true;
+        token = bus_.transfer(0xFF);
+    } while (token == 0xFF && bus_.millis() - start < timeoutMs);
+    if (token != TokenStart) return false;          // timeout or data error token
+    bus_.read(dst, n);
+    (void)bus_.transfer(0xFF);                      // CRC (not checked: CRC mode off)
+    (void)bus_.transfer(0xFF);
+    return true;
+}
+bool SdCard::transmit(const std::uint8_t* src, std::uint8_t token) {
+    if (!waitReady(500)) return false;
+    (void)bus_.transfer(token);
+    bus_.write(src, SectorSize);
+    (void)bus_.transfer(0xFF);                      // dummy CRC
+    (void)bus_.transfer(0xFF);
+    const std::uint8_t response = bus_.transfer(0xFF);
+    if ((response & 0x1F) != 0x05) return false;   // data rejected (CRC or write error)
+    return waitReady(500);                          // programming (busy)
+}
 
-    if (v2 && command(58, 0, 0xFD) == 0x00) { // READ_OCR
+bool SdCard::init() {
+    reset();
+    if (!bus_.cardPresent()) return false;
+    bus_.setClock(InitClockHz);
+    bus_.select(false);
+    for (int i = 0; i < 10; ++i) (void)bus_.transfer(0xFF);   // >= 74 clocks with CS high
+    std::uint8_t r = 0xFF;
+    for (int i = 0; i < 10 && r != 0x01; ++i) { r = command(CMD0, 0); deselect(); }
+    if (r != 0x01) return fail();
+    Type type = Type::None;
+    const std::uint32_t start = bus_.millis();
+    r = command(CMD8, 0x1AA);
+    if (r == 0x01) {
+        std::uint8_t r7[4];
+        bus_.read(r7, 4);
+        deselect();
+        if (r7[2] != 0x01 || r7[3] != 0xAA) return fail();   // voltage not accepted / bad echo
+        // ACMD41 with HCS until the card leaves the idle state (up to 1 s).
+        do { r = appCommand(ACMD41, 0x40000000); deselect(); } while (r == 0x01 && bus_.millis() - start < 1000);
+        if (r != 0x00) return fail();
+        r = command(CMD58, 0);
+        if (r != 0x00) return fail();
         std::uint8_t ocr[4];
-        for (auto& b : ocr) b = xfer(0xFF);
-        r.highCapacity = (ocr[0] & 0x40u) != 0; // CCS
+        bus_.read(ocr, 4);
+        deselect();
+        type = (ocr[0] & 0x40) ? Type::SDHC : Type::SDv2;
+    } else {
+        deselect();
+        // SD version 1 (MMC cards are not supported).
+        do { r = appCommand(ACMD41, 0); deselect(); } while (r == 0x01 && bus_.millis() - start < 1000);
+        if (r != 0x00) return fail();
+        type = Type::SDv1;
     }
-
-    if (command(9, 0, 0xAF) == 0x00) { // SEND_CSD
-        std::uint8_t token = 0xFF;
-        for (int i = 0; i < 1000 && token == 0xFF; ++i) token = xfer(0xFF);
-        if (token == 0xFE) {
-            std::uint8_t csd[16];
-            for (auto& b : csd) b = xfer(0xFF);
-            xfer(0xFF); xfer(0xFF); // CRC16
-            if ((csd[0] >> 6) == 1) { // CSD v2: C_SIZE[69:48]
-                const std::uint32_t cSize = (static_cast<std::uint32_t>(csd[7] & 0x3Fu) << 16) |
-                                            (static_cast<std::uint32_t>(csd[8]) << 8) | csd[9];
-                r.capacityBytes = (static_cast<std::uint64_t>(cSize) + 1u) * 512u * 1024u;
-            } else { // CSD v1
-                const std::uint32_t readBlLen = csd[5] & 0x0Fu;
-                const std::uint32_t cSize = (static_cast<std::uint32_t>(csd[6] & 0x03u) << 10) |
-                                            (static_cast<std::uint32_t>(csd[7]) << 2) | (csd[8] >> 6);
-                const std::uint32_t mult = ((csd[9] & 0x03u) << 1) | (csd[10] >> 7);
-                r.capacityBytes = (static_cast<std::uint64_t>(cSize) + 1u) << (mult + 2u + readBlLen);
-            }
-        }
+    if (type != Type::SDHC) {
+        r = command(CMD16, 512);
+        deselect();
+        if (r != 0x00) return fail();
     }
-    release();
-    spi_deinit(kSpi);
-    return r;
+    bus_.setClock(FastClockHz);
+    // Capacity from the CSD register.
+    r = command(CMD9, 0);
+    std::uint8_t csd[16];
+    if (r != 0x00 || !receive(csd, sizeof(csd), 200)) return fail();
+    deselect();
+    std::uint64_t sectors = 0;
+    if ((csd[0] >> 6) == 1) {                       // CSD version 2.0 (SDHC/SDXC)
+        const std::uint32_t csize = (static_cast<std::uint32_t>(csd[7] & 0x3F) << 16) | (static_cast<std::uint32_t>(csd[8]) << 8) | csd[9];
+        sectors = (static_cast<std::uint64_t>(csize) + 1) * 1024;
+    } else {                                        // CSD version 1.0
+        const std::uint32_t readBl = csd[5] & 0x0F;
+        const std::uint32_t csize = (static_cast<std::uint32_t>(csd[6] & 0x03) << 10) | (static_cast<std::uint32_t>(csd[7]) << 2) | (csd[8] >> 6);
+        const std::uint32_t mult = ((csd[9] & 0x03) << 1) | (csd[10] >> 7);
+        sectors = (static_cast<std::uint64_t>(csize + 1) << (mult + 2 + readBl)) / SectorSize;
+    }
+    if (sectors == 0) return fail();
+    type_ = type;
+    sectors_ = sectors;
+    return true;
 }
 
-#else
-
-ProbeResult probe() noexcept {
-    ProbeResult r;
-    r.enabled = FXAI_ENABLE_SD != 0;
-    r.error = FXAI_ENABLE_SD ? "solo su dispositivo" : "SD disabilitata (FXAI_ENABLE_SD=OFF)";
-    return r;
+bool SdCard::read(std::uint64_t lba, std::uint8_t* dst, std::uint32_t count) {
+    if (!ready() || lba + count > sectors_) return false;
+    for (std::uint32_t i = 0; i < count; ++i) {
+        if (command(CMD17, address(lba + i)) != 0x00) return fail();
+        if (!receive(dst + static_cast<std::size_t>(i) * SectorSize, SectorSize, 200)) return fail();
+        deselect();
+    }
+    return true;
 }
 
-#endif
+bool SdCard::write(std::uint64_t lba, const std::uint8_t* src, std::uint32_t count) {
+    if (!ready() || lba + count > sectors_) return false;
+    for (std::uint32_t i = 0; i < count; ++i) {
+        if (command(CMD24, address(lba + i)) != 0x00) return fail();
+        if (!transmit(src + static_cast<std::size_t>(i) * SectorSize, TokenStart)) return fail();
+        deselect();
+        // CMD13: the card reports programming errors in R2.
+        const std::uint8_t r1 = command(CMD13, 0);
+        const std::uint8_t r2 = bus_.transfer(0xFF);
+        deselect();
+        if (r1 != 0x00 || r2 != 0x00) { ++errors_; return false; }
+    }
+    return true;
+}
 
+bool SdCard::sync() {
+    if (!ready()) return false;
+    bus_.select(true);
+    const bool ok = waitReady(500);
+    deselect();
+    return ok;
+}
+
+bool RamDisk::read(std::uint64_t lba, std::uint8_t* dst, std::uint32_t count) {
+    if (!ready_ || (lba + count) * SectorSize > data_.size()) return false;
+    std::memcpy(dst, data_.data() + lba * SectorSize, static_cast<std::size_t>(count) * SectorSize);
+    return true;
+}
+bool RamDisk::write(std::uint64_t lba, const std::uint8_t* src, std::uint32_t count) {
+    if (!ready_ || failWrites_ || (lba + count) * SectorSize > data_.size()) return false;
+    std::memcpy(data_.data() + lba * SectorSize, src, static_cast<std::size_t>(count) * SectorSize);
+    return true;
+}
 } // namespace fx::sd
