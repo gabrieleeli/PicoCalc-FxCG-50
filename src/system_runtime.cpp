@@ -18,9 +18,9 @@ namespace fx::runtime {
 namespace {
 constexpr std::uint32_t kPaint = 0xA5A5A5A5u;
 
-[[maybe_unused]] StackUsage measure(const std::uint32_t* stack, std::size_t words, bool guarded) noexcept {
+[[maybe_unused]] StackUsage measure(const std::uint32_t* bottom, std::size_t words, bool guarded) noexcept {
     std::size_t untouched = 0;
-    while (untouched < words && stack[untouched] == kPaint) ++untouched;
+    while (untouched < words && bottom[untouched] == kPaint) ++untouched;
     return {words * sizeof(std::uint32_t), (words - untouched) * sizeof(std::uint32_t), guarded};
 }
 } // namespace
@@ -37,14 +37,13 @@ const char* describe(FaultKind kind) noexcept {
 #if FXAI_ON_DEVICE
 
 namespace {
-alignas(8) std::uint32_t g_appStack[board::config::kAppStackBytes / sizeof(std::uint32_t)];
-alignas(8) std::uint32_t g_core1Stack[board::config::kCore1StackBytes / sizeof(std::uint32_t)];
-bool g_appStackActive = false;
 volatile bool g_core1Running = false;
 void (*volatile g_core1Entry)() = nullptr;
 
 // Flash safety helper: flash erase/program must stop the other core. Core 1
-// only runs on demand, so the lockout is used exactly while it is alive.
+// only runs on demand (diagnostics), so the lockout is used exactly while it
+// is alive; the SDK default would refuse every write once pico_multicore is
+// linked and core 1 was never initialised as a lockout victim.
 std::uint32_t g_flashIrqState = 0;
 bool g_lockedOutCore1 = false;
 
@@ -83,12 +82,17 @@ void core1Trampoline() {
     for (;;) __wfe();
 }
 
-// --- HardFault ----------------------------------------------------------------
 constexpr std::uint32_t kFaultMagic = 0xFA170000u;
 } // namespace
 } // namespace fx::runtime
 
 extern "C" {
+// Linker symbols (memmap_picocalc.ld): core 0 STACK region and SCRATCH_X.
+extern std::uint32_t __StackBottom;
+extern std::uint32_t __StackTop;
+extern std::uint32_t __StackOneBottom;
+extern std::uint32_t __StackOneTop;
+
 flash_safety_helper_t* get_flash_safety_helper(void) { return &fx::runtime::g_flashHelper; }
 
 // Per-core emergency stacks for the HardFault handler (512 bytes each).
@@ -148,39 +152,31 @@ __attribute__((naked, used, section(".time_critical.isr_hardfault"))) void isr_h
 
 namespace fx::runtime {
 
-[[noreturn]] void runOnAppStack(void (*entry)()) {
-    for (auto& w : g_appStack) w = kPaint;
-    const auto bottom = reinterpret_cast<std::uintptr_t>(&g_appStack[0]);
-    const auto top = bottom + sizeof(g_appStack);
-    g_appStackActive = true;
-    // MSPLIM first (the new bottom is below the current SCRATCH_Y stack, so the
-    // running code stays legal), then switch SP. Interrupt handlers use the new
-    // stack from here on.
-    __asm volatile(
-        "msr msplim, %0\n"
-        "mov sp, %1\n"
-        "blx %2\n"
-        "1: b 1b\n"
-        :
-        : "r"(bottom), "r"(top), "r"(entry)
-        : "memory");
-    __builtin_unreachable();
+void paintStacks() noexcept {
+    // Everything below the current stack pointer (minus a margin for this
+    // frame) is unused: paint it so that core0Stack() can find the deepest use.
+    std::uint32_t* bottom = &__StackBottom;
+    std::uint32_t marker = 0;
+    auto* limit = reinterpret_cast<std::uint32_t*>((reinterpret_cast<std::uintptr_t>(&marker) - 256u) & ~std::uintptr_t{3});
+    for (std::uint32_t* p = bottom; p < limit; ++p) *p = kPaint;
 }
 
 StackUsage core0Stack() noexcept {
-    return measure(g_appStack, sizeof(g_appStack) / sizeof(g_appStack[0]), g_appStackActive);
+    const std::size_t words = static_cast<std::size_t>(&__StackTop - &__StackBottom);
+    return measure(&__StackBottom, words, PICO_USE_STACK_GUARDS != 0);
 }
 
 StackUsage core1Stack() noexcept {
-    return measure(g_core1Stack, sizeof(g_core1Stack) / sizeof(g_core1Stack[0]), PICO_USE_STACK_GUARDS != 0);
+    const std::size_t words = static_cast<std::size_t>(&__StackOneTop - &__StackOneBottom);
+    return measure(&__StackOneBottom, words, PICO_USE_STACK_GUARDS != 0);
 }
 
 bool launchCore1(void (*entry)()) noexcept {
     if (g_core1Running || !entry) return false;
-    for (auto& w : g_core1Stack) w = kPaint;
+    for (std::uint32_t* p = &__StackOneBottom; p < &__StackOneTop; ++p) *p = kPaint;
     g_core1Entry = entry;
     multicore_reset_core1();
-    multicore_launch_core1_with_stack(core1Trampoline, g_core1Stack, sizeof(g_core1Stack));
+    multicore_launch_core1(core1Trampoline); // SCRATCH_X stack, MSPLIM guard by the SDK
     // Wait until core 1 registered itself as a lockout victim.
     const absolute_time_t until = make_timeout_time_ms(100);
     while (!g_core1Running && !time_reached(until)) __wfe();
@@ -211,10 +207,7 @@ bool takeLastFault(FaultRecord& out) noexcept {
 namespace {
 bool g_core1 = false;
 }
-[[noreturn]] void runOnAppStack(void (*entry)()) {
-    entry();
-    for (;;) {}
-}
+void paintStacks() noexcept {}
 StackUsage core0Stack() noexcept { return {}; }
 StackUsage core1Stack() noexcept { return {}; }
 bool launchCore1(void (*entry)()) noexcept {

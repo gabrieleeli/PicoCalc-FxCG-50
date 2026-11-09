@@ -91,7 +91,7 @@ double poissonCdf(unsigned k, double lambda);
 // by free memory instead of a fixed 45x5 array; set() fails with
 // std::bad_alloc without modifying the sheet when memory is exhausted.
 struct Spreadsheet {
- static constexpr std::size_t Rows=limits::kProfile.spreadsheetRows, Cols=limits::kProfile.spreadsheetCols;
+ static constexpr std::size_t Rows=limits::kSpreadsheetRows, Cols=limits::kSpreadsheetCols;
  void set(std::size_t row, std::size_t col, double value);
  double get(std::size_t row, std::size_t col) const;
  double sum(std::size_t col, std::size_t first, std::size_t last) const;

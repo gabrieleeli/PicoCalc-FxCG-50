@@ -1,10 +1,14 @@
 #include "pict.hpp"
+#include "limits.hpp"
 #include "storage.hpp"
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 
 namespace fx::pict {
+
+std::size_t maxEncodedBytes() noexcept { return limits::ram().pictEncodedBytes; }
+
 namespace {
 constexpr char Magic[8] = {'P', 'C', 'P', 'I', 'C', 'T', '\r', '\n'};
 constexpr std::size_t HeaderSize = 8 + 2 + 2 + 2 + 1 + 1 + 9 * 8 + 4;   // 92
@@ -79,7 +83,7 @@ std::string parse(const std::uint8_t* data, std::size_t size, Image& out) {
     if ((flags & 1) && !validateView(img.view).empty()) return "V-Window non valida";
     const std::uint32_t n = get32(p);
     p += 4;
-    if (n > MaxEncodedBytes) return "immagine troppo grande per la memoria";
+    if (n > maxEncodedBytes()) return "immagine troppo grande per la memoria";
     if (HeaderSize + n + 4 != size) return "lunghezza dei dati errata";
     img.rle.assign(p, p + n);
     if (!forEachSpan(img, [](int, int, int, std::uint16_t) {})) return "dati dell'immagine danneggiati";

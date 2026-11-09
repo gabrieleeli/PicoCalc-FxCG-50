@@ -1,11 +1,24 @@
 #include "diagnostics.hpp"
+#include "app.hpp"
+#include "board_config.hpp"
 #include "graph_engine.hpp"
 #include "graph_file.hpp"
 #include "graph_solve.hpp"
+#include "mem_pools.hpp"
+#include "psram.hpp"
+#include "storage.hpp"
+#include "system_info.hpp"
+#include "system_runtime.hpp"
 #include "workspace.hpp"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <memory>
+
+#if FXAI_ON_DEVICE
+#include "pico/time.h"
+#endif
 
 namespace fx::diag {
 namespace {
@@ -23,12 +36,12 @@ double rate(std::size_t bytes, std::uint32_t ms) { return ms ? static_cast<doubl
 
 std::vector<Line> testStorage(files::FileSystem* fs, const Clock& now) {
     std::vector<Line> out;
-    if (!fs) { add(out, false, "microSD non disponibile in questa build"); return out; }
+    if (!fs) { add(out, false, "archivio non disponibile in questa build"); return out; }
     std::uint32_t t0 = now();
     files::Status st = fs->status();
     const std::uint32_t mountMs = now() - t0;
-    if (st != files::Status::Ok) { add(out, false, std::string("scheda: ") + files::statusMessage(st)); return out; }
-    add(out, true, "scheda: " + fs->describe());
+    if (st != files::Status::Ok) { add(out, false, std::string(fs->name()) + ": " + files::statusMessage(st)); return out; }
+    add(out, true, std::string(fs->name()) + ": " + fs->describe());
     add(out, true, format("inizializzazione e montaggio: %.0f ms", mountMs));
     std::uint64_t freeBytes = 0;
     t0 = now();
@@ -125,6 +138,247 @@ std::vector<Line> testGraph(Workspace& ws, const Clock& now) {
         add(out, false, std::string("GRAPH: ") + e.what());
     }
     setAngleMode(angle);
+    return out;
+}
+
+// ---------------------------------------------------------------- memory and hardware (v1.9.0)
+namespace {
+std::uint32_t mix(std::uint32_t& s) noexcept {
+    s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+    return s;
+}
+std::string sizeText(std::size_t bytes) {
+    char b[16];
+    sysinfo::formatSize(b, sizeof b, bytes);
+    return b;
+}
+struct Slot { unsigned char* p; std::size_t n; unsigned char tag; };
+
+#if FXAI_ON_DEVICE
+StressStats g_core1Stats{};
+volatile bool g_core1Done = false;
+void core1Stress() {
+    g_core1Stats = allocatorStress(0xC0DE1234u, 20000, 4096);
+    g_core1Done = true;
+}
+#endif
+} // namespace
+
+StressStats allocatorStress(std::uint32_t seed, std::size_t operations, std::size_t maxBlock) noexcept {
+    StressStats st;
+    Slot live[128];
+    std::size_t count = 0;
+    std::uint32_t s = seed | 1u;
+    const bool psram = mem::available(mem::Pool::PSRAM_BOARD);
+    for (std::size_t op = 0; op < operations; ++op) {
+        ++st.operations;
+        if (count == 0 || (count < 128 && (mix(s) % 100u) < 55u)) {
+            const std::size_t n = 1 + mix(s) % (maxBlock ? maxBlock : 1);
+            const unsigned pick = mix(s) % (psram ? 4u : 2u);
+            const mem::Policy policy = pick == 0 ? mem::Policy::PREFER_SRAM
+                                     : pick == 1 ? mem::Policy::SRAM_ONLY
+                                     : pick == 2 ? mem::Policy::PREFER_PSRAM : mem::Policy::PSRAM_ONLY;
+            auto* p = static_cast<unsigned char*>(mem::tryAlloc(policy, n));
+            if (!p) { ++st.failures; continue; }
+            ++st.allocations;
+            const auto tag = static_cast<unsigned char>(mix(s));
+            std::memset(p, tag, n);
+            live[count++] = {p, n, tag};
+            st.peakLive = std::max(st.peakLive, count);
+        } else {
+            const std::size_t i = mix(s) % count;
+            for (std::size_t k = 0; k < live[i].n; ++k)
+                if (live[i].p[k] != live[i].tag) { ++st.corruptions; break; }
+            mem::free(live[i].p);
+            live[i] = live[--count];
+        }
+    }
+    for (std::size_t i = 0; i < count; ++i) {
+        for (std::size_t k = 0; k < live[i].n; ++k)
+            if (live[i].p[k] != live[i].tag) { ++st.corruptions; break; }
+        mem::free(live[i].p);
+    }
+    return st;
+}
+
+std::vector<Line> testMemory(app::Platform& platform) {
+    std::vector<Line> out;
+    namespace cfg = board::config;
+    const auto& i = psram::info();
+    add(out, true, std::string("scheda: ") + cfg::kBoardName + ", flash " + sizeText(cfg::kFlashSize) +
+                       (cfg::kHasPsram ? ", PSRAM attesa " + sizeText(cfg::kPsramExpectedBytes) : std::string(", senza PSRAM")));
+    if (cfg::kHasPsram) {
+        char buf[112];
+        if (FXAI_ON_DEVICE)
+            std::snprintf(buf, sizeof buf, "PSRAM: rilevata %s, abilitata %s, MF 0x%02X KGD 0x%02X EID 0x%02X, %u KB",
+                          i.detected ? "si" : "no", i.enabled ? "si" : "no", i.manufacturer, i.kgd, i.eid,
+                          static_cast<unsigned>(i.sizeBytes / 1024u));
+        else
+            std::snprintf(buf, sizeof buf, "PSRAM (simulata sull'host): abilitata %s, %u KB", i.enabled ? "si" : "no",
+                          static_cast<unsigned>(i.sizeBytes / 1024u));
+        add(out, i.enabled, buf);
+        if (i.detected && i.sysClockHz) {          // timing exists only on the device
+            std::snprintf(buf, sizeof buf, "PSRAM: clk_sys %lu MHz, div %lu, SCK %lu MHz, MAX_SELECT %lu, MIN_DESELECT %lu",
+                          static_cast<unsigned long>(i.sysClockHz / 1000000u), static_cast<unsigned long>(i.clockDivider),
+                          static_cast<unsigned long>(i.sckHz / 1000000u), static_cast<unsigned long>(i.maxSelect),
+                          static_cast<unsigned long>(i.minDeselect));
+            add(out, true, buf);
+            std::snprintf(buf, sizeof buf, "PSRAM: self-test di avvio %s in %lu us, verifiche M1 %lu, ripristini %lu",
+                          i.bootSelfTest.passed ? "OK" : "FALLITO", static_cast<unsigned long>(i.bootSelfTest.elapsedUs),
+                          static_cast<unsigned long>(i.configChecks), static_cast<unsigned long>(i.configRepairs));
+            add(out, i.bootSelfTest.passed, buf);
+        }
+        if (i.error) add(out, false, std::string("PSRAM: ") + i.error);
+    }
+    char lines[24][sysinfo::kLineChars];
+    const std::size_t n = sysinfo::formatMemory(sysinfo::collect(platform.hardware()), lines, 24);
+    for (std::size_t k = 1; k < n; ++k) add(out, true, lines[k]);   // line 0 repeats the board name
+    add(out, mem::checkIntegrity(), mem::checkIntegrity() ? "integrita' dei pool TLSF: OK" : "integrita' dei pool TLSF: ERRORE");
+    return out;
+}
+
+std::vector<Line> testPsram(const Clock& now) {
+    std::vector<Line> out;
+    if (!board::config::kHasPsram) { add(out, true, "PSRAM: non presente su questa scheda (test saltato)"); return out; }
+    if (!mem::available(mem::Pool::PSRAM_BOARD)) { add(out, false, "PSRAM: non disponibile (avvio solo in SRAM)"); return out; }
+    const std::uint32_t t0 = now();
+    const auto t = psram::runDiagnostics(256u * 1024u, t0 * 2654435761u + 1u);
+    char buf[112];
+    std::snprintf(buf, sizeof buf, "PSRAM 256 KB: bus dati %s, pattern %s, cache/uncached %s, %lu campioni, %lu us",
+                  t.dataBus ? "OK" : "-", t.randomPattern ? "OK" : "-", t.cachedPath ? "OK" : "-",
+                  static_cast<unsigned long>(t.samples), static_cast<unsigned long>(t.elapsedUs));
+    add(out, t.passed, buf);
+    if (!t.passed && t.failedStep) {
+        std::snprintf(buf, sizeof buf, "PSRAM: errore in %s, parola %u: atteso 0x%08lX letto 0x%08lX", t.failedStep,
+                      static_cast<unsigned>(t.failWordIndex), static_cast<unsigned long>(t.expected),
+                      static_cast<unsigned long>(t.actual));
+        add(out, false, buf);
+    }
+    return out;
+}
+
+std::vector<Line> testAllocator(const Clock& now, bool dualCore) {
+    std::vector<Line> out;
+    std::uint32_t t0 = now();
+    const auto st = allocatorStress(t0 * 2654435761u + 7u, 20000, 8192);
+    const bool integrity = mem::checkIntegrity();
+    char buf[112];
+    std::snprintf(buf, sizeof buf, "allocatore: %u operazioni, %u allocazioni, %u rifiutate, %u corruzioni, %u ms",
+                  static_cast<unsigned>(st.operations), static_cast<unsigned>(st.allocations),
+                  static_cast<unsigned>(st.failures), static_cast<unsigned>(st.corruptions),
+                  static_cast<unsigned>(now() - t0));
+    add(out, st.corruptions == 0, buf);
+    add(out, integrity, integrity ? "integrita' TLSF dopo lo stress: OK" : "integrita' TLSF dopo lo stress: ERRORE");
+    if (!dualCore) return out;
+#if FXAI_ON_DEVICE
+    g_core1Done = false;
+    if (!runtime::launchCore1(core1Stress)) { add(out, false, "2 core: core 1 non avviabile"); return out; }
+    const auto st0 = allocatorStress(0x5EED0001u, 20000, 4096);
+    const absolute_time_t until = make_timeout_time_ms(10000);
+    while (!g_core1Done && !time_reached(until)) tight_loop_contents();
+    const bool done = g_core1Done;
+    const auto stack1 = runtime::core1Stack();
+    runtime::stopCore1();
+    const bool integrity2 = mem::checkIntegrity();
+    std::snprintf(buf, sizeof buf, "2 core: core0 %u corruzioni, core1 %s con %u corruzioni, stack core1 %u B",
+                  static_cast<unsigned>(st0.corruptions), done ? "completato" : "TIMEOUT",
+                  static_cast<unsigned>(g_core1Stats.corruptions), static_cast<unsigned>(stack1.highWaterBytes));
+    add(out, done && st0.corruptions == 0 && g_core1Stats.corruptions == 0, buf);
+    add(out, integrity2, integrity2 ? "2 core: integrita' dei pool OK" : "2 core: integrita' dei pool ERRORE");
+#else
+    add(out, true, "2 core: solo sul dispositivo");
+#endif
+    return out;
+}
+
+std::vector<Line> testFlashPsram(storage::FlashDevice* sector, const Clock& now) {
+    std::vector<Line> out;
+    if (!sector || sector->size() < sector->eraseSize()) { add(out, false, "flash: settore diagnostico non disponibile"); return out; }
+    // 64 KB of PSRAM: more than the 16 KB XIP cache, so dirty lines must have
+    // been written back by the flash routines.
+    constexpr std::size_t Words = 16384;
+    std::uint32_t* buffer = nullptr;
+    const bool havePsram = mem::available(mem::Pool::PSRAM_BOARD);
+    if (havePsram) {
+        buffer = static_cast<std::uint32_t*>(mem::tryAlloc(mem::Pool::PSRAM_BOARD, Words * 4, 64));
+        if (!buffer) { add(out, false, "flash/PSRAM: PSRAM insufficiente per il test"); return out; }
+        std::uint32_t s = 0x1234567u;
+        for (std::size_t i = 0; i < Words; ++i) buffer[i] = mix(s);
+    }
+    const unsigned long repairsBefore = psram::info().configRepairs;
+    std::uint32_t t0 = now();
+    const bool erased = sector->erase(0, sector->eraseSize());
+    const std::uint32_t eraseMs = now() - t0;
+    std::uint8_t page[256];
+    for (std::size_t i = 0; i < sizeof page; ++i) page[i] = static_cast<std::uint8_t>(i * 7u + 3u);
+    t0 = now();
+    const bool programmed = erased && sector->program(0, page, sizeof page);
+    const std::uint32_t programMs = now() - t0;
+    std::uint8_t back[256] = {};
+    const bool verified = programmed && sector->read(0, back, sizeof back) && std::memcmp(back, page, sizeof page) == 0;
+    char buf[112];
+    std::snprintf(buf, sizeof buf, "flash: cancellazione %u ms, programmazione %u ms, verifica %s",
+                  static_cast<unsigned>(eraseMs), static_cast<unsigned>(programMs), verified ? "OK" : "ERRATA");
+    add(out, verified, buf);
+    if (havePsram) {
+        bool okCached = true, okUncached = true;
+        std::uint32_t s = 0x1234567u;
+#if FXAI_ON_DEVICE
+        const auto uncached = reinterpret_cast<volatile std::uint32_t*>(
+            reinterpret_cast<std::uintptr_t>(buffer) - board::config::kPsramCachedBase + board::config::kPsramUncachedBase);
+#else
+        const volatile std::uint32_t* uncached = buffer;
+#endif
+        for (std::size_t i = 0; i < Words; ++i) {
+            const std::uint32_t v = mix(s);
+            if (uncached[i] != v) okUncached = false;
+            if (buffer[i] != v) okCached = false;
+        }
+        // The window must still accept writes (QPI mode + WRITABLE_M1 intact).
+        for (std::size_t i = 0; i < 256; ++i) buffer[i] = ~static_cast<std::uint32_t>(i);
+        psram::cleanCache();
+        bool writable = true;
+        for (std::size_t i = 0; i < 256; ++i) if (uncached[i] != ~static_cast<std::uint32_t>(i)) writable = false;
+        mem::free(buffer);
+        std::snprintf(buf, sizeof buf, "PSRAM dopo la scrittura flash: con cache %s, diretta %s, ancora scrivibile %s",
+                      okCached ? "OK" : "ERRATA", okUncached ? "OK" : "ERRATA", writable ? "si" : "NO");
+        add(out, okCached && okUncached && writable, buf);
+        const unsigned long repairs = psram::info().configRepairs - repairsBefore;
+        add(out, true, repairs ? "configurazione QMI M1 ripristinata dopo la scrittura (" + std::to_string(repairs) + " volte)"
+                               : std::string("configurazione QMI M1 intatta dopo la scrittura"));
+    } else {
+        add(out, true, "PSRAM: non disponibile, verificata solo la flash");
+    }
+    return out;
+}
+
+std::vector<Line> testDisplay(app::Platform& platform) {
+    std::vector<Line> out;
+    const auto hw = platform.hardware();
+    add(out, true, "framebuffer " + sizeText(hw.framebufferBytes) + " in " + (hw.framebufferInPsram ? "PSRAM" : "SRAM") +
+                       (hw.framebufferRequestedPsram && !hw.framebufferInPsram ? " (PSRAM richiesta ma non disponibile)" : ""));
+    const std::uint32_t us = platform.benchmarkPresent();
+    if (us) add(out, true, "aggiornamento completo del LCD: " + std::to_string(us / 1000) + "." + std::to_string(us % 1000 / 100) + " ms");
+    else add(out, true, "aggiornamento LCD: tempo misurato solo sul dispositivo");
+#if FXAI_ON_DEVICE
+    // GRAPH layer cache: copy of the 320x282 plot area from PSRAM into the
+    // framebuffer, as done for every TRACE step (the screen is redrawn after).
+    if (mem::available(mem::Pool::PSRAM_BOARD) && hw.framebufferBytes) {
+        constexpr std::size_t Bytes = 320u * 282u * 2u;
+        auto* layer = static_cast<std::uint16_t*>(mem::tryAlloc(mem::Pool::PSRAM_BOARD, Bytes, 64));
+        if (layer) {
+            for (std::size_t i = 0; i < Bytes / 2; ++i) layer[i] = static_cast<std::uint16_t>(i * 2654435761u >> 16);
+            psram::cleanCache();
+            const std::uint32_t t0 = time_us_32();
+            std::uint16_t* fb = reinterpret_cast<std::uint16_t*>(hw.framebufferPixels);
+            if (fb) std::memcpy(fb + 18 * 320, layer, Bytes);
+            const std::uint32_t copyUs = time_us_32() - t0;
+            mem::free(layer);
+            add(out, true, "copia del layer GRAPH (176 KB) dalla PSRAM: " + std::to_string(copyUs / 1000) + "." +
+                               std::to_string(copyUs % 1000 / 100) + " ms");
+        }
+    }
+#endif
     return out;
 }
 } // namespace fx::diag

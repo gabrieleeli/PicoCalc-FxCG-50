@@ -93,6 +93,5 @@ int main() {
     r = psram::runPatternTests(odd, partial);
     FX_CHECK(r.passed);
 
-    std::puts("PSRAM self-test fault detection: PASS");
-    return 0;
+    return fxtest::finish("psram_selftest_smoke");
 }

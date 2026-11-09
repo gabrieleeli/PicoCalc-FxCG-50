@@ -82,6 +82,7 @@ const char* variableKey(GraphType t) {
 // ---------------------------------------------------------------- lifecycle
 void GraphApp::enter(Context& ctx) {
     built_ = false;                                  // functions and memory may have changed in other modes
+    layerValid_ = false;
     menu_.close(); menuKind_ = Menu::None;
     input_.ask = Ask::None; confirm_ = Confirm::None; copyTarget_ = -1;
     loadBackground(ctx);
@@ -98,6 +99,7 @@ void GraphApp::leave(Context& ctx) {
     // Release the sampled curves while other modes run (heap for TLS, lists...).
     curves_.clear(); curves_.shrink_to_fit();
     shade_.clear(); built_ = false;
+    layer_.clear(); layer_.shrink_to_fit(); layerValid_ = false;
     capture_ = pict::Image{}; captureReady_ = capturePending_ = false;
 }
 bool GraphApp::tick(Context& ctx) {
@@ -107,6 +109,7 @@ bool GraphApp::tick(Context& ctx) {
         redraw = true;
     }
     if (screen_ == Screen::Plot && !renderDone_) {
+        layerValid_ = false;                         // the curves are changing
         try {
             redraw = renderStep(ctx, 600) || redraw;
         } catch (const std::bad_alloc&) {
@@ -796,6 +799,12 @@ void GraphApp::confirmed(Context& ctx, Confirm c) {
 
 // ---------------------------------------------------------------- key routing
 void GraphApp::key(Context& ctx, const KeyEvent& ev) {
+    // The cached static layers (drawPlot) survive only the cursor moves of
+    // TRACE and of the pointer; any other key may change what they show.
+    const bool cursorMove = screen_ == Screen::Plot && (mode_ == Mode::Trace || mode_ == Mode::Pointer) &&
+                            input_.ask == Ask::None && menuKind_ == Menu::None &&
+                            (ev.is(Key::Left) || ev.is(Key::Right) || ev.is(Key::Up) || ev.is(Key::Down));
+    if (!cursorMove) layerValid_ = false;
     if (input_.ask != Ask::None) {
         if (ev.is(Key::Exit)) { input_.ask = Ask::None; return; }
         if (ev.is(Key::Exe)) {

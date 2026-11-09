@@ -1,10 +1,17 @@
-// RP2350 entry point: board bring-up, then the portable Firmware loop.
+// RP2350 entry point: board bring-up (PSRAM, memory pools, LCD, keyboard,
+// flash regions), then the portable Firmware loop.
+#include "board_config.hpp"
 #include "board_platform.hpp"
 #include "board_port.hpp"
 #include "firmware.hpp"
+#include "psram.hpp"
+#include "system_info.hpp"
+#include "system_runtime.hpp"
 #include "ui_kit.hpp"
 #include "pico/stdlib.h"
 #include <cstdio>
+#include <exception>
+#include <string>
 
 #ifndef FXAI_VERSION
 #define FXAI_VERSION "dev"
@@ -30,29 +37,68 @@ void calibrationScreen() {
     while (true) { board::service(); if (board::pollKey(raw) && (raw >> 8) == 1) break; board::idle(); }
 }
 #endif
+
+void logMemory(fx::app::Platform& platform, const char* when) {
+    char lines[24][fx::sysinfo::kLineChars];
+    const std::size_t n = fx::sysinfo::formatMemory(fx::sysinfo::collect(platform.hardware()), lines, 24);
+    std::printf("[mem] --- %s ---\n", when);
+    for (std::size_t i = 0; i < n; ++i) std::printf("[mem] %s\n", lines[i]);
+}
 } // namespace
 
 int main() {
-    board::init();
-    std::printf("PicoCalc FX %s booting (%s)\n", FXAI_VERSION, board::name());
+    // The 32 KB core 0 stack (linker script) is guarded by MSPLIM since reset;
+    // paint its unused part for the high-water mark shown by SYSTEM > INFO.
+    fx::runtime::paintStacks();
+    fx::runtime::FaultRecord fault;
+    const bool hadFault = fx::runtime::takeLastFault(fault);
+    board::init();   // PSRAM + memory pools first, then LCD, keyboard, flash regions
+    std::printf("PicoCalc FX %s booting (%s, %s)\n", FXAI_VERSION, board::name(), board::config::kBoardName);
+    if (hadFault)
+        std::printf("[fault] previous reset caused by %s on core %u (CFSR 0x%08lX PC 0x%08lX LR 0x%08lX)\n",
+                    fx::runtime::describe(fault.kind), fault.core, static_cast<unsigned long>(fault.cfsr),
+                    static_cast<unsigned long>(fault.pc), static_cast<unsigned long>(fault.lr));
+    const bool psramFailed = board::config::kHasPsram && !psram::available();
+    if (psramFailed)
+        std::printf("[psram] DISABLED: %s -> running from SRAM only\n", psram::info().error ? psram::info().error : "?");
 #if FXAI_DISPLAY_CALIBRATION_SCREEN
     calibrationScreen();
 #endif
     fx::BoardPlatform platform;
-    static fx::Firmware firmware(platform, board::storageFlash());
+    static fx::Firmware firmware(platform, board::storageFlash(), board::legacyStorageFlash());
     firmware.boot();
-    std::printf("workspace %s, storage %u bytes, free heap %u bytes\n", firmware.loadedFromFlash() ? "restored" : "new",
-                static_cast<unsigned>(board::storageFlash().size()), static_cast<unsigned>(board::freeHeap()));
+    std::printf("workspace %s%s, record capacity %u bytes, free SRAM heap %u bytes\n",
+                firmware.loadedFromFlash() ? "restored" : "new", firmware.migrated() ? " (imported from v1.8.0)" : "",
+                static_cast<unsigned>(platform.storageCapacity()), static_cast<unsigned>(board::freeHeap()));
+    logMemory(platform, "boot");
+    if (hadFault)
+        firmware.notice(std::string("System ERROR: riavvio dopo ") + fx::runtime::describe(fault.kind) +
+                        " (dettagli su USB seriale)");
+    else if (psramFailed)
+        firmware.notice(std::string("Memory ERROR: PSRAM disabilitata, avvio solo in SRAM (") +
+                        (psram::info().error ? psram::info().error : "?") + ")");
     board::invalidate();
     firmware.draw(board::graphics());
     board::present();
     while (true) {
-        board::service();
-        std::uint16_t raw = 0;
-        while (board::pollKey(raw)) firmware.rawKey(raw);
-        if (firmware.step()) {
-            firmware.draw(board::graphics());
-            board::present();
+        // The AppManager already turns application exceptions into error
+        // boxes; this is the last line of defence of the main loop.
+        try {
+            board::service();
+            std::uint16_t raw = 0;
+            while (board::pollKey(raw)) firmware.rawKey(raw);
+            if (firmware.step()) {
+                firmware.draw(board::graphics());
+                board::present();
+            }
+        } catch (const std::bad_alloc&) {
+            std::printf("[loop] std::bad_alloc\n");
+            firmware.notice("Memory ERROR: memoria insufficiente");   // allocation-free path
+        } catch (const std::exception& e) {
+            std::printf("[loop] %s\n", e.what());
+            char text[160];
+            std::snprintf(text, sizeof text, "ERROR: %s", e.what());
+            firmware.notice(static_cast<const char*>(text));
         }
         board::idle();
     }

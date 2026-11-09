@@ -2,9 +2,12 @@
 // clock, scripted key queue and a RAM flash model. Used by the simulator and
 // the integration tests; it is not evidence that the physical LCD works.
 #include "board_host.hpp"
+#include "board_config.hpp"
 #include "board_port.hpp"
 #include "file_store.hpp"
+#include "flash_fs.hpp"
 #include <cstdio>
+#include <algorithm>
 #include <cstring>
 #include <deque>
 #include <vector>
@@ -18,7 +21,19 @@ gfx::TileDiff diff;
 std::deque<std::uint16_t> keys;
 std::uint32_t nowMs = 1000;
 int battery = 87; bool isCharging = false;
-storage::RamFlash flash(128 * 1024);
+// Same geometry as the device: record store (with the Pico 2 W reserved tail),
+// LittleFS partition (capped at 2 MB to keep the host RAM use small) and the
+// diagnostic sector.
+storage::RamFlash flash(board::config::kFlashRecordSize);
+storage::RamFlash fsFlash(std::min<std::size_t>(board::config::kFlashFsSize, 2u * 1024u * 1024u));
+storage::RamFlash diagFlash(board::config::kFlashSectorBytes);
+storage::FlashDevice* legacyFlash = nullptr;
+[[maybe_unused]] bool flashConfigured = [] {
+    if (board::config::kFlashRecordOffset + board::config::kFlashRecordSize >
+        board::config::kFlashSize - board::config::kFlashTailGuardBytes)
+        flash.setReservedTail(board::config::kFlashTailGuardBytes);
+    return true;
+}();
 std::size_t flushes = 0, lastBytes = 0;
 fx::net::ChatTransport* transport = nullptr;
 fx::files::RamFileSystem card(16u * 1024u * 1024u);   // simulated microSD card
@@ -57,6 +72,18 @@ bool charging() { return isCharging; }
 void setBacklight(std::uint8_t, std::uint8_t) {}
 std::size_t freeHeap() { return 256 * 1024; }
 storage::FlashDevice& storageFlash() { return flash; }
+storage::FlashDevice* legacyStorageFlash() { return legacyFlash; }
+storage::FlashDevice* internalFlash() { return &fsFlash; }
+fx::files::FileSystem* internalFileSystem() {
+    static fx::files::LittleFsFileSystem fs(fsFlash);
+    return &fs;
+}
+storage::FlashDevice* diagnosticFlash() { return &diagFlash; }
+FramebufferInfo framebufferInfo() noexcept { return {fb, sizeof(fb), false, false}; }
+std::uint32_t lastPresentUs() noexcept { return 0; }
+std::uint32_t benchmarkFullPresent() { diff.invalidate(); present(); return 0; }
+FlashStats flashStats() noexcept { return {0, 0}; }
+std::size_t firmwareBytes() noexcept { return 0; }
 fx::net::ChatTransport* chatTransport() { return transport; }
 fx::files::FileSystem* fileSystem() { return files; }
 const char* name() { return "host"; }
@@ -69,6 +96,7 @@ std::size_t flushCount() { return flushes; }
 void setBattery(int p, bool c) { battery = p; isCharging = c; }
 void setChatTransport(fx::net::ChatTransport* t) { transport = t; }
 void setFileSystem(fx::files::FileSystem* fs) { files = fs; }
+void setLegacyStorage(storage::FlashDevice* device) { legacyFlash = device; }
 fx::files::FileSystem& ramCard() { return card; }
 bool savePng(const std::string& path, int scale) {
     if (scale < 1) scale = 1;

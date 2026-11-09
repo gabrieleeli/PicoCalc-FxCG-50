@@ -1,6 +1,7 @@
 #pragma once
 #include "app_registry.hpp"
 #include "graphics_engine.hpp"
+#include "hardware_info.hpp"
 #include "keyboard_input.hpp"
 #include "ui_kit.hpp"
 #include "workspace.hpp"
@@ -8,6 +9,7 @@
 #include <memory>
 #include <string>
 
+namespace storage { class FlashDevice; }
 namespace fx {
 namespace net { class ChatTransport; }
 namespace files { class FileSystem; }
@@ -27,6 +29,11 @@ public:
     virtual const char* name() = 0;
     virtual net::ChatTransport* chat() = 0;     // nullptr when networking is unavailable
     virtual files::FileSystem* files() = 0;     // user files (microSD); nullptr when not available
+    // Hardware services for SYSTEM > INFO / DIAG (defaults: not available).
+    virtual sysinfo::Hardware hardware() { return {}; }
+    virtual storage::FlashDevice* diagnosticFlash() { return nullptr; }   // 4 KB scratch sector
+    virtual files::FileSystem* internalFiles() { return nullptr; }       // LittleFS on the internal flash
+    virtual std::uint32_t benchmarkPresent() { return 0; }               // full LCD frame, us
 };
 
 class AppManager;
@@ -43,6 +50,8 @@ public:
     bool dirty() const noexcept { return dirty_; }
     void clearDirty() noexcept { dirty_ = false; }
     void toast(const std::string& message, std::uint32_t durationMs = 1600);
+    // Allocation-free (pre-reserved buffer): usable to report an out-of-memory error.
+    void toast(const char* message, std::uint32_t durationMs = 1600);
     const std::string& toastText() const noexcept { return toast_; }   // message shown now (empty: none)
     bool shift() const noexcept { return shift_; }
     void setShift(bool on) noexcept { shift_ = on; }
@@ -97,6 +106,9 @@ public:
     const std::string& errorDetail() const noexcept { return errorDetail_; }
     // Shows an fx-CG50 error box; the next key closes it.
     void showError(const std::string& what);
+    // Allocation-free (pre-reserved buffers, long texts are cut): reporting an
+    // out-of-memory error must never allocate.
+    void showError(const char* what);
     bool needsFullRedraw() noexcept { const bool r = fullRedraw_; fullRedraw_ = false; return r; }
 
 private:

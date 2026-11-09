@@ -1,4 +1,5 @@
 #include "app.hpp"
+#include <cstring>
 #include "expression.hpp"
 #include <cstdio>
 #include <exception>
@@ -12,8 +13,19 @@ const char* complexName(ComplexMode m) { return m == ComplexMode::Real ? "Real" 
 
 void Context::open(AppId id) { manager_.open(id); }
 void Context::home() { manager_.home(); }
-void Context::toast(const std::string& message, std::uint32_t durationMs) {
-    toast_ = message;
+namespace {
+// Copies into the capacity already reserved: never allocates (the text is cut).
+void assignReserved(std::string& dst, const char* s, std::size_t n) noexcept {
+    if (n > dst.capacity()) n = dst.capacity();
+    dst.assign(s, n);
+}
+constexpr std::size_t ToastCapacity = 160, TitleCapacity = 48, DetailCapacity = 200;
+} // namespace
+
+void Context::toast(const std::string& message, std::uint32_t durationMs) { toast(message.c_str(), durationMs); }
+void Context::toast(const char* message, std::uint32_t durationMs) {
+    if (toast_.capacity() < ToastCapacity) toast_.reserve(ToastCapacity);   // first use (normal conditions)
+    assignReserved(toast_, message ? message : "", message ? std::strlen(message) : 0);
     toastUntil_ = platform.millis() + durationMs;
 }
 ui::StatusInfo Context::status(const char* title) const {
@@ -30,7 +42,12 @@ ui::StatusInfo Context::status(const char* title) const {
 }
 void Context::drawStatus(gfx::Canvas& c, const char* title) const { ui::statusBar(c, status(title)); }
 
-AppManager::AppManager(Workspace& ws, Platform& platform) : ctx_(ws, platform, *this) {}
+AppManager::AppManager(Workspace& ws, Platform& platform) : ctx_(ws, platform, *this) {
+    // Reserved up front so that an out-of-memory error can always be shown.
+    errorTitle_.reserve(TitleCapacity);
+    errorDetail_.reserve(DetailCapacity);
+    ctx_.toast_.reserve(ToastCapacity);
+}
 
 void AppManager::add(App& a) {
     const auto i = static_cast<std::size_t>(a.id());
@@ -58,16 +75,20 @@ void AppManager::open(AppId id) {
     requested_ = id;
     switchTo(unavailable_, id);
 }
-void AppManager::showError(const std::string& what) {
+void AppManager::showError(const std::string& what) { showError(what.c_str()); }
+void AppManager::showError(const char* what) {
     // Split "Math ERROR: detail" into the fx-CG50 title and a detail line.
-    const auto colon = what.find(':');
-    if (colon != std::string::npos && what.find("ERROR") < colon) {
-        errorTitle_ = what.substr(0, colon);
-        errorDetail_ = what.substr(colon + 1);
-        while (!errorDetail_.empty() && errorDetail_.front() == ' ') errorDetail_.erase(errorDetail_.begin());
+    if (!what) what = "";
+    const char* colon = std::strchr(what, ':');
+    const char* error = std::strstr(what, "ERROR");
+    if (colon && error && error < colon) {
+        assignReserved(errorTitle_, what, static_cast<std::size_t>(colon - what));
+        const char* d = colon + 1;
+        while (*d == ' ') ++d;
+        assignReserved(errorDetail_, d, std::strlen(d));
     } else {
-        errorTitle_ = "ERROR";
-        errorDetail_ = what;
+        assignReserved(errorTitle_, "ERROR", 5);
+        assignReserved(errorDetail_, what, std::strlen(what));
     }
 }
 void AppManager::key(const KeyEvent& ev) {
@@ -110,10 +131,11 @@ void AppManager::draw(gfx::Canvas& c) {
     c.resetClip();
     if (active_) {
         try { active_->draw(ctx_, c); }
+        catch (const std::bad_alloc&) { ui::clear(c); ui::errorBox(c, "Memory ERROR", "memoria insufficiente"); }
         catch (const std::exception& e) { ui::clear(c); ui::errorBox(c, "ERROR", e.what()); }
     }
     c.resetClip();
     if (!ctx_.toast_.empty()) ui::toast(c, ctx_.toast_.c_str());
-    if (!errorTitle_.empty()) ui::errorBox(c, errorTitle_.c_str(), errorDetail_.c_str());
+    if (!errorTitle_.empty()) ui::errorBox(c, errorTitle_.c_str(), errorDetail_.c_str());   // allocation-free
 }
 } // namespace fx::app

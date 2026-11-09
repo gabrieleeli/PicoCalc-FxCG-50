@@ -9,6 +9,9 @@
 #include "fatfs_store.hpp"
 #include "file_store.hpp"
 #include "firmware.hpp"
+#include "mem_pools.hpp"
+#include "board_config.hpp"
+#include "storage.hpp"
 #include "graph_engine.hpp"
 #include "graph_file.hpp"
 #include "pict.hpp"
@@ -343,7 +346,8 @@ int main() {
         r.settle();
         r.key(pckey::Esc);
         ws.graph.settings = GraphSettings{};
-        // RAM: 20 dense Lissajous curves share MaxTotalCurvePoints (heap of the RP2350)
+        // RAM: 20 dense Lissajous curves share maxTotalCurvePoints(): truncated with
+        // the SRAM budget (Pico 2 W), complete with the PSRAM pool (Pico Plus 2 W).
         g = r.graphWith({});
         for (std::size_t i = 0; i < MaxGraphFunctions; ++i) {
             ws.functions[i].type = GraphType::Param;
@@ -356,7 +360,10 @@ int main() {
             std::size_t points = 0, truncated = 0;
             for (const auto& c : g->curves()) { points += c.xy.size() / 2; truncated += c.truncated ? 1 : 0; }
             CHECK(!g->rendering() && !r.error() && g->curves().size() == MaxGraphFunctions);
-            CHECK(points <= graph::MaxTotalCurvePoints && points > graph::MaxTotalCurvePoints / 2 && truncated > 0);
+            const std::size_t total = graph::maxTotalCurvePoints();
+            CHECK(points <= total);
+            if (total < 100000) CHECK(points > total / 2 && truncated > 0);
+            else CHECK(truncated == 0 && points > 100000);
         }
         r.key(pckey::Esc);
         ws.view = ViewWindow{};
@@ -821,11 +828,18 @@ int main() {
         // A record larger than the flash slot: the autosave says why
         const auto saves = r.fw.saves();
         for (std::size_t i = 0; i < Workspace::MaxChatMessages; ++i) ws.chat.push_back({false, std::string(3000, 'c')});
+        // The Pico Plus 2 W slot (512 KB) also needs a long history to overflow.
+        const std::size_t room = storage::RecordStore(board::storageFlash()).capacity();
+        while (serializeWorkspace(ws).size() <= room && ws.history.size() < Workspace::MaxHistory) {
+            HistoryEntry h; h.expression = std::string(3000, '1'); ws.history.push_back(h);
+        }
+        CHECK(serializeWorkspace(ws).size() > room);
         r.fw.apps().context().markDirty();
         board::host::advance(3000); r.settle();
         CHECK(r.fw.saves() == saves);
         CHECK(r.fw.apps().context().toastText().find("Memoria flash piena") != std::string::npos);
         ws.chat.clear();
+        ws.history.clear();
     }
     // ================================================================ 12.4 on the whole microSD stack
     // GRAPH -> files::FileSystem -> FatFs -> SD protocol (SPI) -> simulated SDHC card.
@@ -899,6 +913,7 @@ int main() {
         files::FatFsFileSystem sdfs(sdc);
         CHECK(sdfs.format() == files::Status::Ok);
         board::host::setFileSystem(&sdfs);
+        if (board::config::kHasPsram) mem::testing::simulatePsram(8u << 20);   // the Pico Plus 2 W expects its PSRAM
         const auto functionsBefore = ws.functions;
         r.home(); r.type("G");                                           // SYSTEM
         auto* sys = dynamic_cast<app::SystemApp*>(r.fw.apps().active());
@@ -935,5 +950,6 @@ int main() {
         }
     }
     board::host::setFileSystem(&board::host::ramCard());
+    mem::testing::reset();
     return testutil::finish("graph_app_test");
 }

@@ -22,6 +22,7 @@ const char* const kSystemSrc[] = {"src/apps/system_app.cpp", nullptr};
 const char* const kConversionSrc[] = {"src/apps/conversion_app.cpp", nullptr};
 const char* const kAiChatSrc[] = {"src/apps/ai_chat_app.cpp", nullptr};
 const char* const kSymbolsSrc[] = {"src/apps/symbols_app.cpp", nullptr};
+const char* const kGraph3DSrc[] = {"src/apps/graph3d_app.cpp", nullptr};
 
 const AppInfo kApps[AppCount] = {
     {AppId::RunMatrix, "Run-Matrix", "1", rgb888To565(232, 96, 30), AppStatus::Available,
@@ -84,8 +85,8 @@ const AppInfo kApps[AppCount] = {
      "Gestione della memoria: uso, cancellazione selettiva, salvataggio del workspace",
      nullptr, s::Widgets | s::Storage, AllData, 0, kMemorySrc},
     {AppId::System, "System", "G", rgb888To565(60, 130, 150), AppStatus::Available,
-     "Impostazioni (SET UP), retroilluminazione, Wi-Fi, relay AI, informazioni e reset",
-     nullptr, Ui | s::Network | s::Storage | s::Diag, AllData /* RESET clears the whole workspace */, 0, kSystemSrc},
+     "Impostazioni (SET UP), retroilluminazione, Wi-Fi, relay AI, informazioni su memoria e PSRAM, diagnostica e reset",
+     nullptr, Ui | s::Network | s::Storage | s::Diag | s::Hardware, AllData /* RESET clears the whole workspace */, 0, kSystemSrc},
     {AppId::Geometry, "Geometry", "H", rgb888To565(50, 110, 210), AppStatus::Planned,
      "Costruzioni geometriche (punti, rette, circonferenze, poligoni) e misure",
      "Costruzioni geometriche interattive non ancora implementate.",
@@ -94,10 +95,9 @@ const AppInfo kApps[AppCount] = {
      "Punti su un'immagine di sfondo, liste di coordinate e regressioni",
      "Picture Plot non ancora implementato.",
      s::Expression | Ui | s::Stats | s::Storage | s::Models, d::Settings | d::Lists | d::View, 0, nullptr},
-    {AppId::Graph3D, "3D Graph", "J", rgb888To565(70, 60, 190), AppStatus::Planned,
-     "Superfici z=f(x,y), sfere, piani, rette nello spazio con finestra 3D",
-     "Grafici 3D z=f(x,y) non ancora implementati nell'interfaccia.",
-     s::Expression | Ui | s::Storage | s::Models, d::Settings | d::Memory, 0, nullptr},
+    {AppId::Graph3D, "3D Graph", "J", rgb888To565(70, 60, 190), AppStatus::Available,
+     "Superfici z=f(x,y) (fino a 3) nella finestra 3D, rotazione e zoom; z-buffer e griglie fino a 128 con la PSRAM",
+     nullptr, s::Expression | Ui | s::Storage | s::Models | s::Graph3D, d::Settings | d::Memory | d::Graph3D, 0, kGraph3DSrc},
     {AppId::Conversion, "Conversion", "K", rgb888To565(220, 90, 120), AppStatus::Available,
      "Conversioni di unita' (10 grandezze, prefissi SI); il risultato va in Ans",
      nullptr, s::Expression | Ui | s::Units, d::Settings | d::Memory, 0, kConversionSrc},
@@ -127,9 +127,11 @@ const char* const kHUnits[] = {"point_a.hpp", nullptr};
 const char* const kHHelp[] = {"cheatsheet.hpp", nullptr};
 const char* const kHRunCore[] = {"run_matrix.hpp", nullptr};
 const char* const kHModels[] = {"app_models.hpp", nullptr};
-const char* const kHGraphCore[] = {"graph_model.hpp", "graph_engine.hpp", "graph_solve.hpp", "table_model.hpp", nullptr};
+const char* const kHGraphCore[] = {"graph_model.hpp", "graph_engine.hpp", "graph_solve.hpp", "table_model.hpp", "limits.hpp", nullptr};
 const char* const kHFiles[] = {"file_store.hpp", "graph_file.hpp", "pict.hpp", nullptr};
 const char* const kHDiag[] = {"diagnostics.hpp", nullptr};
+const char* const kHGraph3D[] = {"graph3d.hpp", "limits.hpp", nullptr};
+const char* const kHHardware[] = {"board_config.hpp", "mem_pools.hpp", "psram.hpp", "limits.hpp", "system_info.hpp", "system_runtime.hpp", nullptr};
 const ServiceInfo kServices[service::Count] = {
     {s::Expression, "Expression", kHExpression}, {s::Exact, "Exact", kHExact}, {s::Editor, "Editor", kHEditor},
     {s::MathRender, "MathRender", kHRender}, {s::Format, "Format", kHFormat}, {s::Solvers, "Solvers", kHSolvers},
@@ -137,8 +139,9 @@ const ServiceInfo kServices[service::Count] = {
     {s::Network, "Network", kHNetwork}, {s::Storage, "Storage", kHStorage}, {s::Units, "Units", kHUnits},
     {s::Help, "Help", kHHelp}, {s::RunCore, "RunCore", kHRunCore}, {s::Models, "Models", kHModels},
     {s::GraphCore, "GraphCore", kHGraphCore}, {s::Files, "Files", kHFiles}, {s::Diag, "Diag", kHDiag},
+    {s::Graph3D, "Graph3D", kHGraph3D}, {s::Hardware, "Hardware", kHHardware},
 };
-const char* const kDataNames[data::Count] = {"settings", "memory", "history", "functions", "view", "table", "lists", "equation", "chat", "graph"};
+const char* const kDataNames[data::Count] = {"settings", "memory", "history", "functions", "view", "table", "lists", "equation", "chat", "graph", "graph3d"};
 } // namespace
 
 const AppInfo& appInfo(AppId id) noexcept {

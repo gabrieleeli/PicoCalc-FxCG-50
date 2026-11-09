@@ -1,8 +1,11 @@
 // SYSTEM / SET UP: angle unit, display format, complex mode, exact results, Frac Result (d/c, ab/c),
 // backlights, Wi-Fi and AI relay configuration, device information and reset.
 #include "apps.hpp"
+#include "board_config.hpp"
 #include "diagnostics.hpp"
+#include "mem_pools.hpp"
 #include "net.hpp"
+#include "psram.hpp"
 #include <algorithm>
 #include <cstdio>
 
@@ -37,7 +40,7 @@ DisplayFormat displayFrom(int i) {
 FormField choice(const char* l, std::vector<std::string> c, int sel) { const std::string t = c[static_cast<std::size_t>(sel)]; return {l, t, FormField::Type::Choice, std::move(c), sel}; }
 FormField text(const char* l, const std::string& v, bool secret = false) { return {l, v, secret ? FormField::Type::Secret : FormField::Type::Text, {}, 0}; }
 FormField number(const char* l, double v) { return {l, formatReal(v), FormField::Type::Number, {}, 0}; }
-enum Field { FAngle, FDisplay, FComplex, FFrac, FMixed, FLcd, FKbd, FSsid, FPass, FHost, FPort, FPath, FToken, FProvider, FModel, FTokens };
+enum Field { FAngle, FDisplay, FComplex, FFrac, FMixed, FLcd, FKbd, FFiles, FSsid, FPass, FHost, FPort, FPath, FToken, FProvider, FModel, FTokens };
 } // namespace
 
 void SystemApp::enter(Context& ctx) {
@@ -50,6 +53,7 @@ void SystemApp::enter(Context& ctx) {
         choice("Frac Result", {"d/c", "ab/c"}, s.mixedFractions ? 1 : 0),
         number("Luce LCD", s.lcdBacklight),
         number("Luce tastiera", s.kbdBacklight),
+        choice("Archivio file", {"microSD", "Flash interna"}, s.fileStore == Settings::FileStore::Internal ? 1 : 0),
         text("Wi-Fi SSID", s.wifiSsid),
         text("Wi-Fi password", s.wifiPassword, true),
         text("Relay host", s.relayHost),
@@ -71,6 +75,7 @@ void SystemApp::apply(Context& ctx) {
     s.complex = static_cast<ComplexMode>(f[FComplex].choice);
     s.fractionResults = f[FFrac].choice == 0;
     s.mixedFractions = f[FMixed].choice == 1;
+    s.fileStore = f[FFiles].choice == 1 ? Settings::FileStore::Internal : Settings::FileStore::MicroSd;
     const double lcd = form_.number(ctx, FLcd), kbd = form_.number(ctx, FKbd), port = form_.number(ctx, FPort), tokens = form_.number(ctx, FTokens);
     if (lcd < 0 || lcd > 255 || kbd < 0 || kbd > 255) throw MathError("Argument ERROR: retroilluminazione 0..255");
     if (port < 1 || port > 65535 || port != static_cast<int>(port)) throw MathError("Argument ERROR: porta 1..65535");
@@ -113,15 +118,26 @@ void SystemApp::key(Context& ctx, const KeyEvent& ev) {
     if (consumed && (ev.is(Key::Left) || ev.is(Key::Right))) apply(ctx);
 }
 
-// DIAG: microSD and GRAPH self-tests, also printed on the USB serial port.
+// DIAG: memory/PSRAM/flash/display (v1.9.0), microSD and GRAPH (v1.8.0)
+// self-tests, also printed on the USB serial port.
 void SystemApp::runDiagnostics(Context& ctx) {
     diag_ = true; diagTop_ = 0; diagLines_.clear();
     const diag::Clock clock = [&ctx]() { return ctx.now(); };
-    std::printf("[DIAG] PicoCalc FX %s on %s, free RAM %u KB\n", FXAI_VERSION_STRING, ctx.platform.name(), static_cast<unsigned>(ctx.platform.freeHeap() / 1024));
-    diagLines_.emplace_back(true, std::string("RAM libera prima dei test: ") + std::to_string(ctx.platform.freeHeap() / 1024) + " KB");
-    for (const auto& l : diag::testStorage(ctx.platform.files(), clock)) diagLines_.emplace_back(l.ok, "SD  " + l.text);
-    for (const auto& l : diag::testGraph(ctx.ws, clock)) diagLines_.emplace_back(l.ok, "GPH " + l.text);
-    diagLines_.emplace_back(true, std::string("RAM libera dopo i test: ") + std::to_string(ctx.platform.freeHeap() / 1024) + " KB");
+    std::printf("[DIAG] PicoCalc FX %s on %s (%s), free SRAM heap %u KB\n", FXAI_VERSION_STRING, ctx.platform.name(),
+                board::config::kBoardName, static_cast<unsigned>(ctx.platform.freeHeap() / 1024));
+    diagLines_.emplace_back(true, std::string("RAM SRAM libera prima dei test: ") + std::to_string(ctx.platform.freeHeap() / 1024) + " KB");
+    auto run = [&](const char* tag, const std::vector<diag::Line>& lines) {
+        for (const auto& l : lines) diagLines_.emplace_back(l.ok, std::string(tag) + l.text);
+    };
+    run("MEM ", diag::testMemory(ctx.platform));
+    run("PSR ", diag::testPsram(clock));
+    run("ALC ", diag::testAllocator(clock, true));
+    run("FLS ", diag::testFlashPsram(ctx.platform.diagnosticFlash(), clock));
+    run("LCD ", diag::testDisplay(ctx.platform));
+    run("SD  ", diag::testStorage(ctx.platform.files(), clock));
+    run("INT ", diag::testStorage(ctx.platform.internalFiles(), clock));
+    run("GPH ", diag::testGraph(ctx.ws, clock));
+    diagLines_.emplace_back(true, std::string("RAM SRAM libera dopo i test: ") + std::to_string(ctx.platform.freeHeap() / 1024) + " KB");
     std::printf("[DIAG] end\n");
 }
 
@@ -156,7 +172,14 @@ void SystemApp::draw(Context& ctx, gfx::Canvas& c) {
         auto line = [&](const char* l, const std::string& v) { ui::text(c, 8, y, l, Accent, font::Face::Small); ui::text(c, 130, y, v.c_str(), Ink, font::Face::Small); y += 18; };
         line("Firmware", std::string("PicoCalc FX ") + FXAI_VERSION_STRING);
         line("Piattaforma", ctx.platform.name());
-        std::snprintf(buf, sizeof(buf), "%u KB", static_cast<unsigned>(ctx.platform.freeHeap() / 1024)); line("RAM libera", buf);
+        std::snprintf(buf, sizeof(buf), "%u KB", static_cast<unsigned>(ctx.platform.freeHeap() / 1024)); line("SRAM libera", buf);
+        if (mem::available(mem::Pool::PSRAM_BOARD)) {
+            const auto ps = mem::stats(mem::Pool::PSRAM_BOARD);
+            std::snprintf(buf, sizeof(buf), "%u KB liberi di %u KB", static_cast<unsigned>(ps.free / 1024), static_cast<unsigned>(ps.total / 1024));
+            line("PSRAM", buf);
+        } else {
+            line("PSRAM", board::config::kHasPsram ? std::string("DISABILITATA (solo SRAM)") : std::string("non presente"));
+        }
         std::snprintf(buf, sizeof(buf), "%u / %u byte", static_cast<unsigned>(blob.size()), static_cast<unsigned>(ctx.platform.storageCapacity())); line("Dati salvati", buf);
         const int b = ctx.platform.batteryPercent();
         line("Batteria", b < 0 ? std::string("n/d (USB)") : std::to_string(b) + "%" + (ctx.platform.charging() ? " in carica" : ""));

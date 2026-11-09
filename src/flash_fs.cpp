@@ -1,332 +1,330 @@
 #include "flash_fs.hpp"
 
-#include "board_config.hpp"
-#include "mem_pools.hpp"
-#include "psram.hpp"
+#include "storage.hpp"
 
 #include "lfs.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 
-#if FXAI_ON_DEVICE
-#include "hardware/flash.h"
-#include "hardware/sync.h"
-#include "pico/flash.h"
-#include "pico/platform.h"
-#include "pico/time.h"
-extern "C" char __flash_binary_end; // end of the image in flash (SDK linker script)
-#endif
-
-namespace fx::storage {
+namespace fx::files {
 namespace {
-namespace cfg = board::config;
-constexpr std::size_t kPageBytes = 256;
-constexpr std::size_t kSectorBytes = 4096;
-constexpr std::size_t kCacheBytes = 512;
+constexpr std::size_t kReadSize = 16;
+constexpr std::size_t kCacheBytes = 512;      // multiple of the 256-byte flash page
 constexpr std::size_t kLookaheadBytes = 128;
-constexpr std::size_t kBounceBytes = 4096;
-constexpr const char* kBootCounterFile = "/boot_count";
 
-static_assert(cfg::kFlashDiagOffset % kSectorBytes == 0, "diagnostic sector must be sector aligned");
-
-#if FXAI_ON_DEVICE
-// --- RP2350 internal flash through flash_safe_execute() -----------------------
-alignas(4) std::uint8_t g_bounce[kBounceBytes]; // SRAM: readable while XIP is off
-
-struct FlashJob {
-    std::uint32_t offset;
-    std::size_t bytes;
-    bool erase;
-    bool m1Intact;
-};
-
-void __no_inline_not_in_flash_func(runFlashJob)(void* param) {
-    auto* job = static_cast<FlashJob*>(param);
-    if (job->erase) flash_range_erase(job->offset, job->bytes);
-    else flash_range_program(job->offset, g_bounce, job->bytes);
-    // The SDK restores M1 timing/rcmd/rfmt (FLASH_DEVINFO has no CS1 entry);
-    // verify every M1 register and XIP_CTRL.WRITABLE_M1 before XIP resumes.
-    job->m1Intact = psram::verifyConfigurationFromSafeZone();
+Status map(int err) {
+    switch (err) {
+    case LFS_ERR_OK: return Status::Ok;
+    case LFS_ERR_NOENT: return Status::NotFound;
+    case LFS_ERR_EXIST: return Status::Exists;
+    case LFS_ERR_NOSPC: return Status::Full;
+    case LFS_ERR_CORRUPT: return Status::Corrupt;
+    case LFS_ERR_NAMETOOLONG: return Status::InvalidName;
+    case LFS_ERR_FBIG: return Status::TooLarge;
+    case LFS_ERR_NOTDIR: return Status::NotFound;
+    default: return Status::IoError;
+    }
 }
-
-class DeviceFlash final : public FlashDevice {
-public:
-    bool read(std::size_t offset, void* dst, std::size_t bytes) override {
-        if (offset + bytes > cfg::kFlashSize) return false;
-        // flash_range_program/erase flush the XIP cache, so cached reads are fresh.
-        std::memcpy(dst, reinterpret_cast<const void*>(cfg::kFlashXipBase + offset), bytes);
-        return true;
-    }
-    bool erase(std::size_t offset, std::size_t bytes) override {
-        if (!writable(offset, bytes) || offset % kSectorBytes || bytes % kSectorBytes) return false;
-        FlashJob job{static_cast<std::uint32_t>(offset), bytes, true, true};
-        return execute(job);
-    }
-    bool program(std::size_t offset, const void* src, std::size_t bytes) override {
-        if (!writable(offset, bytes) || offset % kPageBytes || bytes % kPageBytes) return false;
-        const auto* in = static_cast<const std::uint8_t*>(src);
-        while (bytes) {
-            const std::size_t chunk = bytes < kBounceBytes ? bytes : kBounceBytes;
-            std::memcpy(g_bounce, in, chunk); // copy out of PSRAM/flash before XIP stops
-            FlashJob job{static_cast<std::uint32_t>(offset), chunk, false, true};
-            if (!execute(job)) return false;
-            offset += chunk;
-            in += chunk;
-            bytes -= chunk;
-        }
-        return true;
-    }
-    bool lastM1Intact{true};
-    std::uint32_t lastDurationUs{};
-
-private:
-    static bool writable(std::size_t offset, std::size_t bytes) {
-        // Never touch the firmware partition or the BTstack area.
-        return offset >= cfg::kFlashDiagOffset && offset + bytes <= cfg::kFlashFsOffset + cfg::kFlashFsSize;
-    }
-    bool execute(FlashJob& job) {
-        // Dirty PSRAM lines are committed by the SDK (xip_cache_clean_all) before
-        // the ROM flushes the cache; cleaning here as well keeps that explicit.
-        psram::cleanCache();
-        const std::uint64_t start = time_us_64();
-        const int rc = flash_safe_execute(runFlashJob, &job, 500);
-        lastDurationUs = static_cast<std::uint32_t>(time_us_64() - start);
-        lastM1Intact = job.m1Intact;
-        if (rc != PICO_OK) std::printf("[flash] flash_safe_execute failed (%d)\n", rc);
-        return rc == PICO_OK;
-    }
-};
-DeviceFlash g_deviceFlash;
-FlashDevice* g_device = &g_deviceFlash;
-#else
-FlashDevice* g_device = nullptr;
-#endif
-
-lfs_t g_lfs{};
-lfs_config g_cfg{};
-alignas(4) std::uint8_t g_readBuffer[kCacheBytes];
-alignas(4) std::uint8_t g_progBuffer[kCacheBytes];
-alignas(4) std::uint8_t g_lookahead[kLookaheadBytes];
-alignas(4) std::uint8_t g_fileBuffer[kCacheBytes];
-bool g_mounted = false;
-bool g_formatted = false;
-int g_lastError = 0;
-std::size_t g_peakUsed = 0;
-std::uint32_t g_bootCount = 0;
-
-int bdRead(const lfs_config* c, lfs_block_t block, lfs_off_t off, void* buffer, lfs_size_t size) {
-    if (!g_device) return LFS_ERR_IO;
-    const std::size_t addr = cfg::kFlashFsOffset + static_cast<std::size_t>(block) * c->block_size + off;
-    return g_device->read(addr, buffer, size) ? 0 : LFS_ERR_IO;
+bool sameName(const char* a, const std::string& b) {
+    const std::size_t n = std::strlen(a);
+    if (n != b.size()) return false;
+    for (std::size_t i = 0; i < n; ++i)
+        if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i]))) return false;
+    return true;
 }
-int bdProg(const lfs_config* c, lfs_block_t block, lfs_off_t off, const void* buffer, lfs_size_t size) {
-    if (!g_device) return LFS_ERR_IO;
-    const std::size_t addr = cfg::kFlashFsOffset + static_cast<std::size_t>(block) * c->block_size + off;
-    return g_device->program(addr, buffer, size) ? 0 : LFS_ERR_IO;
-}
-int bdErase(const lfs_config* c, lfs_block_t block) {
-    if (!g_device) return LFS_ERR_IO;
-    const std::size_t addr = cfg::kFlashFsOffset + static_cast<std::size_t>(block) * c->block_size;
-    return g_device->erase(addr, c->block_size) ? 0 : LFS_ERR_IO;
-}
-int bdSync(const lfs_config*) { return 0; }
-
-void configure() {
-    g_cfg = lfs_config{};
-    g_cfg.read = bdRead;
-    g_cfg.prog = bdProg;
-    g_cfg.erase = bdErase;
-    g_cfg.sync = bdSync;
-    g_cfg.read_size = 16;
-    g_cfg.prog_size = kPageBytes;
-    g_cfg.block_size = kSectorBytes;
-    g_cfg.block_count = static_cast<lfs_size_t>(cfg::kFlashFsSize / kSectorBytes);
-    g_cfg.block_cycles = 500;
-    g_cfg.cache_size = kCacheBytes;
-    g_cfg.lookahead_size = kLookaheadBytes;
-    g_cfg.read_buffer = g_readBuffer;
-    g_cfg.prog_buffer = g_progBuffer;
-    g_cfg.lookahead_buffer = g_lookahead;
-}
-
-void updatePeak() {
-    if (!g_mounted) return;
-    const lfs_ssize_t blocks = lfs_fs_size(&g_lfs);
-    if (blocks >= 0) {
-        const std::size_t used = static_cast<std::size_t>(blocks) * kSectorBytes;
-        if (used > g_peakUsed) g_peakUsed = used;
+std::vector<std::string> split(const std::string& path) {
+    std::vector<std::string> parts;
+    std::string cur;
+    for (char c : path) {
+        if (c == '/' || c == '\\') { if (!cur.empty()) parts.push_back(cur); cur.clear(); }
+        else cur += c;
     }
+    if (!cur.empty()) parts.push_back(cur);
+    return parts;
 }
 } // namespace
 
-Layout layout() noexcept {
-    Layout l;
-    l.flashSize = cfg::kFlashSize;
-    l.firmwarePartition = cfg::kFirmwarePartitionBytes;
-#if FXAI_ON_DEVICE
-    l.firmwareUsed = static_cast<std::size_t>(reinterpret_cast<std::uintptr_t>(&__flash_binary_end) - cfg::kFlashXipBase);
-#endif
-    l.diagOffset = cfg::kFlashDiagOffset;
-    l.fsOffset = cfg::kFlashFsOffset;
-    l.fsSize = cfg::kFlashFsSize;
-    l.btReservedOffset = cfg::kFlashFsOffset + cfg::kFlashFsSize;
-    return l;
-}
+struct LittleFsFileSystem::Impl {
+    explicit Impl(storage::FlashDevice& d) : dev(d) {}
+    storage::FlashDevice& dev;
+    lfs_t lfs{};
+    lfs_config cfg{};
+    alignas(4) std::uint8_t readBuffer[kCacheBytes]{};
+    alignas(4) std::uint8_t progBuffer[kCacheBytes]{};
+    alignas(4) std::uint8_t lookahead[kLookaheadBytes]{};
+    bool mounted{false}, formatted{false};
+    int lastError{0};
 
-bool mount() noexcept {
-    if (g_mounted) return true;
-    if (!g_device) { g_lastError = LFS_ERR_IO; return false; }
-    configure();
-    int err = lfs_mount(&g_lfs, &g_cfg);
-    g_formatted = false;
-    if (err) {
-        // Blank or corrupt partition (first boot, or layout change): format.
-        err = lfs_format(&g_lfs, &g_cfg);
-        if (!err) err = lfs_mount(&g_lfs, &g_cfg);
-        g_formatted = err == 0;
+    static int bdRead(const lfs_config* c, lfs_block_t block, lfs_off_t off, void* buffer, lfs_size_t size) {
+        auto* self = static_cast<Impl*>(c->context);
+        return self->dev.read(static_cast<std::size_t>(block) * c->block_size + off, buffer, size) ? 0 : LFS_ERR_IO;
     }
-    g_lastError = err;
-    g_mounted = err == 0;
-    if (!g_mounted) {
-        std::printf("[fs] LittleFS mount failed (%d): internal storage disabled\n", err);
-        return false;
+    static int bdProg(const lfs_config* c, lfs_block_t block, lfs_off_t off, const void* buffer, lfs_size_t size) {
+        auto* self = static_cast<Impl*>(c->context);
+        return self->dev.program(static_cast<std::size_t>(block) * c->block_size + off, buffer, size) ? 0 : LFS_ERR_IO;
     }
-    std::uint32_t count = 0;
-    if (readFile(kBootCounterFile, &count, sizeof(count)) != static_cast<long>(sizeof(count))) count = 0;
-    ++count;
-    writeFile(kBootCounterFile, &count, sizeof(count));
-    g_bootCount = count;
-    updatePeak();
-    return true;
-}
+    static int bdErase(const lfs_config* c, lfs_block_t block) {
+        auto* self = static_cast<Impl*>(c->context);
+        return self->dev.erase(static_cast<std::size_t>(block) * c->block_size, c->block_size) ? 0 : LFS_ERR_IO;
+    }
+    static int bdSync(const lfs_config*) { return 0; }
 
-void unmount() noexcept {
-    if (g_mounted) lfs_unmount(&g_lfs);
-    g_mounted = false;
-}
-
-FsStats stats() noexcept {
-    FsStats s;
-    s.mounted = g_mounted;
-    s.formattedAtBoot = g_formatted;
-    s.blockSize = kSectorBytes;
-    s.blockCount = cfg::kFlashFsSize / kSectorBytes;
-    s.lastError = g_lastError;
-    s.bootCount = g_bootCount;
-    if (g_mounted) {
-        const lfs_ssize_t blocks = lfs_fs_size(&g_lfs);
-        if (blocks >= 0) {
-            s.usedBytes = static_cast<std::size_t>(blocks) * kSectorBytes;
-            const std::size_t total = s.blockCount * kSectorBytes;
-            s.freeBytes = total > s.usedBytes ? total - s.usedBytes : 0;
+    std::size_t blockCount() const { return dev.eraseSize() ? dev.size() / dev.eraseSize() : 0; }
+    void configure() {
+        cfg = lfs_config{};
+        cfg.context = this;
+        cfg.read = bdRead;
+        cfg.prog = bdProg;
+        cfg.erase = bdErase;
+        cfg.sync = bdSync;
+        cfg.read_size = kReadSize;
+        cfg.prog_size = static_cast<lfs_size_t>(dev.programSize());
+        cfg.block_size = static_cast<lfs_size_t>(dev.eraseSize());
+        cfg.block_count = static_cast<lfs_size_t>(blockCount());
+        cfg.block_cycles = 500;                 // wear levelling of the metadata pairs
+        cfg.cache_size = kCacheBytes;
+        cfg.lookahead_size = kLookaheadBytes;
+        cfg.read_buffer = readBuffer;
+        cfg.prog_buffer = progBuffer;
+        cfg.lookahead_buffer = lookahead;
+    }
+    Status fail(int err) { lastError = err; return map(err); }
+    Status ensureMounted() {
+        if (mounted) return Status::Ok;
+        if (blockCount() < 2 || dev.programSize() > kCacheBytes || kCacheBytes % dev.programSize()) return Status::NotSupported;
+        configure();
+        formatted = false;
+        int err = lfs_mount(&lfs, &cfg);
+        if (err) {
+            // Blank or foreign partition (first boot, layout change): it holds
+            // nothing else, so it is formatted.
+            err = lfs_format(&lfs, &cfg);
+            if (!err) err = lfs_mount(&lfs, &cfg);
+            formatted = err == 0;
         }
-        updatePeak();
+        if (err) { std::printf("[fs] LittleFS mount failed (%d)\n", err); return fail(err); }
+        mounted = true;
+        return Status::Ok;
     }
-    s.peakUsedBytes = g_peakUsed;
-    return s;
-}
-
-bool writeFile(const char* path, const void* data, std::size_t bytes) noexcept {
-    if (!g_mounted || !path) return false;
-    lfs_file_t file{};
-    lfs_file_config fcfg{};
-    fcfg.buffer = g_fileBuffer;
-    int err = lfs_file_opencfg(&g_lfs, &file, path, LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC, &fcfg);
-    if (err) { g_lastError = err; return false; }
-    const lfs_ssize_t written = lfs_file_write(&g_lfs, &file, data, static_cast<lfs_size_t>(bytes));
-    err = lfs_file_close(&g_lfs, &file); // commits atomically
-    g_lastError = err;
-    updatePeak();
-    return err == 0 && written == static_cast<lfs_ssize_t>(bytes);
-}
-
-long readFile(const char* path, void* buffer, std::size_t capacity) noexcept {
-    if (!g_mounted || !path) return -1;
-    lfs_file_t file{};
-    lfs_file_config fcfg{};
-    fcfg.buffer = g_fileBuffer;
-    int err = lfs_file_opencfg(&g_lfs, &file, path, LFS_O_RDONLY, &fcfg);
-    if (err) { g_lastError = err; return -1; }
-    const lfs_ssize_t got = lfs_file_read(&g_lfs, &file, buffer, static_cast<lfs_size_t>(capacity));
-    lfs_file_close(&g_lfs, &file);
-    return got < 0 ? -1 : static_cast<long>(got);
-}
-
-bool removeFile(const char* path) noexcept {
-    if (!g_mounted || !path) return false;
-    const int err = lfs_remove(&g_lfs, path);
-    g_lastError = err;
-    return err == 0;
-}
-
-FlashPsramReport testPsramAfterFlashWrite() noexcept {
-    FlashPsramReport r;
-#if FXAI_ON_DEVICE
-    r.ran = true;
-    constexpr std::size_t kWords = 16384; // 64 KiB: more than the 16 KiB XIP cache
-    std::uint32_t* buffer = nullptr;
-    const bool havePsram = psram::available();
-    if (havePsram) {
-        buffer = static_cast<std::uint32_t*>(mem::tryAlloc(mem::Pool::PSRAM_BOARD, kWords * 4, 64));
-        if (!buffer) { r.error = "PSRAM insufficiente per il test"; return r; }
-        std::uint32_t s = 0x1234567u;
-        for (std::size_t i = 0; i < kWords; ++i) { s ^= s << 13; s ^= s >> 17; s ^= s << 5; buffer[i] = s; }
-        // No explicit clean here: the flash routines must commit dirty lines themselves.
-    }
-    // Erase + program the diagnostic sector (outside LittleFS).
-    const std::uint64_t t0 = time_us_64();
-    const bool erased = g_deviceFlash.erase(cfg::kFlashDiagOffset, kSectorBytes);
-    r.eraseUs = static_cast<std::uint32_t>(time_us_64() - t0);
-    bool m1 = g_deviceFlash.lastM1Intact;
-    alignas(4) std::uint8_t page[kPageBytes];
-    for (std::size_t i = 0; i < kPageBytes; ++i) page[i] = static_cast<std::uint8_t>(i * 7u + 3u);
-    const std::uint64_t t1 = time_us_64();
-    const bool programmed = erased && g_deviceFlash.program(cfg::kFlashDiagOffset, page, kPageBytes);
-    r.programUs = static_cast<std::uint32_t>(time_us_64() - t1);
-    m1 = m1 && g_deviceFlash.lastM1Intact;
-    r.flashVerified = programmed &&
-        std::memcmp(reinterpret_cast<const void*>(cfg::kFlashXipBase + cfg::kFlashDiagOffset), page, kPageBytes) == 0;
-    r.m1ConfigIntact = m1;
-    if (havePsram) {
-        const auto uncached = reinterpret_cast<volatile std::uint32_t*>(
-            reinterpret_cast<std::uintptr_t>(buffer) - cfg::kPsramCachedBase + cfg::kPsramUncachedBase);
-        std::uint32_t s = 0x1234567u;
-        bool okCached = true, okUncached = true;
-        for (std::size_t i = 0; i < kWords; ++i) {
-            s ^= s << 13; s ^= s >> 17; s ^= s << 5;
-            if (uncached[i] != s) okUncached = false;
-            if (buffer[i] != s) okCached = false;
+    // Resolves every component case-insensitively. The last component keeps
+    // the given spelling when it does not exist (creation). Returns false when
+    // an intermediate folder is missing.
+    bool resolve(const std::string& path, std::string& out, bool& lastExists) {
+        const auto parts = split(path);
+        out.clear();
+        lastExists = true;
+        for (std::size_t k = 0; k < parts.size(); ++k) {
+            lfs_dir_t dir{};
+            std::string found;
+            if (lfs_dir_open(&lfs, &dir, out.empty() ? "/" : out.c_str()) == 0) {
+                lfs_info info{};
+                while (lfs_dir_read(&lfs, &dir, &info) > 0)
+                    if (sameName(info.name, parts[k])) { found = info.name; break; }
+                lfs_dir_close(&lfs, &dir);
+            }
+            if (found.empty()) {
+                if (k + 1 < parts.size()) return false;
+                found = parts[k];
+                lastExists = false;
+            }
+            out += "/" + found;
         }
-        r.psramIntactCached = okCached;
-        r.psramIntactUncached = okUncached;
-        // The window must still accept writes (QPI mode + WRITABLE_M1 intact).
-        for (std::size_t i = 0; i < 256; ++i) buffer[i] = ~static_cast<std::uint32_t>(i);
-        psram::cleanCache();
-        bool writable = true;
-        for (std::size_t i = 0; i < 256; ++i) if (uncached[i] != ~static_cast<std::uint32_t>(i)) writable = false;
-        r.psramWritableAfter = writable;
-        mem::free(buffer);
-    } else {
-        r.psramIntactCached = r.psramIntactUncached = r.psramWritableAfter = true; // not applicable
+        if (out.empty()) out = "/";
+        return true;
     }
-    if (!r.flashVerified) r.error = "verifica flash fallita";
-#else
-    r.error = "solo su dispositivo";
-#endif
-    return r;
+};
+
+namespace {
+class LfsReader final : public Reader {
+public:
+    LfsReader(lfs_t& lfs) : lfs_(lfs) {}
+    ~LfsReader() override { if (open_) lfs_file_close(&lfs_, &file_); }
+    Status open(const char* path) {
+        fcfg_.buffer = buffer_;
+        const int err = lfs_file_opencfg(&lfs_, &file_, path, LFS_O_RDONLY, &fcfg_);
+        open_ = err == 0;
+        return map(err);
+    }
+    Status read(void* data, std::size_t length, std::size_t& got) override {
+        const lfs_ssize_t n = lfs_file_read(&lfs_, &file_, data, static_cast<lfs_size_t>(length));
+        if (n < 0) { got = 0; return map(static_cast<int>(n)); }
+        got = static_cast<std::size_t>(n);
+        return Status::Ok;
+    }
+private:
+    lfs_t& lfs_;
+    lfs_file_t file_{};
+    lfs_file_config fcfg_{};
+    alignas(4) std::uint8_t buffer_[kCacheBytes]{};
+    bool open_{false};
+};
+class LfsWriter final : public Writer {
+public:
+    LfsWriter(lfs_t& lfs) : lfs_(lfs) {}
+    ~LfsWriter() override { if (open_) lfs_file_close(&lfs_, &file_); }
+    Status open(const char* path) {
+        fcfg_.buffer = buffer_;
+        const int err = lfs_file_opencfg(&lfs_, &file_, path, LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC, &fcfg_);
+        open_ = err == 0;
+        return map(err);
+    }
+    Status write(const void* data, std::size_t length) override {
+        if (!open_) return Status::IoError;
+        const lfs_ssize_t n = lfs_file_write(&lfs_, &file_, data, static_cast<lfs_size_t>(length));
+        if (n < 0) return map(static_cast<int>(n));
+        return static_cast<std::size_t>(n) == length ? Status::Ok : Status::Full;
+    }
+    Status close() override {
+        if (!open_) return Status::IoError;
+        open_ = false;
+        return map(lfs_file_close(&lfs_, &file_));   // the file is committed atomically here
+    }
+private:
+    lfs_t& lfs_;
+    lfs_file_t file_{};
+    lfs_file_config fcfg_{};
+    alignas(4) std::uint8_t buffer_[kCacheBytes]{};
+    bool open_{false};
+};
+} // namespace
+
+LittleFsFileSystem::LittleFsFileSystem(storage::FlashDevice& device) : impl_(std::make_unique<Impl>(device)) {}
+LittleFsFileSystem::~LittleFsFileSystem() {
+    if (impl_ && impl_->mounted) lfs_unmount(&impl_->lfs);
+}
+bool LittleFsFileSystem::mounted() const noexcept { return impl_->mounted; }
+bool LittleFsFileSystem::formattedAtMount() const noexcept { return impl_->formatted; }
+int LittleFsFileSystem::lastError() const noexcept { return impl_->lastError; }
+std::uint64_t LittleFsFileSystem::totalBytes() const noexcept {
+    return static_cast<std::uint64_t>(impl_->blockCount()) * impl_->dev.eraseSize();
 }
 
-namespace testing {
-void useDevice(FlashDevice* device) noexcept {
-    unmount();
-#if FXAI_ON_DEVICE
-    g_device = device ? device : &g_deviceFlash;
-#else
-    g_device = device;
-#endif
-    g_peakUsed = 0;
+std::string LittleFsFileSystem::describe() {
+    char buf[96];
+    std::snprintf(buf, sizeof buf, "LittleFS %.1f MB (%u blocchi da %u byte)",
+                  static_cast<double>(totalBytes()) / 1048576.0, static_cast<unsigned>(impl_->blockCount()),
+                  static_cast<unsigned>(impl_->dev.eraseSize()));
+    return buf;
 }
-} // namespace testing
 
-} // namespace fx::storage
+Status LittleFsFileSystem::status() { return impl_->ensureMounted(); }
+
+Status LittleFsFileSystem::format() {
+    if (impl_->mounted) { lfs_unmount(&impl_->lfs); impl_->mounted = false; }
+    if (impl_->blockCount() < 2) return Status::NotSupported;
+    impl_->configure();
+    int err = lfs_format(&impl_->lfs, &impl_->cfg);
+    if (!err) err = lfs_mount(&impl_->lfs, &impl_->cfg);
+    if (err) return impl_->fail(err);
+    impl_->mounted = true;
+    return Status::Ok;
+}
+
+Status LittleFsFileSystem::list(const std::string& dirPath, std::vector<Entry>& out) {
+    Status st = impl_->ensureMounted();
+    if (st != Status::Ok) return st;
+    std::string p; bool exists = false;
+    if (!impl_->resolve(dirPath, p, exists) || !exists) return Status::NotFound;
+    lfs_dir_t dir{};
+    int err = lfs_dir_open(&impl_->lfs, &dir, p.c_str());
+    if (err) return impl_->fail(err);
+    out.clear();
+    lfs_info info{};
+    while ((err = lfs_dir_read(&impl_->lfs, &dir, &info)) > 0) {
+        if (std::strcmp(info.name, ".") == 0 || std::strcmp(info.name, "..") == 0) continue;
+        out.push_back({info.name, static_cast<std::uint32_t>(info.size), info.type == LFS_TYPE_DIR});
+    }
+    lfs_dir_close(&impl_->lfs, &dir);
+    return err < 0 ? impl_->fail(err) : Status::Ok;
+}
+
+Status LittleFsFileSystem::stat(const std::string& path, Entry& out) {
+    Status st = impl_->ensureMounted();
+    if (st != Status::Ok) return st;
+    std::string p; bool exists = false;
+    if (!impl_->resolve(path, p, exists) || !exists) return Status::NotFound;
+    if (p == "/") { out = {"", 0, true}; return Status::Ok; }
+    lfs_info info{};
+    const int err = lfs_stat(&impl_->lfs, p.c_str(), &info);
+    if (err) return impl_->fail(err);
+    out = {info.name, static_cast<std::uint32_t>(info.size), info.type == LFS_TYPE_DIR};
+    return Status::Ok;
+}
+
+Status LittleFsFileSystem::openRead(const std::string& path, std::unique_ptr<Reader>& out) {
+    Status st = impl_->ensureMounted();
+    if (st != Status::Ok) return st;
+    std::string p; bool exists = false;
+    if (!impl_->resolve(path, p, exists) || !exists) return Status::NotFound;
+    auto r = std::make_unique<LfsReader>(impl_->lfs);
+    st = r->open(p.c_str());
+    if (st == Status::Ok) out = std::move(r);
+    return st;
+}
+
+Status LittleFsFileSystem::openWrite(const std::string& path, std::unique_ptr<Writer>& out) {
+    Status st = impl_->ensureMounted();
+    if (st != Status::Ok) return st;
+    std::string p; bool exists = false;
+    if (!impl_->resolve(path, p, exists)) return Status::NotFound;
+    auto w = std::make_unique<LfsWriter>(impl_->lfs);
+    st = w->open(p.c_str());
+    if (st == Status::Ok) out = std::move(w);
+    return st;
+}
+
+Status LittleFsFileSystem::remove(const std::string& path) {
+    Status st = impl_->ensureMounted();
+    if (st != Status::Ok) return st;
+    std::string p; bool exists = false;
+    if (!impl_->resolve(path, p, exists) || !exists) return Status::NotFound;
+    const int err = lfs_remove(&impl_->lfs, p.c_str());
+    return err == LFS_ERR_NOTEMPTY ? Status::IoError : (err ? impl_->fail(err) : Status::Ok);   // as FatFs: FR_DENIED
+}
+
+Status LittleFsFileSystem::rename(const std::string& from, const std::string& to) {
+    Status st = impl_->ensureMounted();
+    if (st != Status::Ok) return st;
+    std::string a, b; bool aExists = false, bExists = false;
+    if (!impl_->resolve(from, a, aExists) || !aExists) return Status::NotFound;
+    if (!impl_->resolve(to, b, bExists)) return Status::NotFound;
+    // Same file with another case ("sine" -> "SINE") is a rename, not a clash.
+    if (bExists && !sameName(a.c_str(), b)) return Status::Exists;
+    const int err = lfs_rename(&impl_->lfs, a.c_str(), bExists ? (b.substr(0, b.rfind('/') + 1) + split(to).back()).c_str() : b.c_str());
+    return err ? impl_->fail(err) : Status::Ok;
+}
+
+Status LittleFsFileSystem::makeDirs(const std::string& path) {
+    Status st = impl_->ensureMounted();
+    if (st != Status::Ok) return st;
+    std::string built;
+    for (const auto& part : split(path)) {
+        std::string p; bool exists = false;
+        const std::string want = built.empty() ? part : built + "/" + part;
+        if (!impl_->resolve(want, p, exists)) return Status::NotFound;
+        if (exists) {
+            lfs_info info{};
+            if (lfs_stat(&impl_->lfs, p.c_str(), &info) != 0 || info.type != LFS_TYPE_DIR) return Status::Exists;
+        } else {
+            const int err = lfs_mkdir(&impl_->lfs, p.c_str());
+            if (err && err != LFS_ERR_EXIST) return impl_->fail(err);
+        }
+        built = p;
+    }
+    return Status::Ok;
+}
+
+Status LittleFsFileSystem::freeSpace(std::uint64_t& bytes) {
+    Status st = impl_->ensureMounted();
+    if (st != Status::Ok) return st;
+    const lfs_ssize_t used = lfs_fs_size(&impl_->lfs);
+    if (used < 0) return impl_->fail(static_cast<int>(used));
+    const std::uint64_t total = impl_->blockCount();
+    bytes = (total > static_cast<std::uint64_t>(used) ? total - static_cast<std::uint64_t>(used) : 0) * impl_->dev.eraseSize();
+    return Status::Ok;
+}
+
+} // namespace fx::files

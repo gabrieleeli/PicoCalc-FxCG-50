@@ -6,6 +6,9 @@
 #include "memory.hpp"
 #include "editors.hpp"
 #include "test_util.hpp"
+#include "board_config.hpp"
+#include "limits.hpp"
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -117,6 +120,7 @@ int main(){
  assert(formatNaturalExpression("2*x/3")=="2 × x ÷ 3");
 
  bool fractionOverflow=false; try { (void)fx::makeFraction(INT64_MIN,-1); } catch(const std::overflow_error&) { fractionOverflow=true; } assert(fractionOverflow);
- fx::pointa::RunMatrixSession limitedHistory; for(int i=0;i<35;++i)limitedHistory.execute("1+1"); assert(limitedHistory.history().size()==30 && limitedHistory.history().front().expression=="1+1");
+ // Legacy session history: 30 entries without PSRAM (fx-CG50), memory-bound up to 10000 with it.
+ {const std::size_t cap=fx::limits::historyCapacity();fx::pointa::RunMatrixSession limitedHistory;const std::size_t runs=std::min<std::size_t>(cap+5,20000);for(std::size_t i=0;i<runs;++i)limitedHistory.execute("1+1");assert(limitedHistory.history().size()==std::min(cap,runs) && limitedHistory.history().front().expression=="1+1");if(!board::config::kHasPsram)assert(cap==30);}
  return testutil::finish("math_engine_test");
 }

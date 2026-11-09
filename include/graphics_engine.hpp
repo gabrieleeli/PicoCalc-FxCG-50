@@ -87,7 +87,7 @@ public:
     void arc(int cx, int cy, int radius, int startDegrees, int endDegrees,
              std::uint16_t color) noexcept;
     // Filled polygons use a 32-entry stack buffer and fall back to a pooled
-    // scratch buffer for larger ones (up to limits::kProfile.polygonMaxVertices);
+    // scratch buffer for larger ones (up to limits::ram().polygonMaxVertices);
     // if the scratch allocation fails only the outline is drawn.
     void polygon(const Point* points, std::size_t count, std::uint16_t color,
                  bool filled) noexcept;

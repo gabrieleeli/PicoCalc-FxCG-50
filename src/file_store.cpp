@@ -57,8 +57,8 @@ const char* statusMessage(Status s) noexcept {
     case Status::NoCard: return "scheda microSD assente";
     case Status::NotFound: return "file non trovato";
     case Status::Exists: return "nome gia' usato";
-    case Status::Full: return "scheda microSD piena";
-    case Status::IoError: return "errore di lettura/scrittura sulla scheda";
+    case Status::Full: return "spazio esaurito (microSD o flash interna)";
+    case Status::IoError: return "errore di lettura/scrittura dell'archivio";
     case Status::Corrupt: return "file danneggiato o non valido";
     case Status::InvalidName: return "nome non valido";
     case Status::TooLarge: return "file troppo grande";

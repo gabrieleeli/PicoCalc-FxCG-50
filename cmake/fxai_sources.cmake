@@ -2,10 +2,15 @@
 set(FXAI_ROOT ${CMAKE_CURRENT_LIST_DIR}/..)
 set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/math_engine.cpp
-  # v1.9.0 memory architecture (portable: host tests and RP2350)
+  # Memory architecture (v1.9.0): pools, TLSF, PSRAM driver (host: stub),
+  # board/memory-derived limits, runtime services (host: stubs), system report.
   ${FXAI_ROOT}/src/tlsf.cpp
   ${FXAI_ROOT}/src/mem_pools.cpp
   ${FXAI_ROOT}/src/limits.cpp
+  ${FXAI_ROOT}/src/psram.cpp
+  ${FXAI_ROOT}/src/system_runtime.cpp
+  ${FXAI_ROOT}/src/system_info.cpp
+  ${FXAI_ROOT}/src/bt_support.cpp
   ${FXAI_ROOT}/src/expression.cpp
   ${FXAI_ROOT}/src/exact.cpp
   ${FXAI_ROOT}/src/memory.cpp
@@ -16,6 +21,7 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/graph_model.cpp
   ${FXAI_ROOT}/src/graph_engine.cpp
   ${FXAI_ROOT}/src/graph_solve.cpp
+  ${FXAI_ROOT}/src/graph3d.cpp
   ${FXAI_ROOT}/src/table_model.cpp
   ${FXAI_ROOT}/src/diagnostics.cpp
   ${FXAI_ROOT}/src/file_store.cpp
@@ -25,6 +31,9 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/fatfs_store.cpp
   ${FXAI_ROOT}/third_party/fatfs/ff.c
   ${FXAI_ROOT}/third_party/fatfs/ffunicode.c
+  ${FXAI_ROOT}/src/flash_fs.cpp
+  ${FXAI_ROOT}/third_party/littlefs/lfs.c
+  ${FXAI_ROOT}/third_party/littlefs/lfs_util.c
   ${FXAI_ROOT}/src/natural_editor.cpp
   ${FXAI_ROOT}/src/math_renderer.cpp
   ${FXAI_ROOT}/src/graphics_engine.cpp
@@ -57,10 +66,18 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/apps/memory_app.cpp
   ${FXAI_ROOT}/src/apps/conversion_app.cpp
   ${FXAI_ROOT}/src/apps/ai_chat_app.cpp
+  ${FXAI_ROOT}/src/apps/graph3d_app.cpp
   ${FXAI_ROOT}/src/ai_protocol.cpp
 )
-set(FXAI_INCLUDE_DIR ${FXAI_ROOT}/include ${FXAI_ROOT}/third_party/fatfs)
-# FatFs is vendored unmodified (third_party/fatfs, 1-clause BSD): its own warnings are not ours.
-set_source_files_properties(${FXAI_ROOT}/third_party/fatfs/ff.c ${FXAI_ROOT}/third_party/fatfs/ffunicode.c PROPERTIES COMPILE_OPTIONS "-w")
+# Device-only sources: the global operator new that routes every C++
+# allocation through the memory pools (host tests link it explicitly where
+# they exercise it, see tests/CMakeLists.txt).
+set(FXAI_DEVICE_SOURCES
+  ${FXAI_ROOT}/src/mem_new.cpp
+)
+set(FXAI_INCLUDE_DIR ${FXAI_ROOT}/include ${FXAI_ROOT}/third_party/fatfs ${FXAI_ROOT}/third_party/littlefs)
+# FatFs (1-clause BSD) and LittleFS (BSD-3-Clause) are vendored unmodified: their own warnings are not ours.
+set_source_files_properties(${FXAI_ROOT}/third_party/fatfs/ff.c ${FXAI_ROOT}/third_party/fatfs/ffunicode.c
+  ${FXAI_ROOT}/third_party/littlefs/lfs.c ${FXAI_ROOT}/third_party/littlefs/lfs_util.c PROPERTIES COMPILE_OPTIONS "-w")
 file(READ ${FXAI_ROOT}/VERSION FXAI_VERSION_RAW)
 string(STRIP "${FXAI_VERSION_RAW}" FXAI_VERSION_STRING)

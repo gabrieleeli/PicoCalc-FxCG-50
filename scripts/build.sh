@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Build the PicoCalc FX-CG50 AI firmware for one board.
 #
-#   ./scripts/build.sh --board pico2w          # Raspberry Pi Pico 2 W  (default)
-#   ./scripts/build.sh --board pico_plus_2w    # Pimoroni Pico Plus 2 W (PSRAM 8 MB, flash 16 MB)
+#   ./scripts/build.sh --board pico_plus_2w    # Pimoroni Pico Plus 2 W (PSRAM 8 MB, flash 16 MB; default)
+#   ./scripts/build.sh --board pico2w          # Raspberry Pi Pico 2 W  (alternative profile)
 #
 # Options:
 #   --board <pico2w|pico_plus_2w>   target module
-#   --opt <Os|O2>                   optimisation level (default: per board)
+#   --opt <O2|O3|Os>                optimisation level (default: O2)
 #   --lto                           enable link-time optimisation (experimental)
 #   --fb-psram                      framebuffer in PSRAM (Pico Plus 2 W only)
 #   --bt                            enable Bluetooth (pico_btstack)
@@ -18,7 +18,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-BOARD="pico2w"
+BOARD="pico_plus_2w"
 CLEAN=0
 EXTRA=()
 while [[ $# -gt 0 ]]; do

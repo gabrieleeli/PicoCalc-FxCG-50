@@ -144,10 +144,13 @@ private:
 
 // ---------------------------------------------------------------- sampling
 constexpr std::int16_t PenUp = INT16_MIN;     // x value that starts a new polyline piece
-constexpr std::size_t MaxCurvePoints = 6000;   // points kept per plot (24 KB)
-// Points of all the plots of one graph screen together (96 KB of the ~194 KB
-// heap of the RP2350): the renderer shares this budget through Curve::limit.
-constexpr std::size_t MaxTotalCurvePoints = 24000;
+// Points kept per plot and by all the plots of one graph screen together (the
+// renderer shares the total through Curve::limit). Without PSRAM: 6000 / 24000
+// points (96 KB of the ~194 KB SRAM heap, v1.8.0); with the PSRAM pool of the
+// Pico Plus 2 W: 40000 / 400000 points (1.6 MB), so dense polar/parametric
+// curves and many graphs together are no longer truncated (limits::ram()).
+std::size_t maxCurvePoints() noexcept;
+std::size_t maxTotalCurvePoints() noexcept;
 constexpr std::size_t MaxParamSteps = 20000;   // T/theta steps of one polar/parametric graph
 
 struct Curve {
@@ -155,7 +158,7 @@ struct Curve {
     std::vector<float> boundary;               // inequality: screen y per column (Y types) / x per row (X types), NaN = none
     std::size_t next{0}, steps{0};
     bool done{false}, truncated{false};
-    std::size_t limit{MaxCurvePoints};         // points allowed for this curve (<= MaxCurvePoints)
+    std::size_t limit{maxCurvePoints()};       // points allowed for this curve (<= maxCurvePoints())
     // previous sample (connection to the next one)
     double prevV{}, prevSx{}, prevSy{};
     bool prevOk{false}, havePrev{false};

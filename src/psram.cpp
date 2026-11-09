@@ -34,8 +34,24 @@ namespace {
 Info g_info{};
 } // namespace
 
+#if FXAI_ON_DEVICE
 const Info& info() noexcept { return g_info; }
 bool available() noexcept { return g_info.enabled; }
+#else
+// Host builds: there is no PSRAM driver, but the tests and the simulator may
+// register a simulated PSRAM_BOARD pool (mem::testing::simulatePsram); the
+// state reported here follows that pool so that SYSTEM shows the same data.
+const Info& info() noexcept {
+    const bool pool = mem::available(mem::Pool::PSRAM_BOARD);
+    g_info.fitted = board::config::kHasPsram;
+    g_info.detected = g_info.enabled = pool;
+    g_info.sizeBytes = pool ? mem::stats(mem::Pool::PSRAM_BOARD).total : 0;
+    g_info.bootSelfTest.passed = pool;
+    g_info.error = pool ? nullptr : (board::config::kHasPsram ? "build host: PSRAM non simulata" : "PSRAM non presente su questa scheda");
+    return g_info;
+}
+bool available() noexcept { return mem::available(mem::Pool::PSRAM_BOARD); }
+#endif
 
 #if FXAI_ON_DEVICE && FXAI_HAS_PSRAM
 
@@ -352,18 +368,45 @@ bool init() noexcept {
     g_info = Info{};
 #if FXAI_ON_DEVICE
     g_info.error = "PSRAM non presente su questa scheda";
-#else
-    g_info.fitted = board::config::kHasPsram;
-    g_info.error = "build host: PSRAM simulata solo nei test";
-#endif
     return false;
+#else
+    return available();   // simulated pool (tests, simulator)
+#endif
 }
 void reapplyTiming() noexcept {}
 bool verifyConfiguration() noexcept { return true; }
 void cleanCache() noexcept {}
-SelfTestResult runDiagnostics(std::size_t, std::uint32_t) noexcept {
+SelfTestResult runDiagnostics(std::size_t bufferBytes, std::uint32_t seed) noexcept {
     SelfTestResult r;
+#if FXAI_ON_DEVICE
+    (void)bufferBytes; (void)seed;
     r.failedStep = "PSRAM non disponibile";
+#else
+    // Host: the same pattern tests on a block of the simulated pool (no cache:
+    // the cached and uncached accessors are the same memory).
+    if (!available()) { r.failedStep = "PSRAM non disponibile"; return r; }
+    bufferBytes &= ~static_cast<std::size_t>(63);
+    if (bufferBytes < 64) bufferBytes = 64;
+    void* block = mem::tryAlloc(mem::Pool::PSRAM_BOARD, bufferBytes, 64);
+    if (!block) { r.failedStep = "memoria PSRAM insufficiente per il test"; return r; }
+    struct HostWindow {
+        std::uint32_t* p;
+        std::size_t count;
+        std::size_t words() const noexcept { return count; }
+        void writeUncached(std::size_t i, std::uint32_t v) noexcept { p[i] = v; }
+        std::uint32_t readUncached(std::size_t i) noexcept { return p[i]; }
+        void writeCached(std::size_t i, std::uint32_t v) noexcept { p[i] = v; }
+        std::uint32_t readCached(std::size_t i) noexcept { return p[i]; }
+        void cleanCache() noexcept {}
+        void invalidateWords(std::size_t, std::size_t) noexcept {}
+    } window{static_cast<std::uint32_t*>(block), bufferBytes / sizeof(std::uint32_t)};
+    SelfTestOptions options;
+    options.addressBus = false;
+    options.samples = static_cast<std::uint32_t>(window.count < 16384 ? window.count : 16384);
+    options.seed = seed | 1u;
+    r = runPatternTests(window, options);
+    mem::free(block);
+#endif
     return r;
 }
 #if FXAI_ON_DEVICE

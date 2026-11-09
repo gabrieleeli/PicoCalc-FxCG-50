@@ -14,7 +14,9 @@
 
 namespace fx::pict {
 
-constexpr std::size_t MaxEncodedBytes = 96 * 1024;   // RLE data kept in RAM
+// RLE data kept in RAM: 96 KB without PSRAM (v1.8.0 budget), 1 MB when the
+// PSRAM pool is active (limits::ram().pictEncodedBytes).
+std::size_t maxEncodedBytes() noexcept;
 constexpr int FormatVersion = 1;
 constexpr std::uint8_t PictMemories = 20;            // Pict1..Pict20 (PICT01.pcpict ..)
 
@@ -28,7 +30,7 @@ struct Image {
 
 // Encodes w x h pixels (row stride in pixels). False if the encoded data would
 // be larger than maxBytes (the image is then not kept).
-bool encode(const std::uint16_t* pixels, int stride, int w, int h, Image& out, std::size_t maxBytes = MaxEncodedBytes);
+bool encode(const std::uint16_t* pixels, int stride, int w, int h, Image& out, std::size_t maxBytes = maxEncodedBytes());
 // Calls span(x, y, length, rgb565) for every run; false when the data is damaged.
 template <typename F> bool forEachSpan(const Image& img, F&& span) {
     std::size_t i = 0;

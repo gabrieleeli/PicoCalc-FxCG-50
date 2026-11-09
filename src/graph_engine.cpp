@@ -1,10 +1,14 @@
 #include "graph_engine.hpp"
+#include "limits.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <limits>
 
 namespace fx::graph {
+
+std::size_t maxCurvePoints() noexcept { return limits::ram().graphCurvePoints; }
+std::size_t maxTotalCurvePoints() noexcept { return limits::ram().graphTotalCurvePoints; }
 namespace {
 constexpr double kPi = 3.14159265358979323846;
 constexpr double JumpPx = 4.0;        // pixel distance that triggers the continuity test
@@ -415,7 +419,7 @@ struct Sampler {
         sx = clampScreen(vp.screenX(a)); sy = clampScreen(vp.screenY(b));
         return true;
     }
-    bool full() const { return c.xy.size() + 6 >= 2 * std::min(c.limit, MaxCurvePoints); }
+    bool full() const { return c.xy.size() + 6 >= 2 * std::min(c.limit, maxCurvePoints()); }
     void penUp() {
         if (!c.xy.empty() && c.xy[c.xy.size() - 2] != PenUp) { c.xy.push_back(PenUp); c.xy.push_back(0); }
     }
@@ -491,7 +495,7 @@ bool sampleStep(const GraphEngine& engine, const Plot& p, const Viewport& vp, bo
     if (c.steps == 0 && c.next == 0) {
         c.steps = sampleCount(p, vp);
         if (isInequality(p.type)) c.boundary.assign(c.steps, std::numeric_limits<float>::quiet_NaN());
-        c.xy.reserve(std::min<std::size_t>(2 * std::min(c.limit, MaxCurvePoints), 2 * c.steps + 16));
+        c.xy.reserve(std::min<std::size_t>(2 * std::min(c.limit, maxCurvePoints()), 2 * c.steps + 16));
     }
     Sampler s{engine, p, vp, c, budget};
     while (c.next < c.steps && budget > 0) {

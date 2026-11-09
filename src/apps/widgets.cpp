@@ -14,6 +14,9 @@ double evalNumber(Context& ctx, const std::string& text) {
     return evaluateReal(*parseExpression(text), ec);
 }
 std::string fmt(Context& ctx, double v) { return formatReal(v, ctx.ws.settings.display); }
+files::FileSystem* userFiles(Context& ctx) {
+    return ctx.ws.settings.fileStore == Settings::FileStore::Internal ? ctx.platform.internalFiles() : ctx.platform.files();
+}
 
 // ------------------------------------------------------------------ Form
 bool Form::key(Context& ctx, const KeyEvent& ev) {

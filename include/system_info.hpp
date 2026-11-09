@@ -1,7 +1,9 @@
 #pragma once
-// Snapshot of the memory state for the System -> Memoria screen and the USB log.
+// Snapshot of the memory state for SYSTEM > INFO / DIAG and the USB log:
+// SRAM and PSRAM pools, PSRAM driver state, stacks of both cores, flash
+// layout and the hardware facts supplied by the board port.
 
-#include "flash_fs.hpp"
+#include "hardware_info.hpp"
 #include "mem_pools.hpp"
 #include "psram.hpp"
 #include "system_runtime.hpp"
@@ -10,32 +12,23 @@
 
 namespace fx::sysinfo {
 
-struct FramebufferPlacement {
-    std::size_t bytes{};
-    bool inPsram{};
-    bool requestedPsram{};
-};
-void setFramebuffer(const FramebufferPlacement& placement) noexcept;
-
 struct Report {
     const char* board{};
     const char* version{};
     mem::PoolStats sram{};
     mem::PoolStats psram{};
-    mem::PoolStats psramPicocalc{};
     std::size_t outOfMemoryEvents{};
+    std::size_t invalidFrees{};
     runtime::StackUsage core0{};
     runtime::StackUsage core1{};
-    storage::Layout flash{};
-    storage::FsStats fs{};
-    FramebufferPlacement framebuffer{};
     psram::Info psramInfo{};
+    Hardware hw{};
 };
 
-Report collect() noexcept;
+Report collect(const Hardware& hw) noexcept;
 
 inline constexpr std::size_t kLineChars = 52;
-// Formats the report as fixed-width lines for the 320x320 screen (5x7 font).
+// Formats the report as fixed-width lines (small font, 52 columns).
 std::size_t formatMemory(const Report& report, char (*lines)[kLineChars], std::size_t maxLines) noexcept;
 // "512", "12.5K", "3.2M"
 void formatSize(char* out, std::size_t capacity, std::size_t bytes) noexcept;

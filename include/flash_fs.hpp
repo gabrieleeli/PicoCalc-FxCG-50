@@ -1,83 +1,52 @@
 #pragma once
-// Internal flash partitioning + LittleFS file system.
+// files::FileSystem on the internal flash: LittleFS v2.11.3 (third_party/
+// littlefs, BSD-3-Clause) in the LittleFS partition of board_config.hpp
+// (about 11 MB on the Pimoroni Pico Plus 2 W, 1.9 MB on the Pico 2 W).
 //
-// Layout (offsets from the start of flash, computed in cmake/fxai_board.cmake
-// from the board flash size):
-//   [0, FW)            firmware image (post-build size check)
-//   [FW, FW+4K)        diagnostic scratch sector (flash/PSRAM interaction test)
-//   [FW+4K, END-8K)    LittleFS
-//   [END-8K, END)      reserved for BTstack TLV storage
-//
-// Flash and PSRAM share the QSPI bus (QMI): while a sector is erased or a page
-// programmed, XIP is disabled for BOTH chips. Therefore every erase/program
-// runs through flash_safe_execute() (other core locked out, IRQs masked on the
-// caller), the source data is first copied into an SRAM bounce buffer (a
-// source in PSRAM or flash would be unreadable during the operation), and the
-// QMI M1 (PSRAM) configuration is verified/repaired before leaving the safe zone.
-
-#include <cstddef>
+// GRAPH projects and pictures can be saved here instead of the microSD card
+// (SYSTEM > "Archivio file"). The partition is mounted on demand; a blank or
+// foreign partition is formatted on the first mount (it holds nothing else).
+// Names are matched case-insensitively and keep their case, like FAT; rename
+// refuses an existing target and remove refuses a non-empty folder, as the
+// FatFs backend does, so writeAtomic()/recover() behave the same on both.
+// LittleFS is copy-on-write and power-loss resilient; every erase/program goes
+// through the board FlashDevice (flash_safe_execute, SRAM bounce buffer,
+// PSRAM QMI check on the RP2350).
+#include "file_store.hpp"
 #include <cstdint>
+#include <memory>
+#include <string>
 
-namespace fx::storage {
+namespace storage { class FlashDevice; }
 
-struct Layout {
-    std::size_t flashSize{};
-    std::size_t firmwarePartition{};
-    std::size_t firmwareUsed{};     // bytes of flash occupied by the running image (0 on host)
-    std::size_t diagOffset{};
-    std::size_t fsOffset{};
-    std::size_t fsSize{};
-    std::size_t btReservedOffset{};
-};
-Layout layout() noexcept;
+namespace fx::files {
 
-struct FsStats {
-    bool mounted{};
-    bool formattedAtBoot{};
-    std::size_t blockSize{};
-    std::size_t blockCount{};
-    std::size_t usedBytes{};
-    std::size_t freeBytes{};
-    std::size_t peakUsedBytes{};
-    std::uint32_t bootCount{};
-    int lastError{};
-};
-
-bool mount() noexcept;     // mounts, formatting on first boot or if corrupt
-void unmount() noexcept;
-FsStats stats() noexcept;
-bool writeFile(const char* path, const void* data, std::size_t bytes) noexcept;
-long readFile(const char* path, void* buffer, std::size_t capacity) noexcept; // bytes read or -1
-bool removeFile(const char* path) noexcept;
-
-// Diagnostic: PSRAM content and configuration must survive a flash erase +
-// program of the diagnostic sector (System -> Test).
-struct FlashPsramReport {
-    bool ran{};
-    bool flashVerified{};
-    bool psramIntactCached{};
-    bool psramIntactUncached{};
-    bool psramWritableAfter{};
-    bool m1ConfigIntact{};
-    std::uint32_t eraseUs{};
-    std::uint32_t programUs{};
-    const char* error{};
-};
-FlashPsramReport testPsramAfterFlashWrite() noexcept;
-
-// Low-level flash access used by LittleFS (exposed for host tests).
-class FlashDevice {
+class LittleFsFileSystem final : public FileSystem {
 public:
-    virtual ~FlashDevice() = default;
-    virtual bool read(std::size_t offset, void* dst, std::size_t bytes) = 0;
-    virtual bool erase(std::size_t offset, std::size_t bytes) = 0;        // 4 KiB aligned
-    virtual bool program(std::size_t offset, const void* src, std::size_t bytes) = 0; // 256 B aligned
+    explicit LittleFsFileSystem(storage::FlashDevice& device);
+    ~LittleFsFileSystem() override;
+    LittleFsFileSystem(const LittleFsFileSystem&) = delete;
+    LittleFsFileSystem& operator=(const LittleFsFileSystem&) = delete;
+    const char* name() const noexcept override { return "flash interna"; }
+    std::string describe() override;
+    Status status() override;
+    Status list(const std::string& dir, std::vector<Entry>& out) override;
+    Status stat(const std::string& path, Entry& out) override;
+    Status openRead(const std::string& path, std::unique_ptr<Reader>& out) override;
+    Status openWrite(const std::string& path, std::unique_ptr<Writer>& out) override;
+    Status remove(const std::string& path) override;
+    Status rename(const std::string& from, const std::string& to) override;
+    Status makeDirs(const std::string& path) override;
+    Status freeSpace(std::uint64_t& bytes) override;
+    // Erases the file system (a new empty volume is mounted).
+    Status format();
+    bool mounted() const noexcept;
+    bool formattedAtMount() const noexcept;     // the last mount had to format the partition
+    std::uint64_t totalBytes() const noexcept;
+    int lastError() const noexcept;             // last LittleFS error code (0 = none)
+    struct Impl;
+private:
+    std::unique_ptr<Impl> impl_;
 };
 
-namespace testing {
-// Host tests: route LittleFS to an emulated NOR flash of `flashSize` bytes
-// (the default device layout is applied to it). nullptr restores the default.
-void useDevice(FlashDevice* device) noexcept;
-} // namespace testing
-
-} // namespace fx::storage
+} // namespace fx::files

@@ -56,6 +56,5 @@ int main() {
     }
     FX_CHECK(mem::stats(mem::Pool::SRAM).allocations == 0);
     mem::testing::reset();
-    std::puts("operator new routing (threshold, scopes, bad_alloc): PASS");
-    return 0;
+    return fxtest::finish("mem_new_smoke");
 }

@@ -1,4 +1,7 @@
-// PicoCalc (ClockworkPi mainboard v2.0) + Raspberry Pi Pico 2 W board port.
+// PicoCalc (ClockworkPi mainboard v2.0) board port for the Pimoroni Pico Plus 2 W
+// (RP2350B, 8 MB PSRAM, 16 MB flash) and the Raspberry Pi Pico 2 W (RP2350A,
+// 4 MB flash). The PicoCalc wiring is the same for both modules (pins from
+// board_config.hpp); only the memory resources differ.
 //
 // Hardware facts used here come from the official ClockworkPi sources
 // (github.com/clockworkpi/PicoCalc, Code/picocalc_helloworld/lcdspi and i2ckbd,
@@ -12,7 +15,11 @@
 //          [reg, percent | 0x80 when charging]; writes use reg | 0x80.
 // Everything in this file still requires validation on a physical PicoCalc.
 #include "board_port.hpp"
+#include "board_config.hpp"
+#include "flash_fs.hpp"
+#include "mem_pools.hpp"
 #include "net.hpp"
+#include "psram.hpp"
 #include "hardware/gpio.h"
 #include "hardware/i2c.h"
 #include "hardware/spi.h"
@@ -22,7 +29,7 @@
 #include <algorithm>
 #include <cstring>
 #include <initializer_list>
-#include <malloc.h>
+#include <cstdio>
 
 #ifndef FXAI_LCD_SPI_HZ
 #define FXAI_LCD_SPI_HZ 25000000
@@ -33,24 +40,33 @@
 #ifndef FXAI_KBD_REPLY_DELAY_MS
 #define FXAI_KBD_REPLY_DELAY_MS 16 // official i2ckbd driver waits 16 ms between write and read
 #endif
-#ifndef FXAI_STORAGE_BYTES
-#define FXAI_STORAGE_BYTES (128u * 1024u)
-#endif
-
 extern "C" {
-extern char __end__;           // start of the heap (SDK linker script)
-extern char __HeapLimit;       // end of the heap
 extern char __flash_binary_end;
 }
 
 namespace board {
 namespace {
 // ------------------------------------------------------------------ LCD
-constexpr uint LCD_SCK = 10, LCD_TX = 11, LCD_RX = 12, LCD_CS = 13, LCD_DC = 14, LCD_RST = 15;
+namespace cfg = board::config;
+constexpr uint LCD_SCK = cfg::kLcdSck, LCD_TX = cfg::kLcdMosi, LCD_RX = cfg::kLcdMiso, LCD_CS = cfg::kLcdCs,
+               LCD_DC = cfg::kLcdDc, LCD_RST = cfg::kLcdReset;
 spi_inst_t* const LCD_SPI = spi1;
-constexpr int W = 320, H = 320;
-std::uint16_t framebuffer[W * H];
+constexpr int W = static_cast<int>(cfg::kLcdWidth), H = static_cast<int>(cfg::kLcdHeight);
+constexpr std::size_t FrameBytes = static_cast<std::size_t>(W) * H * sizeof(std::uint16_t);
+// The framebuffer stays in SRAM by default: drawing into PSRAM would go
+// through the 16 KB XIP cache shared with the code running from flash, and
+// present() is limited by the SPI bus anyway (docs/PICO_PLUS_2W.md).
+// FXAI_FRAMEBUFFER_IN_PSRAM=ON moves it (200 KB more SRAM heap); if the PSRAM
+// is not available it is allocated from the SRAM heap instead.
+#if FXAI_FRAMEBUFFER_IN_PSRAM
+std::uint16_t* framebuffer = nullptr;
+#else
+alignas(4) std::uint16_t staticFramebuffer[W * H];
+std::uint16_t* framebuffer = staticFramebuffer;
+#endif
+bool framebufferInPsram = false;
 gfx::Canvas canvas(framebuffer, W, H);
+std::uint32_t presentUs = 0;
 gfx::TileDiff tiles;
 std::size_t lastBytes = 0;
 #if FXAI_LCD_RGB565
@@ -148,9 +164,9 @@ void sendRect(const gfx::Rect& r) {
 }
 
 // ------------------------------------------------------------------ keyboard (STM32 over I2C1)
-constexpr uint KBD_SDA = 6, KBD_SCL = 7;
+constexpr uint KBD_SDA = cfg::kKeyboardSda, KBD_SCL = cfg::kKeyboardScl;
 i2c_inst_t* const KBD_I2C = i2c1;
-constexpr std::uint8_t KBD_ADDR = 0x1F;
+constexpr std::uint8_t KBD_ADDR = cfg::kKeyboardAddress;
 constexpr std::uint8_t REG_BKL = 0x05, REG_FIF = 0x09, REG_BK2 = 0x0A, REG_BAT = 0x0B, WRITE = 0x80;
 constexpr std::uint32_t KBD_POLL_MS = 10, BAT_POLL_MS = 10000, I2C_TIMEOUT_US = 20000;
 enum class Phase { Idle, WaitReply };
@@ -212,41 +228,93 @@ void serviceKeyboard() {
     if (now - lastPoll >= KBD_POLL_MS) { lastPoll = now; (void)startRead(REG_FIF, now); }
 }
 
-// ------------------------------------------------------------------ flash storage (last 128 KB)
-class PicoFlash final : public storage::FlashDevice {
+// ------------------------------------------------------------------ internal flash regions
+// Flash and PSRAM share the QMI: while a sector is erased or a page is
+// programmed XIP is off for BOTH chips. Every erase/program therefore runs
+// through flash_safe_execute() (other core locked out, IRQs masked on this
+// one), the data to program is first copied into an SRAM bounce buffer (a
+// source in PSRAM or in flash would be unreadable during the operation; on the
+// Pico Plus 2 W operator new places large buffers such as the serialised
+// workspace in PSRAM), and the QMI M1 (PSRAM) window configuration is verified
+// and repaired before XIP resumes. Erases go sector by sector so that USB and
+// the keyboard are serviced between them.
+// 1 KB = 4 pages per flash_safe_execute(): each program job keeps the IRQs
+// masked for ~2 ms instead of ~8 ms for a whole sector.
+alignas(4) std::uint8_t bounce[4 * FLASH_PAGE_SIZE];
+struct FlashJob { std::uint32_t offset; std::size_t len; bool erase; bool m1Intact; };
+void __no_inline_not_in_flash_func(runFlashJob)(void* param) {
+    auto* job = static_cast<FlashJob*>(param);
+    if (job->erase) flash_range_erase(job->offset, job->len);
+    else flash_range_program(job->offset, bounce, job->len);
+    job->m1Intact = psram::verifyConfigurationFromSafeZone();
+}
+std::uint32_t flashJobs = 0, flashFailures = 0;
+
+class FlashRegion final : public storage::FlashDevice {
 public:
-    PicoFlash() {
-        offset_ = PICO_FLASH_SIZE_BYTES - FXAI_STORAGE_BYTES;
-        // Never overlap the firmware image.
-        const auto binaryEnd = static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(&__flash_binary_end) - XIP_BASE);
-        usable_ = binaryEnd <= offset_;
+    FlashRegion(std::size_t offset, std::size_t size, bool writable, std::size_t reservedTail = 0)
+        : offset_(offset), size_(size), writable_(writable), tail_(reservedTail) {
+        // Never overlap the firmware image (a region inside the firmware
+        // partition is only valid above the image, and only for reading).
+        const auto binaryEnd = static_cast<std::size_t>(reinterpret_cast<std::uintptr_t>(&__flash_binary_end) - XIP_BASE);
+        usable_ = offset_ >= binaryEnd && offset_ + size_ <= cfg::kFlashSize;
     }
-    std::size_t size() const override { return usable_ ? FXAI_STORAGE_BYTES : 0; }
+    std::size_t size() const override { return usable_ ? size_ : 0; }
     std::size_t eraseSize() const override { return FLASH_SECTOR_SIZE; }
     std::size_t programSize() const override { return FLASH_PAGE_SIZE; }
+    std::size_t reservedTail() const override { return tail_; }
     bool read(std::size_t off, void* dst, std::size_t len) override {
-        if (!usable_ || off + len > FXAI_STORAGE_BYTES) return false;
+        if (!usable_ || off + len > size_) return false;
+        // flash_range_erase/program flush the XIP cache: cached reads are fresh.
         std::memcpy(dst, reinterpret_cast<const void*>(XIP_BASE + offset_ + off), len);
         return true;
     }
     bool erase(std::size_t off, std::size_t len) override {
-        if (!usable_ || off % FLASH_SECTOR_SIZE || len % FLASH_SECTOR_SIZE || off + len > FXAI_STORAGE_BYTES) return false;
-        Op op{offset_ + static_cast<std::uint32_t>(off), nullptr, len};
-        return flash_safe_execute(&PicoFlash::doErase, &op, 1000) == PICO_OK;
+        if (!allowed(off, len) || off % FLASH_SECTOR_SIZE || len % FLASH_SECTOR_SIZE) return false;
+        for (std::size_t done = 0; done < len; done += FLASH_SECTOR_SIZE) {
+            FlashJob job{static_cast<std::uint32_t>(offset_ + off + done), FLASH_SECTOR_SIZE, true, true};
+            if (!execute(job)) return false;
+        }
+        return true;
     }
     bool program(std::size_t off, const void* src, std::size_t len) override {
-        if (!usable_ || off % FLASH_PAGE_SIZE || len % FLASH_PAGE_SIZE || off + len > FXAI_STORAGE_BYTES) return false;
-        Op op{offset_ + static_cast<std::uint32_t>(off), static_cast<const std::uint8_t*>(src), len};
-        return flash_safe_execute(&PicoFlash::doProgram, &op, 1000) == PICO_OK;
+        if (!allowed(off, len) || off % FLASH_PAGE_SIZE || len % FLASH_PAGE_SIZE) return false;
+        const auto* in = static_cast<const std::uint8_t*>(src);
+        while (len) {
+            const std::size_t chunk = len < sizeof(bounce) ? len : sizeof(bounce);
+            std::memcpy(bounce, in, chunk);   // copied out of PSRAM/flash while XIP still works
+            FlashJob job{static_cast<std::uint32_t>(offset_ + off), chunk, false, true};
+            if (!execute(job)) return false;
+            off += chunk; in += chunk; len -= chunk;
+        }
+        return true;
     }
 private:
-    struct Op { std::uint32_t offset; const std::uint8_t* data; std::size_t len; };
-    static void doErase(void* p) { auto* op = static_cast<Op*>(p); flash_range_erase(op->offset, op->len); }
-    static void doProgram(void* p) { auto* op = static_cast<Op*>(p); flash_range_program(op->offset, op->data, op->len); }
-    std::uint32_t offset_{};
-    bool usable_{};
+    bool allowed(std::size_t off, std::size_t len) const {
+        if (!usable_ || !writable_ || off + len > size_ || off + len < off) return false;
+        // Defence in depth: nothing ever writes the reserved tail of the region
+        // nor the last flash sector (RP2350-E10).
+        if (tail_ && off + len > size_ - tail_) return false;
+        return offset_ + off + len <= cfg::kFlashSize - cfg::kFlashTailGuardBytes;
+    }
+    static bool execute(FlashJob& job) {
+        ++flashJobs;
+        const int rc = flash_safe_execute(runFlashJob, &job, 1000);
+        if (rc != PICO_OK) { ++flashFailures; std::printf("[flash] flash_safe_execute failed (%d)\n", rc); }
+        return rc == PICO_OK;
+    }
+    std::size_t offset_, size_;
+    bool writable_, usable_{};
+    std::size_t tail_;
 };
-PicoFlash* flashDevice = nullptr;
+// Workspace record store: on the Pico 2 W it ends at the end of the flash
+// (v1.8.0 location), so its last sector is the reserved tail.
+constexpr std::size_t RecordTail =
+    cfg::kFlashRecordOffset + cfg::kFlashRecordSize > cfg::kFlashSize - cfg::kFlashTailGuardBytes ? cfg::kFlashTailGuardBytes : 0;
+FlashRegion* recordFlash = nullptr;
+FlashRegion* fsFlash = nullptr;
+FlashRegion* diagFlash = nullptr;
+FlashRegion* legacyFlash = nullptr;
 } // namespace
 
 fx::net::ChatTransport* picoChatTransport();   // net_pico.cpp
@@ -254,6 +322,16 @@ void picoNetService();                          // net_pico.cpp: cyw43_arch_poll
 
 void init() {
     stdio_init_all();
+    // Memory first: the PSRAM pool must exist before anything large is
+    // allocated (operator new sends large blocks to PSRAM_BOARD when present).
+    mem::init();
+    (void)psram::init();          // on failure the firmware runs from SRAM only
+#if FXAI_FRAMEBUFFER_IN_PSRAM
+    framebuffer = static_cast<std::uint16_t*>(mem::tryAlloc(mem::Pool::PSRAM_BOARD, FrameBytes, 64));
+    framebufferInPsram = framebuffer != nullptr;
+    if (!framebuffer) framebuffer = static_cast<std::uint16_t*>(mem::alloc(mem::Pool::SRAM, FrameBytes, 64));
+    canvas.attach(framebuffer, W, H);
+#endif
     gpio_set_function(KBD_SCL, GPIO_FUNC_I2C);
     gpio_set_function(KBD_SDA, GPIO_FUNC_I2C);
     i2c_init(KBD_I2C, 10000);
@@ -262,16 +340,26 @@ void init() {
     lcdInit();
     canvas.clear(0xFFFF);
     tiles.invalidate();
-    static PicoFlash flashInstance;
-    flashDevice = &flashInstance;
+    static FlashRegion record(cfg::kFlashRecordOffset, cfg::kFlashRecordSize, true, RecordTail);
+    static FlashRegion fs(cfg::kFlashFsOffset, cfg::kFlashFsSize, true);
+    static FlashRegion diag(cfg::kFlashDiagOffset, cfg::kFlashSectorBytes, true);
+    recordFlash = &record; fsFlash = &fs; diagFlash = &diag;
+    if constexpr (cfg::kLegacyRecordOffset + cfg::kLegacyRecordSize <= cfg::kFirmwarePartitionBytes) {
+        // Pico Plus 2 W: a workspace saved by a v1.8.0 (pico2_w) firmware on
+        // this module, read once to migrate it (never written).
+        static FlashRegion legacy(cfg::kLegacyRecordOffset, cfg::kLegacyRecordSize, false);
+        if (legacy.size()) legacyFlash = &legacy;
+    }
 }
 gfx::Canvas& graphics() noexcept { return canvas; }
 void present() {
+    const std::uint32_t t0 = time_us_32();
     gfx::Rect rects[32];
     const std::size_t n = tiles.diff(framebuffer, W, H, rects, 32);
     lastBytes = 0;
     for (std::size_t i = 0; i < n; ++i) sendRect(rects[i]);
     (void)canvas.consumeDirty();
+    presentUs = time_us_32() - t0;
 }
 void invalidate() { tiles.invalidate(); }
 bool pollKey(std::uint16_t& raw) {
@@ -288,13 +376,28 @@ void setBacklight(std::uint8_t lcd, std::uint8_t keyboard) {
     writes[0] = {REG_BKL, lcd, true};
     writes[1] = {REG_BK2, keyboard, true};
 }
-std::size_t freeHeap() {
-    const struct mallinfo m = mallinfo();
-    const std::size_t total = static_cast<std::size_t>(&__HeapLimit - &__end__);
-    return total > static_cast<std::size_t>(m.uordblks) ? total - static_cast<std::size_t>(m.uordblks) : 0;
+std::size_t freeHeap() { return mem::stats(mem::Pool::SRAM).free; }
+storage::FlashDevice& storageFlash() { return *recordFlash; }
+storage::FlashDevice* legacyStorageFlash() { return legacyFlash; }
+storage::FlashDevice* internalFlash() { return fsFlash; }
+fx::files::FileSystem* internalFileSystem() {
+    if (!fsFlash || fsFlash->size() == 0) return nullptr;
+    static fx::files::LittleFsFileSystem fs(*fsFlash);   // mounted on first use
+    return &fs;
 }
-storage::FlashDevice& storageFlash() { return *flashDevice; }
+storage::FlashDevice* diagnosticFlash() { return diagFlash; }
+FramebufferInfo framebufferInfo() noexcept { return {framebuffer, FrameBytes, framebufferInPsram, FXAI_FRAMEBUFFER_IN_PSRAM != 0}; }
+std::uint32_t lastPresentUs() noexcept { return presentUs; }
+std::uint32_t benchmarkFullPresent() {
+    tiles.invalidate();
+    present();
+    return presentUs;
+}
+FlashStats flashStats() noexcept { return {flashJobs, flashFailures}; }
+std::size_t firmwareBytes() noexcept {
+    return static_cast<std::size_t>(reinterpret_cast<std::uintptr_t>(&__flash_binary_end) - XIP_BASE);
+}
 fx::net::ChatTransport* chatTransport() { return picoChatTransport(); }
-const char* name() { return "PicoCalc / Pico 2 W"; }
+const char* name() { return board::config::kIsPicoPlus2W ? "PicoCalc / Pico Plus 2 W" : "PicoCalc / Pico 2 W"; }
 std::size_t lastFlushBytes() { return lastBytes; }
 } // namespace board

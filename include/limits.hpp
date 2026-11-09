@@ -1,16 +1,21 @@
 #pragma once
-// Capacity limits: per-board profile + runtime limits derived from free memory.
+// Capacity limits of the firmware: per-board profile + memory-derived limits.
 //
-// Two kinds of limits exist and are kept deliberately separate:
-//  * capacity limits (data sizes): the board profile gives an upper bound and
-//    the runtime functions lower it to what the pools can actually hold now
-//    (mem::largestFree / free bytes). On the Pico Plus 2 W the caps are the
-//    largest values the 8 MiB PSRAM can serve, not values sized for 520 KiB.
-//  * structural safety limits (recursion depth, loop counts): they protect the
-//    SRAM stacks and the CPU time budget, are the same on both boards and are
-//    never removed.
-// Every large allocation must still check for failure: a limit computed now
-// can be invalidated by the next allocation (see "Memoria insufficiente").
+// Three kinds of limits are kept deliberately separate:
+//  * persistent limits (data stored in the workspace record on the internal
+//    flash): fixed per board build, because a record saved by a firmware must
+//    always be readable by the same firmware. The Pico Plus 2 W has a 1 MB
+//    record store (2 x 512 KB slots) and 8 MB of PSRAM, so its lists reach the
+//    fx-CG50 size (999 elements) and the Run-Matrix history keeps more lines;
+//    the Pico 2 W keeps the v1.8.0 values (its record store is 2 x 64 KB);
+//  * RAM limits (buffers that are never saved: GRAPH curve points, pictures,
+//    3D meshes): chosen at run time from the pools that actually exist, so a
+//    Pico Plus 2 W whose PSRAM failed its self-test falls back to the Pico 2 W
+//    values instead of running out of SRAM;
+//  * structural limits (recursion depth, CPU time): they protect the SRAM
+//    stacks and are identical on both boards (see expression.hpp).
+// Every large allocation still has to handle std::bad_alloc: a limit computed
+// now can be invalidated by the next allocation.
 
 #include "board_config.hpp"
 
@@ -19,88 +24,52 @@
 
 namespace fx::limits {
 
-struct Profile {
+// ---- Persistent limits (workspace record format v4, both boards) ---------------
+inline constexpr std::size_t kHistoryEntries = board::config::kIsPicoPlus2W ? 200 : 40;   // Run-Matrix history
+inline constexpr std::size_t kListMaxLength = board::config::kIsPicoPlus2W ? 999 : 255;   // statistics lists (fx-CG50: 999)
+inline constexpr std::size_t kChatMessages = 30;   // AI conversation (the relay keeps the last 20 turns)
+
+// ---- RAM limits -------------------------------------------------------------------
+struct RamProfile {
     const char* name;
-    // Calculator data
-    std::size_t matrixSlots;          // Mat A..Z
-    std::size_t matrixMaxDim;         // rows/cols upper bound
-    std::size_t statLists;            // List 1..26
-    std::size_t listMaxLength;        // elements per list
-    std::size_t spreadsheetRows;
-    std::size_t spreadsheetCols;
-    std::size_t historyEntries;       // Run-Matrix history
-    std::size_t editorMaxTokens;      // natural-editor nodes per expression
-    // Graphs
-    std::size_t graphMaxFunctions;    // simultaneous Y= functions
-    std::size_t graphSamplesPerPixel; // oversampling of each plotted column
-    bool graphLayerCache;             // keep the rendered plot as an off-screen layer
-    std::size_t graph3dMaxGrid;       // surface grid (cells per side)
-    bool graph3dZBuffer;              // z-buffer (else painter's algorithm)
-    // UI
-    std::size_t maxWindows;
-    std::size_t maxNavigationDepth;
-    std::size_t windowSnapshots;      // full-screen snapshots kept by the window manager
-    std::size_t polygonMaxVertices;
-    // Text / AI / CAS
-    std::size_t aiRequestBytes;
-    std::size_t aiResponseBytes;
-    std::size_t textBufferBytes;
-    std::size_t casArenaBytes;
+    std::size_t graphCurvePoints;       // points kept per plot (int16 x,y: 4 bytes each)
+    std::size_t graphTotalCurvePoints;  // points of all the plots of one graph screen
+    std::size_t pictEncodedBytes;       // RLE picture (PICT, background, BMP import) kept in RAM
+    std::size_t graph3dMaxGrid;         // surface cells per side
+    bool graph3dZBuffer;                // per-pixel depth test (else painter's algorithm)
+    std::size_t polygonMaxVertices;     // filled polygons (scanline scratch from the pools)
+    bool graphLayerCache;               // GRAPH keeps its static layers (180 KB) while the cursor moves
 };
+// SRAM only (Pico 2 W, or Pico Plus 2 W with the PSRAM disabled): the v1.8.0
+// budgets, sized for the ~194 KB heap left next to the 200 KB framebuffer.
+inline constexpr RamProfile kSramProfile{"SRAM 520 KB", 6000, 24000, 96u * 1024u, 24, false, 256, false};
+// PSRAM pool active: the same data, served by the 8 MB PSRAM.
+inline constexpr RamProfile kPsramProfile{"SRAM 520 KB + PSRAM 8 MB", 40000, 400000, 1024u * 1024u, 128, true, 4096, true};
+// Profile for the pools that exist now.
+const RamProfile& ram() noexcept;
 
-inline constexpr Profile kPico2WProfile{
-    "Pico 2 W (SRAM 520 KiB)",
-    26, 40, 26, 999, 999, 26, 30, 256,
-    20, 1, false, 24, false,
-    16, 16, 0, 256,
-    8u * 1024u, 16u * 1024u, 4u * 1024u, 0u,
-};
-
-inline constexpr Profile kPicoPlus2WProfile{
-    "Pico Plus 2 W (SRAM 520 KiB + PSRAM 8 MiB)",
-    26, 999, 26, 1000000, 999, 26, 10000, 4096,
-    64, 8, true, 128, true,
-    64, 64, 8, 4096,
-    256u * 1024u, 2u * 1024u * 1024u, 256u * 1024u, 1024u * 1024u,
-};
-
-inline constexpr const Profile& kProfile = board::config::kHasPsram ? kPicoPlus2WProfile : kPico2WProfile;
-
-// ---- Compile-time limits ------------------------------------------------------
-// Canvas dirty-rectangle list lives inside gfx::Canvas (no allocation in the
-// hot drawing path): sized per board at compile time.
-inline constexpr std::size_t kDirtyRegionCapacity = board::config::kHasPsram ? 32 : 16;
-// Structural, stack-bound recursion limits (same stack size on both boards).
-// Derived from the ARM frame sizes reported by -fstack-usage for the recursive
-// descent parser (expr->term->unary->power->postfix->atom) and the layout
-// engine; see docs/PICO_PLUS_2W.md, "Limiti strutturali".
-inline constexpr unsigned kMaxParseDepth = 48;    // nested unary/parenthesis levels
-inline constexpr unsigned kMaxAstDepth = 64;      // AST evaluation/serialisation depth
-inline constexpr unsigned kMaxLayoutDepth = 32;   // math layout recursion
-inline constexpr unsigned kMaxEditorNesting = 12; // nested VPAM templates
-// CPU-time guard (not memory): terms of sum(f,a,b).
-inline constexpr std::size_t kMaxSummationTerms = 10001;
-
-// ---- Runtime limits -------------------------------------------------------------
-const Profile& profile() noexcept;
+// ---- Memory-derived limits ----------------------------------------------------------
 // Bytes usable for heavy data right now (PREFER_PSRAM pools minus reserves).
 std::size_t heavyBudget() noexcept;
 // True when `bytes` of heavy data can be allocated now (largest block and budget).
 bool fitsHeavy(std::size_t bytes) noexcept;
-
-std::size_t matrixMaxDim() noexcept;        // square matrix that can still be inverted
-std::size_t listMaxLength() noexcept;
-std::size_t historyCapacity() noexcept;
-std::size_t editorMaxTokens() noexcept;
-std::size_t graphMaxFunctions() noexcept;
-std::size_t graphSamplesPerPixel(std::size_t functions, std::size_t columns) noexcept;
+// 3D surface: grid and depth buffer that fit the viewport and the free memory.
 std::size_t graph3dGrid(std::size_t viewportPixels) noexcept;
 bool graph3dZBuffer(std::size_t viewportPixels) noexcept;
-std::size_t windowSnapshots(std::size_t frameBytes) noexcept;
-std::size_t aiRequestCapacity() noexcept;
-std::size_t aiResponseCapacity() noexcept;
+// Legacy calculator API (editors.hpp, math_engine.hpp): Mat A..Z, List 1..26.
+inline constexpr std::size_t kMatrixSlots = 26;
+inline constexpr std::size_t kMatrixMaxDim = board::config::kHasPsram ? 999 : 40;
+inline constexpr std::size_t kStatLists = 26;
+inline constexpr std::size_t kSpreadsheetRows = 999, kSpreadsheetCols = 26;
+std::size_t matrixMaxDim() noexcept;     // square matrix that can still be inverted now
+std::size_t listMaxLength() noexcept;    // elements of one legacy list that fit now
+std::size_t historyCapacity() noexcept;  // legacy Run-Matrix session (point_a.hpp)
+
+// ---- Canvas -------------------------------------------------------------------------
+// Dirty-rectangle list inside gfx::Canvas (no allocation in the drawing hot path).
+inline constexpr std::size_t kDirtyRegionCapacity = board::config::kHasPsram ? 32 : 16;
 
 // User-facing message for allocation failures.
-inline constexpr const char* kOutOfMemoryMessage = "Memoria insufficiente";
+inline constexpr const char* kOutOfMemoryMessage = "Memory ERROR: memoria insufficiente";
 
 } // namespace fx::limits

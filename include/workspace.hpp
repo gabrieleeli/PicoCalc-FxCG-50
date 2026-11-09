@@ -1,4 +1,5 @@
 #pragma once
+#include "app_models.hpp"
 #include "expression.hpp"
 #include "graph_model.hpp"
 #include "math_engine.hpp"
@@ -28,6 +29,10 @@ struct Settings {
     std::uint8_t aiProvider{0};          // 0 = Claude (Anthropic), 1 = ChatGPT (OpenAI)
     std::string aiModel;                 // empty = relay default
     std::uint16_t aiMaxChars{1200};           // reply length requested from the relay (200..4000)
+    // Where GRAPH projects and pictures are saved (record v5): the microSD card
+    // or LittleFS on the internal flash (about 11 MB on the Pico Plus 2 W).
+    enum class FileStore : std::uint8_t { MicroSd = 0, Internal = 1 };
+    FileStore fileStore{FileStore::MicroSd};
 };
 
 struct HistoryEntry {
@@ -71,13 +76,23 @@ struct EquationState {
 
 struct ChatMessage { bool fromUser{}; std::string text; };
 
+// 3D Graph mode (record v5): functions Z1..Z3, 3D V-Window, grid and view.
+struct Graph3DState {
+    models::Graph3DModel model{};
+    float yaw{35.0F}, pitch{28.0F}, zoom{1.0F};
+    Graph3DState() { model.z[0] = "sin(x)cos(y)"; }
+};
+
 // Shared data of every application. It also resolves the variables that
 // Run-Matrix reads from other modes through VARS (V-Window, Table range).
 struct Workspace final : NameResolver {
-    static constexpr std::size_t MaxHistory = 40;
+    // Per-board limits of the persistent data (limits.hpp): Pico 2 W 40 history
+    // lines and lists of 255 elements (v1.8.0), Pico Plus 2 W 200 lines and
+    // lists of 999 elements (fx-CG50) in its 2 x 512 KB record store.
+    static constexpr std::size_t MaxHistory = limits::kHistoryEntries;
     static constexpr std::size_t ListCount = 6;
-    static constexpr std::size_t MaxListLength = 255;
-    static constexpr std::size_t MaxChatMessages = 30;
+    static constexpr std::size_t MaxListLength = limits::kListMaxLength;
+    static constexpr std::size_t MaxChatMessages = limits::kChatMessages;
 
     Settings settings;
     CalculatorMemory memory;
@@ -89,6 +104,7 @@ struct Workspace final : NameResolver {
     std::array<std::vector<double>, ListCount> lists{};
     EquationState equation;
     std::vector<ChatMessage> chat;
+    Graph3DState graph3d;
 
     Workspace();
     void resetAll();

@@ -247,7 +247,7 @@ void Canvas::polygon(const Point* p,std::size_t n,std::uint16_t c,bool filled) n
     // Scanline fill: one intersection per edge at most. Small polygons use the
     // stack, large ones a pooled scratch buffer (no fixed 32-vertex limit).
     constexpr std::size_t StackVertices=32;
-    if(n>fx::limits::kProfile.polygonMaxVertices){polygon(p,n,c,false);return;}
+    if(n>fx::limits::ram().polygonMaxVertices){polygon(p,n,c,false);return;}
     int stackIntersections[StackVertices];
     int* intersections=stackIntersections;
     void* scratch=nullptr;

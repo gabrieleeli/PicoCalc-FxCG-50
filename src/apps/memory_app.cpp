@@ -6,8 +6,8 @@ namespace fx::app {
 using namespace ui::theme;
 
 namespace {
-const char* kItems[] = {"Storia Run-Matrix", "Variabili A-Z e Ans", "Liste statistiche", "Funzioni Graph", "Coefficienti Equation", "Conversazioni AI"};
-constexpr int ItemCount = 6;
+const char* kItems[] = {"Storia Run-Matrix", "Variabili A-Z e Ans", "Liste statistiche", "Funzioni Graph", "Coefficienti Equation", "Conversazioni AI", "Funzioni 3D Graph"};
+constexpr int ItemCount = 7;
 }
 
 void MemoryApp::key(Context& ctx, const KeyEvent& ev) {
@@ -21,6 +21,7 @@ void MemoryApp::key(Context& ctx, const KeyEvent& ev) {
             case 3: for (std::size_t i = 0; i < ws.functions.size(); ++i) ws.functions[i] = emptyGraphFunction(i); break;
             case 4: ws.equation = EquationState{}; break;
             case 5: ws.chat.clear(); break;
+            case 6: ws.graph3d = Graph3DState{}; break;
             default: break;
             }
             ctx.markDirty();
@@ -53,6 +54,8 @@ void MemoryApp::draw(Context& ctx, gfx::Canvas& c) {
     std::snprintf(counts[3], 32, "%d definite", fns);
     std::snprintf(counts[4], 32, "%d incognite", ws.equation.unknowns);
     std::snprintf(counts[5], 32, "%u messaggi", static_cast<unsigned>(ws.chat.size()));
+    int fns3d = 0; for (const auto& z : ws.graph3d.model.z) if (!z.empty()) ++fns3d;
+    std::snprintf(counts[6], 32, "%d definite", fns3d);
     const int top = ui::ContentTop + 4;
     for (int i = 0; i < ItemCount; ++i) ui::listRow(c, top + i * 24, 22, kItems[i], counts[i], i == selected_);
     const auto blob = serializeWorkspace(ws);

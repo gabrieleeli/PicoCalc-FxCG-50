@@ -7,6 +7,10 @@
 
 namespace fx::app {
 
+// Store for user files chosen in SYSTEM ("Archivio file"): the microSD card
+// or LittleFS on the internal flash. nullptr when the build has neither.
+files::FileSystem* userFiles(Context& ctx);
+
 // Evaluates a numeric entry with the workspace memory (A-Z, Ans) in Real mode.
 double evalNumber(Context& ctx, const std::string& text);
 std::string fmt(Context& ctx, double v);

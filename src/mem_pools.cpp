@@ -216,6 +216,24 @@ private:
     std::atomic<std::size_t> peakBreak_{0};
 };
 
+// A device build for a board without PSRAM (Pico 2 W) has no PSRAM pool at
+// all: the TLSF control block (3.6 KB) would only waste SRAM there.
+#if FXAI_ON_DEVICE && !FXAI_HAS_PSRAM
+struct NoPool {
+    bool init(void*, std::size_t) noexcept { return false; }
+    void reset() noexcept {}
+    bool ready() const noexcept { return false; }
+    bool owns(const void*) const noexcept { return false; }
+    void* allocate(std::size_t, std::size_t) noexcept { return nullptr; }
+    bool deallocate(void*) noexcept { return false; }
+    detail::TlsfStats stats() noexcept { return {}; }
+    bool check() noexcept { return true; }
+};
+using PsramPool = NoPool;
+#else
+using PsramPool = TlsfPool;
+#endif
+
 // ---------------------------------------------------------------------------
 struct Registry {
     HeapPool heap{};
@@ -223,7 +241,7 @@ struct Registry {
     TlsfPool sramSim{}; // host simulation of a bounded SRAM heap (tests only)
 #endif
     std::atomic<bool> sramSimulated{false};
-    TlsfPool psram{};
+    PsramPool psram{};
     std::atomic<bool> psramReady{false};
     std::uintptr_t psramBase{0};
     std::size_t psramBytes{0};

@@ -269,6 +269,5 @@ int main() {
     registryPico2wProfile();
     dualThreadStress();
     mem::testing::reset();
-    std::puts("Memory pools (TLSF, policies, pmr, threads): PASS");
-    return 0;
+    return fxtest::finish("mem_pools_smoke");
 }

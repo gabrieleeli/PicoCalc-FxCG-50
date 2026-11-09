@@ -135,9 +135,33 @@ void errorBox(gfx::Canvas& c, const char* title, const char* detail) {
     panel(c, {x, y, w, h}, Bg, Ink);
     c.rect(x + 2, y + 2, w - 4, 2, Error, true);
     textCenter(c, ScreenW / 2, y + 12, title, Error);
-    std::string lines[3];
-    const std::size_t n = wrapText(detail ? detail : "", 30, lines, 3);
-    for (std::size_t i = 0; i < n; ++i) textCenter(c, ScreenW / 2, y + 36 + static_cast<int>(i) * 14, lines[i].c_str(), Ink, font::Face::Small);
+    // Wrapped into fixed buffers: the box also reports out-of-memory errors,
+    // so drawing it must not allocate.
+    char lines[3][128];
+    std::size_t n = 0;
+    const char* p = detail ? detail : "";
+    while (*p && n < 3) {
+        const char* start = p;
+        const char* lastSpace = nullptr;
+        std::size_t glyphs = 0;
+        const char* q = p;
+        while (*q && glyphs < 30) {
+            if (*q == ' ') lastSpace = q;
+            const auto* u = reinterpret_cast<const unsigned char*>(q);
+            (void)font::nextCodepoint(u);
+            q = reinterpret_cast<const char*>(u);
+            ++glyphs;
+        }
+        const char* end = (*q && lastSpace && lastSpace > start) ? lastSpace : q;
+        std::size_t len = static_cast<std::size_t>(end - start);
+        if (len >= sizeof lines[0]) len = sizeof lines[0] - 1;
+        std::memcpy(lines[n], start, len);
+        lines[n][len] = 0;
+        ++n;
+        p = end;
+        while (*p == ' ') ++p;
+    }
+    for (std::size_t i = 0; i < n; ++i) textCenter(c, ScreenW / 2, y + 36 + static_cast<int>(i) * 14, lines[i], Ink, font::Face::Small);
     textCenter(c, ScreenW / 2, y + h - 22, "Press:[EXIT]", Ink);
 }
 

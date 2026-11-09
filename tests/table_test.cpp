@@ -322,8 +322,9 @@ int main() {
         CHECK(t->row() == 998 && t->cell(r.ctx(), 998, 0, v) && v == 998);
         r.key(pckey::F3); r.type("3");                                // ADD: over 999 rows
         CHECK(r.error() && r.errorTitle() == "Memory ERROR"); r.closeError();
-        r.key(pckey::F8); r.type("1"); r.enter("1");                  // LISTMEM: lists hold 255 values
-        CHECK(r.error() && r.errorTitle() == "Dimension ERROR"); r.closeError();
+        r.key(pckey::F8); r.type("1"); r.enter("1");                  // LISTMEM: lists hold 255 values (999 on the Pico Plus 2 W)
+        if (Workspace::MaxListLength < 999) { CHECK(r.error() && r.errorTitle() == "Dimension ERROR"); r.closeError(); }
+        else CHECK(!r.error() && ws.lists[0].size() == 999 && ws.lists[0][998] == 998);
         r.key(pckey::F1);
         r.key(pckey::F5); r.enter("0"); r.enter("999"); r.enter("1"); r.key(pckey::Esc);   // 1000 rows
         CHECK(r.error() && r.errorTitle() == "Memory ERROR"); r.closeError();
@@ -364,6 +365,10 @@ int main() {
         const auto at = std::search(blob.begin(), blob.end(), pattern, pattern + 24);
         CHECK(at != blob.end());
         if (at != blob.end()) {
+            // v5 appends the file store and the 3D Graph block at the end
+            std::size_t tail = 2 + 6 * 8 + 1 + 3 * 4;
+            for (const auto& z : w3.graph3d.model.z) tail += 3 + z.size();
+            blob.resize(blob.size() - tail);
             blob.erase(at + 24, at + 24 + 6);                         // variable, list, type, generated, row count
             const std::uint16_t three = 3;
             std::memcpy(blob.data() + 4, &three, 2);

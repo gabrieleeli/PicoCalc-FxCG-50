@@ -7,6 +7,7 @@
 #include "app_widgets.hpp"
 #include "file_store.hpp"
 #include "graph_engine.hpp"
+#include "graph3d.hpp"
 #include "table_model.hpp"
 #include "pict.hpp"
 #include "statistics.hpp"
@@ -174,6 +175,7 @@ public:
     double integralValue() const noexcept { return integral_.value; }
     double areaValue() const noexcept { return integral_.area; }
     bool rendering() const noexcept { return !renderDone_; }
+    bool layerCached() const noexcept { return layerValid_; }   // static layers kept in PSRAM (trace/pointer)
     void finishRendering(Context& ctx);                  // completes the sampling now (tests, PICT capture)
     const graph::GraphEngine& engine() const noexcept { return engine_; }
     const std::vector<graph::Curve>& curves() const noexcept { return curves_; }
@@ -366,6 +368,14 @@ private:
     std::vector<std::string> windowText_;                // V-Window texts when the form was filled
     std::uint32_t lastBlink_{0};
     std::vector<std::int16_t> shade_;                    // integral shading: column, y0, y1 triples
+    // Static layers of the plot (background, regions, grid, axes, curves,
+    // sketches, marks) kept while the trace/pointer cursor moves: with the
+    // PSRAM budgets a screen may hold 400000 curve points, far slower to
+    // redraw than to copy back (180 KB, PSRAM only, limits::ram()).
+    std::vector<std::uint16_t> layer_;
+    std::uint64_t layerKey_{0};
+    bool layerValid_{false};
+    std::uint64_t layerFingerprint(const Context& ctx) const;
     double factorX_{2};
     bool panGrab_{false};
     Screen formatReturn_{Screen::List};
@@ -505,6 +515,51 @@ private:
     std::string status_;
     int scroll_{0};                    // lines scrolled up from the newest text
     std::uint32_t lastDraw_{0};
+};
+
+// 3D GRAPH: up to three surfaces z = f(x, y) in the 3D V-Window, rotation with
+// the arrows and zoom. The samples are computed in tick() (a budget of points
+// per tick, so the keyboard is never blocked) and kept between redraws:
+// rotating or zooming only re-projects. With the PSRAM pool of the Pico Plus
+// 2 W the meshes and the z-buffer live in PSRAM (grids up to 128); without it
+// the reduced profile is used (painter's algorithm, grids up to 24).
+class Graph3DApp final : public App {
+public:
+    AppId id() const override { return AppId::Graph3D; }
+    void enter(Context& ctx) override;
+    void leave(Context& ctx) override;
+    void key(Context& ctx, const KeyEvent& ev) override;
+    void draw(Context& ctx, gfx::Canvas& c) override;
+    bool tick(Context& ctx) override;
+
+    enum class Screen : std::uint8_t { List, Edit, Window, Plot };
+    Screen screen() const noexcept { return screen_; }
+    bool sampling() const noexcept { return sampling_; }
+    void finishSampling(Context& ctx);                   // completes the sampling now (tests)
+    const g3d::Mesh& mesh(std::size_t i) const { return meshes_.at(i); }
+    std::size_t grid() const noexcept { return grid_; }  // grid in use (after the memory limits)
+    bool zbuffer() const noexcept { return zbuffer_; }
+    const g3d::RenderStats& lastRender() const noexcept { return stats_; }
+    const std::string& message() const noexcept { return message_; }
+    static constexpr gfx::Rect Viewport{4, 38, 312, 236};
+private:
+    void startSampling(Context& ctx);
+    void stopSampling() noexcept;
+    void drawList(Context& ctx, gfx::Canvas& c);
+    void drawPlot(Context& ctx, gfx::Canvas& c);
+    void openWindow(Context& ctx);
+    void applyWindow(Context& ctx);
+    Screen screen_{Screen::List};
+    int row_{0};
+    LineEditor editor_{200};
+    Form window_;
+    std::array<g3d::Mesh, models::Graph3DModel::Functions> meshes_{};
+    std::array<CompiledExpression, models::Graph3DModel::Functions> compiled_{};
+    std::array<bool, models::Graph3DModel::Functions> active_{};
+    bool sampling_{false}, samplesValid_{false}, zbuffer_{false}, windowFromPlot_{false};
+    std::size_t sampleSurface_{0}, sampleNext_{0}, grid_{0};
+    g3d::RenderStats stats_{};
+    std::string message_;
 };
 
 } // namespace fx::app

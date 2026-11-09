@@ -1,9 +1,10 @@
 #pragma once
 // Runtime services shared by both cores:
-//  * application stack for core 0 in SRAM (FXAI_APP_STACK_BYTES) instead of the
-//    4 KiB SCRATCH_Y boot stack, guarded by the Cortex-M33 MSPLIM register;
-//  * optional core-1 worker with its own guarded SRAM stack (SDK
-//    PICO_USE_STACK_GUARDS installs MSPLIM for core 1);
+//  * core 0 stack: the dedicated 32 KB STACK region of the linker script
+//    (src/platform/pico/memmap_picocalc.ld), used from reset and guarded by
+//    the Cortex-M33 MSPLIM register (PICO_USE_STACK_GUARDS installs it);
+//  * optional core-1 worker on the 4 KB SCRATCH_X stack (also MSPLIM-guarded),
+//    used by the dual-core allocator diagnostic;
 //  * canary painting of both stacks for high-water measurement;
 //  * HardFault handler that survives a stack-limit violation (it drops MSPLIM
 //    and switches to a per-core emergency stack), records the fault in the
@@ -21,12 +22,12 @@ struct StackUsage {
     bool guarded{};               // hardware stack limit (MSPLIM) active
 };
 
-// Runs `entry` on the guarded SRAM application stack. Never returns.
-[[noreturn]] void runOnAppStack(void (*entry)());
+// Paints the unused part of the core 0 stack (call once, early in main()).
+void paintStacks() noexcept;
 StackUsage core0Stack() noexcept;
 StackUsage core1Stack() noexcept;
 
-// Core 1 worker (used by the dual-core allocator stress test).
+// Core 1 worker (used by the dual-core allocator diagnostic).
 bool launchCore1(void (*entry)()) noexcept; // false if already running
 bool core1Running() noexcept;
 void stopCore1() noexcept;                  // hard reset of core 1

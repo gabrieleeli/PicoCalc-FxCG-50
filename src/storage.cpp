@@ -34,25 +34,35 @@ bool RamFlash::read(std::size_t off, void* dst, std::size_t len) {
     return true;
 }
 bool RamFlash::erase(std::size_t off, std::size_t len) {
-    if (off % erase_ || len % erase_ || off + len > data_.size()) return false;
+    if (off % erase_ || len % erase_ || off + len > data_.size() || inTail(off, len)) return false;
     std::size_t n = len;
     if (!consume(n)) return false;
     std::fill(data_.begin() + static_cast<std::ptrdiff_t>(off), data_.begin() + static_cast<std::ptrdiff_t>(off + n), 0xFF);
+    if (n == len) ++writes_;
     return n == len;
 }
 bool RamFlash::program(std::size_t off, const void* src, std::size_t len) {
-    if (off % program_ || len % program_ || off + len > data_.size()) return false;
+    if (off % program_ || len % program_ || off + len > data_.size() || inTail(off, len)) return false;
     std::size_t n = len;
     if (!consume(n)) return false;
     const auto* s = static_cast<const std::uint8_t*>(src);
     for (std::size_t i = 0; i < n; ++i) data_[off + i] &= s[i];   // NOR: only 1 -> 0
+    if (n == len) ++writes_;
     return n == len;
 }
 
 RecordStore::RecordStore(FlashDevice& d) : dev_(d), slotSize_((d.size() / 2) / d.eraseSize() * d.eraseSize()) {}
-std::size_t RecordStore::capacity() const noexcept {
+std::size_t RecordStore::readCapacity() const noexcept {
     const std::size_t page = dev_.programSize();
     return slotSize_ > page ? slotSize_ - page : 0;
+}
+std::size_t RecordStore::capacity() const noexcept {
+    // Both slots get the same limit: the second one ends at the end of the
+    // device, where the reserved tail may lie (alternating slots must accept
+    // the same records).
+    const std::size_t tail = (dev_.reservedTail() + dev_.eraseSize() - 1) / dev_.eraseSize() * dev_.eraseSize();
+    const std::size_t room = readCapacity();
+    return room > tail ? room - tail : 0;
 }
 bool RecordStore::readHeader(int slot, Header& h) {
     std::uint32_t w[6];
@@ -64,7 +74,7 @@ bool RecordStore::slotValid(int slot, Header& h) {
     if (!readHeader(slot, h)) return false;
     if (h.magic != Magic || h.version != FormatVersion) return false;
     if (crc32(&h, HeaderSize - 4) != h.headerCrc) return false;
-    if (h.length > capacity()) return false;
+    if (h.length > readCapacity()) return false;
     std::vector<std::uint8_t> buf(h.length);
     if (h.length && !dev_.read(slotOffset(slot) + dev_.programSize(), buf.data(), h.length)) return false;
     return crc32(buf.data(), buf.size()) == h.payloadCrc;
@@ -111,6 +121,8 @@ bool RecordStore::save(const std::vector<std::uint8_t>& payload) {
 }
 bool RecordStore::eraseAll() {
     slot_ = -1; seq_ = 0;
-    return dev_.erase(0, slotSize_ * 2);
+    const std::size_t tail = (dev_.reservedTail() + dev_.eraseSize() - 1) / dev_.eraseSize() * dev_.eraseSize();
+    const std::size_t len = slotSize_ * 2 > tail ? slotSize_ * 2 - tail : 0;
+    return dev_.erase(0, len);   // both headers are erased: no record is valid any more
 }
 } // namespace storage

@@ -268,7 +268,8 @@ int main() {
         CHECK(classify({1, 0, -1, 0, 0, 0}) == ConicKind::Degenerate);  // two lines
         Graph3DModel g3; g3.z[0] = "x^2-y^2";
         CHECK(validate(g3).empty());
-        g3.grid = 60; CHECK(!validate(g3).empty());
+        g3.grid = 128; CHECK(validate(g3).empty());
+        g3.grid = 129; CHECK(!validate(g3).empty());
         FinancialModel fin;
         CHECK(validate(fin).empty());
         fin.py = 0; CHECK(!validate(fin).empty());

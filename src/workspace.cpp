@@ -1,6 +1,7 @@
 #include "workspace.hpp"
 #include <cmath>
 #include <cstring>
+#include <memory>
 
 namespace fx {
 Workspace::Workspace() { resetAll(); }
@@ -17,6 +18,7 @@ void Workspace::resetAll() {
     for (auto& l : lists) l.clear();
     equation = EquationState{};
     chat.clear();
+    graph3d = Graph3DState{};
 }
 
 void Workspace::apply() const { setAngleMode(settings.angle); }
@@ -52,7 +54,8 @@ constexpr std::uint32_t Magic = 0x46584157;   // "WAXF"
 // project name. Version 1 (v1.6.0), 2 and 3 records are still accepted.
 // Version 4 (v1.8.0, TABLE completion) adds the table variable, the table
 // function type and the generated (possibly edited) rows.
-constexpr std::uint16_t Version = 4;
+// Version 5 (v1.9.0) appends the file store setting and the 3D Graph data.
+constexpr std::uint16_t Version = 5;
 constexpr std::size_t LegacyFunctions = 6;
 
 struct Writer {
@@ -160,6 +163,14 @@ std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws) {
     w.u8(e.ineqDegree); w.u8(e.ineqRelation); for (double d : e.inequality) w.f64(d);
     w.u16(static_cast<std::uint16_t>(ws.chat.size()));
     for (const auto& m : ws.chat) { w.u8(m.fromUser ? 1 : 0); w.str(m.text); }
+    // v5
+    w.u8(static_cast<std::uint8_t>(ws.settings.fileStore));
+    const auto& g3 = ws.graph3d;
+    w.u8(static_cast<std::uint8_t>(models::Graph3DModel::Functions));
+    for (std::size_t i = 0; i < models::Graph3DModel::Functions; ++i) { w.str(g3.model.z[i]); w.u8(g3.model.selected[i] ? 1 : 0); }
+    for (double d : {g3.model.xmin, g3.model.xmax, g3.model.ymin, g3.model.ymax, g3.model.zmin, g3.model.zmax}) w.f64(d);
+    w.u8(static_cast<std::uint8_t>(g3.model.grid));
+    w.f32(g3.yaw); w.f32(g3.pitch); w.f32(g3.zoom);
     return std::move(w.out);
 }
 
@@ -170,7 +181,10 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
     const std::uint16_t version = r.u16();
     if (version < 1 || version > Version || !r.ok) return false;
     const bool v2 = version >= 2;
-    Workspace ws;
+    // The workspace being decoded lives on the heap (PSRAM on the Pico Plus
+    // 2 W): as a local it took about 5.4 KB of the 32 KB stack.
+    const auto holder = std::make_unique<Workspace>();
+    Workspace& ws = *holder;
     Settings& s = ws.settings;
     const auto angle = r.u8(); if (angle > 2) return false; s.angle = static_cast<AngleMode>(angle);
     const auto dmode = r.u8(); if (dmode > 4) return false; s.display.mode = static_cast<DisplayMode>(dmode);
@@ -284,6 +298,22 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
     if (e.unknowns < 2 || e.unknowns > 6 || e.degree < 2 || e.degree > 6 || e.ineqDegree < 1 || e.ineqDegree > 6 || e.ineqRelation > 3) return false;
     const auto cn = r.u16(); if (cn > Workspace::MaxChatMessages) return false;
     for (std::uint16_t i = 0; i < cn && r.ok; ++i) { ChatMessage m; m.fromUser = r.u8() != 0; m.text = r.str(); ws.chat.push_back(std::move(m)); }
+    if (version >= 5) {
+        const auto store = r.u8(); if (store > 1) return false;
+        s.fileStore = static_cast<Settings::FileStore>(store);
+        auto& g3 = ws.graph3d;
+        if (r.u8() != models::Graph3DModel::Functions) return false;
+        for (std::size_t i = 0; i < models::Graph3DModel::Functions; ++i) {
+            g3.model.z[i] = r.str(); g3.model.selected[i] = r.u8() != 0;
+            if (g3.model.z[i].size() > MaxGraphExpression) return false;
+        }
+        for (double* d : {&g3.model.xmin, &g3.model.xmax, &g3.model.ymin, &g3.model.ymax, &g3.model.zmin, &g3.model.zmax}) *d = r.f64();
+        g3.model.grid = r.u8();
+        g3.yaw = r.f32(); g3.pitch = r.f32(); g3.zoom = r.f32();
+        if (r.ok && (!models::validate(g3.model).empty() || !std::isfinite(g3.yaw) || !std::isfinite(g3.pitch) ||
+                     !(g3.zoom > 0.05F && g3.zoom < 20.0F)))
+            return false;
+    }
     if (!r.ok || r.i != r.n) return false;
     if (version < 3) {
         // Older forms accepted values the v1.8.0 checks reject: keep the record

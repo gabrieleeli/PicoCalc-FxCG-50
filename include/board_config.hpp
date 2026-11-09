@@ -1,14 +1,13 @@
 #pragma once
-// Board configuration: PicoCalc pin map + capabilities of the selected module.
+// Board configuration: PicoCalc pin map, module capabilities and flash layout.
 //
-// The PicoCalc v2 mainboard wiring is identical for both supported modules
+// The PicoCalc v2.0 mainboard wiring is identical for both supported modules
 // (Raspberry Pi Pico 2 W and Pimoroni Pico Plus 2 W are pin-compatible on the
 // 40-pin header). Only module-internal resources differ (PSRAM, flash size,
 // RP2350A vs RP2350B GPIO/ADC count). Every module-specific value is taken from
-// the Pico SDK board header when building for the device — never hard-coded.
-//
-// Host builds (tests, desktop) do not include the SDK; they select a profile
-// with -DFXAI_BOARD_PICO2W=1 or -DFXAI_BOARD_PICO_PLUS_2W=1 (default: Pico 2 W).
+// the Pico SDK board header when building for the device and checked with
+// static_assert; host builds (tests, simulator) mirror the selected profile:
+// -DFXAI_BOARD_PICO2W=1 (default) or -DFXAI_BOARD_PICO_PLUS_2W=1.
 
 #include <cstddef>
 #include <cstdint>
@@ -22,7 +21,8 @@
 #endif
 
 // ---------------------------------------------------------------------------
-// Board identity and build-time feature flags (defaults for host builds).
+// Board identity and build-time options (defaults for host builds; the
+// firmware gets them from cmake/fxai_board.cmake).
 #if !defined(FXAI_BOARD_PICO2W) && !defined(FXAI_BOARD_PICO_PLUS_2W)
 #define FXAI_BOARD_PICO2W 1
 #endif
@@ -47,20 +47,11 @@
 #ifndef FXAI_BOARD_ID
 #define FXAI_BOARD_ID (FXAI_BOARD_PICO_PLUS_2W ? "pico_plus_2w" : "pico2w")
 #endif
-#ifndef FXAI_VERSION
-#define FXAI_VERSION "host"
-#endif
 #ifndef FXAI_ENABLE_3D
 #define FXAI_ENABLE_3D 1
 #endif
-#ifndef FXAI_ENABLE_CAS
-#define FXAI_ENABLE_CAS FXAI_BOARD_PICO_PLUS_2W
-#endif
 #ifndef FXAI_ENABLE_BT
 #define FXAI_ENABLE_BT 0
-#endif
-#ifndef FXAI_ENABLE_SD
-#define FXAI_ENABLE_SD 1
 #endif
 #ifndef FXAI_FRAMEBUFFER_IN_PSRAM
 #define FXAI_FRAMEBUFFER_IN_PSRAM 0
@@ -68,14 +59,31 @@
 #ifndef FXAI_PSRAM_NEW_THRESHOLD
 #define FXAI_PSRAM_NEW_THRESHOLD 512
 #endif
-#ifndef FXAI_APP_STACK_BYTES
-#define FXAI_APP_STACK_BYTES 32768
-#endif
-#ifndef FXAI_CORE1_STACK_BYTES
-#define FXAI_CORE1_STACK_BYTES 8192
-#endif
+
+// Flash layout (offsets from the start of flash). cmake/fxai_board.cmake
+// computes the same values from the board flash size; see docs/PICO_PLUS_2W.md.
+//   [0, FW)                 firmware partition (size-checked after every build)
+//   [FW, FW+4K)             diagnostic sector (flash/PSRAM interaction test)
+//   [FW+4K, BT)             LittleFS internal file system
+//   [BT, BT+8K)             BTstack storage (reserved even with Bluetooth off)
+//   [REC, REC+RECSIZE)      workspace record store (two A/B slots)
+//   last 4 KB sector        never written: the RP2350-E10 UF2 workaround of the
+//                           bootrom overwrites the last block of the flash
+// On the Pico 2 W the record store keeps the v1.8.0 location (the last 128 KB)
+// so that a firmware update keeps the saved workspace; saves are capped so that
+// they never reach the last sector.
 #ifndef FXAI_FIRMWARE_PARTITION_BYTES
 #define FXAI_FIRMWARE_PARTITION_BYTES (FXAI_BOARD_PICO_PLUS_2W ? (4u * 1024u * 1024u) : (2u * 1024u * 1024u))
+#endif
+#ifndef FXAI_FLASH_RECORD_SIZE
+#define FXAI_FLASH_RECORD_SIZE (FXAI_BOARD_PICO_PLUS_2W ? (1024u * 1024u) : (128u * 1024u))
+#endif
+#ifndef FXAI_FLASH_RECORD_OFFSET
+#define FXAI_FLASH_RECORD_OFFSET \
+    (FXAI_BOARD_PICO_PLUS_2W ? (FXAI_FLASH_SIZE - 4096u - FXAI_FLASH_RECORD_SIZE) : (FXAI_FLASH_SIZE - FXAI_FLASH_RECORD_SIZE))
+#endif
+#ifndef FXAI_FLASH_BT_OFFSET
+#define FXAI_FLASH_BT_OFFSET (FXAI_FLASH_RECORD_OFFSET - 8192u)
 #endif
 #ifndef FXAI_FLASH_DIAG_OFFSET
 #define FXAI_FLASH_DIAG_OFFSET FXAI_FIRMWARE_PARTITION_BYTES
@@ -84,7 +92,7 @@
 #define FXAI_FLASH_FS_OFFSET (FXAI_FIRMWARE_PARTITION_BYTES + 4096u)
 #endif
 #ifndef FXAI_FLASH_FS_SIZE
-#define FXAI_FLASH_FS_SIZE (FXAI_FLASH_SIZE - FXAI_FLASH_FS_OFFSET - 8192u)
+#define FXAI_FLASH_FS_SIZE (FXAI_FLASH_BT_OFFSET - FXAI_FLASH_FS_OFFSET)
 #endif
 
 namespace board::config {
@@ -92,14 +100,13 @@ namespace board::config {
 // --- Identity ---------------------------------------------------------------
 inline constexpr const char* kBoardName = FXAI_BOARD_NAME;
 inline constexpr const char* kBoardId = FXAI_BOARD_ID;
-inline constexpr const char* kFirmwareVersion = FXAI_VERSION;
 inline constexpr bool kIsPicoPlus2W = FXAI_BOARD_PICO_PLUS_2W != 0;
 inline constexpr bool kHasPsram = FXAI_HAS_PSRAM != 0;
 
 // --- PicoCalc v2.0 mainboard wiring (unchanged for both modules) -------------
-// Sources: ClockworkPi PicoCalc repository (Code/MP3Player/config.h,
-// Code/pico_multi_booter/boot.c, keyboard firmware) and the v2.0 schematic.
-// LCD: ST7365P 320x320, SPI1 pins driven by a PIO SPI transmitter.
+// Sources: ClockworkPi PicoCalc repository (Code/picocalc_helloworld lcdspi and
+// i2ckbd, Code/MP3Player/config.h, Code/pico_multi_booter/boot.c).
+// LCD: ST7365P 320x320 on the hardware SPI1 peripheral (official driver).
 inline constexpr unsigned kLcdSck = 10, kLcdMosi = 11, kLcdMiso = 12;
 inline constexpr unsigned kLcdCs = 13, kLcdDc = 14, kLcdReset = 15;
 inline constexpr unsigned kLcdWidth = 320, kLcdHeight = 320;
@@ -108,35 +115,56 @@ inline constexpr unsigned kLcdWidth = 320, kLcdHeight = 320;
 inline constexpr unsigned kKeyboardSda = 6, kKeyboardScl = 7;
 inline constexpr std::uint8_t kKeyboardAddress = 0x1F;
 inline constexpr unsigned kKeyboardI2cHz = 10'000;
-// micro-SD socket on SPI0; card-detect is active-low with pull-up.
+// microSD socket on SPI0; card detect is active low with a pull-up.
 inline constexpr unsigned kSdSck = 18, kSdMosi = 19, kSdMiso = 16, kSdCs = 17, kSdDetect = 22;
 // UART0 is routed to the PicoCalc USB-C port (not used: stdio goes to USB CDC).
 inline constexpr unsigned kUartTx = 0, kUartRx = 1;
-// Audio PWM pins are NOT used by this firmware: ClockworkPi sources disagree
-// (pwm_sound.h: GP26/GP27, MP3Player/config.h: GP28/GP27). Verify on the
-// schematic before writing an audio driver.
+// Audio PWM pins are NOT used by this firmware: the ClockworkPi sources
+// disagree (pwm_sound.h: GP26/GP27, MP3Player/config.h: GP28/GP27).
 
 // --- Module resources --------------------------------------------------------
 inline constexpr std::size_t kSramBytes = 520u * 1024u;
 inline constexpr std::uintptr_t kSramBase = 0x20000000u;
-inline constexpr std::uintptr_t kFlashXipBase = 0x10000000u;     // cached XIP, CS0
-inline constexpr std::uintptr_t kPsramCachedBase = 0x11000000u;  // cached XIP, CS1
-inline constexpr std::uintptr_t kPsramUncachedBase = 0x15000000u;// XIP_NOCACHE_NOALLOC + 16 MiB
+inline constexpr std::uintptr_t kFlashXipBase = 0x10000000u;      // cached XIP, CS0
+inline constexpr std::uintptr_t kPsramCachedBase = 0x11000000u;   // cached XIP, CS1
+inline constexpr std::uintptr_t kPsramUncachedBase = 0x15000000u; // XIP_NOCACHE_NOALLOC + 16 MiB
 inline constexpr std::size_t kPsramWindowBytes = 16u * 1024u * 1024u; // CS1 address window
 inline constexpr std::size_t kPsramExpectedBytes = kHasPsram ? 8u * 1024u * 1024u : 0u;
 inline constexpr std::size_t kFlashSize = FXAI_FLASH_SIZE;
+inline constexpr std::size_t kFlashSectorBytes = 4096u;
+inline constexpr std::size_t kFlashPageBytes = 256u;
 inline constexpr std::size_t kFirmwarePartitionBytes = FXAI_FIRMWARE_PARTITION_BYTES;
 inline constexpr std::size_t kFlashDiagOffset = FXAI_FLASH_DIAG_OFFSET;
 inline constexpr std::size_t kFlashFsOffset = FXAI_FLASH_FS_OFFSET;
 inline constexpr std::size_t kFlashFsSize = FXAI_FLASH_FS_SIZE;
-inline constexpr std::size_t kFlashSectorBytes = 4096u;
-inline constexpr std::size_t kAppStackBytes = FXAI_APP_STACK_BYTES;
-inline constexpr std::size_t kCore1StackBytes = FXAI_CORE1_STACK_BYTES;
+inline constexpr std::size_t kFlashBtOffset = FXAI_FLASH_BT_OFFSET;
+inline constexpr std::size_t kFlashBtBytes = 8192u;
+inline constexpr std::size_t kFlashRecordOffset = FXAI_FLASH_RECORD_OFFSET;
+inline constexpr std::size_t kFlashRecordSize = FXAI_FLASH_RECORD_SIZE;
+// Workspace record store of the v1.8.0 firmware (always built for the Pico 2 W:
+// last 128 KB of a 4 MB flash). On the Pico Plus 2 W this area lies inside the
+// firmware partition, above the image: it is only ever read, to migrate a
+// workspace saved by a v1.8.0 firmware that ran on the same module.
+inline constexpr std::size_t kLegacyRecordOffset = 4u * 1024u * 1024u - 128u * 1024u;
+inline constexpr std::size_t kLegacyRecordSize = 128u * 1024u;
+// Bytes at the end of the flash that are never written (RP2350-E10).
+inline constexpr std::size_t kFlashTailGuardBytes = kFlashSectorBytes;
+// Core 0 stack: the dedicated 32 KB STACK region of the linker script
+// (src/platform/pico/memmap_picocalc.ld), guarded by MSPLIM. Core 1 (used only
+// by diagnostics) runs on SCRATCH_X (4 KB, PICO_CORE1_STACK_SIZE).
+inline constexpr std::size_t kAppStackBytes = 32u * 1024u;
+inline constexpr std::size_t kCore1StackBytes = 4u * 1024u;
 
 static_assert(kFlashFsOffset % kFlashSectorBytes == 0, "LittleFS must start on a sector boundary");
 static_assert(kFlashFsSize % kFlashSectorBytes == 0, "LittleFS size must be a multiple of 4 KiB");
-static_assert(kFlashFsOffset + kFlashFsSize <= kFlashSize, "LittleFS exceeds the flash");
-static_assert(kAppStackBytes >= 8192 && kAppStackBytes % 8 == 0, "application stack must be >= 8 KiB, 8-byte multiple");
+static_assert(kFlashFsSize >= 64u * 1024u, "LittleFS partition too small");
+static_assert(kFlashFsOffset + kFlashFsSize <= kFlashBtOffset, "LittleFS overlaps the Bluetooth area");
+static_assert(kFlashBtOffset + kFlashBtBytes <= kFlashRecordOffset, "Bluetooth area overlaps the record store");
+static_assert(kFlashRecordOffset % kFlashSectorBytes == 0 && kFlashRecordSize % (2 * kFlashSectorBytes) == 0,
+              "record store must be made of whole sectors, two equal slots");
+static_assert(kFlashRecordOffset + kFlashRecordSize <= kFlashSize, "record store exceeds the flash");
+static_assert(kFlashDiagOffset >= kFirmwarePartitionBytes && kFlashDiagOffset + kFlashSectorBytes <= kFlashFsOffset,
+              "diagnostic sector must lie between the firmware and LittleFS");
 
 #if FXAI_ON_DEVICE
 static_assert(PICO_FLASH_SIZE_BYTES == FXAI_FLASH_SIZE, "FXAI_FLASH_SIZE must match the SDK board header");
@@ -173,8 +201,9 @@ constexpr bool pinIsModuleInternal(unsigned pin) noexcept {
     return pin == kCyw43WlOn || pin == kCyw43Data || pin == kCyw43Cs || pin == kCyw43Clock ||
            (kPsramCsPin >= 0 && pin == static_cast<unsigned>(kPsramCsPin));
 }
-static_assert(!pinIsModuleInternal(kLcdSck) && !pinIsModuleInternal(kLcdMosi) && !pinIsModuleInternal(kLcdCs) &&
-              !pinIsModuleInternal(kLcdDc) && !pinIsModuleInternal(kLcdReset), "LCD pin collides with a module pin");
+static_assert(!pinIsModuleInternal(kLcdSck) && !pinIsModuleInternal(kLcdMosi) && !pinIsModuleInternal(kLcdMiso) &&
+              !pinIsModuleInternal(kLcdCs) && !pinIsModuleInternal(kLcdDc) && !pinIsModuleInternal(kLcdReset),
+              "LCD pin collides with a module pin");
 static_assert(!pinIsModuleInternal(kKeyboardSda) && !pinIsModuleInternal(kKeyboardScl), "I2C pin collides");
 static_assert(!pinIsModuleInternal(kSdSck) && !pinIsModuleInternal(kSdMosi) && !pinIsModuleInternal(kSdMiso) &&
               !pinIsModuleInternal(kSdCs) && !pinIsModuleInternal(kSdDetect), "SD pin collides");

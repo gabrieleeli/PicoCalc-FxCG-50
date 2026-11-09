@@ -21,8 +21,8 @@ std::string baseName(const std::string& path) {
 } // namespace
 
 files::FileSystem* GraphApp::fileSystem(Context& ctx, bool required) {
-    files::FileSystem* fs = ctx.platform.files();
-    if (!fs) { if (required) throw MathError("Storage ERROR: microSD non disponibile in questa build"); return nullptr; }
+    files::FileSystem* fs = userFiles(ctx);
+    if (!fs) { if (required) throw MathError("Storage ERROR: archivio file non disponibile in questa build"); return nullptr; }
     const files::Status st = fs->status();
     if (st != files::Status::Ok) { if (required) fail(st); return nullptr; }
     return fs;
@@ -124,8 +124,8 @@ void GraphApp::openFiles(Context& ctx, Browse purpose) {
     files_.folder = purpose == Browse::Projects ? files::GraphFolder : files::PictFolder;
     if (screen_ != Screen::Files) returnScreen_ = screen_ == Screen::Edit ? Screen::List : screen_;
     screen_ = Screen::Files;
-    files::FileSystem* fs = ctx.platform.files();
-    if (!fs) { files_.status = "microSD non disponibile in questa build"; return; }
+    files::FileSystem* fs = userFiles(ctx);
+    if (!fs) { files_.status = "archivio file non disponibile in questa build"; return; }
     files::Status st = fs->status();
     if (st == files::Status::Ok) st = fs->makeDirs(files_.folder);
     if (st == files::Status::Ok) st = files::recover(*fs, files_.folder);   // finish interrupted saves
@@ -180,7 +180,7 @@ void GraphApp::filesKey(Context& ctx, const KeyEvent& ev) {
             // BMP copy of a picture, readable on a PC.
             files::FileSystem* fs = fileSystem(ctx, true);
             std::vector<std::uint8_t> data;
-            check(files::readAll(*fs, files::join(files_.folder, selectedName()), data, pict::MaxEncodedBytes + 256));
+            check(files::readAll(*fs, files::join(files_.folder, selectedName()), data, pict::maxEncodedBytes() + 256));
             pict::Image img;
             const std::string err = pict::parse(data.data(), data.size(), img);
             if (!err.empty()) throw MathError("Storage ERROR: " + err);
@@ -272,7 +272,7 @@ void GraphApp::writeCapture(Context& ctx) {
 void GraphApp::recallPicture(Context& ctx, const std::string& path, bool asBackground) {
     files::FileSystem* fs = fileSystem(ctx, true);
     std::vector<std::uint8_t> data;
-    const files::Status st = files::readAll(*fs, path, data, pict::MaxEncodedBytes + 256);
+    const files::Status st = files::readAll(*fs, path, data, pict::maxEncodedBytes() + 256);
     if (st == files::Status::TooLarge) throw MathError("Memory ERROR: immagine troppo grande");
     check(st);
     pict::Image img;
@@ -309,7 +309,7 @@ void GraphApp::loadBackground(Context& ctx) {
     files::FileSystem* fs = fileSystem(ctx, false);
     if (!fs) throw MathError("Storage ERROR: sfondo non disponibile (microSD)");
     std::vector<std::uint8_t> data;
-    check(files::readAll(*fs, path, data, pict::MaxEncodedBytes + 256));
+    check(files::readAll(*fs, path, data, pict::maxEncodedBytes() + 256));
     pict::Image img;
     const std::string err = pict::parse(data.data(), data.size(), img);
     if (!err.empty()) throw MathError("Storage ERROR: sfondo " + err);

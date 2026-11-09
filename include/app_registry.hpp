@@ -46,8 +46,10 @@ constexpr std::uint32_t RunCore    = 1u << 13;   // run_matrix.hpp  Run-Matrix c
 constexpr std::uint32_t Models     = 1u << 14;   // app_models.hpp  data models of the planned modes
 constexpr std::uint32_t GraphCore  = 1u << 15;   // graph_model/graph_engine/graph_solve/table_model.hpp  plots, sampling, G-Solve, zoom, tables
 constexpr std::uint32_t Files      = 1u << 16;   // file_store/graph_file/pict.hpp  microSD files, .pcgraph, .pcpict
-constexpr std::uint32_t Diag       = 1u << 17;   // diagnostics.hpp  hardware self-tests (microSD, GRAPH timing)
-constexpr std::uint32_t Count      = 18;
+constexpr std::uint32_t Diag       = 1u << 17;   // diagnostics.hpp  hardware self-tests (microSD, GRAPH timing, memory)
+constexpr std::uint32_t Graph3D    = 1u << 18;   // graph3d.hpp     3D surfaces z=f(x,y) (meshes and z-buffer in PSRAM)
+constexpr std::uint32_t Hardware   = 1u << 19;   // board_config/mem_pools/psram/limits/system_info.hpp  board and memory state
+constexpr std::uint32_t Count      = 20;
 } // namespace service
 
 // Sections of fx::Workspace, the only channel through which modes exchange data.
@@ -62,7 +64,8 @@ constexpr std::uint32_t Lists     = 1u << 6;     // List 1..6
 constexpr std::uint32_t Equation  = 1u << 7;     // Equation coefficients and solver
 constexpr std::uint32_t Chat      = 1u << 8;     // AI conversation
 constexpr std::uint32_t Graph     = 1u << 9;     // GRAPH Setup, V-Window/graph memories, sketches, project
-constexpr std::uint32_t Count     = 10;
+constexpr std::uint32_t Graph3D   = 1u << 10;    // 3D Graph functions, 3D V-Window and view
+constexpr std::uint32_t Count     = 11;
 } // namespace data
 
 constexpr std::uint32_t linkTo(AppId id) noexcept { return 1u << static_cast<unsigned>(id); }

@@ -4,6 +4,7 @@
 // tools: TRACE, ZOOM, SKETCH, G-SOLVE, PAN, paste and Modify display.
 // Every value shown comes from the shared evaluator through the engine.
 #include "apps.hpp"
+#include "limits.hpp"
 #include "graph_solve.hpp"
 #include "math_renderer.hpp"
 #include "table_model.hpp"
@@ -211,13 +212,14 @@ bool GraphApp::renderStep(Context& ctx, int budget) {
     const std::size_t total = plots.size() + sketchPlots_.size();
     auto plotAt = [&](std::size_t i) -> const graph::Plot& { return i < plots.size() ? plots[i] : sketchPlots_[i - plots.size()]; };
     auto curveAt = [&](std::size_t i) -> graph::Curve& { return i < plots.size() ? curves_[i] : sketchCurves_[i - plots.size()]; };
-    // All the curves share MaxTotalCurvePoints: a curve may use what the others left.
+    // All the curves share maxTotalCurvePoints(): a curve may use what the others left.
     auto share = [&](graph::Curve& c) {
         std::size_t used = 0;
         for (const auto& k : curves_) used += k.xy.size() / 2;
         for (const auto& k : sketchCurves_) used += k.xy.size() / 2;
         const std::size_t others = used - c.xy.size() / 2;
-        c.limit = others >= graph::MaxTotalCurvePoints ? 0 : std::min(graph::MaxCurvePoints, graph::MaxTotalCurvePoints - others);
+        const std::size_t total = graph::maxTotalCurvePoints();
+        c.limit = others >= total ? 0 : std::min(graph::maxCurvePoints(), total - others);
     };
     if (ctx.ws.graph.settings.simulGraph) {
         // Simul Graph: every graph advances in the same tick.
@@ -661,9 +663,57 @@ void GraphApp::drawOverlays(Context& ctx, gfx::Canvas& c) {
     }
 }
 
+std::uint64_t GraphApp::layerFingerprint(const Context& ctx) const {
+    // Inputs of drawLayers(): a mismatch forces a full redraw even if an
+    // invalidation was missed. Sizes and flags only (cheap), not the points.
+    std::uint64_t h = 1469598103934665603ull;
+    auto mix = [&h](const void* p, std::size_t n) {
+        const auto* b = static_cast<const unsigned char*>(p);
+        for (std::size_t i = 0; i < n; ++i) { h ^= b[i]; h *= 1099511628211ull; }
+    };
+    auto num = [&mix](std::uint64_t v) { mix(&v, sizeof v); };
+    const ViewWindow& v = ctx.ws.view;
+    for (double d : {v.xmin, v.xmax, v.xscl, v.ymin, v.ymax, v.yscl, v.tmin, v.tmax, v.tstep}) mix(&d, sizeof d);
+    const GraphSettings& gs = ctx.ws.graph.settings;
+    num(static_cast<std::uint64_t>(gs.grid)); num(static_cast<std::uint64_t>(gs.axes)); num(gs.label); num(gs.fade);
+    num(gs.ineqUnion); num(gs.background); num(background_.rle.size()); num(overlay_.rle.size());
+    num(renderDone_); num(shadeIntegral_); num(shade_.size()); num(static_cast<std::uint64_t>(integral_.f)); num(marks_.size());
+    const auto& plots = engine_.plots();
+    num(plots.size());
+    for (const auto& p : plots) { num(p.color); num(static_cast<std::uint64_t>(p.style)); num(static_cast<std::uint64_t>(p.type)); }
+    for (const auto* list : {&curves_, &sketchCurves_}) {
+        num(list->size());
+        for (const auto& c : *list) { num(c.xy.size()); num(c.boundary.size()); num(c.done); num(c.truncated); }
+    }
+    num(ctx.ws.graph.sketch.size());
+    for (const auto& s : ctx.ws.graph.sketch) { num(static_cast<std::uint64_t>(s.kind)); num(s.color); num(s.path.size()); num(s.text.size()); }
+    return h;
+}
+
 void GraphApp::drawPlot(Context& ctx, gfx::Canvas& c) {
     ensureBuilt(ctx);
-    drawLayers(ctx, c);
+    // While the trace/pointer cursor moves only the overlays change: with the
+    // PSRAM pool the static layers are copied back instead of redrawn.
+    const gfx::Rect area{L, T, Cols, Rows};
+    const bool cursorMode = mode_ == Mode::Trace || mode_ == Mode::Pointer;
+    const bool cacheable = cursorMode && renderDone_ && !capturePending_ && limits::ram().graphLayerCache;
+    const std::uint64_t key = cacheable ? layerFingerprint(ctx) : 0;
+    if (cacheable && layerValid_ && layerKey_ == key) {
+        c.copyFrom(area, layer_.data(), Cols);
+    } else {
+        layerValid_ = false;
+        drawLayers(ctx, c);
+        if (cacheable) {
+            try {
+                layer_.resize(static_cast<std::size_t>(Cols) * static_cast<std::size_t>(Rows));   // PSRAM (operator new)
+                c.copyTo(area, layer_.data(), Cols);
+                layerKey_ = key;
+                layerValid_ = true;
+            } catch (const std::bad_alloc&) {
+                layer_.clear(); layer_.shrink_to_fit();   // no cache: redraw every time, as without PSRAM
+            }
+        }
+    }
     if (capturePending_) {
         // PICT: the graph layers only (no menus, cursors or texts).
         capturePending_ = false;

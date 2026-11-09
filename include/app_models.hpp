@@ -3,9 +3,10 @@
 // Planned in app_registry.hpp). They fix what each mode will store and the
 // limits taken from the fx-CG50 manual, with validation and the few pure
 // helpers the models need (conic classification, cell references, frame
-// counts). They are not yet part of the persisted workspace: each one is
-// added to fx::Workspace (and to the versioned record) in the session that
-// implements its mode, so no format change is made for data nobody edits.
+// counts). A model becomes part of fx::Workspace (and of the versioned
+// record) in the session that implements its mode, so no format change is
+// made for data nobody edits: Graph3DModel is persisted since v1.9.0 (record
+// version 5, 3D Graph mode); the others are not persisted yet.
 // All expressions are linear text evaluated by the shared engine.
 #include <array>
 #include <cstddef>
@@ -64,7 +65,7 @@ struct Graph3DModel {
     std::array<std::string, Functions> z{};      // z = f(x, y)
     std::array<bool, Functions> selected{{true, false, false}};
     double xmin{-3}, xmax{3}, ymin{-3}, ymax{3}, zmin{-3}, zmax{3};
-    int grid{25};                                 // mesh lines per axis (5..50)
+    int grid{40};                                 // cells per axis (5..128; limited by the free memory)
 };
 std::string validate(const Graph3DModel& m);
 

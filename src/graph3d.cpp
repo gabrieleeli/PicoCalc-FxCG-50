@@ -1,39 +1,20 @@
+// 3D surface renderer (orthographic projection, flat shading). Derived from
+// the v1.9.0 renderer; extended to several surfaces sharing one depth test,
+// the 3D V-Window box and z clipping.
 #include "graph3d.hpp"
-
-#include "expression.hpp"
-#include "limits.hpp"
-#include "mem_pools.hpp"
 
 #include <algorithm>
 #include <cmath>
-#include <memory_resource>
 #include <new>
-#include <vector>
 
 namespace fx::g3d {
 namespace {
 constexpr float kPi = 3.14159265358979323846F;
+constexpr float kZScale = 0.75F;   // box height relative to its width
 
-struct Vertex {   // world-space sample
-    float x, y, z;
-    bool valid;
-};
-struct Projected { // screen space; depth grows away from the viewer
+struct Projected {   // screen space; depth grows away from the viewer
     float sx, sy, depth;
 };
-
-std::uint16_t heightColor(float t, float light) noexcept {
-    // Blue -> cyan -> green -> yellow -> red gradient, scaled by the light factor.
-    t = std::clamp(t, 0.0F, 1.0F);
-    float r = 0, g = 0, b = 0;
-    if (t < 0.25F) { r = 0; g = t * 4; b = 1; }
-    else if (t < 0.5F) { r = 0; g = 1; b = 1 - (t - 0.25F) * 4; }
-    else if (t < 0.75F) { r = (t - 0.5F) * 4; g = 1; b = 0; }
-    else { r = 1; g = 1 - (t - 0.75F) * 4; b = 0; }
-    light = std::clamp(light, 0.25F, 1.0F);
-    return gfx::rgb888To565(static_cast<std::uint8_t>(r * light * 255), static_cast<std::uint8_t>(g * light * 255),
-                            static_cast<std::uint8_t>(b * light * 255));
-}
 
 float edge(const Projected& a, const Projected& b, float px, float py) noexcept {
     return (b.sx - a.sx) * (py - a.sy) - (b.sy - a.sy) * (px - a.sx);
@@ -78,208 +59,230 @@ void fillTriangleZ(gfx::Canvas& c, std::uint16_t* zb, const gfx::Rect& vp, const
     }
 }
 
-// Evaluated surface samples, kept between renders (PSRAM on the Pico Plus 2 W):
-// rotating or zooming only re-projects, it never re-evaluates the expression.
-struct SampleCache {
-    std::pmr::vector<Vertex> verts{mem::resource(mem::Policy::PREFER_PSRAM)};
-    std::string expression;
-    double xmin{}, xmax{}, ymin{}, ymax{};
-    std::size_t grid{};
-    double zmin{}, zmax{};
-    std::size_t valid{};
-    bool ready{};
+struct Projector {
+    float cy, sy, cp, sp, scale, cx0, cy0;
+    Projector(const View& view, const gfx::Rect& vp) {
+        const float yaw = view.yawDeg * kPi / 180.0F, pitch = view.pitchDeg * kPi / 180.0F;
+        cy = std::cos(yaw); sy = std::sin(yaw); cp = std::cos(pitch); sp = std::sin(pitch);
+        scale = 0.36F * static_cast<float>(std::min(vp.w, vp.h)) * view.zoom;
+        cx0 = static_cast<float>(vp.x) + static_cast<float>(vp.w) * 0.5F;
+        cy0 = static_cast<float>(vp.y) + static_cast<float>(vp.h) * 0.52F;
+    }
+    // x, y in [-1, 1], zn in [-kZScale, kZScale].
+    Projected operator()(float x, float y, float zn) const noexcept {
+        const float rx = x * cy - y * sy;
+        const float ry = x * sy + y * cy;
+        const float screenY = ry * sp + zn * cp;   // up
+        const float depth = ry * cp - zn * sp;     // into the screen
+        return {cx0 + rx * scale, cy0 - screenY * scale, depth};
+    }
 };
-SampleCache& sampleCache() {
-    static SampleCache cache;
-    return cache;
+
+gfx::Point toPoint(const Projected& p) noexcept {
+    return {static_cast<int>(std::lround(p.sx)), static_cast<int>(std::lround(p.sy))};
+}
+} // namespace
+
+std::uint16_t surfaceColor(std::size_t index, float t, float light) noexcept {
+    t = std::clamp(t, 0.0F, 1.0F);
+    light = std::clamp(light, 0.25F, 1.0F);
+    float r = 0, g = 0, b = 0;
+    switch (index % 3) {
+    case 0:   // blue -> cyan -> green -> yellow -> red (height map)
+        if (t < 0.25F) { r = 0; g = t * 4; b = 1; }
+        else if (t < 0.5F) { r = 0; g = 1; b = 1 - (t - 0.25F) * 4; }
+        else if (t < 0.75F) { r = (t - 0.5F) * 4; g = 1; b = 0; }
+        else { r = 1; g = 1 - (t - 0.75F) * 4; b = 0; }
+        break;
+    case 1:   // dark green -> light green
+        r = 0.1F + 0.5F * t; g = 0.55F + 0.45F * t; b = 0.15F + 0.35F * t;
+        break;
+    default:  // purple -> orange
+        r = 0.55F + 0.45F * t; g = 0.2F + 0.45F * t; b = 0.7F - 0.6F * t;
+        break;
+    }
+    return gfx::rgb888To565(static_cast<std::uint8_t>(r * light * 255), static_cast<std::uint8_t>(g * light * 255),
+                            static_cast<std::uint8_t>(b * light * 255));
 }
 
-RenderStats renderWithGrid(gfx::Canvas& canvas, const std::string& expr, const View& view, gfx::Rect vp,
-                           std::size_t grid, bool zbuffer) {
-    RenderStats st;
-    st.grid = grid;
-    st.zbuffer = zbuffer;
-    st.reducedProfile = !zbuffer;
-    std::pmr::memory_resource* heavy = mem::resource(mem::Policy::PREFER_PSRAM);
+void beginSample(Mesh& mesh, std::size_t grid) {
+    mesh.clear();
+    if (grid < 1) grid = 1;
     const std::size_t n = grid + 1;
-    SampleCache& cache = sampleCache();
-    const bool reuse = cache.ready && cache.grid == grid && cache.expression == expr && cache.xmin == view.xmin &&
-                       cache.xmax == view.xmax && cache.ymin == view.ymin && cache.ymax == view.ymax;
-    if (!reuse) {
-        cache.ready = false;
-        cache.verts.clear();
-        cache.verts.shrink_to_fit();
-        cache.verts.resize(n * n); // may throw std::bad_alloc: the cache stays invalid
+    try {
+        mesh.verts.resize(n * n, Vertex{0.0F, 0.0F, 0.0F, false});
+    } catch (...) {
+        mesh.clear();
+        throw;
     }
-    std::pmr::vector<Vertex>& verts = cache.verts;
-    std::pmr::vector<Projected> proj(heavy);
-    std::pmr::vector<std::uint16_t> depth(heavy);
-    std::pmr::vector<std::uint32_t> order(heavy);
-    proj.resize(n * n);
-    st.bufferBytes = verts.size() * sizeof(Vertex) + proj.size() * sizeof(Projected);
-    if (zbuffer) {
-        depth.assign(static_cast<std::size_t>(vp.w) * static_cast<std::size_t>(vp.h), 0xFFFF);
-        st.bufferBytes += depth.size() * sizeof(std::uint16_t);
-    } else {
-        order.resize(grid * grid);
-        st.bufferBytes += order.size() * sizeof(std::uint32_t);
-    }
+    mesh.grid = grid;
+}
 
-    // Sample z = f(x, y) (skipped when the cached samples still match).
-    double zmin = reuse ? cache.zmin : 1e300, zmax = reuse ? cache.zmax : -1e300;
-    if (reuse) st.validVertices = cache.valid;
-    for (std::size_t j = 0; j < n && !reuse; ++j) {
-        for (std::size_t i = 0; i < n; ++i) {
-            const double tx = static_cast<double>(i) / static_cast<double>(grid);
-            const double ty = static_cast<double>(j) / static_cast<double>(grid);
-            const double x = view.xmin + (view.xmax - view.xmin) * tx;
-            const double y = view.ymin + (view.ymax - view.ymin) * ty;
-            Vertex v{static_cast<float>(tx * 2 - 1), static_cast<float>(ty * 2 - 1), 0.0F, false};
-            try {
-                const double z = fx::evaluate(expr, x, y);
-                if (std::isfinite(z)) {
-                    v.z = static_cast<float>(z);
-                    v.valid = true;
-                    zmin = std::min(zmin, z);
-                    zmax = std::max(zmax, z);
-                    ++st.validVertices;
-                }
-            } catch (const std::bad_alloc&) {
-                throw;
-            } catch (...) {
-            }
-            verts[j * n + i] = v;
+bool sampleStep(Mesh& mesh, const Function& f, const Window& w, std::size_t& next, std::size_t budget) {
+    const std::size_t grid = mesh.grid, n = grid + 1, total = mesh.verts.size();
+    if (grid == 0) return true;
+    for (; next < total && budget > 0; ++next, --budget) {
+        const std::size_t i = next % n, j = next / n;
+        const double tx = static_cast<double>(i) / static_cast<double>(grid);
+        const double ty = static_cast<double>(j) / static_cast<double>(grid);
+        const double x = w.xmin + (w.xmax - w.xmin) * tx;
+        const double y = w.ymin + (w.ymax - w.ymin) * ty;
+        Vertex v{static_cast<float>(tx * 2 - 1), static_cast<float>(ty * 2 - 1), 0.0F, false};
+        double z = 0;
+        if (f(x, y, z) && std::isfinite(z) && std::fabs(z) < 3.0e38) {
+            v.z = static_cast<float>(z);
+            v.valid = true;
+            if (mesh.valid == 0) { mesh.zmin = mesh.zmax = z; }
+            else { mesh.zmin = std::min(mesh.zmin, z); mesh.zmax = std::max(mesh.zmax, z); }
+            ++mesh.valid;
         }
+        mesh.verts[next] = v;
     }
-    if (!reuse) {
-        cache.expression = expr; // may throw: leave the cache invalid
-        cache.xmin = view.xmin; cache.xmax = view.xmax; cache.ymin = view.ymin; cache.ymax = view.ymax;
-        cache.grid = grid;
-        cache.zmin = zmin;
-        cache.zmax = zmax;
-        cache.valid = st.validVertices;
-        cache.ready = true;
-    }
-    if (!st.validVertices) { st.error = "funzione non definita nel dominio"; return st; }
-    st.zmin = zmin;
-    st.zmax = zmax;
-    const float zrange = zmax > zmin ? static_cast<float>(zmax - zmin) : 1.0F;
+    return next >= total;
+}
 
-    // Rotate (yaw around Z, pitch around X) and project orthographically.
-    const float yaw = view.yawDeg * kPi / 180.0F, pitch = view.pitchDeg * kPi / 180.0F;
-    const float cy = std::cos(yaw), sy = std::sin(yaw), cp = std::cos(pitch), sp = std::sin(pitch);
-    const float scale = 0.36F * static_cast<float>(std::min(vp.w, vp.h)) * view.zoom;
-    const float cx0 = static_cast<float>(vp.x) + static_cast<float>(vp.w) * 0.5F;
-    const float cy0 = static_cast<float>(vp.y) + static_cast<float>(vp.h) * 0.52F;
-    float dmin = 1e30F, dmax = -1e30F;
-    for (std::size_t k = 0; k < n * n; ++k) {
-        const Vertex& v = verts[k];
-        const float zn = v.valid ? ((v.z - static_cast<float>(zmin)) / zrange * 2.0F - 1.0F) * 0.75F : 0.0F;
-        const float rx = v.x * cy - v.y * sy;
-        const float ry = v.x * sy + v.y * cy;
-        const float screenY = ry * sp + zn * cp;   // up
-        const float depthV = ry * cp - zn * sp;    // into the screen
-        proj[k] = {cx0 + rx * scale, cy0 - screenY * scale, depthV};
-        dmin = std::min(dmin, depthV);
-        dmax = std::max(dmax, depthV);
-    }
-    const float depthScale = dmax > dmin ? 65000.0F / (dmax - dmin) : 1.0F;
+void sample(Mesh& mesh, const Function& f, const Window& w, std::size_t grid) {
+    beginSample(mesh, grid);
+    std::size_t next = 0;
+    (void)sampleStep(mesh, f, w, next, mesh.verts.size());
+}
 
-    auto quadColor = [&](std::size_t i, std::size_t j) {
-        const Vertex& a = verts[j * n + i];
-        const Vertex& b = verts[j * n + i + 1];
-        const Vertex& d = verts[(j + 1) * n + i];
-        const float h = (a.z + b.z + d.z + verts[(j + 1) * n + i + 1].z) * 0.25F;
-        // Lambert term from the quad normal (light from the viewer's upper left).
-        const float dzx = (b.z - a.z) / zrange * 1.5F * static_cast<float>(grid) / 2.0F;
-        const float dzy = (d.z - a.z) / zrange * 1.5F * static_cast<float>(grid) / 2.0F;
-        const float len = std::sqrt(dzx * dzx + dzy * dzy + 1.0F);
-        const float light = (0.35F * -dzx + 0.45F * -dzy + 0.82F) / len;
-        return heightColor((h - static_cast<float>(zmin)) / zrange, 0.45F + 0.55F * light);
-    };
-    auto quadValid = [&](std::size_t i, std::size_t j) {
-        return verts[j * n + i].valid && verts[j * n + i + 1].valid && verts[(j + 1) * n + i].valid &&
-               verts[(j + 1) * n + i + 1].valid;
+RenderStats render(gfx::Canvas& canvas, const Mesh* const* meshes, std::size_t count, const Window& w,
+                   const View& view, gfx::Rect vp, bool zbuffer) {
+    RenderStats st;
+    st.zbuffer = zbuffer;
+    if (vp.w <= 0 || vp.h <= 0) { st.error = "area del grafico vuota"; return st; }
+    std::pmr::memory_resource* heavy = mem::resource(mem::Policy::PREFER_PSRAM);
+    const Projector project(view, vp);
+    const float zrange = w.zmax > w.zmin ? static_cast<float>(w.zmax - w.zmin) : 1.0F;
+    const auto zNorm = [&](float z) { return ((z - static_cast<float>(w.zmin)) / zrange * 2.0F - 1.0F) * kZScale; };
+    const auto inBox = [&](const Vertex& v) {
+        return v.valid && v.z >= static_cast<float>(w.zmin) && v.z <= static_cast<float>(w.zmax);
     };
 
     const gfx::Rect oldClip = canvas.clip();
     canvas.setClip(vp);
-    if (zbuffer) {
-        for (std::size_t j = 0; j < grid; ++j)
-            for (std::size_t i = 0; i < grid; ++i) {
-                if (!quadValid(i, j)) continue;
-                const std::uint16_t color = quadColor(i, j);
-                const Projected& p00 = proj[j * n + i];
-                const Projected& p10 = proj[j * n + i + 1];
-                const Projected& p01 = proj[(j + 1) * n + i];
-                const Projected& p11 = proj[(j + 1) * n + i + 1];
-                fillTriangleZ(canvas, depth.data(), vp, p00, p10, p11, color, dmin, depthScale);
-                fillTriangleZ(canvas, depth.data(), vp, p00, p11, p01, color, dmin, depthScale);
+    // Box (3D V-Window): drawn first, the surfaces cover its hidden edges.
+    const float corners[8][3] = {{-1, -1, -kZScale}, {1, -1, -kZScale}, {1, 1, -kZScale}, {-1, 1, -kZScale},
+                                 {-1, -1, kZScale},  {1, -1, kZScale},  {1, 1, kZScale},  {-1, 1, kZScale}};
+    Projected box[8];
+    for (int k = 0; k < 8; ++k) box[k] = project(corners[k][0], corners[k][1], corners[k][2]);
+    const int edges[12][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6}, {6, 7}, {7, 4}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+    const std::uint16_t boxColor = gfx::rgb888To565(150, 150, 160);
+    for (const auto& e : edges) {
+        const gfx::Point a = toPoint(box[e[0]]), b = toPoint(box[e[1]]);
+        canvas.line(a.x, a.y, b.x, b.y, boxColor);
+    }
+
+    // Project every surface (vertex order = mesh order, one block per surface).
+    std::size_t total = 0;
+    for (std::size_t s = 0; s < count; ++s) if (meshes[s]) total += meshes[s]->verts.size();
+    std::pmr::vector<Projected> proj(heavy);
+    proj.resize(total);
+    st.bufferBytes = proj.size() * sizeof(Projected);
+    float dmin = 1e30F, dmax = -1e30F;
+    {
+        std::size_t k = 0;
+        for (std::size_t s = 0; s < count; ++s) {
+            if (!meshes[s]) continue;
+            for (const Vertex& v : meshes[s]->verts) {
+                const Projected p = project(v.x, v.y, zNorm(v.valid ? v.z : static_cast<float>(w.zmin)));
+                proj[k++] = p;
+                dmin = std::min(dmin, p.depth);
+                dmax = std::max(dmax, p.depth);
             }
+        }
+    }
+    const float depthScale = dmax > dmin ? 65000.0F / (dmax - dmin) : 1.0F;
+
+    // Quad helpers (index = vertex offset of the surface + lattice position).
+    struct Quad { std::uint32_t base; std::uint16_t i, j; std::uint8_t surface; };
+    auto quadColor = [&](const Mesh& m, std::size_t surface, std::size_t i, std::size_t j) {
+        const std::size_t n = m.grid + 1;
+        const Vertex& a = m.verts[j * n + i];
+        const Vertex& b = m.verts[j * n + i + 1];
+        const Vertex& d = m.verts[(j + 1) * n + i];
+        const float h = (a.z + b.z + d.z + m.verts[(j + 1) * n + i + 1].z) * 0.25F;
+        // Lambert term from the quad normal (light from the viewer's upper left).
+        const float dzx = (b.z - a.z) / zrange * kZScale * static_cast<float>(m.grid);
+        const float dzy = (d.z - a.z) / zrange * kZScale * static_cast<float>(m.grid);
+        const float len = std::sqrt(dzx * dzx + dzy * dzy + 1.0F);
+        const float light = (0.35F * -dzx + 0.45F * -dzy + 0.82F) / len;
+        return surfaceColor(surface, (h - static_cast<float>(w.zmin)) / zrange, 0.45F + 0.55F * light);
+    };
+    auto quadVisible = [&](const Mesh& m, std::size_t i, std::size_t j) {
+        const std::size_t n = m.grid + 1;
+        return inBox(m.verts[j * n + i]) && inBox(m.verts[j * n + i + 1]) && inBox(m.verts[(j + 1) * n + i]) &&
+               inBox(m.verts[(j + 1) * n + i + 1]);
+    };
+
+    if (zbuffer) {
+        std::pmr::vector<std::uint16_t> depth(heavy);
+        depth.assign(static_cast<std::size_t>(vp.w) * static_cast<std::size_t>(vp.h), 0xFFFF);
+        st.bufferBytes += depth.size() * sizeof(std::uint16_t);
+        std::size_t base = 0;
+        for (std::size_t s = 0; s < count; ++s) {
+            if (!meshes[s]) continue;
+            const Mesh& m = *meshes[s];
+            const std::size_t n = m.grid + 1;
+            for (std::size_t j = 0; j < m.grid; ++j)
+                for (std::size_t i = 0; i < m.grid; ++i) {
+                    if (!quadVisible(m, i, j)) continue;
+                    const std::uint16_t color = quadColor(m, s, i, j);
+                    const Projected& p00 = proj[base + j * n + i];
+                    const Projected& p10 = proj[base + j * n + i + 1];
+                    const Projected& p01 = proj[base + (j + 1) * n + i];
+                    const Projected& p11 = proj[base + (j + 1) * n + i + 1];
+                    fillTriangleZ(canvas, depth.data(), vp, p00, p10, p11, color, dmin, depthScale);
+                    fillTriangleZ(canvas, depth.data(), vp, p00, p11, p01, color, dmin, depthScale);
+                    st.triangles += 2;
+                }
+            base += m.verts.size();
+        }
     } else {
-        // Painter's algorithm: far quads first.
-        std::size_t count = 0;
-        for (std::size_t j = 0; j < grid; ++j)
-            for (std::size_t i = 0; i < grid; ++i)
-                if (quadValid(i, j)) order[count++] = static_cast<std::uint32_t>(j * grid + i);
-        auto quadDepth = [&](std::uint32_t q) {
-            const std::size_t i = q % grid, j = q / grid;
-            return proj[j * n + i].depth + proj[j * n + i + 1].depth + proj[(j + 1) * n + i].depth +
-                   proj[(j + 1) * n + i + 1].depth;
+        // Painter's algorithm over the quads of every surface: far quads first.
+        std::pmr::vector<Quad> order(heavy);
+        std::size_t quads = 0;
+        for (std::size_t s = 0; s < count; ++s) if (meshes[s]) quads += meshes[s]->grid * meshes[s]->grid;
+        order.reserve(quads);
+        st.bufferBytes += quads * sizeof(Quad);
+        std::size_t base = 0;
+        for (std::size_t s = 0; s < count; ++s) {
+            if (!meshes[s]) continue;
+            const Mesh& m = *meshes[s];
+            for (std::size_t j = 0; j < m.grid; ++j)
+                for (std::size_t i = 0; i < m.grid; ++i)
+                    if (quadVisible(m, i, j))
+                        order.push_back({static_cast<std::uint32_t>(base), static_cast<std::uint16_t>(i),
+                                         static_cast<std::uint16_t>(j), static_cast<std::uint8_t>(s)});
+            base += m.verts.size();
+        }
+        auto quadDepth = [&](const Quad& q) {
+            const std::size_t n = meshes[q.surface]->grid + 1;
+            return proj[q.base + q.j * n + q.i].depth + proj[q.base + q.j * n + q.i + 1].depth +
+                   proj[q.base + (q.j + 1) * n + q.i].depth + proj[q.base + (q.j + 1) * n + q.i + 1].depth;
         };
-        std::sort(order.begin(), order.begin() + static_cast<std::ptrdiff_t>(count),
-                  [&](std::uint32_t a, std::uint32_t b) { return quadDepth(a) > quadDepth(b); });
-        for (std::size_t k = 0; k < count; ++k) {
-            const std::size_t i = order[k] % grid, j = order[k] / grid;
-            const auto& p00 = proj[j * n + i];
-            const auto& p10 = proj[j * n + i + 1];
-            const auto& p11 = proj[(j + 1) * n + i + 1];
-            const auto& p01 = proj[(j + 1) * n + i];
-            const gfx::Point quad[4] = {{static_cast<int>(std::lround(p00.sx)), static_cast<int>(std::lround(p00.sy))},
-                                        {static_cast<int>(std::lround(p10.sx)), static_cast<int>(std::lround(p10.sy))},
-                                        {static_cast<int>(std::lround(p11.sx)), static_cast<int>(std::lround(p11.sy))},
-                                        {static_cast<int>(std::lround(p01.sx)), static_cast<int>(std::lround(p01.sy))}};
-            canvas.polygon(quad, 4, quadColor(i, j), true);
+        std::sort(order.begin(), order.end(), [&](const Quad& a, const Quad& b) { return quadDepth(a) > quadDepth(b); });
+        for (const Quad& q : order) {
+            const Mesh& m = *meshes[q.surface];
+            const std::size_t n = m.grid + 1;
+            const gfx::Point quad[4] = {toPoint(proj[q.base + q.j * n + q.i]), toPoint(proj[q.base + q.j * n + q.i + 1]),
+                                        toPoint(proj[q.base + (q.j + 1) * n + q.i + 1]), toPoint(proj[q.base + (q.j + 1) * n + q.i])};
+            canvas.polygon(quad, 4, quadColor(m, q.surface, q.i, q.j), true);
             canvas.polygon(quad, 4, gfx::palette::Background, false);
+            st.triangles += 2;
         }
     }
     canvas.setClip(oldClip);
     st.ok = true;
     return st;
 }
-} // namespace
-
-RenderStats renderSurface(gfx::Canvas& canvas, const std::string& expression, const View& view, gfx::Rect viewport) {
-    const std::size_t pixels = static_cast<std::size_t>(std::max(0, viewport.w)) * static_cast<std::size_t>(std::max(0, viewport.h));
-    std::size_t grid = fx::limits::graph3dGrid(pixels);
-    bool zbuffer = fx::limits::graph3dZBuffer(pixels);
-    for (;;) {
-        try {
-            return renderWithGrid(canvas, expression, view, viewport, grid, zbuffer);
-        } catch (const std::bad_alloc&) {
-            // Roll back to a cheaper profile: release the sample cache, drop the
-            // z-buffer, then halve the grid.
-            clearCache();
-            if (zbuffer) { zbuffer = false; continue; }
-            if (grid > 4) { grid /= 2; continue; }
-            RenderStats st;
-            st.error = fx::limits::kOutOfMemoryMessage;
-            return st;
-        }
-    }
-}
-
-void clearCache() noexcept {
-    SampleCache& cache = sampleCache();
-    cache.ready = false;
-    cache.verts.clear();
-    cache.verts.shrink_to_fit();
-    cache.expression.clear();
-    cache.expression.shrink_to_fit();
-}
 
 void rotate(View& view, float yawDelta, float pitchDelta) noexcept {
-    view.yawDeg = std::fmod(view.yawDeg + yawDelta + 360.0F, 360.0F);
+    // fmod keeps the sign of the dividend: normalise into [0, 360) for any delta.
+    view.yawDeg = std::fmod(view.yawDeg + yawDelta, 360.0F);
+    if (view.yawDeg < 0.0F) view.yawDeg += 360.0F;
+    if (view.yawDeg >= 360.0F) view.yawDeg = 0.0F;
     view.pitchDeg = std::clamp(view.pitchDeg + pitchDelta, -5.0F, 85.0F);
 }
 
