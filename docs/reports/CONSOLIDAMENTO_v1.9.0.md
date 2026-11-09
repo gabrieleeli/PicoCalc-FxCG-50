@@ -294,19 +294,32 @@ Pico SDK 2.2.0, `arm-none-eabi-gcc` 13.2.1, build pulite con
 Prima della riorganizzazione: bundle Git di tutti i branch, verifica che ogni
 branch da eliminare fosse antenato di `main` (o di `version/v1.8.0`, a sua
 volta antenato di `main`), nessun force push, nessuna riscrittura della
-cronologia pubblica (`main` è avanzato solo con fast-forward).
+cronologia pubblica (`main` è avanzato solo con fast-forward, da `9ed7fdb`).
 
 | Branch | Esito |
 |---|---|
 | `main` | **mantenuto**: v1.9.0 ufficiale |
 | `version/v1.5.4`, `version/v1.6.0`, `version/v1.7.0`, `version/v1.8.0` | **mantenuti**: snapshot storici, invariati |
-| `version/v1.9.0` (`9ed7fdb`) | eliminato: duplicato della 1.9.0, contenuto in `main` |
-| `release/1.9.0` (`f1f3089`) | eliminato: duplicato non aggiornato, contenuto in `main` |
-| `claude/pimoroni-pico-plus-2w-94lg56` (`9ed7fdb`) | eliminato: branch di lavoro, contenuto in `main` |
-| `ccr-90a0c133-k0rf3a` (`9ed7fdb`) | eliminato: branch di lavoro, contenuto in `main` |
-| `claude/loving-meitner-jifxhg` (`c595ef6`) | eliminato: = `version/v1.8.0` |
-| `claude/laughing-mendel-jewowt` (`72285e9`) | eliminato: = `version/v1.7.0` |
-| `claude/peaceful-euler-auyrm5` (`7dc65cd`) | eliminato: antenato di `version/v1.8.0` |
+| `version/v1.9.0` (`9ed7fdb`) | **da eliminare**: duplicato della 1.9.0, contenuto in `main` |
+| `release/1.9.0` (`f1f3089`) | **da eliminare**: duplicato non aggiornato, contenuto in `main` |
+| `claude/pimoroni-pico-plus-2w-94lg56` (`9ed7fdb`) | **da eliminare**: branch di lavoro, contenuto in `main` |
+| `ccr-90a0c133-k0rf3a` (`9ed7fdb`) | **da eliminare**: branch di lavoro, contenuto in `main` |
+| `claude/loving-meitner-jifxhg` (`c595ef6`) | **da eliminare**: = `version/v1.8.0` |
+| `claude/laughing-mendel-jewowt` (`72285e9`) | **da eliminare**: = `version/v1.7.0` |
+| `claude/peaceful-euler-auyrm5` (`7dc65cd`) | **da eliminare**: antenato di `version/v1.8.0` |
+
+**Eliminazione non eseguita.** Tutti e sette sono stati verificati (0 commit
+non contenuti in `main`, backup in un bundle Git), ma l'ambiente della sessione
+ha rifiutato `git push origin --delete` con HTTP 403 (policy del proxy Git, non
+un errore di rete) e gli strumenti GitHub disponibili non eliminano branch.
+Vanno eliminati dal proprietario, dalla pagina *Branches* del repository su
+GitHub oppure da un clone locale:
+
+```bash
+git push origin --delete version/v1.9.0 release/1.9.0 claude/laughing-mendel-jewowt claude/loving-meitner-jifxhg claude/peaceful-euler-auyrm5 claude/pimoroni-pico-plus-2w-94lg56 ccr-90a0c133-k0rf3a
+```
+
+Nessun lavoro va perso: ogni commit di quei branch è già in `main`.
 
 Tag: `v1.9.0` sull'ultima commit del consolidamento in `main`. La protezione
 del branch `main` su GitHub (Settings → Branches) va attivata dal

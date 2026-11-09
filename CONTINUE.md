@@ -13,10 +13,13 @@ completo: `docs/reports/CONSOLIDAMENTO_v1.9.0.md`.
 | `version/v1.5.4`, `version/v1.6.0`, `version/v1.7.0`, `version/v1.8.0` | snapshot storici, uno per versione | non modificare |
 
 I branch duplicati della 1.9.0 e i branch temporanei (`version/v1.9.0`,
-`release/1.9.0`, `claude/*`, `ccr-*`) sono stati eliminati dopo aver verificato
-che ogni loro commit è contenuto in `main` o in `version/v1.8.0` (dettagli nel
-rapporto). Un solo branch per versione; mai force-push; nessuna release o tag
-nuovi senza richiesta.
+`release/1.9.0`, `claude/laughing-mendel-jewowt`, `claude/loving-meitner-jifxhg`,
+`claude/peaceful-euler-auyrm5`, `claude/pimoroni-pico-plus-2w-94lg56`,
+`ccr-90a0c133-k0rf3a`) sono **interamente contenuti in `main`** (verificato con
+`git merge-base --is-ancestor`) e vanno eliminati: l'ambiente di sviluppo della
+sessione ha rifiutato l'eliminazione dei branch remoti (HTTP 403), quindi va
+fatta dal proprietario (comandi nel rapporto, §16). Un solo branch per
+versione; mai force-push; nessuna release o tag nuovi senza richiesta.
 
 ## 1. Stato attuale
 
@@ -44,7 +47,7 @@ nuovi senza richiesta.
 
 | Area | Contenuto |
 |---|---|
-| Git | analisi di tutti i branch; merge della v1.8.0 nella linea 1.9.0 con l'architettura della v1.8.0; branch duplicati eliminati dopo la verifica; tag `v1.9.0` |
+| Git | analisi di tutti i branch; merge della v1.8.0 nella linea 1.9.0 con l'architettura della v1.8.0; `main` avanzato solo con fast-forward; branch duplicati verificati (eliminazione rifiutata dall'ambiente, da fare); tag `v1.9.0` |
 | Hardware | profili `PICO_PLUS_2W` (predefinito) e `PICO2W`, mappa della flash per scheda, PSRAM con self-test e avvio solo SRAM in caso di guasto, pool TLSF, `operator new` instradato, limiti per scheda e per memoria presente, MSPLIM, HardFault, core 1 per la diagnostica, lettura del JEDEC ID della flash |
 | Correzioni | ultimo settore (RP2350-E10), scrittura flash da buffer in PSRAM, "Memory ERROR" che allocava (terminazione), `bad_alloc` dell'autosalvataggio, modifiche perse dopo un salvataggio fallito per memoria, `Workspace` di 5,4 KB sullo stack, yaw 3D, UF2 della scheda sbagliata |
 | Applicazioni | 3D Graph; cache dei layer di GRAPH in PSRAM; archivio dei file su LittleFS; SYSTEM INFO/DIAG estesi; MEMORY per il 3D |

@@ -32,7 +32,10 @@
 ## Versioni e branch
 
 Un solo branch per versione. `main` è la versione corrente (1.9.0); le versioni
-precedenti hanno un branch storico `version/<n>` che non va modificato.
+precedenti hanno un branch storico `version/<n>` che non va modificato. Gli
+altri branch ancora presenti su GitHub (`version/v1.9.0`, `release/1.9.0`,
+`claude/*`, `ccr-*`) sono duplicati interamente contenuti in `main`, da
+eliminare ([rapporto](reports/CONSOLIDAMENTO_v1.9.0.md#16-branch-e-tag)).
 
 | Branch / tag | Contenuto |
 |---|---|
