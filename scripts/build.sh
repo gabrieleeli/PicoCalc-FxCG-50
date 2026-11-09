@@ -88,5 +88,23 @@ fi
 if command -v arm-none-eabi-size >/dev/null 2>&1; then
   arm-none-eabi-size "$ELF"
 fi
+# Record the sources this UF2 was built from, for scripts/make_release.sh: the
+# commit when the firmware sources match it, "dirty" otherwise, and the hash of
+# the UF2 (a later rebuild without this script invalidates the record). File
+# dates cannot be used: the Pico SDK touches CMakeLists.txt on every build when
+# it compiles picotool from source (Findpicotool.cmake).
+STATE="$BUILD_DIR/fxai_source_state"
+SOURCES=(src include cmake CMakeLists.txt certs VERSION third_party)
+if git -C "$ROOT" rev-parse --verify -q HEAD >/dev/null 2>&1; then
+  if git -C "$ROOT" diff --quiet HEAD -- "${SOURCES[@]}" &&
+     [[ -z "$(git -C "$ROOT" ls-files --others --exclude-standard -- "${SOURCES[@]}")" ]]; then
+    COMMIT="$(git -C "$ROOT" rev-parse HEAD)"
+  else
+    COMMIT="dirty"
+  fi
+  printf '%s %s\n' "$COMMIT" "$(sha256sum "$UF2" | cut -d' ' -f1)" > "$STATE"
+else
+  rm -f "$STATE"
+fi
 echo "SUCCESS: $UF2"
 echo "Flash: hold BOOTSEL while connecting USB, then copy the UF2 to the RP2350 drive."

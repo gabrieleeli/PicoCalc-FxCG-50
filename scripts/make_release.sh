@@ -20,10 +20,26 @@ for board in pico_plus_2w pico2w; do
     echo "ERROR: $uf2 not found; run scripts/build.sh --board $board first." >&2
     exit 2
   fi
-  # Refuse a UF2 that is older than a tracked firmware source file.
-  NEWER="$(cd "$ROOT" && git ls-files -z -- src include cmake CMakeLists.txt certs VERSION third_party | xargs -0 -I{} find {} -newer "$uf2" -print | head -1 || true)"
-  if [[ -n "$NEWER" ]]; then
-    echo "ERROR: $NEWER is newer than $uf2; rebuild with scripts/build.sh --board $board." >&2
+  # The UF2 must have been built by scripts/build.sh from the firmware sources
+  # of this commit: build.sh records the commit and the UF2 hash. Commits that
+  # only change other files (documentation) do not require a rebuild.
+  state="$ROOT/build/$board/fxai_source_state"
+  if [[ ! -f "$state" ]]; then
+    echo "ERROR: $state not found; rebuild with scripts/build.sh --board $board." >&2
+    exit 2
+  fi
+  read -r built_commit built_hash < "$state"
+  if [[ "$built_hash" != "$(sha256sum "$uf2" | cut -d' ' -f1)" ]]; then
+    echo "ERROR: $uf2 changed after scripts/build.sh recorded it; rebuild with scripts/build.sh --board $board." >&2
+    exit 2
+  fi
+  if [[ "$built_commit" == "dirty" ]]; then
+    echo "ERROR: $uf2 was built from uncommitted firmware sources; commit and rebuild with scripts/build.sh --board $board." >&2
+    exit 2
+  fi
+  if ! git -C "$ROOT" cat-file -e "${built_commit}^{commit}" 2>/dev/null ||
+     ! git -C "$ROOT" diff --quiet "$built_commit" HEAD -- src include cmake CMakeLists.txt certs VERSION third_party; then
+    echo "ERROR: firmware sources changed since $uf2 was built (commit ${built_commit:0:7}); rebuild with scripts/build.sh --board $board." >&2
     exit 2
   fi
   UF2S+=("$uf2")
