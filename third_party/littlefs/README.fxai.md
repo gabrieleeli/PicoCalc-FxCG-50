@@ -5,6 +5,10 @@
 - Files copied unmodified: `lfs.c`, `lfs.h`, `lfs_util.c`, `lfs_util.h`, `LICENSE.md`
 - License: BSD-3-Clause (see `LICENSE.md`)
 
-The block-device glue for the RP2350 internal flash lives in `src/flash_fs.cpp`
-(`flash_safe_execute()` + SRAM bounce buffer). The same glue is exercised on the
-host by `tests/flash_fs_smoke.cpp` with an emulated NOR flash.
+The file-system adapter (`fx::files::LittleFsFileSystem`) lives in
+`src/flash_fs.cpp` and works on any `storage::FlashDevice`. On the RP2350 the
+device is the internal-flash region of `src/platform/pico/board_pico.cpp`
+(`flash_safe_execute()` + SRAM bounce buffer, bounded to the LittleFS
+partition and to the real flash chip). On the host the same adapter is
+exercised by `tests/internal_fs_test.cpp` on an emulated NOR flash
+(`storage::RamFlash`, with power-loss injection).

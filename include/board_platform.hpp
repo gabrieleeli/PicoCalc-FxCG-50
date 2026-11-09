@@ -24,6 +24,9 @@ public:
         h.lastPresentUs = board::lastPresentUs();
         h.flashJobs = fl.jobs; h.flashFailures = fl.failures;
         h.firmwareBytes = board::firmwareBytes();
+        const auto chip = board::flashChip();
+        h.flashChipBytes = chip.bytes;
+        h.flashJedec[0] = chip.manufacturer; h.flashJedec[1] = chip.type; h.flashJedec[2] = chip.capacity;
         return h;
     }
     storage::FlashDevice* diagnosticFlash() override { return board::diagnosticFlash(); }

@@ -92,6 +92,15 @@ std::size_t formatMemory(const Report& r, char (*lines)[kLineChars], std::size_t
     formatSize(b, sizeof b, cfg::kFirmwarePartitionBytes);
     formatSize(c, sizeof c, cfg::kFlashSize);
     line(lines, maxLines, n, "FLASH firmware %s/%s  totale %s", a, b, c);
+    formatSize(a, sizeof a, r.hw.flashChipBytes);
+    if (r.hw.flashChipBytes && r.hw.flashChipBytes < cfg::kFlashSize)
+        line(lines, maxLines, n, "  CHIP %s < %s: UF2 errato, dati spenti", a, c);
+    else if (r.hw.flashChipBytes)
+        line(lines, maxLines, n, "  chip %s (JEDEC %02X %02X %02X)", a, r.hw.flashJedec[0], r.hw.flashJedec[1],
+             r.hw.flashJedec[2]);
+    else
+        line(lines, maxLines, n, "  chip: JEDEC %02X %02X %02X non riconosciuto", r.hw.flashJedec[0],
+             r.hw.flashJedec[1], r.hw.flashJedec[2]);
     formatSize(a, sizeof a, cfg::kFlashFsSize);
     formatSize(b, sizeof b, cfg::kFlashRecordSize);
     line(lines, maxLines, n, "  LittleFS %s  workspace %s (A/B)", a, b);

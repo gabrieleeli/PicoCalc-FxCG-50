@@ -84,6 +84,12 @@ std::uint32_t lastPresentUs() noexcept { return 0; }
 std::uint32_t benchmarkFullPresent() { diff.invalidate(); present(); return 0; }
 FlashStats flashStats() noexcept { return {0, 0}; }
 std::size_t firmwareBytes() noexcept { return 0; }
+// The simulated module has the chip of its profile (W25Q128 / W25Q32 IDs).
+FlashChip flashChip() noexcept {
+    std::uint8_t log2 = 0;
+    while ((std::size_t{1} << log2) < config::kFlashSize) ++log2;
+    return {0xEF, 0x40, log2, config::flashBytesFromJedec(0xEF, log2)};
+}
 fx::net::ChatTransport* chatTransport() { return transport; }
 fx::files::FileSystem* fileSystem() { return files; }
 const char* name() { return "host"; }

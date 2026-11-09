@@ -45,6 +45,10 @@ std::uint32_t benchmarkFullPresent();        // sends a full frame, returns its 
 struct FlashStats { std::uint32_t jobs; std::uint32_t failures; };
 FlashStats flashStats() noexcept;            // flash_safe_execute() calls and failures
 std::size_t firmwareBytes() noexcept;        // flash occupied by the firmware image (0 on the host)
+// Flash chip identified at boot (JEDEC ID). bytes == 0 when the answer was not
+// recognised; storage regions beyond the chip (wrong UF2) are disabled.
+struct FlashChip { std::uint8_t manufacturer; std::uint8_t type; std::uint8_t capacity; std::size_t bytes; };
+FlashChip flashChip() noexcept;
 fx::net::ChatTransport* chatTransport();   // nullptr when Wi-Fi is not available
 // User files: microSD (FatFs) on the PicoCalc, RAM card on the host.
 fx::files::FileSystem* fileSystem();

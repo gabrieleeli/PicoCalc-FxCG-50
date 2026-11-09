@@ -1,5 +1,5 @@
 #pragma once
-// 3D surfaces z = f(x, y) for the 3D Graph mode (FXAI_ENABLE_3D).
+// 3D surfaces z = f(x, y) for the 3D Graph mode.
 //
 // The samples of each surface (Mesh) and the render buffers (projected
 // vertices, 16-bit z-buffer, painter's order) are allocated through

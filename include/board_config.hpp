@@ -47,9 +47,6 @@
 #ifndef FXAI_BOARD_ID
 #define FXAI_BOARD_ID (FXAI_BOARD_PICO_PLUS_2W ? "pico_plus_2w" : "pico2w")
 #endif
-#ifndef FXAI_ENABLE_3D
-#define FXAI_ENABLE_3D 1
-#endif
 #ifndef FXAI_ENABLE_BT
 #define FXAI_ENABLE_BT 0
 #endif
@@ -149,6 +146,22 @@ inline constexpr std::size_t kLegacyRecordOffset = 4u * 1024u * 1024u - 128u * 1
 inline constexpr std::size_t kLegacyRecordSize = 128u * 1024u;
 // Bytes at the end of the flash that are never written (RP2350-E10).
 inline constexpr std::size_t kFlashTailGuardBytes = kFlashSectorBytes;
+// Capacity of the flash chip from its JEDEC ID (command 0x9F: manufacturer,
+// memory type, capacity). The common SPI NOR vendors encode the capacity as
+// log2 of the size in bytes; any other answer (no reply 0x00/0xFF, another
+// encoding) is "unknown" (0) and the layout of the build is kept.
+constexpr std::size_t flashBytesFromJedec(std::uint8_t manufacturer, std::uint8_t capacity) noexcept {
+    if (manufacturer == 0x00 || manufacturer == 0xFF) return 0;
+    if (capacity < 0x13 || capacity > 0x1A) return 0;   // 512 KB .. 64 MB
+    return std::size_t{1} << capacity;
+}
+// Flash bytes the storage regions may use: the layout of this build, cut to
+// the chip when the chip is known to be smaller. A Pico Plus 2 W UF2 copied
+// onto a Pico 2 W would otherwise place LittleFS and the workspace beyond the
+// 4 MB chip, where the addresses wrap around onto the firmware and its data.
+constexpr std::size_t usableFlashBytes(std::size_t chipBytes) noexcept {
+    return chipBytes && chipBytes < kFlashSize ? chipBytes : kFlashSize;
+}
 // Core 0 stack: the dedicated 32 KB STACK region of the linker script
 // (src/platform/pico/memmap_picocalc.ld), guarded by MSPLIM. Core 1 (used only
 // by diagnostics) runs on SCRATCH_X (4 KB, PICO_CORE1_STACK_SIZE).

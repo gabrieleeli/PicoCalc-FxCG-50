@@ -250,14 +250,42 @@ void __no_inline_not_in_flash_func(runFlashJob)(void* param) {
 }
 std::uint32_t flashJobs = 0, flashFailures = 0;
 
+// Flash chip identification (JEDEC READ ID). The command bytes are prepared by
+// the caller: the job itself only touches SRAM while XIP is off.
+struct FlashIdJob { std::uint8_t tx[4]; std::uint8_t rx[4]; bool m1Intact; };
+void __no_inline_not_in_flash_func(runFlashIdJob)(void* param) {
+    auto* job = static_cast<FlashIdJob*>(param);
+    flash_do_cmd(job->tx, job->rx, sizeof job->tx);
+    job->m1Intact = psram::verifyConfigurationFromSafeZone();
+}
+board::FlashChip flashChipInfo{};
+// Upper bound of every storage region: the layout of the build, or the chip
+// when it is smaller (wrong UF2: see board::config::usableFlashBytes()).
+std::size_t flashLimit = cfg::kFlashSize;
+void probeFlashChip() {
+    FlashIdJob job{{0x9F, 0, 0, 0}, {}, true};
+    ++flashJobs;
+    if (flash_safe_execute(runFlashIdJob, &job, 1000) != PICO_OK) {
+        ++flashFailures;
+        std::printf("[flash] JEDEC ID not read: storage layout of the build kept\n");
+        return;
+    }
+    flashChipInfo = {job.rx[1], job.rx[2], job.rx[3], cfg::flashBytesFromJedec(job.rx[1], job.rx[3])};
+    flashLimit = cfg::usableFlashBytes(flashChipInfo.bytes);
+    std::printf("[flash] JEDEC %02X %02X %02X: chip %u KiB, build layout %u KiB%s\n", job.rx[1], job.rx[2], job.rx[3],
+                static_cast<unsigned>(flashChipInfo.bytes / 1024u), static_cast<unsigned>(cfg::kFlashSize / 1024u),
+                flashLimit < cfg::kFlashSize ? " -> CHIP TOO SMALL: storage beyond it disabled (wrong UF2)" : "");
+}
+
 class FlashRegion final : public storage::FlashDevice {
 public:
     FlashRegion(std::size_t offset, std::size_t size, bool writable, std::size_t reservedTail = 0)
         : offset_(offset), size_(size), writable_(writable), tail_(reservedTail) {
         // Never overlap the firmware image (a region inside the firmware
-        // partition is only valid above the image, and only for reading).
+        // partition is only valid above the image, and only for reading) and
+        // never go beyond the chip (probeFlashChip() runs first).
         const auto binaryEnd = static_cast<std::size_t>(reinterpret_cast<std::uintptr_t>(&__flash_binary_end) - XIP_BASE);
-        usable_ = offset_ >= binaryEnd && offset_ + size_ <= cfg::kFlashSize;
+        usable_ = offset_ >= binaryEnd && offset_ + size_ <= flashLimit;
     }
     std::size_t size() const override { return usable_ ? size_ : 0; }
     std::size_t eraseSize() const override { return FLASH_SECTOR_SIZE; }
@@ -340,6 +368,7 @@ void init() {
     lcdInit();
     canvas.clear(0xFFFF);
     tiles.invalidate();
+    probeFlashChip();   // before the regions: they are cut to the real chip
     static FlashRegion record(cfg::kFlashRecordOffset, cfg::kFlashRecordSize, true, RecordTail);
     static FlashRegion fs(cfg::kFlashFsOffset, cfg::kFlashFsSize, true);
     static FlashRegion diag(cfg::kFlashDiagOffset, cfg::kFlashSectorBytes, true);
@@ -394,6 +423,7 @@ std::uint32_t benchmarkFullPresent() {
     return presentUs;
 }
 FlashStats flashStats() noexcept { return {flashJobs, flashFailures}; }
+FlashChip flashChip() noexcept { return flashChipInfo; }
 std::size_t firmwareBytes() noexcept {
     return static_cast<std::size_t>(reinterpret_cast<std::uintptr_t>(&__flash_binary_end) - XIP_BASE);
 }

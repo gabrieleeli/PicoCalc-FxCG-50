@@ -8,7 +8,9 @@
 #include "diagnostics.hpp"
 #include "mem_pools.hpp"
 #include "storage.hpp"
+#include "system_info.hpp"
 #include "test_util.hpp"
+#include <cstring>
 #include <string>
 
 using namespace fx;
@@ -58,6 +60,21 @@ int main() {
     CHECK(internal != nullptr);
     if (internal && internal->list("PICOCALC", list) == files::Status::Ok)
         for (const auto& e : list) CHECK(e.name != "DIAG");
+
+    // ---- flash chip line (MEM group and USB log): the module's chip, or a wrong UF2
+    {
+        char lines[24][sysinfo::kLineChars];
+        auto has = [&](std::size_t n, const char* text) {
+            for (std::size_t i = 0; i < n; ++i) if (std::strstr(lines[i], text)) return true;
+            return false;
+        };
+        sysinfo::Hardware hw = r.platform.hardware();
+        std::size_t n = sysinfo::formatMemory(sysinfo::collect(hw), lines, 24);
+        CHECK(has(n, board::config::kIsPicoPlus2W ? "chip 16.0M (JEDEC EF 40 18)" : "chip 4.0M (JEDEC EF 40 16)"));
+        hw.flashChipBytes = board::config::kFlashSize / 4;                // image built for a 4x larger flash
+        n = sysinfo::formatMemory(sysinfo::collect(hw), lines, 24);
+        CHECK(has(n, "UF2 errato"));
+    }
 
     // ---- Pico Plus 2 W whose PSRAM did not pass its self-test: reported, the rest works
     if (board::config::kHasPsram) {

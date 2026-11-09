@@ -13,6 +13,8 @@ struct Hardware {
     std::uint32_t flashJobs{};          // flash_safe_execute() erase/program jobs
     std::uint32_t flashFailures{};
     std::size_t firmwareBytes{};        // flash occupied by the firmware image (0 on the host)
+    std::size_t flashChipBytes{};       // flash chip capacity read at boot (JEDEC ID; 0: not recognised)
+    std::uint8_t flashJedec[3]{};       // manufacturer, memory type, capacity code
     void* framebufferPixels{};          // diagnostics only (device)
 };
 } // namespace fx::sysinfo

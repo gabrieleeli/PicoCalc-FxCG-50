@@ -71,7 +71,19 @@ int main() {
                 firmware.loadedFromFlash() ? "restored" : "new", firmware.migrated() ? " (imported from v1.8.0)" : "",
                 static_cast<unsigned>(platform.storageCapacity()), static_cast<unsigned>(board::freeHeap()));
     logMemory(platform, "boot");
-    if (hadFault)
+    // A UF2 built for a larger flash than the chip (Pico Plus 2 W image on a
+    // Pico 2 W): the storage regions beyond the chip were disabled by
+    // board::init(); say which image to install. Checked first: it explains
+    // the other symptoms (no PSRAM, nothing saved).
+    const auto chip = board::flashChip();
+    if (chip.bytes && chip.bytes < board::config::kFlashSize) {
+        char text[160];
+        std::snprintf(text, sizeof text, "System ERROR: UF2 per %s su una flash da %u MB. Installare %s: i dati non vengono salvati",
+                      board::config::kBoardName, static_cast<unsigned>(chip.bytes >> 20),
+                      board::config::kIsPicoPlus2W ? "picocalc_fxai_pico2w.uf2" : "l'UF2 di questa scheda");
+        std::printf("[flash] %s\n", text);
+        firmware.notice(static_cast<const char*>(text));
+    } else if (hadFault)
         firmware.notice(std::string("System ERROR: riavvio dopo ") + fx::runtime::describe(fault.kind) +
                         " (dettagli su USB seriale)");
     else if (psramFailed)

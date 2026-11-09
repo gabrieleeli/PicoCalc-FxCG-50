@@ -91,8 +91,11 @@ bool Firmware::step() {
             saved = saveNow();
             if (!saved) {
                 // A record larger than the slot can never be saved: say why and how to fix it.
-                const std::size_t bytes = serializeWorkspace(ws_).size(), room = store_.capacity();
-                if (bytes > room)
+                const std::size_t room = store_.capacity();
+                const std::size_t bytes = room ? serializeWorkspace(ws_).size() : 0;
+                if (room == 0)   // region disabled at boot (flash chip smaller than the build's layout)
+                    std::snprintf(msg, sizeof(msg), "Salvataggio non disponibile: area dati della flash disattivata");
+                else if (bytes > room)
                     std::snprintf(msg, sizeof(msg), "Memoria flash piena: %u KB > %u KB (cancella memorie grafiche, SKETCH, chat)",
                                   static_cast<unsigned>((bytes + 1023) / 1024), static_cast<unsigned>(room / 1024));
                 else

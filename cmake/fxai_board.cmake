@@ -78,7 +78,6 @@ set(PICO_BOARD "${_fxai_pico_board}" CACHE STRING "Pico SDK board (derived from 
 
 # ---------------------------------------------------------------------------
 # Feature flags (every flag can be overridden).
-option(FXAI_ENABLE_3D  "3D Graph mode (z-buffer with PSRAM, reduced painter's profile without)" ON)
 option(FXAI_ENABLE_BT  "Bluetooth LE through pico_btstack (no feature needs it; never required to build)" OFF)
 option(FXAI_FRAMEBUFFER_IN_PSRAM "Place the 320x320 RGB565 framebuffer in PSRAM (default: SRAM, see docs/PICO_PLUS_2W.md)" OFF)
 option(FXAI_ENABLE_LTO "Link-time optimisation of the application sources (experimental)" OFF)
@@ -134,7 +133,7 @@ message(STATUS "PicoCalc FX AI ${FXAI_VERSION}: FXAI_BOARD=${FXAI_BOARD} -> PICO
                "PSRAM=${FXAI_HAS_PSRAM}, flash=${FXAI_FLASH_SIZE_BYTES} B, "
                "firmware partition=${FXAI_FIRMWARE_PARTITION_BYTES} B, LittleFS=${FXAI_FLASH_FS_SIZE} B @ ${FXAI_FLASH_FS_OFFSET}, "
                "record store=${FXAI_FLASH_RECORD_SIZE} B @ ${FXAI_FLASH_RECORD_OFFSET}")
-message(STATUS "Features: 3D=${FXAI_ENABLE_3D} BT=${FXAI_ENABLE_BT} FB_IN_PSRAM=${FXAI_FRAMEBUFFER_IN_PSRAM} "
+message(STATUS "Features: BT=${FXAI_ENABLE_BT} FB_IN_PSRAM=${FXAI_FRAMEBUFFER_IN_PSRAM} "
                "OPT=-${FXAI_OPT_LEVEL} LTO=${FXAI_ENABLE_LTO}")
 
 # Compile definitions shared by the firmware target.
@@ -144,7 +143,7 @@ function(fxai_apply_board_definitions target)
     else()
         set(_board_def FXAI_BOARD_PICO_PLUS_2W=1)
     endif()
-    foreach(flag FXAI_ENABLE_3D FXAI_ENABLE_BT FXAI_FRAMEBUFFER_IN_PSRAM)
+    foreach(flag FXAI_ENABLE_BT FXAI_FRAMEBUFFER_IN_PSRAM)
         if(${flag})
             list(APPEND _flag_defs ${flag}=1)
         else()

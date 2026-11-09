@@ -52,6 +52,28 @@ int main() {
         CHECK(cfg::kFlashFsSize > 1800u * 1024u);
         CHECK(cfg::kPsramCsPin == -1 && cfg::kGpioCount == 30 && cfg::kAdcBasePin == 26);
     }
+    // ================================================================ flash chip check (wrong UF2)
+    CHECK(cfg::flashBytesFromJedec(0xEF, 0x16) == 4u * 1024u * 1024u);     // W25Q32 (Pico 2 W)
+    CHECK(cfg::flashBytesFromJedec(0xEF, 0x18) == 16u * 1024u * 1024u);    // W25Q128 class (Pico Plus 2 W)
+    CHECK(cfg::flashBytesFromJedec(0xC8, 0x18) == 16u * 1024u * 1024u);    // GigaDevice, same encoding
+    CHECK(cfg::flashBytesFromJedec(0xFF, 0x18) == 0 && cfg::flashBytesFromJedec(0x00, 0x00) == 0);   // no reply
+    CHECK(cfg::flashBytesFromJedec(0x1F, 0x01) == 0);                      // other encoding: unknown
+    CHECK(cfg::usableFlashBytes(0) == cfg::kFlashSize);                    // unknown chip: layout of the build
+    CHECK(cfg::usableFlashBytes(64u * 1024u * 1024u) == cfg::kFlashSize);  // larger chip: layout of the build
+    CHECK(cfg::usableFlashBytes(cfg::kFlashSize) == cfg::kFlashSize);
+    if (cfg::kIsPicoPlus2W) {
+        // The Plus image on a 4 MB chip: every storage region lies beyond it and
+        // is disabled; only the (read-only) v1.8.0 location stays inside.
+        const std::size_t limit = cfg::usableFlashBytes(4u * 1024u * 1024u);
+        CHECK(limit == 4u * 1024u * 1024u);
+        CHECK(cfg::kFlashDiagOffset + cfg::kFlashSectorBytes > limit && cfg::kFlashFsOffset + cfg::kFlashFsSize > limit &&
+              cfg::kFlashRecordOffset + cfg::kFlashRecordSize > limit);
+        CHECK(cfg::kLegacyRecordOffset + cfg::kLegacyRecordSize <= limit);
+    }
+    {
+        const auto chip = board::flashChip();                              // simulated module: its own chip
+        CHECK(chip.bytes == cfg::kFlashSize && chip.manufacturer == 0xEF);
+    }
     // PicoCalc wiring identical on both modules (v1.8.0 driver values)
     CHECK(cfg::kLcdSck == 10 && cfg::kLcdMosi == 11 && cfg::kLcdMiso == 12 && cfg::kLcdCs == 13 && cfg::kLcdDc == 14 && cfg::kLcdReset == 15);
     CHECK(cfg::kKeyboardSda == 6 && cfg::kKeyboardScl == 7 && cfg::kKeyboardAddress == 0x1F && cfg::kKeyboardI2cHz == 10000);
