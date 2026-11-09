@@ -1,7 +1,8 @@
 # PicoCalc FX AI — C++ firmware project (Pico 2 W / Pimoroni Pico Plus 2 W)
 
 Version: **1.9.0** (see `VERSION`; the value is compiled into the firmware and
-shown in *System*).
+shown in *System*). Branch `version/v1.9.0`, built on `main` (= `version/v1.5.4`):
+the separate `version/v1.6.0`–`version/v1.8.0` branches are not merged into it.
 
 This is the first integrated C++ project scaffold built from the supplied `math_engine.py` and `funzioni.txt` requirements. It is **not yet a production-ready UF2**: the exact ST7365P panel init/flush and keyboard packet protocol must be validated against the PicoCalc mainboard/keyboard firmware revision, and the AI network client needs a secure HTTPS relay implementation.
 

@@ -5,6 +5,11 @@ Questo documento descrive il supporto dual-board introdotto nella v1.9.0:
 flash 16 MB). La mappatura GPIO del PicoCalc è invariata: cambia solo ciò che è
 interno al modulo.
 
+> Base del codice: la 1.9.0 è sviluppata su `main` (= `version/v1.5.4`), per
+> scelta esplicita. **Non include** le modifiche dei branch `version/v1.6.0`,
+> `version/v1.7.0` e `version/v1.8.0` (HAL ufficiale, relay AI, SD/FatFs, nuove
+> app), che non sono mai stati uniti in `main`.
+>
 > Stato di verifica: tutto quanto descritto qui è **compilato per entrambe le
 > schede e testato su host** (suite nativa, ASan/UBSan, ThreadSanitizer).
 > **Nessun test è stato eseguito su hardware reale**: driver PSRAM, scritture

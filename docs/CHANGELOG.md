@@ -2,6 +2,9 @@
 
 ## 1.9.0 — Pimoroni Pico Plus 2 W (PSRAM 8 MB + flash 16 MB), memoria multi-pool
 
+Base: `main` / `version/v1.5.4` (scelta esplicita). Le modifiche dei branch
+`version/v1.6.0`–`version/v1.8.0` non sono incluse. Branch: `version/v1.9.0`.
+
 - **Versione**: `VERSION` era fermo a `1.5.3-dev`; ora `1.9.0` ed è l'unica
   sorgente della versione (CMake → `FXAI_VERSION` → firmware, schermata System,
   `pico_set_program_version`).
