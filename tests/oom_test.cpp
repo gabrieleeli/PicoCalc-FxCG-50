@@ -74,19 +74,27 @@ int main() {
         CHECK(!r.error() && ws.history.size() == histBefore + 1 && ws.memory.answer() == 56877.0);
         r.home();
 
-        // ---- autosave with no memory left: a message, never a crash
+        // ---- autosave with no memory left: a message, never a crash, and the
+        //      pending changes are saved by themselves once memory is back
         ws.memory.store('B', 7);
         r.fw.apps().context().markDirty();
+        const std::uint32_t savesBefore = r.fw.saves();
         exhaust();
         board::host::advance(3000);
         r.settle();
         const std::string& toast = r.fw.apps().context().toastText();   // no copy: memory is exhausted
-        CHECK(toast.find("Memory ERROR") != std::string::npos || toast.find("Memoria") != std::string::npos);
+        CHECK(toast.find("Memory ERROR") != std::string::npos);
+        CHECK(r.fw.saves() == savesBefore && r.fw.apps().context().dirty());   // nothing saved, nothing forgotten
         release();
-        r.fw.apps().context().markDirty();
-        board::host::advance(3000);
+        board::host::advance(3000);                                  // no new input, no new markDirty()
         r.settle();
-        CHECK(r.fw.saves() >= 1);                                    // saved once memory is back
+        CHECK(r.fw.saves() == savesBefore + 1 && !r.fw.apps().context().dirty());
+        {
+            std::vector<std::uint8_t> blob;
+            Workspace back;
+            CHECK(storage::RecordStore(board::storageFlash()).load(blob) &&
+                  deserializeWorkspace(blob.data(), blob.size(), back) && back.memory.recall('B') == 7.0);
+        }
 
         // ---- GRAPH: drawing with no memory degrades
         r.type("5");

@@ -86,7 +86,7 @@ bool Firmware::step() {
         // The autosave runs outside the AppManager: no exception may leave it
         // (an escaped std::bad_alloc would terminate the firmware).
         char msg[112];
-        bool saved = false;
+        bool saved = false, retry = false;
         try {
             saved = saveNow();
             if (!saved) {
@@ -99,10 +99,18 @@ bool Firmware::step() {
                     std::snprintf(msg, sizeof(msg), "Errore salvataggio flash");
             }
         } catch (const std::bad_alloc&) {
-            std::snprintf(msg, sizeof(msg), "Memory ERROR: salvataggio non riuscito (memoria insufficiente)");
+            // Running out of memory is temporary (a mode holding large buffers,
+            // a long computation): the changes stay pending and are saved as
+            // soon as the memory is back, instead of being lost at power-off.
+            std::snprintf(msg, sizeof(msg), "Memory ERROR: salvataggio rimandato (memoria insufficiente)");
+            retry = true;
         }
         if (!saved) {
-            ctx.clearDirty();
+            // A record that does not fit or a failing flash cannot be fixed by
+            // trying again (and repeated erases would wear the flash): the next
+            // change triggers a new attempt.
+            if (retry) lastInput_ = platform_.millis();   // next attempt after AutosaveDelayMs
+            else ctx.clearDirty();
             ctx.toast(static_cast<const char*>(msg), 4000);   // allocation-free
             redraw_ = true;
         }
