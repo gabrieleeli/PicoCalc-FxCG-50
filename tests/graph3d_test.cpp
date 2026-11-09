@@ -89,8 +89,16 @@ int main() {
         g3d::rotate(v, -1000.0F, -500.0F);
         CHECK(v.yawDeg >= 0.0F && v.yawDeg < 360.0F && v.pitchDeg >= -5.0F);
         // distinct colour families for the three surfaces
-        CHECK(g3d::surfaceColor(0, 0.5F, 1.0F) != g3d::surfaceColor(1, 0.5F, 1.0F));
-        CHECK(g3d::surfaceColor(1, 0.5F, 1.0F) != g3d::surfaceColor(2, 0.5F, 1.0F));
+        // each surface keeps its own dominant channel at every height and light
+        // (Z1 blue, Z2 red, Z3 green): intersecting surfaces stay distinguishable
+        for (float t : {0.0F, 0.25F, 0.5F, 0.75F, 1.0F})
+            for (float light : {0.45F, 1.0F})
+                for (std::size_t sfc = 0; sfc < 3; ++sfc) {
+                    const std::uint16_t c = g3d::surfaceColor(sfc, t, light);
+                    const int r = (c >> 11) * 2, g = (c >> 5) & 63, b = (c & 31) * 2;   // 6-bit scale
+                    const int dominant = b > r && b > g ? 0 : r > g && r > b ? 1 : g > r && g > b ? 2 : -1;
+                    CHECK(dominant == static_cast<int>(sfc));
+                }
     }
 
     // ================================================================ 3D GRAPH mode

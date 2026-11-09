@@ -1,0 +1,37 @@
+# 3D Graph v1.9.0 screenshots (docs/screenshots/40-43), produced with the same
+# code as the firmware on the Pico Plus 2 W profile (PSRAM pool, z-buffer):
+#   build/host-pico_plus_2w/picocalc_sim docs/screenshots tests/sim/graph3d.txt
+#
+# ---- function list: Z1 = sin(x)cos(y) is the default, add Z2 = x^2/4 - y^2/4
+type j
+key DOWN
+type x^2
+key RIGHT
+type /4-y^2
+key RIGHT
+type /4
+key EXE
+shot 40_graph3d_list.png
+# ---- draw: sampled step by step in tick(), then the coloured surfaces
+key F6
+wait 200
+wait 200
+wait 200
+wait 200
+wait 200
+wait 200
+wait 200
+wait 200
+shot 41_graph3d_surfaces.png
+# ---- rotation and zoom reuse the samples (no new computation)
+key LEFT
+key LEFT
+key LEFT
+key UP
+key F1
+shot 42_graph3d_rotated.png
+# ---- AUTO: the box follows the z range of the samples
+key F5
+key F4
+wait 200
+shot 43_graph3d_auto.png

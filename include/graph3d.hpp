@@ -77,7 +77,8 @@ RenderStats render(gfx::Canvas& canvas, const Mesh* const* meshes, std::size_t c
                    const View& view, gfx::Rect viewport, bool zbuffer);
 
 void rotate(View& view, float yawDelta, float pitchDelta) noexcept;
-// Colour of surface `index` (0..2) at relative height t in [0, 1] and light.
+// Colour of surface `index` (0..2: blue, red, green families) at relative
+// height t in [0, 1] and light.
 std::uint16_t surfaceColor(std::size_t index, float t, float light) noexcept;
 
 } // namespace fx::g3d

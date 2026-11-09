@@ -87,18 +87,18 @@ std::uint16_t surfaceColor(std::size_t index, float t, float light) noexcept {
     t = std::clamp(t, 0.0F, 1.0F);
     light = std::clamp(light, 0.25F, 1.0F);
     float r = 0, g = 0, b = 0;
+    // One hue family per surface, in the order of the GRAPH relations (blue,
+    // red, green), so that intersecting surfaces stay distinguishable; the
+    // brightness follows the height and the light.
     switch (index % 3) {
-    case 0:   // blue -> cyan -> green -> yellow -> red (height map)
-        if (t < 0.25F) { r = 0; g = t * 4; b = 1; }
-        else if (t < 0.5F) { r = 0; g = 1; b = 1 - (t - 0.25F) * 4; }
-        else if (t < 0.75F) { r = (t - 0.5F) * 4; g = 1; b = 0; }
-        else { r = 1; g = 1 - (t - 0.75F) * 4; b = 0; }
+    case 0:   // dark blue -> sky blue
+        r = 0.05F + 0.45F * t; g = 0.25F + 0.55F * t; b = 0.6F + 0.4F * t;
         break;
-    case 1:   // dark green -> light green
-        r = 0.1F + 0.5F * t; g = 0.55F + 0.45F * t; b = 0.15F + 0.35F * t;
+    case 1:   // dark red -> orange
+        r = 0.6F + 0.4F * t; g = 0.1F + 0.5F * t; b = 0.1F + 0.2F * t;
         break;
-    default:  // purple -> orange
-        r = 0.55F + 0.45F * t; g = 0.2F + 0.45F * t; b = 0.7F - 0.6F * t;
+    default:  // dark green -> light green
+        r = 0.1F + 0.4F * t; g = 0.45F + 0.55F * t; b = 0.1F + 0.3F * t;
         break;
     }
     return gfx::rgb888To565(static_cast<std::uint8_t>(r * light * 255), static_cast<std::uint8_t>(g * light * 255),

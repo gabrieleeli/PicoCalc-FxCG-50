@@ -9,6 +9,7 @@
 // The microSD card is a 16 MB RAM card; with PICOCALC_SD_IMAGE=<file> it is a
 // FAT/exFAT disk image instead (for example a copy of a real card), used
 // through the same FatFs code as the firmware.
+#include "board_config.hpp"
 #include "board_host.hpp"
 #include "board_platform.hpp"
 #include "board_port.hpp"
@@ -16,6 +17,7 @@
 #include "file_disk.hpp"
 #include "firmware.hpp"
 #include "keyboard_input.hpp"
+#include "mem_pools.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -44,6 +46,10 @@ int main(int argc, char** argv) {
     std::istream* in = &std::cin;
     if (std::string(argv[2]) != "-") { file.open(argv[2]); if (!file) { std::fprintf(stderr, "cannot open %s\n", argv[2]); return 2; } in = &file; }
     board::init();
+    // Same memory as the module: with the Pico Plus 2 W profile the 8 MB PSRAM
+    // pool exists (on the device it is created after the boot self-test), so
+    // GRAPH, PICT and 3D Graph use the PSRAM limits as on the calculator.
+    if (board::config::kHasPsram) mem::testing::simulatePsram(board::config::kPsramExpectedBytes);
     const char* image = std::getenv("PICOCALC_SD_IMAGE");
     static board::host::FileDisk disk(image ? image : "");
     static fx::files::FatFsFileSystem imageFs(disk);
