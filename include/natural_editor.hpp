@@ -32,7 +32,7 @@ public:
     std::vector<NaturalDrawOp> layout(int x=0, int baseline=0, int maxWidth=300) const;
     std::size_t cursorIndex() const { return cursor_; }
     const NaturalNode& root() const { return *root_; }
-    std::string error() const { return error_; }
+    const std::string& error() const noexcept { return error_; }
     void clearError() { error_.clear(); }
 private:
     std::shared_ptr<NaturalNode> root_;
@@ -45,5 +45,6 @@ private:
     const NaturalNode& activeRow() const;
     bool enterChild(std::size_t child);
     bool leaveChild(bool toRight);
+    void prepareInsert(bool structural);
 };
 }

@@ -1,6 +1,7 @@
 #include "ui.hpp"
 #include "point_a.hpp"
 #include "board_port.hpp"
+#include "board_config.hpp"
 #include "memory.hpp"
 #include "natural_editor.hpp"
 #include "graph_renderer.hpp"
@@ -8,9 +9,15 @@
 #include "math_renderer.hpp"
 #include "expression.hpp"
 #include "cheatsheet.hpp"
+#include "graph3d.hpp"
+#include "diagnostics.hpp"
+#include "limits.hpp"
+#include "system_info.hpp"
+#include "run_matrix.hpp"
 #include <string>
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 namespace ui {
 // CG50-inspired compact icon launcher, rearranged for the PicoCalc 320x320 panel.
 // The layout calls the board abstraction; the ST7365P flush still needs hardware validation.
@@ -220,12 +227,143 @@ void drawRunMatrix(const fx::NaturalEditor& editor,const char* result,const char
 
 namespace ui {
 void drawGraph(const char* expression,const fx::GraphView& view){
+ const std::vector<std::string> one{expression?expression:"x^2"};
+ drawGraph(one,view,0);
+}
+void drawGraph(const std::vector<std::string>& functions,const fx::GraphView& view,std::size_t traced){
  board::clear(BG);board::rect(0,0,320,28,TOP,true);board::text(8,9,"PicoCalc FX / GRAPH",CYAN);
- board::text(8,31,expression?expression:"x^2",WHITE);
- fx::GraphRenderer::draw(board::graphics(),expression?expression:"x^2",view);
- board::text(8,278,"LEFT/RIGHT TRACE  UP/DOWN ZOOM",CYAN);
- if(view.trace){double xv=view.xmin+(view.xmax-view.xmin)*(std::clamp(view.cursorX,12,308)-12)/296.0;char coord[48];try{double yv=fx::evaluate(expression?expression:"x^2",xv);std::snprintf(coord,sizeof(coord),"x=%.3g  y=%.3g",xv,yv);}catch(...){std::snprintf(coord,sizeof(coord),"x=%.3g  y=--",xv);}board::text(8,290,coord,ORANGE);}
+ // Legend: every Y= function in its own colour (as many as fit on one line).
+ int lx=8;
+ for(std::size_t i=0;i<functions.size()&&lx<300;++i){
+  char label[40];std::snprintf(label,sizeof(label),"Y%u=%s",static_cast<unsigned>(i+1),functions[i].empty()?"-":functions[i].c_str());
+  if(std::strlen(label)>24)std::strcpy(label+21,"...");
+  board::text(lx,31,label,fx::GraphRenderer::colorFor(i));
+  lx+=static_cast<int>(std::strlen(label))*6+8;
+ }
+ fx::GraphRenderer::draw(board::graphics(),functions,view,traced);
+ board::text(8,278,"<> TRACE  ^v ZOOM  F1 Yn  EXE Y=",CYAN);
+ const std::size_t t=traced<functions.size()?traced:0;
+ if(view.trace&&!functions.empty()){double xv=view.xmin+(view.xmax-view.xmin)*(std::clamp(view.cursorX,12,308)-12)/296.0;char coord[64];try{double yv=fx::evaluate(functions[t],xv);std::snprintf(coord,sizeof(coord),"Y%u  x=%.3g  y=%.3g",static_cast<unsigned>(t+1),xv,yv);}catch(...){std::snprintf(coord,sizeof(coord),"Y%u  x=%.3g  y=--",static_cast<unsigned>(t+1),xv);}board::text(8,290,coord,ORANGE);}
  else board::text(8,290,"AC RESET VIEW   ESC MENU",WHITE);
+ const auto cs=fx::GraphRenderer::cacheStats();
+ char info[64];std::snprintf(info,sizeof(info),"%u fn  %ux camp.  %s",static_cast<unsigned>(cs.functions),static_cast<unsigned>(cs.samplesPerPixel),cs.directFallback?"no cache":(cs.layerBytes?"layer PSRAM":"cache"));
+ board::text(8,304,info,EDGE);
+ board::present();
+}
+
+void drawGraphFunctions(const std::vector<std::string>& functions,std::size_t selected,const char* message){
+ board::clear(BG);board::rect(0,0,320,28,TOP,true);board::text(8,9,"GRAPH / FUNZIONI Y=",CYAN);
+ const std::size_t maxFunctions=fx::limits::graphMaxFunctions();
+ char cap[48];std::snprintf(cap,sizeof(cap),"%u/%u",static_cast<unsigned>(functions.size()),static_cast<unsigned>(maxFunctions));
+ board::text(250,9,cap,WHITE);
+ const std::size_t rows=functions.size()+(functions.size()<maxFunctions?1:0);
+ constexpr std::size_t visible=13;
+ const std::size_t first=selected>=visible?selected-visible+1:0;
+ for(std::size_t r=first;r<rows&&r<first+visible;++r){
+  const int y=36+static_cast<int>(r-first)*17;
+  if(r==selected)board::rect(4,y-3,312,15,0x2945,true);
+  if(r<functions.size()){
+   char label[64];std::snprintf(label,sizeof(label),"Y%u= %s",static_cast<unsigned>(r+1),functions[r].c_str());
+   board::rect(8,y,6,7,fx::GraphRenderer::colorFor(r),true);
+   board::text(20,y,label,r==selected?CYAN:WHITE);
+  } else board::text(20,y,"+ nuova funzione (digita)",EDGE);
+ }
+ if(message&&*message)board::text(8,262,message,ORANGE);
+ board::text(8,278,"TASTI: scrivi / DEL cancella / AC svuota",CYAN);
+ board::text(8,292,"CANC rimuovi  EXE disegna  ESC grafico",WHITE);
+ board::present();
+}
+
+void drawGraph3D(const char* expression,const fx::g3d::View& view){
+ board::clear(BG);board::rect(0,0,320,28,TOP,true);board::text(8,9,"PicoCalc FX / 3D GRAPH",CYAN);
+ char head[64];std::snprintf(head,sizeof(head),"z=%s",expression&&*expression?expression:"-");
+ board::text(8,31,head,WHITE);
+ const gfx::Rect viewport{8,44,304,224};
+ board::rect(viewport.x-1,viewport.y-1,viewport.w+2,viewport.h+2,EDGE,false);
+ const auto st=fx::g3d::renderSurface(board::graphics(),expression?expression:"",view,viewport);
+ char info[64];
+ if(st.ok)std::snprintf(info,sizeof(info),"griglia %ux%u  %s  buffer %uK",static_cast<unsigned>(st.grid),static_cast<unsigned>(st.grid),st.zbuffer?"z-buffer":"pittore",static_cast<unsigned>(st.bufferBytes/1024u));
+ else std::snprintf(info,sizeof(info),"%s",st.error?st.error:"errore");
+ board::text(8,274,info,st.ok?EDGE:ORANGE);
+ char cam[64];std::snprintf(cam,sizeof(cam),"yaw %.0f  pitch %.0f  zoom %.2f",static_cast<double>(view.yawDeg),static_cast<double>(view.pitchDeg),static_cast<double>(view.zoom));
+ board::text(8,288,cam,WHITE);
+ board::text(8,302,"<>^v RUOTA F1/F2 ZOOM AC RESET ESC",CYAN);
+ board::present();
+}
+
+void drawSystemMenu(unsigned selected){
+ board::clear(BG);board::rect(0,0,320,28,TOP,true);board::text(8,9,"PicoCalc FX / SYSTEM",CYAN);
+ static constexpr const char* entries[fx::RunMatrixController::kSystemEntries]={"Memoria (SRAM / PSRAM / Flash)","Limiti per scheda","Test diagnostici"};
+ for(unsigned i=0;i<fx::RunMatrixController::kSystemEntries;++i){
+  const int y=48+static_cast<int>(i)*30;
+  board::rect(10,y-6,300,22,i==selected?0x2945:PANEL,true);
+  board::rect(10,y-6,300,22,i==selected?CYAN:EDGE,false);
+  board::text(20,y,entries[i],i==selected?CYAN:WHITE);
+ }
+ char line[64];
+ std::snprintf(line,sizeof(line),"%s",board::config::kBoardName);board::text(10,160,line,WHITE);
+ std::snprintf(line,sizeof(line),"Firmware %s  profilo: %s",board::config::kFirmwareVersion,board::config::kHasPsram?"PSRAM":"SRAM");board::text(10,176,line,EDGE);
+ board::text(8,290,"SU/GIU SCEGLI  EXE APRI  ESC MENU",CYAN);
+ board::present();
+}
+
+void drawMemory(unsigned page){
+ board::clear(BG);board::rect(0,0,320,28,TOP,true);
+ if(page==0){
+  board::text(8,9,"SYSTEM / MEMORIA  (1/2)",CYAN);
+  const auto report=fx::sysinfo::collect();
+  char lines[22][fx::sysinfo::kLineChars];
+  const std::size_t n=fx::sysinfo::formatMemory(report,lines,22);
+  for(std::size_t i=0;i<n;++i)board::text(6,34+static_cast<int>(i)*13,lines[i],i==0?CYAN:WHITE);
+ } else {
+  board::text(8,9,"SYSTEM / LIMITI  (2/2)",CYAN);
+  const auto& p=fx::limits::profile();
+  char line[64];int y=34;
+  auto put=[&](const char* text,unsigned short color){board::text(6,y,text,color);y+=13;};
+  put(p.name,CYAN);
+  std::snprintf(line,sizeof(line),"Matrici %u slot, max %ux%u (ora %u)",static_cast<unsigned>(p.matrixSlots),static_cast<unsigned>(p.matrixMaxDim),static_cast<unsigned>(p.matrixMaxDim),static_cast<unsigned>(fx::limits::matrixMaxDim()));put(line,WHITE);
+  std::snprintf(line,sizeof(line),"Liste %u x %u el. (ora %u)",static_cast<unsigned>(p.statLists),static_cast<unsigned>(p.listMaxLength),static_cast<unsigned>(fx::limits::listMaxLength()));put(line,WHITE);
+  std::snprintf(line,sizeof(line),"Foglio %u righe x %u colonne",static_cast<unsigned>(p.spreadsheetRows),static_cast<unsigned>(p.spreadsheetCols));put(line,WHITE);
+  std::snprintf(line,sizeof(line),"Cronologia %u (ora %u)",static_cast<unsigned>(p.historyEntries),static_cast<unsigned>(fx::limits::historyCapacity()));put(line,WHITE);
+  std::snprintf(line,sizeof(line),"Editor %u nodi (ora %u), annid. %u",static_cast<unsigned>(p.editorMaxTokens),static_cast<unsigned>(fx::limits::editorMaxTokens()),fx::limits::kMaxEditorNesting);put(line,WHITE);
+  std::snprintf(line,sizeof(line),"Grafici %u funz. (ora %u), %ux camp.",static_cast<unsigned>(p.graphMaxFunctions),static_cast<unsigned>(fx::limits::graphMaxFunctions()),static_cast<unsigned>(p.graphSamplesPerPixel));put(line,WHITE);
+  std::snprintf(line,sizeof(line),"3D griglia %u %s",static_cast<unsigned>(p.graph3dMaxGrid),p.graph3dZBuffer?"z-buffer":"pittore (ridotto)");put(line,WHITE);
+  std::snprintf(line,sizeof(line),"Finestre %u  stack %u  snapshot %u",static_cast<unsigned>(p.maxWindows),static_cast<unsigned>(p.maxNavigationDepth),static_cast<unsigned>(p.windowSnapshots));put(line,WHITE);
+  std::snprintf(line,sizeof(line),"AI rich. %uK risp. %uK (ora %uK)",static_cast<unsigned>(p.aiRequestBytes/1024u),static_cast<unsigned>(p.aiResponseBytes/1024u),static_cast<unsigned>(fx::limits::aiResponseCapacity()/1024u));put(line,WHITE);
+  std::snprintf(line,sizeof(line),"Strutturali: parser %u, AST %u, layout %u",fx::limits::kMaxParseDepth,fx::limits::kMaxAstDepth,fx::limits::kMaxLayoutDepth);put(line,EDGE);
+  std::snprintf(line,sizeof(line),"Sommatoria max %u termini (tempo CPU)",static_cast<unsigned>(fx::limits::kMaxSummationTerms));put(line,EDGE);
+  std::snprintf(line,sizeof(line),"Budget dati pesanti ora: %uK",static_cast<unsigned>(fx::limits::heavyBudget()/1024u));put(line,ORANGE);
+ }
+ board::text(8,304,"<> PAGINA   ESC SYSTEM",CYAN);
+ board::present();
+}
+
+void drawDiagnostics(unsigned selected,const fx::diag::Result* last,bool running){
+ board::clear(BG);board::rect(0,0,320,28,TOP,true);board::text(8,9,"SYSTEM / TEST DIAGNOSTICI",CYAN);
+ for(unsigned i=0;i<fx::diag::kTestCount;++i){
+  const int y=34+static_cast<int>(i)*13;
+  if(i==selected)board::rect(4,y-2,312,12,0x2945,true);
+  board::text(10,y,fx::diag::name(static_cast<fx::diag::Test>(i)),i==selected?CYAN:WHITE);
+ }
+ const int top=34+static_cast<int>(fx::diag::kTestCount)*13+4;
+ board::rect(4,top,312,284-top,PANEL,true);board::rect(4,top,312,284-top,EDGE,false);
+ if(running){
+  board::text(12,top+8,"Esecuzione in corso...",ORANGE);
+ } else if(last&&last->ran){
+  for(unsigned i=0;i<last->lineCount;++i)board::text(10,top+6+static_cast<int>(i)*12,last->lines[i],WHITE);
+  board::text(250,top+6,last->passed?"OK":"KO/INFO",last->passed?GREEN:ORANGE);
+ } else board::text(12,top+8,"Seleziona un test e premi EXE",EDGE);
+ board::text(8,294,"SU/GIU TEST  EXE ESEGUI  ESC SYSTEM",CYAN);
+ board::text(8,306,"Risultati anche su USB (stdio)",EDGE);
+ board::present();
+}
+
+void drawToast(const char* message){
+ if(!message||!*message)return;
+ board::rect(20,130,280,44,0x4000,true);
+ board::rect(20,130,280,44,ORANGE,false);
+ board::text(32,140,message,WHITE);
+ board::text(32,156,"Premi un tasto per continuare",ORANGE);
  board::present();
 }
 }

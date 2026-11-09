@@ -1,5 +1,57 @@
 # Changelog
 
+## 1.9.0 — Pimoroni Pico Plus 2 W (PSRAM 8 MB + flash 16 MB), memoria multi-pool
+
+- **Versione**: `VERSION` era fermo a `1.5.3-dev`; ora `1.9.0` ed è l'unica
+  sorgente della versione (CMake → `FXAI_VERSION` → firmware, schermata System,
+  `pico_set_program_version`).
+- **Build reale**: il firmware v1.5 non era mai stato compilato per ARM (eccezioni
+  C++ disabilitate dall'SDK, `lwipopts.h` mancante, errori nel driver LCD:
+  `constexpr pio0`, `pio_sm_is_tx_stalled` inesistente, `glyph()` non dichiarata).
+  Ora compila senza warning per entrambe le schede con Pico SDK 2.2.0.
+- **Selezione scheda**: `FXAI_BOARD=PICO2W|PICO_PLUS_2W` prima dell'import
+  dell'SDK; definizioni `FXAI_BOARD_*`, `FXAI_HAS_PSRAM`, `FXAI_FLASH_SIZE`;
+  `scripts/build.sh --board ...` con directory e UF2 separati
+  (`build_pico2w.sh` resta come alias); `include/board_config.hpp` con pin
+  PicoCalc invariati e capacità dal board header SDK (ADC su GPIO40–47 sul
+  RP2350B documentato).
+- **Driver PSRAM APS6404L** (QMI CS1, GPIO47 dal board header) portato da
+  SparkFun `sfe_psram.c` (MIT): ID, reset, QPI, timing M1 da `clk_sys`,
+  `0xEB/0x38`, `WRITABLE_M1`; self-test data/address bus, pattern casuali,
+  percorso cached/non cached; in caso di errore PSRAM disabilitata e avvio
+  solo in SRAM; riapplicazione del timing dopo cambi di `clk_sys`.
+- **Memoria multi-pool**: `mem::alloc/tryAlloc/free/stats`, pool SRAM (heap),
+  PSRAM_BOARD (TLSF), PSRAM_PICOCALC (stub); policy PREFER_PSRAM/SRAM_ONLY/
+  PSRAM_ONLY/PREFER_SRAM; adattatori `std::pmr`; `operator new` globale
+  instradato per soglia o `mem::PlacementScope`; thread-safe su due core.
+- **Carico in PSRAM**: cronologia, matrici, liste, foglio di calcolo, campioni e
+  layer dei grafici, mesh/z-buffer 3D, snapshot finestre, buffer AI.
+- **Limiti dinamici** (`include/limits.hpp`): window manager (8/8 → dinamico
+  16/64), dirty regions, poligoni (32 → 256/4096), matrici (4×4 → 40/999),
+  liste (6×256 → 26×999/1M), foglio (45×5 → 999×26 sparso), cronologia
+  (30 → 30/10 000), funzioni Y= (1 → 20/64), 3D (pittore/z-buffer), buffer AI;
+  limiti strutturali mantenuti e aggiunti (profondità parser prima illimitata).
+- **"Memoria insufficiente"** con rollback e senza abort (anche il messaggio è
+  scritto senza allocare); `PICO_MALLOC_PANIC=0`.
+- **Stack**: stack applicativo core 0 da 32 KiB in SRAM (prima 2 KiB in
+  SCRATCH_Y) con MSPLIM; core 1 8 KiB con guardia SDK; handler HardFault in
+  SRAM con stack d'emergenza e report al riavvio.
+- **Flash**: partizioni da `PICO_FLASH_SIZE_BYTES`, LittleFS v2.11.3,
+  scritture solo via `flash_safe_execute()` con buffer SRAM, verifica/ripristino
+  di QMI M1 nella zona sicura, test "PSRAM dopo scrittura flash"; `-Os/-O2`,
+  gc-sections, LTO sperimentale (solo sorgenti app), controllo dimensione.
+- **Grafica**: grafici 2D multi-funzione con cache campioni/layer e
+  sovracampionamento; grafico 3D (z-buffer o pittore); framebuffer in SRAM di
+  default con `FXAI_FRAMEBUFFER_IN_PSRAM`; benchmark `present()` on-device.
+- **System**: schermate Memoria (SRAM/PSRAM/Flash, picchi, stack), Limiti e
+  Test diagnostici (PSRAM, allocatore 1/2 core, flash+PSRAM, framebuffer,
+  Wi-Fi con scansione, LittleFS, SD).
+- **Periferiche**: `wifiConnect()` attiva la modalità STA; probe SD
+  (`FXAI_ENABLE_SD`); Bluetooth LE opzionale (`FXAI_ENABLE_BT`, default OFF).
+- **Test**: suite host ristrutturata (libreria comune) + 8 nuove suite; CTest
+  in `desktop/CMakeLists.txt` (emulatore SDL2 opzionale). Nessun test su
+  hardware reale eseguito: vedi `docs/PICO_PLUS_2W.md` §11.
+
 ## v1.5.2-dev — Casio-style 20-mode launcher
 - Sostituita la griglia generica 3x3 con una griglia 4x5 che riproduce le 20 modalità visibili nell'immagine di riferimento FX-CG50: Run-Matrix, Statistics, eActivity, Spreadsheet, Graph, Dyna Graph, Table, Recursion, Conic Graphs, Equation, Program, Financial, E-CON4, Link, Memory, System, Geometry, Picture Plot, 3D Graph e Conversion.
 - Ogni modalità ha un riquadro dedicato con colore, pittogramma compatto, etichetta e badge del tasto (1–9, A–K), ispirati alle icone originali.

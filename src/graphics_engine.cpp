@@ -1,4 +1,5 @@
 #include "graphics_engine.hpp"
+#include "mem_pools.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -30,6 +31,31 @@ void Canvas::setClip(Rect r) noexcept {
     clip_={x0,y0,std::max(0,x1-x0),std::max(0,y1-y0)};
 }
 void Canvas::resetClip() noexcept { clip_={0,0,width_,height_}; }
+void Canvas::copyFrom(Rect r, const std::uint16_t* src, int stride) noexcept {
+    if(!pixels_||!src||r.w<=0||r.h<=0) return;
+    const int x0=std::max(r.x,clip_.x), y0=std::max(r.y,clip_.y);
+    const int x1=std::min(r.x+r.w,clip_.x+clip_.w), y1=std::min(r.y+r.h,clip_.y+clip_.h);
+    if(x0>=x1||y0>=y1) return;
+    for(int y=y0;y<y1;++y)
+        std::copy(src+static_cast<std::size_t>(y-r.y)*stride+(x0-r.x), src+static_cast<std::size_t>(y-r.y)*stride+(x1-r.x),
+                  pixels_+static_cast<std::size_t>(y)*width_+x0);
+    markDirty({x0,y0,x1-x0,y1-y0});
+}
+void Canvas::copyTo(Rect r, std::uint16_t* dst, int stride) const noexcept {
+    if(!pixels_||!dst||r.w<=0||r.h<=0) return;
+    for(int y=0;y<r.h;++y){
+        const int sy=r.y+y;
+        for(int x=0;x<r.w;++x){
+            const int sx=r.x+x;
+            dst[static_cast<std::size_t>(y)*stride+x]=(sx>=0&&sy>=0&&sx<width_&&sy<height_)?pixels_[static_cast<std::size_t>(sy)*width_+sx]:0;
+        }
+    }
+}
+void Canvas::invalidate(Rect r) noexcept {
+    const int x0=std::max(r.x,0), y0=std::max(r.y,0);
+    const int x1=std::min(r.x+r.w,width_), y1=std::min(r.y+r.h,height_);
+    if(x0<x1&&y0<y1) markDirty({x0,y0,x1-x0,y1-y0});
+}
 void Canvas::markDirty(Rect r) noexcept {
     if(r.w<=0||r.h<=0)return;
     const auto unite=[](Rect a, Rect b) noexcept {
@@ -218,16 +244,27 @@ void Canvas::polygon(const Point* p,std::size_t n,std::uint16_t c,bool filled) n
         for(std::size_t i=0;i<n;++i){const Point a=p[i],b=p[(i+1)%n];line(a.x,a.y,b.x,b.y,c);}
         return;
     }
-    constexpr std::size_t Max=32; if(n>Max)return;
+    // Scanline fill: one intersection per edge at most. Small polygons use the
+    // stack, large ones a pooled scratch buffer (no fixed 32-vertex limit).
+    constexpr std::size_t StackVertices=32;
+    if(n>fx::limits::kProfile.polygonMaxVertices){polygon(p,n,c,false);return;}
+    int stackIntersections[StackVertices];
+    int* intersections=stackIntersections;
+    void* scratch=nullptr;
+    if(n>StackVertices){
+        scratch=mem::tryAlloc(mem::Policy::PREFER_SRAM,n*sizeof(int),alignof(int));
+        if(!scratch){polygon(p,n,c,false);return;}
+        intersections=static_cast<int*>(scratch);
+    }
     int minY=p[0].y,maxY=p[0].y; for(std::size_t i=1;i<n;++i){minY=std::min(minY,p[i].y);maxY=std::max(maxY,p[i].y);}
     minY=std::max(minY,clip_.y);maxY=std::min(maxY,clip_.y+clip_.h-1);
-    int intersections[Max];
     for(int y=minY;y<=maxY;++y){std::size_t count=0;
         for(std::size_t i=0,j=n-1;i<n;j=i++) {const Point a=p[i],b=p[j];
             if((a.y<=y&&b.y>y)||(b.y<=y&&a.y>y)) intersections[count++]=a.x+(y-a.y)*(b.x-a.x)/(b.y-a.y);}
         std::sort(intersections,intersections+count);
         for(std::size_t i=0;i+1<count;i+=2) hLine(intersections[i],y,intersections[i+1]-intersections[i]+1,c);
     }
+    mem::free(scratch);
 }
 void Canvas::bitmap(int x,int y,int w,int h,const std::uint16_t* src,std::uint16_t key,bool transparent) noexcept {
     if(!src||w<=0||h<=0)return;

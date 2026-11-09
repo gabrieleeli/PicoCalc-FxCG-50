@@ -1,4 +1,19 @@
-# Build status — v0.3
+# Build status
+
+## v1.9.0 (2026-11-09)
+
+Verificato in questo ambiente (Pico SDK 2.2.0, arm-none-eabi-gcc 13.2.1):
+- `./scripts/build.sh --board pico2w` e `--board pico_plus_2w`: **build riuscita**, zero warning.
+  Pico 2 W 456 716 B (21% della partizione FW da 2 MiB), SRAM statica 320 KiB;
+  Pico Plus 2 W 505 364 B (12% di 4 MiB), SRAM statica 321 KiB.
+- Varianti compilate: Bluetooth (entrambe), framebuffer in PSRAM, -O2, LTO limitato ai sorgenti app.
+- Suite host (19) per entrambi i profili, anche con ASan/UBSan; TSan sull'allocatore; CTest 19/19.
+
+Non verificato: nessun test su hardware (PSRAM, flash/LittleFS, LCD, tastiera,
+Wi-Fi, SD, BT). Usare *System → Test diagnostici* sul dispositivo.
+Dettagli: `docs/PICO_PLUS_2W.md`.
+
+# Storico — v0.3
 
 ## Verificato
 - Motore matematico compilato e testato su host con `g++ -std=c++17 -Wall -Wextra -Werror`.

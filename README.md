@@ -1,9 +1,40 @@
-# PicoCalc FX AI — C++ firmware project (Pico 2 W)
+# PicoCalc FX AI — C++ firmware project (Pico 2 W / Pimoroni Pico Plus 2 W)
+
+Version: **1.9.0** (see `VERSION`; the value is compiled into the firmware and
+shown in *System*).
 
 This is the first integrated C++ project scaffold built from the supplied `math_engine.py` and `funzioni.txt` requirements. It is **not yet a production-ready UF2**: the exact ST7365P panel init/flush and keyboard packet protocol must be validated against the PicoCalc mainboard/keyboard firmware revision, and the AI network client needs a secure HTTPS relay implementation.
 
+## v1.9.0 — Pimoroni Pico Plus 2 W (PSRAM 8 MB + flash 16 MB)
+
+Two boards are supported from the same sources (`FXAI_BOARD`):
+
+| | Pico 2 W (`PICO2W`, default) | Pico Plus 2 W (`PICO_PLUS_2W`) |
+|---|---|---|
+| Memory | SRAM 520 KiB | SRAM 520 KiB + PSRAM 8 MiB (QMI CS1, GPIO47) |
+| Flash | 4 MiB (FW 2 MiB + LittleFS ~2 MiB) | 16 MiB (FW 4 MiB + LittleFS ~12 MiB) |
+| UF2 | `picocalc_fxai_pico2w.uf2` | `picocalc_fxai_pico_plus_2w.uf2` |
+
+```sh
+export PICO_SDK_PATH=/path/to/pico-sdk   # >= 2.1 (tested with 2.2.0)
+./scripts/build.sh --board pico_plus_2w
+./scripts/build.sh --board pico2w
+```
+
+New in 1.9.0: APS6404L PSRAM driver with boot self-test (SparkFun-derived
+sequence), multi-pool allocator (SRAM heap + TLSF PSRAM pool + PicoCalc PSRAM
+stub) with `std::pmr` adapters and pool-routed `operator new`, per-board and
+memory-derived limits instead of fixed ones, "Memoria insufficiente" handling
+with rollback, MSPLIM stack guards on both cores, LittleFS in the upper flash
+with `flash_safe_execute()`, multi-function 2D graphs with sample/layer caches,
+a 3D surface graph, and *System → Memoria / Limiti / Test diagnostici*.
+The firmware now builds for both boards (the v1.5 sources never compiled for
+ARM: C++ exceptions were disabled, `lwipopts.h` was missing and the LCD driver
+had compile errors). Hardware validation is still pending; see
+`docs/PICO_PLUS_2W.md` for details, memory map, limits and test status.
+
 ## Hardware target
-- Raspberry Pi Pico 2 W (RP2350, CYW43 Wi-Fi)
+- Raspberry Pi Pico 2 W (RP2350A, CYW43 Wi-Fi) **or** Pimoroni Pico Plus 2 W (RP2350B, RM2 Wi-Fi/BT, 8 MiB PSRAM, 16 MiB flash)
 - ClockworkPi PicoCalc v2 mainboard
 - 320x320 ST7365P LCD, driven by a dedicated PIO-SPI engine (GP10 SCK, GP11 MOSI; GP13 CS, GP14 DC, GP15 RESET)
 - Keyboard controller over I2C1 (GP6 SDA, GP7 SCL, address 0x1F; 10 kHz bus)
@@ -12,15 +43,20 @@ This is the first integrated C++ project scaffold built from the supplied `math_
 Check the exact mainboard revision and official schematic before wiring or changing pin definitions. The current `board_port.cpp` intentionally isolates hardware-specific panel and keyboard code rather than guessing an undocumented init sequence.
 
 ## Build
-Install Raspberry Pi Pico SDK, ARM GNU toolchain and CMake. Set `PICO_SDK_PATH`, then:
+Install Raspberry Pi Pico SDK (>= 2.1), ARM GNU toolchain and CMake. Set `PICO_SDK_PATH`, then:
 
 ```sh
-mkdir build && cd build
-cmake .. -DPICO_BOARD=pico2_w
-cmake --build . -j
+./scripts/build.sh --board pico2w          # -> build/pico2w/picocalc_fxai_pico2w.uf2
+./scripts/build.sh --board pico_plus_2w    # -> build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2
+# or by hand (one build directory per board):
+cmake -S . -B build/pico2w -DFXAI_BOARD=PICO2W && cmake --build build/pico2w -j
 ```
 
-Output atteso: `build/picocalc_fxai.uf2`. Il board adapter è presente nel sorgente, ma la build target e il funzionamento fisico richiedono ancora SDK/toolchain e verifica sul PicoCalc reale.
+`-DPICO_BOARD=pico2_w` alone still works (it selects `FXAI_BOARD=PICO2W`).
+Options: `--opt Os|O2`, `--fb-psram`, `--bt`, `--lto`, `-DFXAI_ENABLE_3D/CAS/SD=ON|OFF`.
+Flash with BOOTSEL + copy of the matching UF2 (images are not interchangeable
+between boards). The board adapter compiles for both modules; the physical
+LCD/keyboard/PSRAM behaviour still needs verification on a real PicoCalc.
 
 ## v1.5 — Window Manager (development)
 
@@ -77,7 +113,7 @@ The uploaded Python engine is preserved in `docs/math_engine_original.py`; its n
 The UI reserves separate ChatGPT and Claude panels. For a real deployment, use a small HTTPS relay on a trusted server: the Pico sends the prompt over TLS; the relay stores provider keys and calls the OpenAI or Anthropic API. Never hard-code provider keys in firmware or commit them to source control. `ai_client.cpp` is deliberately a safe placeholder until relay URL, TLS certificate handling, response limits and provider models are configured.
 
 ## Tests
-`tests/run_host_tests.sh` runs the native math, graphics, font, layout, graph, launcher, widget, animation and window-manager smoke suites without the Pico SDK.
+`tests/run_host_tests.sh` runs the native math, graphics, font, layout, graph, launcher, widget, animation, window-manager, memory-pool, PSRAM self-test, limits, out-of-memory, LittleFS and system-menu suites without the Pico SDK (`FXAI_TEST_BOARD=PICO_PLUS_2W` selects the PSRAM profile, `FXAI_TEST_SANITIZE=1` enables ASan/UBSan). The same suites run through CTest: `cmake -S desktop -B build-desktop && cmake --build build-desktop && ctest --test-dir build-desktop`.
 
 ## License and references
 This project contains original code and a preserved copy of the user's supplied Python file. Hardware details should be cross-checked with ClockworkPi's official PicoCalc documentation and schematic. No Casio firmware or proprietary code is included.

@@ -7,6 +7,9 @@
 #include "natural_editor.hpp"
 #include "keyboard_input.hpp"
 #include "run_matrix.hpp"
+#include "limits.hpp"
+#include "board_config.hpp"
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 int main(){
@@ -211,7 +214,9 @@ int main(){
  app.handle(fx::decodePicoCalcKey(0x0133));
  app.handle(fx::decodePicoCalcKey(0x010A));
  assert(app.expression()=="(2+3)" && app.result()=="5");
- fx::pointa::RunMatrixSession limitedHistory; for(int i=0;i<35;++i)limitedHistory.execute("1+1"); assert(limitedHistory.history().size()==30 && limitedHistory.history().front().expression=="1+1");
+ // History retention is a per-board limit: 30 entries (fx-CG50) on the Pico 2 W,
+ // memory-bound up to 10000 with PSRAM.
+ {const std::size_t cap=fx::limits::historyCapacity();fx::pointa::RunMatrixSession limitedHistory;const std::size_t runs=std::min<std::size_t>(cap+5,20000);for(std::size_t i=0;i<runs;++i)limitedHistory.execute("1+1");assert(limitedHistory.history().size()==std::min(cap,runs) && limitedHistory.history().front().expression=="1+1");if(!board::config::kHasPsram)assert(cap==30);}
  app.handle(fx::decodePicoCalcKey(0x0186));
  app.handle(fx::decodePicoCalcKey(0x0178));
  app.handle(fx::decodePicoCalcKey(0x0184));

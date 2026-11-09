@@ -1,4 +1,5 @@
 #include "expression.hpp"
+#include "limits.hpp"
 #include "math_engine.hpp"
 #include <algorithm>
 #include <cctype>
@@ -10,8 +11,17 @@
 
 namespace fx {
 namespace {
+// Structural guard: the recursive descent parser runs on the SRAM stack, so
+// its nesting depth is bounded (fx::limits::kMaxParseDepth) on every board.
+struct DepthGuard {
+ unsigned& depth;
+ DepthGuard(unsigned& d,unsigned limit):depth(d){if(++depth>limit){--depth;throw std::runtime_error("Espressione troppo annidata");}}
+ ~DepthGuard(){--depth;}
+ DepthGuard(const DepthGuard&)=delete;
+ DepthGuard& operator=(const DepthGuard&)=delete;
+};
 class Parser {
- const std::string& s; size_t p=0; double x,y; const CalculatorMemory* memory=nullptr;
+ const std::string& s; size_t p=0; double x,y; const CalculatorMemory* memory=nullptr; unsigned depth=0;
  void ws(){while(p<s.size()&&std::isspace(static_cast<unsigned char>(s[p])))++p;}
  bool eat(char c){ws();
    if(p<s.size()&&s[p]==c){++p;return true;}return false;}
@@ -27,7 +37,7 @@ class Parser {
  double power(){double v=postfix();
    if(eat('^'))v=std::pow(v,unary());
   return v;}
- double unary(){if(eat('+'))return unary();
+ double unary(){DepthGuard guard(depth,limits::kMaxParseDepth);if(eat('+'))return unary();
    if(eat('-'))return-unary();
   return power();}
  double postfix(){double v=atom();while(eat('!')){if(v<0||v>170||std::floor(v)!=v)throw std::domain_error("Fattoriale: serve un intero tra 0 e 170");v=factorial(static_cast<unsigned>(v));}return v;}
@@ -72,9 +82,9 @@ class Parser {
      hi=expr();
     }
     if(!eat(')'))throw std::runtime_error("Manca )");
-    auto f=[&](double t){return Parser(integrand,t,y,memory).run();};
+    auto f=[&](double t){return Parser(integrand,t,y,memory,depth).run();}; // nested parsers share the depth budget
     if(n=="derivative"||n=="diff"){const double h=1e-5*std::max(1.0,std::abs(hi));return (f(hi+h)-f(hi-h))/(2*h);}
-    if(n=="sum"){if(std::floor(first)!=first||std::floor(hi)!=hi)throw std::domain_error("Limiti della sommatoria: usare interi");if(std::abs(hi-first)>10000)throw std::domain_error("Sommatoria troppo ampia (massimo 10001 termini)");double total=0;const long long a=static_cast<long long>(first),b=static_cast<long long>(hi);if(a<=b){for(long long k=a;k<=b;++k)total+=f(static_cast<double>(k));}else{for(long long k=a;k>=b;--k)total+=f(static_cast<double>(k));}return total;}
+    if(n=="sum"){if(std::floor(first)!=first||std::floor(hi)!=hi)throw std::domain_error("Limiti della sommatoria: usare interi");if(std::abs(hi-first)>static_cast<double>(limits::kMaxSummationTerms-1))throw std::domain_error("Sommatoria troppo ampia (massimo 10001 termini)");double total=0;const long long a=static_cast<long long>(first),b=static_cast<long long>(hi);if(a<=b){for(long long k=a;k<=b;++k)total+=f(static_cast<double>(k));}else{for(long long k=a;k>=b;--k)total+=f(static_cast<double>(k));}return total;}
     lo=first;
     constexpr unsigned intervals=400;const double step=(hi-lo)/intervals;
     double total=f(lo)+f(hi);for(unsigned i=1;i<intervals;++i)total+=(i%2?4.0:2.0)*f(lo+i*step);
@@ -141,21 +151,21 @@ class Parser {
   }
   throw std::runtime_error("Espressione non valida");
  }
-public: Parser(const std::string&v,double xv,double yv,const CalculatorMemory* mem=nullptr):s(v),x(xv),y(yv),memory(mem){} double run(){double v=expr();ws();
+public: Parser(const std::string&v,double xv,double yv,const CalculatorMemory* mem=nullptr,unsigned depthBase=0):s(v),x(xv),y(yv),memory(mem),depth(depthBase){} double run(){double v=expr();ws();
    if(p!=s.size())throw std::runtime_error("Caratteri extra");
    if(!std::isfinite(v))throw std::domain_error("Risultato non finito");
   return v;}
 };
 
 class AstParser {
- const std::string& s; std::size_t p{};
+ const std::string& s; std::size_t p{}; unsigned depth{};
  void ws(){while(p<s.size()&&std::isspace(static_cast<unsigned char>(s[p])))++p;}
  bool eat(char c){ws();if(p<s.size()&&s[p]==c){++p;return true;}return false;}
  std::string identifier(){ws();std::size_t b=p;while(p<s.size()&&std::isalnum(static_cast<unsigned char>(s[p])))++p;if(b==p)throw std::runtime_error("Identificatore atteso");std::string n=s.substr(b,p-b);std::transform(n.begin(),n.end(),n.begin(),[](unsigned char c){return static_cast<char>(std::tolower(c));});return n;}
  ast::NodePtr binary(std::string op,ast::NodePtr a,ast::NodePtr b){auto n=ast::make(ast::Kind::Binary,std::move(op));n->children={std::move(a),std::move(b)};return n;}
  ast::NodePtr expression(){auto n=term();for(;;){if(eat('+'))n=binary("+",n,term());else if(eat('-'))n=binary("-",n,term());else return n;}}
  ast::NodePtr term(){auto n=unary();for(;;){if(eat('*'))n=binary("*",n,unary());else if(eat('/'))n=binary("/",n,unary());else if(eat('%'))n=binary("%",n,unary());else{ws();if(p<s.size()&&(s[p]=='('||std::isalpha(static_cast<unsigned char>(s[p]))))n=binary("*",n,unary());else return n;}}}
- ast::NodePtr unary(){if(eat('+')){auto n=ast::make(ast::Kind::Unary,"+");n->children={unary()};return n;}if(eat('-')){auto n=ast::make(ast::Kind::Unary,"-");n->children={unary()};return n;}return power();}
+ ast::NodePtr unary(){DepthGuard guard(depth,limits::kMaxParseDepth);if(eat('+')){auto n=ast::make(ast::Kind::Unary,"+");n->children={unary()};return n;}if(eat('-')){auto n=ast::make(ast::Kind::Unary,"-");n->children={unary()};return n;}return power();}
  ast::NodePtr power(){auto n=postfix();if(eat('^'))n=binary("^",n,unary());return n;}
  ast::NodePtr postfix(){auto n=atom();while(eat('!')){auto c=ast::make(ast::Kind::Call,"factorial");c->children={n};n=c;}return n;}
  ast::NodePtr atom(){ws();if(eat('(')){auto n=expression();if(!eat(')'))throw std::runtime_error("Manca )");auto g=ast::make(ast::Kind::Group);g->children={n};return g;}
@@ -164,10 +174,10 @@ class AstParser {
  }
 public: explicit AstParser(const std::string& text):s(text){} ast::NodePtr run(){auto n=expression();ws();if(p!=s.size())throw std::runtime_error("Caratteri extra nell'espressione");return n;}
 };
-double evalAst(const ast::Node& n,double x,double y){using ast::Kind;auto ev=[&](std::size_t i){if(i>=n.children.size()||!n.children[i])throw std::runtime_error("Figlio AST mancante");return evalAst(*n.children[i],x,y);};
+double evalAst(const ast::Node& n,double x,double y,unsigned depth=0){using ast::Kind;if(depth>limits::kMaxAstDepth)throw std::runtime_error("Espressione troppo annidata");auto ev=[&](std::size_t i){if(i>=n.children.size()||!n.children[i])throw std::runtime_error("Figlio AST mancante");return evalAst(*n.children[i],x,y,depth+1);};
  if(!ast::validShape(n))throw std::runtime_error("Nodo AST non valido");
  switch(n.kind){case Kind::Token:{if(n.text.empty())throw std::runtime_error("Token vuoto");char* e=nullptr;double v=std::strtod(n.text.c_str(),&e);if(e==n.text.c_str()+n.text.size())return v;if(n.text=="x")return x;if(n.text=="y")return y;if(n.text=="pi")return M_PI;if(n.text=="e")return M_E;throw std::runtime_error("Variabile AST sconosciuta: "+n.text);}
- case Kind::Row:{if(n.children.empty())return 0.0;std::string tokenText;double value=0.0;bool haveValue=false;auto flush=[&](){if(!tokenText.empty()){value=evalAst(*parseExpression(tokenText),x,y);haveValue=true;tokenText.clear();}};for(const auto& c:n.children){if(!c)throw std::runtime_error("Figlio AST nullo");if(c->kind==Kind::Token)tokenText+=c->text;else{flush();value=evalAst(*c,x,y);haveValue=true;}}flush();return haveValue?value:0.0;}
+ case Kind::Row:{if(n.children.empty())return 0.0;std::string tokenText;double value=0.0;bool haveValue=false;auto flush=[&](){if(!tokenText.empty()){value=evalAst(*parseExpression(tokenText),x,y,depth+1);haveValue=true;tokenText.clear();}};for(const auto& c:n.children){if(!c)throw std::runtime_error("Figlio AST nullo");if(c->kind==Kind::Token)tokenText+=c->text;else{flush();value=evalAst(*c,x,y,depth+1);haveValue=true;}}flush();return haveValue?value:0.0;}
  case Kind::Binary:{double a=ev(0),b=ev(1);if(n.text=="+")return a+b;if(n.text=="-")return a-b;if(n.text=="*")return a*b;if(n.text=="/"){if(b==0)throw std::domain_error("Divisione per zero");return a/b;}if(n.text=="%"){if(b==0)throw std::domain_error("Modulo per zero");return std::fmod(a,b);}if(n.text=="^")return std::pow(a,b);throw std::runtime_error("Operatore AST sconosciuto");}
  case Kind::Unary:{double a=ev(0);return n.text=="-"?-a:a;}
  case Kind::Fraction:{double b=ev(1);if(b==0)throw std::domain_error("Divisione per zero");return ev(0)/b;}

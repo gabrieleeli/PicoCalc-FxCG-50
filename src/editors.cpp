@@ -1,15 +1,31 @@
 #include "editors.hpp"
+#include "mem_pools.hpp"
+#include <string>
 #include <algorithm>
 #include <cmath>
 #include <numeric>
 #include <stdexcept>
 namespace fx {
-void MatrixEditor::resize(std::size_t s,std::size_t r,std::size_t c){if(s>=Slots||r<1||r>MaxRows||c<1||c>MaxCols)throw std::out_of_range("Dimensioni matrice non valide (1..4)");matrices_[s].assign(r,std::vector<double>(c));}
+void MatrixEditor::resize(std::size_t s,std::size_t r,std::size_t c){
+ if(s>=Slots||r<1||r>MaxRows||c<1||c>MaxCols)throw std::out_of_range("Dimensioni matrice non valide (1.."+std::to_string(MaxRows)+")");
+ mem::PlacementScope heavy(mem::Policy::PREFER_PSRAM);
+ Matrix fresh(r,std::vector<double>(c)); // may throw std::bad_alloc: the old matrix stays intact
+ matrices_[s].swap(fresh);
+}
 void MatrixEditor::set(std::size_t s,std::size_t r,std::size_t c,double v){if(s>=Slots||r>=matrices_[s].size()||c>=matrices_[s][r].size())throw std::out_of_range("Cella matrice fuori intervallo");matrices_[s][r][c]=v;}
 double MatrixEditor::get(std::size_t s,std::size_t r,std::size_t c)const{if(s>=Slots||r>=matrices_[s].size()||c>=matrices_[s][r].size())throw std::out_of_range("Cella matrice fuori intervallo");return matrices_[s][r][c];}
 const Matrix& MatrixEditor::value(std::size_t s)const{if(s>=Slots||matrices_[s].empty())throw std::out_of_range("Matrice non definita");return matrices_[s];}
 void MatrixEditor::clear(std::size_t s){if(s>=Slots)throw std::out_of_range("Slot matrice non valido");matrices_[s].clear();}
-void StatisticsEditor::set(std::size_t l,std::size_t i,double v){if(l>=Lists||i>255)throw std::out_of_range("Lista o indice non valido");auto& a=lists_[l];if(i>=a.size())a.resize(i+1);a[i]=v;}
+void StatisticsEditor::set(std::size_t l,std::size_t i,double v){
+ if(l>=Lists)throw std::out_of_range("Lista non valida");
+ auto& a=lists_[l];
+ if(i>=a.size()){
+  if(i>=limits::listMaxLength())throw std::length_error("Lista piena: limite di memoria raggiunto");
+  mem::PlacementScope heavy(mem::Policy::PREFER_PSRAM);
+  a.resize(i+1); // strong guarantee: on std::bad_alloc the list is unchanged
+ }
+ a[i]=v;
+}
 void StatisticsEditor::erase(std::size_t l,std::size_t i){if(l>=Lists||i>=lists_[l].size())throw std::out_of_range("Elemento lista non valido");lists_[l].erase(lists_[l].begin()+static_cast<std::ptrdiff_t>(i));}
 const std::vector<double>& StatisticsEditor::list(std::size_t l)const{if(l>=Lists)throw std::out_of_range("Lista non valida");return lists_[l];}
 DescriptiveStats StatisticsEditor::summary(std::size_t l)const{return describe(list(l));}

@@ -6,6 +6,7 @@
 #include <vector>
 #include <cstdint>
 #include <utility>
+#include "limits.hpp"
 
 namespace fx {
 enum class AngleMode { Radians, Degrees, Gradians };
@@ -84,12 +85,18 @@ double binomialPmf(unsigned n, unsigned k, double p);
 double binomialCdf(unsigned n, unsigned k, double p);
 double poissonPmf(unsigned k, double lambda);
 double poissonCdf(unsigned k, double lambda);
+// fx-CG50 sized sheet (999 rows x 26 columns on both boards). Storage is
+// sparse (only non-zero cells, PSRAM when available), so the capacity is bound
+// by free memory instead of a fixed 45x5 array; set() fails with
+// std::bad_alloc without modifying the sheet when memory is exhausted.
 struct Spreadsheet {
- static constexpr std::size_t Rows=45, Cols=5;
- std::array<std::array<double,Cols>,Rows> cells{};
+ static constexpr std::size_t Rows=limits::kProfile.spreadsheetRows, Cols=limits::kProfile.spreadsheetCols;
  void set(std::size_t row, std::size_t col, double value);
  double get(std::size_t row, std::size_t col) const;
  double sum(std::size_t col, std::size_t first, std::size_t last) const;
  double average(std::size_t col, std::size_t first, std::size_t last) const;
+ std::size_t usedCells() const noexcept { return cells_.size(); }
+private:
+ std::vector<std::pair<std::uint32_t,double>> cells_; // sorted by row*Cols+col
 };
 }

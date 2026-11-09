@@ -1,4 +1,5 @@
 #include "math_engine.hpp"
+#include "mem_pools.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -153,9 +154,22 @@ double binomialPmf(unsigned n,unsigned k,double p){if(!(p>=0&&p<=1)||k>n) return
 double binomialCdf(unsigned n,unsigned k,double p){if(!(p>=0&&p<=1))throw std::invalid_argument("p deve essere tra 0 e 1");double s=0;for(unsigned i=0;i<=std::min(k,n);++i)s+=binomialPmf(n,i,p);return s;}
 double poissonPmf(unsigned k,double l){if(l<0||!std::isfinite(l))throw std::invalid_argument("Lambda non valida");return std::exp(-l+k*std::log(l==0?1:l)-std::lgamma(k+1.0))*(l==0&&k>0?0:1);}
 double poissonCdf(unsigned k,double l){if(l<0||!std::isfinite(l))throw std::invalid_argument("Lambda non valida");double s=0;for(unsigned i=0;i<=k;++i)s+=poissonPmf(i,l);return s;}
-void Spreadsheet::set(size_t r,size_t c,double v){if(r>=Rows||c>=Cols)throw std::out_of_range("Cella fuori intervallo");cells[r][c]=v;}
-double Spreadsheet::get(size_t r,size_t c)const{if(r>=Rows||c>=Cols)throw std::out_of_range("Cella fuori intervallo");return cells[r][c];}
-double Spreadsheet::sum(size_t c,size_t first,size_t last)const{if(c>=Cols||first>last||last>=Rows)throw std::out_of_range("Intervallo foglio non valido");double s=0;for(size_t r=first;r<=last;++r)s+=cells[r][c];return s;}
+void Spreadsheet::set(size_t r,size_t c,double v){
+ if(r>=Rows||c>=Cols)throw std::out_of_range("Cella fuori intervallo");
+ const auto key=static_cast<std::uint32_t>(r*Cols+c);
+ auto it=std::lower_bound(cells_.begin(),cells_.end(),key,[](const auto& cell,std::uint32_t k){return cell.first<k;});
+ if(it!=cells_.end()&&it->first==key){if(v==0.0)cells_.erase(it);else it->second=v;return;}
+ if(v==0.0)return; // empty cells are not stored
+ mem::PlacementScope heavy(mem::Policy::PREFER_PSRAM);
+ cells_.insert(it,{key,v}); // strong guarantee on std::bad_alloc
+}
+double Spreadsheet::get(size_t r,size_t c)const{
+ if(r>=Rows||c>=Cols)throw std::out_of_range("Cella fuori intervallo");
+ const auto key=static_cast<std::uint32_t>(r*Cols+c);
+ auto it=std::lower_bound(cells_.begin(),cells_.end(),key,[](const auto& cell,std::uint32_t k){return cell.first<k;});
+ return it!=cells_.end()&&it->first==key?it->second:0.0;
+}
+double Spreadsheet::sum(size_t c,size_t first,size_t last)const{if(c>=Cols||first>last||last>=Rows)throw std::out_of_range("Intervallo foglio non valido");double s=0;for(size_t r=first;r<=last;++r)s+=get(r,c);return s;}
 double Spreadsheet::average(size_t c,size_t first,size_t last)const{return sum(c,first,last)/static_cast<double>(last-first+1);}
 
 }

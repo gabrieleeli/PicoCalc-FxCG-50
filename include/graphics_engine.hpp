@@ -1,6 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include "limits.hpp"
 
 namespace gfx {
 struct Rect { int x{}, y{}, w{}, h{}; };
@@ -16,7 +17,10 @@ struct Transform2D {
     PointF apply(PointF p) const noexcept;
 };
 struct DirtyRegions {
-    static constexpr std::size_t Capacity = 16;
+    // Per-board compile-time capacity (16 on Pico 2 W, 32 with PSRAM): the
+    // list lives inside the Canvas so the drawing hot path never allocates.
+    // Overflow is graceful: all regions merge into one bounding rectangle.
+    static constexpr std::size_t Capacity = fx::limits::kDirtyRegionCapacity;
     Rect rects[Capacity]{};
     std::size_t count{};
 };
@@ -54,6 +58,13 @@ public:
     DirtyRegions consumeDirtyRegions() noexcept;
     void setClip(Rect clip) noexcept;
     void resetClip() noexcept;
+    // Marks an area as modified without drawing (e.g. after a direct copy
+    // into the framebuffer, such as a window snapshot restore).
+    void invalidate(Rect area) noexcept;
+    // Row-wise block copies between the canvas and an off-screen layer
+    // (e.g. a cached plot kept in PSRAM). `stride` is in pixels.
+    void copyFrom(Rect area, const std::uint16_t* src, int stride) noexcept;
+    void copyTo(Rect area, std::uint16_t* dst, int stride) const noexcept;
     void clear(std::uint16_t color) noexcept;
     void pixel(int x, int y, std::uint16_t color) noexcept;
     std::uint16_t getPixel(int x, int y) const noexcept;
@@ -75,6 +86,9 @@ public:
     void circle(int cx, int cy, int radius, std::uint16_t color, bool filled) noexcept;
     void arc(int cx, int cy, int radius, int startDegrees, int endDegrees,
              std::uint16_t color) noexcept;
+    // Filled polygons use a 32-entry stack buffer and fall back to a pooled
+    // scratch buffer for larger ones (up to limits::kProfile.polygonMaxVertices);
+    // if the scratch allocation fails only the outline is drawn.
     void polygon(const Point* points, std::size_t count, std::uint16_t color,
                  bool filled) noexcept;
     void bitmap(int x, int y, int width, int height, const std::uint16_t* pixels,

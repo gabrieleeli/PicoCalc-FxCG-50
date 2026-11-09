@@ -7,6 +7,18 @@ Questa è una **simulazione software nativa per Linux**, non un emulatore della 
 - Riutilizza direttamente il motore C++ in `src/` (parser, grafici 2D, statistiche, matrici e altre primitive).
 - La tastiera fisica PicoCalc è rappresentata a schermo; i tasti del PC vengono usati come input. Non è richiesto hardware PicoCalc.
 
+## Test host e CTest (v1.9.0)
+
+`desktop/CMakeLists.txt` compila sempre la libreria portabile `fxcore` e le
+suite di test (CTest); l'emulatore SDL2 viene compilato solo se SDL2 e
+SDL2_ttf sono presenti.
+
+```bash
+cmake -S desktop -B build-desktop [-DFXAI_TEST_BOARD=PICO_PLUS_2W]
+cmake --build build-desktop
+ctest --test-dir build-desktop --output-on-failure
+```
+
 ## Architettura Linux (Arch Linux)
 
 ```bash

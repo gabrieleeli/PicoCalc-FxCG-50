@@ -1,4 +1,5 @@
 #include "math_renderer.hpp"
+#include "limits.hpp"
 #include "memory.hpp"
 #include <algorithm>
 #include <cstdint>
@@ -6,7 +7,9 @@
 #include <limits>
 
 namespace fx::math { namespace {
-constexpr int GlyphW=6, GlyphH=9, GlyphBase=7, MaxDepth=32;
+constexpr int GlyphW=6, GlyphH=9, GlyphBase=7;
+// Structural recursion limit (stack-bound), shared with fx::limits.
+constexpr unsigned MaxDepth=fx::limits::kMaxLayoutDepth;
 std::size_t glyphCount(const std::string& s) noexcept {std::size_t n=0;for(unsigned char c:s)if((c&0xC0)!=0x80)++n;return n;}
 std::size_t byteOffset(const std::string& s,std::size_t glyphs) noexcept {std::size_t i=0,n=0;while(i<s.size()&&n<glyphs){unsigned char c=static_cast<unsigned char>(s[i]);i+=(c<0x80?1:(c&0xE0)==0xC0?2:(c&0xF0)==0xE0?3:4);++n;}return std::min(i,s.size());}
 std::string tokenRun(const NaturalNode& n,std::size_t begin,std::size_t end){std::string s;for(std::size_t i=begin;i<end;++i)s+=n.children[i]->text;return s;}

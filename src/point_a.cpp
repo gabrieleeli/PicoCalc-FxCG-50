@@ -1,5 +1,8 @@
 #include "point_a.hpp"
 #include "expression.hpp"
+#include "limits.hpp"
+#include "mem_pools.hpp"
+#include <new>
 #include <algorithm>
 #include <cmath>
 #include <cctype>
@@ -19,7 +22,27 @@ double scaleOf(Unit u){switch(u){case Unit::Meter:case Unit::SquareMeter:case Un
 double toK(double v,Unit u){return u==Unit::Kelvin?v:u==Unit::Celsius?v+273.15:u==Unit::Fahrenheit?(v-32)*5/9+273.15:throw std::invalid_argument("Temperatura non valida");}
 double fromK(double v,Unit u){return u==Unit::Kelvin?v:u==Unit::Celsius?v-273.15:u==Unit::Fahrenheit?(v-273.15)*9/5+32:throw std::invalid_argument("Temperatura non valida");}
 }
-double RunMatrixSession::execute(const std::string& expression){double value=fx::evaluate(expression,memory_);memory_.setAnswer(value);history_.push_back({expression,value});if(history_.size()>30)history_.erase(history_.begin());return value;}
+double RunMatrixSession::execute(const std::string& expression){
+ const double value=fx::evaluate(expression,memory_);
+ // History is bulk data: on the Pico Plus 2 W it lives in PSRAM.
+ mem::PlacementScope heavy(mem::Policy::PREFER_PSRAM);
+ HistoryEntry entry{expression,value}; // may throw std::bad_alloc: nothing changed yet
+ try{history_.push_back(std::move(entry));}
+ catch(const std::bad_alloc&){
+  // Growing the vector failed (entry left intact by the strong guarantee).
+  // History is a convenience: drop the oldest quarter, then the push cannot
+  // reallocate and therefore cannot fail.
+  if(history_.empty())throw;
+  history_.erase(history_.begin(),history_.begin()+static_cast<std::ptrdiff_t>(std::max<std::size_t>(1,history_.size()/4)));
+  history_.push_back(std::move(entry));
+ }
+ memory_.setAnswer(value); // only after the entry is safely stored
+ // Capacity: 30 entries on the Pico 2 W (fx-CG50 parity), up to 10000 with PSRAM,
+ // lowered at runtime when the pools are short of memory.
+ const std::size_t capacity=fx::limits::historyCapacity();
+ if(history_.size()>capacity)history_.erase(history_.begin(),history_.begin()+static_cast<std::ptrdiff_t>(history_.size()-capacity));
+ return value;
+}
 void RunMatrixSession::store(char variable,double value){memory_.store(variable,value);}
 double RunMatrixSession::recall(char variable)const{return memory_.recall(variable);}
 Matrix subtract(const Matrix&a,const Matrix&b){same(a,b);Matrix r=a;for(size_t i=0;i<r.size();++i)for(size_t j=0;j<r[0].size();++j)r[i][j]-=b[i][j];return r;}
