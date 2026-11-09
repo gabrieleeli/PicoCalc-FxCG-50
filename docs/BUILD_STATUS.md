@@ -23,6 +23,8 @@ una cartella per scheda. Ambiente in fondo alla pagina (invariato; relay con
 | Frame di stack massimi (`-fstack-usage`) | `diag::testMemory` 1712 B, `GraphApp::openProject` 1696 B, `main` 1584 B; moduli nuovi: `graph3d` 552 B, `Graph3DApp` 520 B, `board_pico` 608 B, `flash_fs` 456 B, `psram` 128 B, TLSF 40 B | uguale |
 | Warning | **nessuno** (0 in tutta la build, SDK incluso; FatFs e LittleFS compilati con `-w`) | nessuno |
 | Avvisi CMake | solo quello dell'SDK su picotool (non installato: compilato dai sorgenti) | uguale |
+| SHA-256 dell'UF2 | `805a6c4912aae0ae65d7abb5b5350d9893cdc9bca6c9cf8ec23cdf3e99881f65` | `489911a97bcbfeab4c717cdc0bce2bd1f5f57a8589e49cff83d79a3beeb56591` |
+| Riproducibilità | due build pulite in cartelle diverse e una incrementale producono UF2 identici byte per byte | uguale |
 
 Rispetto alla v1.8.0 (`-O3`, 1 505 640 byte di immagine) l'immagine è più
 piccola perché il livello predefinito ora è `-O2` (codice più compatto per la
@@ -41,6 +43,10 @@ PSRAM.
 | ThreadSanitizer (`--tsan`, allocatore su due thread) | superato | superato |
 | Relay AI (Python, `unittest`) | 15/15 | — |
 | v1.8.0 rieseguita come riferimento | 25/25, **7 179** controlli + 41 (la documentazione della v1.8.0 indicava 7169: il conteggio di `architecture_test` era fermo a 529, il test ne esegue 539) | |
+
+`scripts/make_release.sh` (dopo le due build) produce lo zip dei sorgenti, i due
+UF2 e `SHA256SUMS`; verificato su questo commit. Il pacchetto non è stato
+pubblicato come release GitHub.
 
 Dettagli per suite in [TESTING.md](TESTING.md). Le build dei test usano gli
 stessi sorgenti portabili del firmware; il dispositivo non è stato usato.

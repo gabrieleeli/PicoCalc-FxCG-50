@@ -20,7 +20,7 @@ host, build del firmware o simulazioni. La procedura di collaudo è in
   (`352f147`, conflitti risolti a favore dell'architettura della v1.8.0) e ha
   poi portato i moduli hardware della 1.9.0 dentro quell'architettura
   (`cef21ec`), con le correzioni trovate durante il lavoro (`4bbc80a`,
-  `3fd82fb`, `6b532ed`) e la documentazione.
+  `3fd82fb`, `6b532ed`, `daa5fe6`) e la documentazione (`d23e3e3`).
 - Risultato: tutte le modalità e i test della v1.8.0 (nessuna suite rimossa o
   ridotta) + PSRAM come pool separato con avvio solo SRAM in caso di guasto,
   flash da 16 MB partizionata, LittleFS, 3D Graph, diagnostica estesa;
@@ -67,6 +67,8 @@ di `main`** (0 commit unici rispetto a `main`).
 | `4bbc80a` | consolidamento | autosalvataggio ripreso dopo un "Memory ERROR" |
 | `3fd82fb` | consolidamento | protezione della flash con l'UF2 della scheda sbagliata; codice morto rimosso |
 | `6b532ed` | consolidamento | colori delle superfici 3D, simulatore con il pool PSRAM, screenshot |
+| `d23e3e3` | consolidamento | documentazione della v1.9.0 e questo rapporto |
+| `daa5fe6` | consolidamento | `make_release.sh`: verifica dei sorgenti di ogni UF2 per commit |
 
 ## 4. Differenze tra la v1.8.0 e la prima 1.9.0
 
@@ -106,7 +108,7 @@ Per ogni componente: da dove viene il codice nella 1.9.0 consolidata e perché.
 | 3D | prima 1.9.0 (motore), riscritto | motore a più superfici con z-buffer o pittore e app 3D Graph nel framework |
 | Storage del workspace | v1.8.0 + correzioni | coda riservata (E10), formato v5, migrazione dalla v1.8.0 |
 | Canvas (poligoni oltre 32 vertici, copie di layer) | prima 1.9.0 (merge automatico) | provato da `graphics_memory_test` |
-| Script di build | prima 1.9.0, aggiornati | `build.sh --board`, `build_pico2w.sh` come scorciatoia, release con i due UF2 |
+| Script di build | prima 1.9.0, aggiornati | `build.sh --board`, `build_pico2w.sh` come scorciatoia, release con i due UF2 verificati per commit |
 | Test | v1.8.0 + test della memoria della 1.9.0 adattati + 6 suite nuove | entrambi i profili, sanitizer |
 
 Rimossi: window manager, `ui.cpp`, driver LCD PIO, `main.cpp`, `graph_renderer`,
@@ -191,7 +193,8 @@ MEMORY.
 | 9 | Due superfici 3D con colori quasi uguali (verde su verde) | prima 1.9.0 | una famiglia di colore per superficie | `graph3d_test`, screenshot 41 |
 | 10 | `FXAI_ENABLE_CAS` riservava memoria per un modulo inesistente; contatore di avvii scritto in flash a ogni accensione; buffer AI da 2 MB | prima 1.9.0 | rimossi | — |
 | 11 | `FXAI_ENABLE_3D` non aveva effetto | prima 1.9.0 | opzione rimossa | — |
-| 12 | La documentazione della v1.8.0 dichiarava 7169 controlli; il test ne esegue 7179 (`architecture_test` 539, non 529) | documentazione v1.8.0 | numeri misurati in TESTING/BUILD_STATUS | — |
+| 12 | `make_release.sh` rifiutava sempre il primo UF2 dopo la build della seconda scheda: il Pico SDK tocca `CMakeLists.txt` a ogni build quando compila picotool dai sorgenti e il controllo usava le date dei file | prima 1.9.0 / due UF2 | `build.sh` registra commit dei sorgenti e hash dell'UF2, la release li verifica | flusso completo e tre casi negativi eseguiti |
+| 13 | La documentazione della v1.8.0 dichiarava 7169 controlli; il test ne esegue 7179 (`architecture_test` 539, non 529) | documentazione v1.8.0 | numeri misurati in TESTING/BUILD_STATUS | — |
 
 Difetti dei test della prima 1.9.0 corretti durante l'adattamento: API dei
 limiti cambiata (`limits_smoke` riscritto), assunzioni valide solo per il
@@ -283,6 +286,8 @@ Pico SDK 2.2.0, `arm-none-eabi-gcc` 13.2.1, build pulite con
 | Stack | core 0 32 KB (MSPLIM), core 1 4 KB; frame massimo 1712 byte | uguale |
 | Warning | 0 (anche nell'SDK) | 0 |
 | `picotool info` | 1.9.0 (pico_plus_2w), `pimoroni_pico_plus2_w_rp2350` | 1.9.0 (pico2w), `pico2_w` |
+| SHA-256 dell'UF2 | `805a6c49…881f65` | `489911a9…b56591` |
+| Release | `make_release.sh`: zip + due UF2 + `SHA256SUMS` (non pubblicata) | |
 
 ## 16. Branch e tag
 

@@ -18,6 +18,12 @@ quell'architettura. Rapporto completo:
   `scripts/build.sh --board ...`, `build_pico2w.sh` invariato nell'uso.
 - `-O2` predefinito su entrambe (era `-O3`), `-fstack-usage`, controllo della
   dimensione dell'immagine nella partizione firmware, LTO sperimentale.
+- `scripts/make_release.sh` produce lo zip dei sorgenti, i due UF2 e
+  `SHA256SUMS`. **Corretto**: il controllo "UF2 aggiornato" confrontava le date
+  dei file, ma il Pico SDK tocca `CMakeLists.txt` a ogni build quando compila
+  picotool dai sorgenti, quindi dopo la seconda scheda il primo UF2 risultava
+  sempre vecchio; ora `build.sh` registra il commit dei sorgenti e l'hash
+  dell'UF2 e la release li verifica.
 - Pin della PicoCalc invariati (driver ufficiali della v1.8.0: LCD su SPI1,
   tastiera STM32 su I²C1, microSD su SPI0), raccolti in `board_config.hpp`.
 
