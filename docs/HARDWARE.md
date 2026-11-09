@@ -1,19 +1,21 @@
-# Hardware — PicoCalc (mainboard v2.0) + Raspberry Pi Pico 2 W
+# Hardware — PicoCalc (mainboard v2.0) + Pimoroni Pico Plus 2 W / Raspberry Pi Pico 2 W
 
 Fonti: repository ufficiale [clockworkpi/PicoCalc](https://github.com/clockworkpi/PicoCalc)
 (`Code/picocalc_helloworld/lcdspi`, `Code/picocalc_helloworld/i2ckbd`,
 `Code/picocalc_keyboard`, `ST7365P_SPEC_V1.0.pdf`, `clockwork_Mainboard_V2.0_Schematic.pdf`).
 **Tutti i valori sono ripresi da queste fonti; nessuno è ancora stato verificato su
-un dispositivo fisico.**
+un dispositivo fisico.** I pin della PicoCalc sono gli stessi con entrambi i
+moduli (raccolti in `include/board_config.hpp`, verificati da `board_profile_test`);
+memoria, flash e PSRAM della Plus sono descritte in [PICO_PLUS_2W.md](PICO_PLUS_2W.md).
 
 ## Microcontrollore
 
 | | |
 |---|---|
-| MCU | RP2350 (Cortex-M33), 520 KB SRAM, flash QSPI 4 MB (Pico 2 W) |
-| Clock | 150 MHz (default SDK) |
-| Wi-Fi | CYW43439 tramite `pico_cyw43_arch_lwip_poll` |
-| Core 1 | non usato |
+| MCU | Pico Plus 2 W: RP2350B (QFN-80, 48 GPIO), flash QSPI 16 MB, **PSRAM APS6404L 8 MB** su QMI CS1 (GPIO47); Pico 2 W: RP2350A (QFN-60), flash 4 MB, niente PSRAM. Entrambi Cortex-M33, 520 KB SRAM |
+| Clock | 150 MHz (default SDK); PSRAM a 75 MHz (divisore 2) |
+| Wi-Fi | CYW43439 tramite `pico_cyw43_arch_lwip_poll`, stessi pin GP23/24/25/29 sui due moduli |
+| Core 1 | usato solo dalla diagnostica (stress dell'allocatore su due core), con lo stack in SCRATCH_X |
 
 ## Display
 
@@ -72,9 +74,16 @@ in [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md) e diagnostica SYSTEM → F
 
 ## Flash
 
-- Ultimi 128 KB (`FXAI_STORAGE_BYTES`) riservati al workspace: due slot da 64 KB.
-- Scrittura con `flash_safe_execute()` (interrupt disabilitati durante erase/program).
-- Il driver si disattiva da solo se l'immagine firmware raggiungesse quell'area.
+- Mappa per scheda (firmware, settore diagnostico, LittleFS, BTstack, workspace
+  A/B): [PICO_PLUS_2W.md](PICO_PLUS_2W.md#5-flash-partizioni-e-protezioni) e
+  [STORAGE.md](STORAGE.md). Sul Pico 2 W il workspace resta negli ultimi 128 KB
+  come nella v1.8.0; sulla Plus occupa 1 MB prima dell'ultimo settore.
+- L'ultimo settore non viene mai scritto (erratum RP2350-E10).
+- Scrittura con `flash_safe_execute()` (interrupt disabilitati, core 1 fermo se
+  attivo), dati copiati prima in un buffer di rimbalzo in SRAM, verifica della
+  configurazione PSRAM dopo ogni operazione.
+- Le regioni non si sovrappongono mai all'immagine del firmware e vengono
+  limitate alla capacità reale del chip (JEDEC ID letto all'avvio).
 
 ## Collaudo consigliato sul dispositivo
 
@@ -88,7 +97,9 @@ in [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md) e diagnostica SYSTEM → F
 6. GRAPH: disegnare 20 funzioni (anche parametriche con Tpitch piccolo) e
    misurare il tempo di disegno; verificare che TRACE ed EXIT rispondano
    durante il disegno; controllare i colori di curve e riempimenti.
-7. microSD e TABLE: seguire [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md)
+7. PSRAM, flash, 3D e prestazioni della Plus: seguire
+   [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) (HW-40…HW-82).
+8. microSD e TABLE: seguire [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md)
    (diagnostica SYSTEM → DIAG con log `[DIAG]` sulla seriale USB). In sintesi:
    FILE > SAVE AS, estrarre e reinserire la scheda,
    OPEN; PICTURE STORE/RECALL; estrarre la scheda durante un salvataggio e

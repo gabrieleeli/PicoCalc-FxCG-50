@@ -93,7 +93,8 @@ Tempi sul RP2350 da misurare (vedi `docs/HARDWARE_TEST_v1.8.0.md`, HW-34).
 
 - INSERT/ADD inseriscono una copia della riga (il valore si cambia con
   EDIT); la CG50 non documenta il valore della nuova riga.
-- Liste di 255 elementi (CG50: 999): LISTMEM di tabelle più lunghe dà
+- Liste di 999 elementi come la CG50 sul Pimoroni Pico Plus 2 W; sul Pico 2 W
+  255 (record del workspace da 64 KB): lì LISTMEM di tabelle più lunghe dà
   Dimension ERROR.
 - Con una sovrapposizione `[A=…]` senza Derivative la colonna usa il primo
   valore di A.

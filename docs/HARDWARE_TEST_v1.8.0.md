@@ -1,5 +1,11 @@
 # Collaudo su PicoCalc fisica — v1.8.0 (GRAPH, microSD, TABLE)
 
+> Con la v1.9.0 queste prove restano valide e vanno ripetute con l'UF2 della
+> propria scheda (`picocalc_fxai_pico_plus_2w.uf2` o `picocalc_fxai_pico2w.uf2`,
+> preparazione in [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md)); sulla
+> Plus i limiti di memoria sono più alti (HW-17 non deve più dare "disegno
+> parziale", vedi HW-50).
+
 Questa procedura serve a portare le voci da *TESTED ON HOST* a *TESTED ON
 HARDWARE*. **Fino a quando i risultati non arrivano dal dispositivo, nessuna
 voce è dichiarata provata su hardware.** Ogni prova ha un codice (HW-xx):

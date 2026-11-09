@@ -1,37 +1,117 @@
-# Memorizzazione: flash interna e microSD (v1.8.0, collaudo software)
+# Memorizzazione: flash interna e microSD (v1.9.0)
 
-Il firmware usa due memorie con ruoli diversi.
+Il firmware usa tre memorie con ruoli diversi.
 
 | Memoria | Contenuto | Modulo |
 |---|---|---|
-| Flash del Pico 2 W (ultimi 128 KB, due slot A/B) | workspace: impostazioni, variabili, Ans, cronologia Run-Matrix, liste, funzioni e Setup di GRAPH, memorie V-Window e grafiche, SKETCH, coefficienti, conversazioni AI | `storage.hpp/.cpp`, `workspace.cpp` |
+| Flash interna, **record del workspace** (due slot A/B) | impostazioni, variabili, Ans, cronologia Run-Matrix, liste, funzioni e Setup di GRAPH, memorie V-Window e grafiche, SKETCH, TABLE, coefficienti, conversazioni AI, **3D Graph**, archivio scelto per i file | `storage.hpp/.cpp`, `workspace.cpp` |
+| Flash interna, **LittleFS** (v1.9.0) | file utente interni: progetti GRAPH `.pcgraph`, immagini `.pcpict`, `.bmp` | `flash_fs.hpp/.cpp`, `third_party/littlefs` |
 | microSD della PicoCalc | progetti GRAPH `.pcgraph`, immagini `.pcpict`, esportazioni `.bmp` | `file_store`, `fatfs_store`, `sd_card`, `sd_spi_pico.cpp` |
 
-Il workspace in flash conserva lo stato di lavoro anche senza scheda; la
-microSD contiene i file che l'utente salva, apre, rinomina o cancella.
+Il workspace in flash conserva lo stato di lavoro anche senza scheda. I file
+dell'utente vanno sulla microSD oppure, scegliendo SYSTEM → "Archivio file" =
+Flash interna, su LittleFS: le due memorie hanno la stessa interfaccia
+`files::FileSystem` e lo stesso salvataggio atomico, quindi GRAPH le usa allo
+stesso modo.
+
+## Mappa della flash (v1.9.0)
+
+Partizioni calcolate da `cmake/fxai_board.cmake` e verificate da
+`board_config.hpp` (`static_assert`) e da `board_profile_test`:
+
+| Area | Pimoroni Pico Plus 2 W (16 MB) | Raspberry Pi Pico 2 W (4 MB) |
+|---|---|---|
+| Firmware | 0x000000–0x3FFFFF (4 MB) | 0x000000–0x1FFFFF (2 MB) |
+| Settore diagnostico | 0x400000 (4 KB) | 0x200000 (4 KB) |
+| LittleFS | 0x401000–0xEFCFFF (≈ 11,0 MB) | 0x201000–0x3DDFFF (≈ 1,9 MB) |
+| BTstack (riservato) | 0xEFD000 (8 KB) | 0x3DE000 (8 KB) |
+| Record del workspace | 0xEFF000–0xFFEFFF (1 MB, 2 × 512 KB) | 0x3E0000–0x3FFFFF (128 KB, 2 × 64 KB: **posizione della v1.8.0**) |
+| Ultimo settore | 0xFFF000: mai scritto | 0x3FF000: mai scritto dai nuovi salvataggi |
+
+**Ultimo settore (erratum RP2350-E10).** Durante l'aggiornamento via UF2 il
+workaround del bootrom per l'erratum E10 sovrascrive l'ultimo blocco della
+flash (pico-sdk PR #2412; l'SDK sposta per lo stesso motivo i dati BTstack).
+Nella v1.8.0 lo slot B del workspace finiva nell'ultimo settore: un record più
+grande di ~60 KB poteva perdere la sua coda all'aggiornamento successivo (lo
+slot A avrebbe salvato il salvataggio precedente). Ora:
+- sulla Plus il record finisce 4 KB prima della fine della flash;
+- sul Pico 2 W il record resta dove lo metteva la v1.8.0 (così l'aggiornamento
+  conserva i dati) ma `FlashDevice::reservedTail()` vale 4 KB: i salvataggi
+  sono limitati a 59,75 KB per slot e non scrivono mai l'ultimo settore, mentre
+  i record già presenti, anche più lunghi, vengono ancora letti;
+- la regione della flash rifiuta comunque erase/program in quell'area.
+
+**Migrazione dalla v1.8.0 (Pico Plus 2 W).** Se il nuovo archivio non contiene
+record e all'indirizzo usato dalla v1.8.0 (0x3E0000, dentro la partizione
+firmware della Plus ma oltre l'immagine) ce n'è uno valido, il workspace viene
+importato una volta, in sola lettura, e salvato nel nuovo archivio al primo
+autosalvataggio (toast "Dati della v1.8.0 importati"). Un record nuovo non
+viene mai sostituito da quello vecchio (`board_profile_test`).
+
+**Scritture sicure con la PSRAM.** Flash e PSRAM condividono il bus QMI: ogni
+erase/program passa da `flash_safe_execute()`, i dati vengono copiati in un
+buffer di rimbalzo in SRAM da 1 KB (il workspace serializzato, grande, sta in
+PSRAM sulla Plus e non sarebbe leggibile con l'XIP fermo), si cancella un
+settore alla volta e la configurazione M1 della PSRAM viene verificata prima
+di riprendere l'XIP ([PICO_PLUS_2W.md](PICO_PLUS_2W.md#5-flash-partizioni-e-protezioni)).
+
+**Capacità reale del chip.** Prima di creare le regioni `board::init()` legge
+il JEDEC ID della flash: se il chip è più piccolo della mappa della build (UF2
+della Plus copiato su un Pico 2 W) le regioni oltre il chip vengono
+disattivate, perché gli indirizzi oltre i 4 MB ricadrebbero sul firmware e sui
+dati del Pico 2 W. Il workspace non viene salvato ("Salvataggio non
+disponibile"), l'avvio indica l'UF2 da installare e i dati già presenti
+restano intatti. Un ID non riconosciuto lascia la mappa della build.
 
 ## Workspace in flash
 
-Due slot da 64 KB con CRC-32 e numero di sequenza: si scrive sempre lo slot più
+Due slot con CRC-32 e numero di sequenza: si scrive sempre lo slot più
 vecchio, quindi un'interruzione durante la scrittura lascia valido l'altro
 (test di interruzione in ogni punto in `storage_test`). Il record è alla
-**versione 4**: la versione 3 (GRAPH v1.8.0) aggiunge le 20 funzioni di GRAPH
-con stile e Yt, il Setup della modalità, le 6 memorie V-Window, le 20 memorie
-grafiche, gli elementi SKETCH, l'immagine richiamata e il progetto aperto; la
-versione 4 (TABLE v1.8.0) la variabile, il tipo e le righe della tabella
-(≤ 999). I record v1 (v1.6.0), v2 (v1.7.0) e v3 sono letti: le 6 funzioni di allora diventano Y1–Y6 e
-la griglia booleana diventa Grid On/Off; una V-Window che non supera i controlli
-della v1.8.0 viene corretta (scale positive, intervallo T) o, se non basta,
-sostituita da quella iniziale, senza scartare il resto dei dati (test in
-`run_matrix_test`).
+**versione 5** (v1.9.0): aggiunge in coda l'archivio scelto per i file e lo
+stato del 3D Graph (Z1–Z3, selezione, finestra 3D, griglia, vista). La
+versione 3 (GRAPH v1.8.0) aggiunge le 20 funzioni di GRAPH con stile e Yt, il
+Setup della modalità, le 6 memorie V-Window, le 20 memorie grafiche, gli
+elementi SKETCH, l'immagine richiamata e il progetto aperto; la versione 4
+(TABLE v1.8.0) la variabile, il tipo e le righe della tabella (≤ 999). I record
+v1 (v1.6.0), v2 (v1.7.0), v3 e v4 (v1.8.0) sono letti: un record v4 generato
+dai sorgenti della v1.8.0 è nei test (`tests/fixtures/workspace_v1_8_0.inc`);
+le 6 funzioni della v1.6.0 diventano Y1–Y6 e la griglia booleana diventa Grid
+On/Off; una V-Window che non supera i controlli viene corretta o sostituita da
+quella iniziale, senza scartare il resto dei dati.
 
-La capacità del record è ~63,7 KB. Per restarne lontani i tratti PEN dello
-SKETCH hanno un limite complessivo di 1200 punti (prima 64 × 400 punti
-potevano superare 200 KB); con 20 funzioni, 20 memorie grafiche piene e 64
-elementi SKETCH lo stato GRAPH resta sotto 60 KB (`graph_app_test`). Se il
-record supera comunque la capacità (es. molte conversazioni AI lunghe),
+| Limite | Pico 2 W | Pico Plus 2 W |
+|---|---|---|
+| Capacità di un salvataggio | 59,75 KB | 511,75 KB |
+| Cronologia Run-Matrix | 40 righe | 200 righe |
+| Liste statistiche | 6 × 255 | 6 × 999 (fx-CG50) |
+| Conversazione AI | 30 messaggi | 30 messaggi |
+
+I tratti PEN dello SKETCH hanno un limite complessivo di 1200 punti; con 20
+funzioni, 20 memorie grafiche piene e 64 elementi SKETCH lo stato GRAPH resta
+sotto 60 KB (`graph_app_test`). Se il record supera comunque la capacità,
 l'autosalvataggio mostra "Memoria flash piena: N KB > M KB (cancella memorie
-grafiche, SKETCH, chat)" invece di un errore generico.
+grafiche, SKETCH, chat)". Se manca la memoria per serializzarlo compare
+"Memory ERROR: salvataggio non riuscito" (prima della v1.9.0 l'eccezione
+usciva dal ciclo principale).
+
+## LittleFS sulla flash interna (v1.9.0)
+
+`fx::files::LittleFsFileSystem` implementa `files::FileSystem` su LittleFS
+v2.11.3 (blocchi da 4 KB, programmazione a pagine da 256 byte, cache 512 byte,
+`block_cycles` 500 per il livellamento dell'usura):
+
+- montato solo alla prima operazione (nessuna scrittura a ogni avvio);
+  partizione vuota o estranea → formattata (non contiene altro);
+- nomi confrontati senza distinguere maiuscole/minuscole ma conservati, come su
+  FAT; `rename` rifiuta una destinazione esistente e `remove` una cartella non
+  vuota, come il backend FatFs, così `writeAtomic()`/`recover()` funzionano
+  uguali sulle due memorie;
+- `internal_fs_test`: contratto completo, partizione piena, persistenza dopo lo
+  smontaggio e **interruzione di alimentazione** in decine di punti di un
+  salvataggio atomico: dopo il riavvio il file è sempre quello vecchio o quello
+  nuovo, mai un misto, e non restano `.tmp`/`.bak`;
+- DIAG la prova come la microSD (righe `INT`).
 
 ## Pila della microSD
 

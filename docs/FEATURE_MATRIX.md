@@ -1,4 +1,8 @@
-# Feature matrix — v1.8.0 (dopo il collaudo software di GRAPH, microSD e TABLE)
+# Feature matrix — v1.9.0 (consolidamento v1.8.0 + Pimoroni Pico Plus 2 W)
+
+La v1.9.0 contiene tutte le funzioni della v1.8.0 (stessi sorgenti e stessi
+test) più il layer hardware e di memoria per il Pimoroni Pico Plus 2 W.
+Origine di ogni componente: [reports/CONSOLIDAMENTO_v1.9.0.md](reports/CONSOLIDAMENTO_v1.9.0.md).
 
 Stati (in italiano tra parentesi):
 
@@ -12,14 +16,31 @@ Stati (in italiano tra parentesi):
 | **TESTED ON HARDWARE** (testata su hardware) | provata sulla PicoCalc fisica |
 | **COMPLETE** | testata su hardware e con la funzionalità CG50 corrispondente completa |
 
-Nessuna voce è TESTED ON HARDWARE: la PicoCalc fisica non è stata usata.
+Nessuna voce è TESTED ON HARDWARE: la PicoCalc fisica non è stata usata (né
+con il Pico 2 W né con il Pimoroni Pico Plus 2 W). "TESTED ON HOST" vale per
+entrambi i profili di scheda: la suite gira con `FXAI_TEST_BOARD=PICO_PLUS_2W`
+e `PICO2W`.
 Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 
 ## Piattaforma e hardware
 
 | Funzione | Stato | Note |
 |---|---|---|
-| Build UF2 RP2350 (Pico SDK 2.2.0) | TESTED ON HOST | build eseguita, `picotool info` verificato |
+| Build UF2 Pimoroni Pico Plus 2 W (RP2350B, `pimoroni_pico_plus2_w_rp2350`) | TESTED ON HOST | build eseguita senza warning nei sorgenti del progetto; controllo della dimensione nella partizione firmware |
+| Build UF2 Raspberry Pi Pico 2 W (profilo alternativo) | TESTED ON HOST | build eseguita senza warning; UF2 con nomi distinti per scheda |
+| Selezione della scheda (`FXAI_BOARD`), cartelle di build separate, `board_config.hpp` con `static_assert` sui pin e sulle risorse | TESTED ON HOST | `board_profile_test` |
+| Driver PSRAM APS6404L (QMI CS1, GPIO47, QPI 75 MHz, self-test all'avvio) | IMPLEMENTED | self-test TESTED ON HOST con modelli di guasto (`psram_selftest_smoke`); driver da collaudare (HW-40…HW-45) |
+| Avvio solo in SRAM se la PSRAM manca o fallisce il self-test | TESTED ON HOST | limiti RAM al profilo SRAM, diagnostica e messaggio (`system_diag_test`, `limits_smoke`) |
+| Pool SRAM/PSRAM (TLSF), politiche, `operator new` instradato, `std::pmr` | TESTED ON HOST | `mem_pools_smoke` (anche ThreadSanitizer), `mem_new_smoke`, `oom_test` |
+| "Memory ERROR" senza crash e senza allocazioni nel percorso dell'errore | TESTED ON HOST | `oom_test` con `operator new` instradato e SRAM limitata |
+| Autosalvataggio dopo un "Memory ERROR": modifiche conservate e salvate appena la memoria torna | TESTED ON HOST | `oom_test` (nessun nuovo tasto: il salvataggio riparte da solo e il record contiene la modifica) |
+| Limiti persistenti per scheda, limiti RAM dalla memoria presente | TESTED ON HOST | `limits_smoke` |
+| Partizioni della flash (firmware, diagnostica, LittleFS, BTstack, workspace) | TESTED ON HOST | `board_profile_test` |
+| Ultimo settore mai scritto (erratum RP2350-E10) | TESTED ON HOST | `board_profile_test` |
+| Capacità reale della flash letta all'avvio (JEDEC ID): regioni oltre il chip disattivate con un UF2 della scheda sbagliata | IMPLEMENTED | decodifica e limiti TESTED ON HOST (`board_profile_test`, `system_diag_test`); lettura sul chip da collaudare (HW-40, HW-49) |
+| Scritture flash con buffer di rimbalzo SRAM e verifica QMI M1 | IMPLEMENTED | logica TESTED ON HOST con la PSRAM simulata (`system_diag_test`); da collaudare (HW-45) |
+| Stack core 0 da 32 KB con guardia MSPLIM, HardFault con rapporto al riavvio | IMPLEMENTED | da collaudare (HW-42, HW-81) |
+| Core 1 (stress dell'allocatore su due core) | IMPLEMENTED | solo diagnostica; da collaudare (HW-44) |
 | Driver LCD ST7365P (SPI1, init ufficiale, RGB666) | IMPLEMENTED | da collaudare; opzione RGB565 |
 | Aggiornamento parziale LCD (tile 16×16) | TESTED ON HOST | `TileDiff`, test in app_test |
 | DMA per il flush LCD | NOT STARTED | non conveniente: il collo di bottiglia è il bus SPI (vedi HARDWARE.md) |
@@ -27,8 +48,10 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Pressione prolungata / ripetizione | TESTED ON HOST | ripetizione generata dallo STM32, long-press nel decoder |
 | Batteria e retroilluminazione | IMPLEMENTED | registri 0x05/0x0A/0x0B |
 | Storage flash A/B con CRC | TESTED ON HOST | test di interruzione di alimentazione; driver Pico da collaudare |
+| LittleFS sulla flash interna come archivio dei file utente | TESTED ON HOST | `internal_fs_test` (anche interruzioni di alimentazione); da collaudare (HW-47, HW-70) |
+| Migrazione del workspace v1.8.0 sulla Pico Plus 2 W | TESTED ON HOST | `board_profile_test` con un record generato dai sorgenti v1.8.0 |
 | microSD (SPI0 GP16–19, card detect GP22) | IMPLEMENTED | protocollo SD, recupero dopo estrazione/errori e FatFs TESTED ON HOST con scheda simulata (`sd_fatfs_test`); volumi FAT16/FAT32/exFAT verificati con fsck.fat, fsck.exfat e mtools (`sd_interop_test`); bus SPI0 reale da collaudare ([STORAGE.md](STORAGE.md), [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md)) |
-| Diagnostica sul dispositivo (SYSTEM → DIAG: microSD, tempi GRAPH, log USB) | TESTED ON HOST | prova eseguita nel simulatore e nei test; serve per il collaudo fisico |
+| Diagnostica sul dispositivo (SYSTEM → DIAG: memoria/PSRAM, allocatore su 1 e 2 core, flash↔PSRAM, LCD, microSD, flash interna, tempi GRAPH, log USB) | TESTED ON HOST | `system_diag_test`, `graph_app_test`; serve per il collaudo fisico |
 | Wi-Fi CYW43 | IMPLEMENTED | da collaudare |
 | HTTPS (lwIP altcp_tls + mbedTLS, verifica obbligatoria) | IMPLEMENTED | parser HTTP TESTED ON HOST |
 | Gestione energetica / sospensione | NOT STARTED | |
@@ -115,6 +138,8 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Graph: 20 funzioni Y=, r=, Param, X=, 8 disequazioni, intervalli, sovrapposizioni, liste, funzioni composte | TESTED ON SIMULATOR | matrice completa in [GRAPH_PARITY.md](GRAPH_PARITY.md) |
 | Graph: TRACE, ZOOM (13 voci), V-Window e memorie, SKETCH (12 voci), G-SOLVE (ROOT…∫dx MIXED), Modify, memorie grafiche, PICT, sfondo | TESTED ON SIMULATOR / TESTED ON HOST | voce per voce in GRAPH_PARITY.md |
 | Graph: progetti `.pcgraph` su microSD (NEW/OPEN/SAVE/SAVE AS/RENAME/DELETE) | TESTED ON SIMULATOR | scheda simulata; formato in [PCGRAPH_FORMAT.md](PCGRAPH_FORMAT.md) |
+| Graph: budget dei punti 40 000/400 000 con la PSRAM (6000/24 000 senza) | TESTED ON HOST | `graphics_memory_test`: 20 parametriche dense complete con la PSRAM, troncate senza |
+| Graph: layer statici in PSRAM durante TRACE/puntatore | TESTED ON HOST | immagine identica al pixel a un ridisegno completo (`graphics_memory_test`) |
 | Graph: Dual Screen G+G/GtoT, Graph to Table, comandi grafici di Run-Matrix | NOT STARTED | |
 | Grafici impliciti (f(x,y)=0) | NOT STARTED | non presenti nella modalità Graph della CG50 (Conic Graphs) |
 | Table: lista delle relazioni, Y=/r=/Param, SET, Variable Range/List, derivate, celle di 6 caratteri | TESTED ON SIMULATOR | [TABLE.md](TABLE.md), screenshot 32, 35–37 |
@@ -129,7 +154,8 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | AI Chat (Claude / ChatGPT) | TESTED ON HOST | con trasporto simulato; rete reale da collaudare |
 | Symbols (guida) | TESTED ON HOST | |
 | eActivity, Spreadsheet, Dyna Graph, Recursion, Conic Graphs | IN PROGRESS | solo architettura e modello dati (`app_models.hpp`, testato); nessuna interfaccia; schermata "non disponibile" |
-| Program, Financial, Link, Geometry, Picture Plot, 3D Graph | IN PROGRESS | idem |
+| 3D Graph: Z1–Z3 = f(x,y), finestra 3D, griglia, rotazione, zoom, AUTO, campionamento incrementale, z-buffer in PSRAM (pittore senza PSRAM), un colore per superficie, persistenza | TESTED ON SIMULATOR | `graph3d_test` (motore e modalità, con e senza PSRAM); screenshot 40–43 (`tests/sim/graph3d.txt`); sfere/piani/rette parametrici della fx-CG50 NOT STARTED |
+| Program, Financial, Link, Geometry, Picture Plot | IN PROGRESS | solo modello dati; schermata "non disponibile" |
 | E-CON4 | NOT STARTED | richiede un data logger esterno: non realizzabile sulla PicoCalc (stato External) |
 | Python (MicroPython) | NOT STARTED | richiede l'integrazione del runtime come libreria (modello dei file di script definito) |
 
@@ -142,10 +168,13 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Lettura dei record v1.6.0 (formato versione 1) | TESTED ON HOST |
 | Liste statistiche | TESTED ON HOST |
 | Stato di GRAPH (20 funzioni, V-Window, Setup, memorie V-Window e grafiche, SKETCH) e di TABLE (range, variabile, tipo, righe) — record v4 | TESTED ON HOST |
+| Record v5 (v1.9.0): 3D Graph e archivio dei file; lettura dei record v4 della v1.8.0 | TESTED ON HOST |
+| Liste di 999 elementi e cronologia di 200 righe (Pico Plus 2 W) | TESTED ON HOST |
 | Lettura dei record v3 (GRAPH v1.8.0 prima di TABLE) | TESTED ON HOST |
 | Record oltre la capacità della flash: messaggio "Memoria flash piena" con la dimensione | TESTED ON HOST |
 | Lettura dei record v1.7.0 (versione 2) e correzione delle V-Window legacy | TESTED ON HOST |
 | Progetti `.pcgraph` e immagini `.pcpict`/BMP sulla microSD, scrittura atomica e recupero | TESTED ON HOST (scheda simulata, pila completa GraphApp → FatFs → SD) |
+| Progetti e immagini sulla flash interna (LittleFS), scelta in SYSTEM | TESTED ON HOST |
 | Coefficienti Equation | TESTED ON HOST |
 | Conversazioni AI (cancellabili da AI Chat e Memory) | TESTED ON HOST |
 | Programmi, file Python, documenti, matrici salvate | NOT STARTED |

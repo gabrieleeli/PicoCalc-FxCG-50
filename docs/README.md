@@ -1,6 +1,6 @@
 # Documentazione
 
-## Documenti attuali (v1.8.0)
+## Documenti attuali (v1.9.0)
 
 | Documento | Contenuto |
 |---|---|
@@ -11,11 +11,13 @@
 | [STORAGE.md](STORAGE.md) | flash interna e microSD: workspace, file store, FatFs, protocollo SD, pin SPI0 |
 | [PCGRAPH_FORMAT.md](PCGRAPH_FORMAT.md) | formati `.pcgraph`, `PCGMEM`, `.pcpict`, BMP; scrittura atomica e recupero |
 | [TABLE.md](TABLE.md) | TABLE: lista delle relazioni, variabile range/lista, tipi Y=/r=/Param, editing delle righe, LISTMEM, persistenza |
-| [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md) | procedura di collaudo sulla PicoCalc fisica (GRAPH, microSD, TABLE) e dati da inviare |
+| [PICO_PLUS_2W.md](PICO_PLUS_2W.md) | Pimoroni Pico Plus 2 W: schede supportate, mappa della memoria, driver PSRAM, pool e limiti, partizioni della flash, grafica, stack, build, diagnostica |
+| [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) | collaudo della v1.9.0 sulla PicoCalc fisica (PSRAM, memoria, flash, 3D, guasti; HW-40…HW-82) |
+| [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md) | procedura di collaudo sulla PicoCalc fisica (GRAPH, microSD, TABLE; HW-01…HW-36, da ripetere con la v1.9.0) e dati da inviare |
 | [APPLICATIONS_ARCHITECTURE.md](APPLICATIONS_ARCHITECTURE.md) | registro delle modalità, servizi condivisi, dati scambiati, progetto delle modalità future, test di architettura |
 | [RUN_MATRIX.md](RUN_MATRIX.md) | Run-Matrix: tasti, cronologia, risultati esatti, S⇔D, frazioni miste, periodo, variabili |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | strati, ciclo principale, workspace, memoria, cartelle |
-| [HARDWARE.md](HARDWARE.md) | PicoCalc + Pico 2 W: display, tastiera, flash, collaudo |
+| [HARDWARE.md](HARDWARE.md) | PicoCalc + Pico Plus 2 W / Pico 2 W: display, tastiera, microSD, flash, collaudo |
 | [GRAPHICS_ENGINE.md](GRAPHICS_ENGINE.md) | canvas, aggiornamento parziale, font, renderer matematico, UI kit |
 | [MATH_ENGINE.md](MATH_ENGINE.md) | parser, valutatore, metodi numerici, formati, limiti |
 | [AI_INTEGRATION.md](AI_INTEGRATION.md) | relay, protocollo, sicurezza, Claude e ChatGPT |
@@ -24,20 +26,21 @@
 | [ROADMAP.md](ROADMAP.md) | cosa manca e priorità |
 | [CHANGELOG.md](CHANGELOG.md) | cronologia delle versioni |
 | [SYMBOL_CHEATSHEET.md](SYMBOL_CHEATSHEET.md) | simboli e notazione (contenuto dell'app Symbols) |
-| [reports/](reports/) | rapporti di sessione (v1.7.0, GRAPH v1.8.0, collaudo e TABLE v1.8.0) |
+| [reports/](reports/) | rapporti di sessione (v1.7.0, GRAPH v1.8.0, collaudo e TABLE v1.8.0) e del consolidamento della v1.9.0 ([CONSOLIDAMENTO_v1.9.0.md](reports/CONSOLIDAMENTO_v1.9.0.md)) |
 | [../CONTINUE.md](../CONTINUE.md) | stato e istruzioni per riprendere lo sviluppo |
 
 ## Versioni e branch
 
-Ogni versione ha un branch `version/<n>`; non va modificato dopo il rilascio.
-Lo sviluppo nuovo avviene in branch separati.
+Un solo branch per versione. `main` è la versione corrente (1.9.0); le versioni
+precedenti hanno un branch storico `version/<n>` che non va modificato.
 
 | Branch / tag | Contenuto |
 |---|---|
+| **`main`** (tag `v1.9.0`) | v1.9.0: v1.8.0 completa + Pimoroni Pico Plus 2 W (PSRAM, flash 16 MB, 3D Graph) |
 | `version/v1.5.4` | codice originale caricato (non compilava per RP2350) |
 | `version/v1.6.0` | prima build RP2350, modalità complete della v1.6.0, relay AI |
 | `version/v1.7.0` | Sessione 1: audit, architettura delle applicazioni, Run-Matrix con risultati esatti |
-| `version/v1.8.0` | Sessione GRAPH: motore dei grafici, modalità GRAPH, progetti e microSD (in sviluppo fino all'approvazione) |
+| `version/v1.8.0` | GRAPH, microSD, TABLE e collaudo software (Pico 2 W) |
 
 ## Documenti storici (versioni ≤ 1.5.4)
 

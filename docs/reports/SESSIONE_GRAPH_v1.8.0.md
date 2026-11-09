@@ -113,7 +113,7 @@ sviluppo fino all'approvazione.
 
 ## 7. Prossima sessione → v1.9.0
 
-Proposta in [ROADMAP.md](../ROADMAP.md#2-prossima-sessione--v190-proposta):
+Proposta in [ROADMAP.md](../ROADMAP.md#2-prossima-sessione-proposta):
 1) collaudo hardware di GRAPH e microSD; 2) TABLE completa; 3) Dual Screen e
 Graph to Table; 4) Dyna Graph, Recursion, Conic Graphs sul servizio GraphCore;
 5) FORMAT nello SKETCH e suffissi angolari; 6) Punto 3 (Natural V.P.A.M. ↔

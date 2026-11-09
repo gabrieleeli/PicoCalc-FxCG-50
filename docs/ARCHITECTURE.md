@@ -1,4 +1,4 @@
-# Architettura — v1.8.0
+# Architettura — v1.9.0
 
 Architettura di ogni modalità, servizi condivisi, dati scambiati e regole
 verificate dai test: [APPLICATIONS_ARCHITECTURE.md](APPLICATIONS_ARCHITECTURE.md).
@@ -9,32 +9,39 @@ verificate dai test: [APPLICATIONS_ARCHITECTURE.md](APPLICATIONS_ARCHITECTURE.md
 ┌──────────────────────────────────────────────────────────────────────┐
 │ Applicazioni (src/apps/)                                             │
 │ Launcher · Run-Matrix · Statistics · Graph · Table · Equation ·      │
-│ System · Memory · Conversion · AI Chat · Symbols · "non disponibile" │
+│ 3D Graph · System · Memory · Conversion · AI Chat · Symbols ·        │
+│ "non disponibile"                                                    │
 ├──────────────────────────────────────────────────────────────────────┤
 │ Framework app (app.hpp, app_manager.cpp, app_widgets.hpp)            │
 │ Registro (app_registry): stato, servizi, dati, collegamenti          │
 │ AppManager: routing tasti, MENU/SHIFT/EXIT lungo, errori → box CG50  │
-│ Context: Workspace + Platform + clipboard + toast                   │
+│ Context: Workspace + Platform + clipboard + toast                    │
 ├───────────────────────────┬──────────────────────────────────────────┤
 │ UI kit (ui_kit, widgets)  │ Motore matematico                        │
 │ Natural editor + renderer │ expression (tokenizer→AST→valutatori     │
 │ font_renderer, graphics   │ numerico ed esatto), exact, run_matrix,  │
 │ (Canvas RGB565, TileDiff) │ number_format, solvers, statistics,      │
-│                           │ math_engine, point_a, app_models,        │
+│ graph3d (superfici 3D)    │ math_engine, point_a, app_models,        │
 │                           │ graph_engine, graph_solve (GraphCore)    │
 ├───────────────────────────┴──────────────────────────────────────────┤
-│ File (file_store, graph_file, pict) → FatFs (third_party/fatfs) →    │
-│ protocollo SD (sd_card) su un bus SPI astratto                       │
+│ File (file_store, graph_file, pict) → FatFs → protocollo SD (SPI)    │
+│                                     → LittleFS (flash_fs) → flash    │
 ├──────────────────────────────────────────────────────────────────────┤
-│ Firmware (firmware.cpp): boot, decoder tasti, autosalvataggio, redraw│
+│ Firmware (firmware.cpp): boot, migrazione, decoder tasti,            │
+│ autosalvataggio, redraw                                              │
 ├──────────────────────────────────────────────────────────────────────┤
-│ Porta board (board_port.hpp)                                         │
-│  ├─ Pico: board_pico.cpp (LCD, tastiera, flash), sd_spi_pico.cpp     │
-│  │        (microSD su SPI0), net_pico.cpp (Wi-Fi, TLS), main_pico.cpp│
-│  └─ Host: board_host.cpp (scheda microSD in RAM) + simulator.cpp     │
+│ Memoria (v1.9.0): mem_pools (heap SRAM + PSRAM TLSF), operator new   │
+│ instradato, limits (persistenti / RAM / strutturali), psram (driver  │
+│ e self-test), system_runtime (MSPLIM, HardFault, core 1), sysinfo    │
+├──────────────────────────────────────────────────────────────────────┤
+│ Porta board (board_port.hpp) + board_config.hpp (pin, risorse, flash)│
+│  ├─ Pico: board_pico.cpp (PSRAM, LCD, tastiera, regioni flash),      │
+│  │        sd_spi_pico.cpp (microSD su SPI0), net_pico.cpp (Wi-Fi,    │
+│  │        TLS), main_pico.cpp (avvio, rapporto guasti, ciclo)        │
+│  └─ Host: board_host.cpp (microSD e flash in RAM) + simulator.cpp    │
+│ Schede: Pimoroni Pico Plus 2 W (principale), Raspberry Pi Pico 2 W   │
 └──────────────────────────────────────────────────────────────────────┘
 ```
-
 Tutto ciò che sta sopra la porta board è **portabile** e viene compilato sia per
 l'RP2350 sia per il PC con la stessa lista di sorgenti (`cmake/fxai_sources.cmake`):
 la logica testata sul PC è esattamente quella del firmware.
@@ -42,7 +49,11 @@ la logica testata sul PC è esattamente quella del firmware.
 ## Ciclo principale (firmware e simulatore)
 
 ```
-board::init() → Firmware::boot()   (carica il workspace dalla flash)
+paintStacks(), takeLastFault()     (guardia MSPLIM attiva dal reset)
+board::init()                      PSRAM + self-test, pool, LCD, tastiera, JEDEC della
+                                   flash, regioni flash (limitate al chip reale)
+Firmware::boot()                   carica il workspace (o migra quello della v1.8.0)
+avvisi                             UF2 sbagliato, guasto precedente o PSRAM disattivata
 loop:
   board::service()                 tastiera I2C non bloccante, batteria, Wi-Fi poll
   while board::pollKey(raw): Firmware::rawKey(raw) → KeyDecoder → AppManager::key
@@ -69,8 +80,9 @@ Il workspace implementa anche `NameResolver`: Run-Matrix legge in sola lettura
 le variabili di Graph e Table (`Xmin`, `TblStart`, …) senza accedere direttamente
 a quelle sezioni.
 
-`serializeWorkspace()` produce un blob binario versionato (versione 4 dalla
-v1.8.0 con TABLE; le versioni 1, 2 e 3 vengono ancora lette); `RecordStore` lo scrive in uno dei due
+`serializeWorkspace()` produce un blob binario versionato (versione 5 dalla
+v1.9.0 con il 3D Graph e l'archivio dei file; le versioni 1–4 vengono ancora
+lette); `RecordStore` lo scrive in uno dei due
 slot flash con CRC-32 dell'intestazione e del contenuto.
 
 ## Motore matematico
@@ -86,19 +98,27 @@ Binary/Unary/Call valutati da un unico valutatore templato su `double` (modo Rea
 Il motore lancia `SyntaxError`, `MathError`, `NonRealError` con testo nello stile
 Casio ("Math ERROR: divisione per zero"). `AppManager` intercetta ogni eccezione
 (anche `std::bad_alloc` → "Memory ERROR") e mostra la finestra di errore; il tasto
-successivo la chiude e l'input resta modificabile. Nessuna eccezione esce dal ciclo
-principale.
+successivo la chiude e l'input resta modificabile. Dalla v1.9.0 il percorso
+dell'errore (messaggio, toast, finestra) usa buffer riservati e non alloca,
+l'autosalvataggio intercetta `std::bad_alloc` e il ciclo principale del firmware
+intercetta ogni eccezione residua (`oom_test`).
 
 ## Memoria
 
-- Framebuffer statico 320×320 RGB565 (200 KB); nessun secondo framebuffer: le
-  modifiche si rilevano con hash per tile (1,6 KB).
-- Stack di 32 KB in SRAM (linker script `src/platform/pico/memmap_picocalc.ld`).
-- Heap ≈194 KB per AST, liste, storia, mbedTLS (handshake TLS ~50–60 KB) e
-  GRAPH (punti delle curve ≤ 96 KB, immagini RLE ≤ 96 KB ciascuna, volume
-  FatFs).
-- Limiti espliciti: storia 40 voci, liste 255 elementi, chat 30 messaggi,
-  risposta HTTP 16 KB, Σ/Π 100001 termini, tabella 500 righe.
+- Framebuffer statico 320×320 RGB565 (200 KB) in SRAM; nessun secondo
+  framebuffer: le modifiche si rilevano con hash per tile (1,6 KB).
+- Stack di 32 KB in SRAM (linker script `src/platform/pico/memmap_picocalc.ld`)
+  con guardia MSPLIM.
+- Heap SRAM ≈ 186–190 KB per AST, stringhe brevi, mbedTLS (handshake TLS
+  ~50–60 KB), lwIP; sulla **Pimoroni Pico Plus 2 W** il pool **PSRAM da 8 MB**
+  riceve ogni allocazione C++ da 512 byte in su (`operator new` instradato):
+  punti delle curve di GRAPH, layer di GRAPH durante TRACE, immagini, mesh e
+  z-buffer 3D, liste, cronologia, workspace serializzato. Regole e mappa:
+  [PICO_PLUS_2W.md](PICO_PLUS_2W.md).
+- Limiti (`limits.hpp`): persistenti per scheda (Pico 2 W: storia 40, liste 255;
+  Pico Plus 2 W: storia 200, liste 999), RAM dai pool presenti (curve
+  6000/24 000 o 40 000/400 000 punti, PICT 96 KB o 1 MB, 3D griglia 24 o 128),
+  chat 30 messaggi, risposta HTTP 16 KB, tabella 999 righe.
 - Limiti contro l'esaurimento dello stack: espressioni di 320 token e 32 livelli
   annidati, editor con 12 modelli annidati e 400 nodi, budget di 16 KB per
   valutazione (vedi [MATH_ENGINE.md](MATH_ENGINE.md)).
@@ -112,8 +132,10 @@ principale.
 | `src/platform/pico/` | porta RP2350, configurazioni lwIP/mbedTLS, linker script |
 | `src/platform/host/` | porta host e simulatore |
 | `third_party/fatfs/` | FatFs R0.16 (non modificato) e `ffconf.h` del progetto |
+| `third_party/littlefs/` | LittleFS v2.11.3 (non modificato) |
 | `tests/` | test host (CTest); `tests/sim/` script degli screenshot |
 | `relay/` | server relay AI (Python) e test |
 | `tools/gen_fonts.py` | generatore dei font bitmap |
 | `certs/relay_ca.pem` | CA fidate per il relay (ISRG Root X1/X2) |
-| `cmake/` | lista sorgenti condivisa e template |
+| `cmake/` | lista sorgenti condivisa, selezione della scheda e partizioni (`fxai_board.cmake`), controllo della dimensione, template |
+| `scripts/` | `build.sh --board`, `build_pico2w.sh`, `make_release.sh` |

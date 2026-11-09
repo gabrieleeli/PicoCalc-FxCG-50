@@ -1,40 +1,47 @@
-# Roadmap — dopo la v1.8.0
+# Roadmap — dopo la v1.9.0
 
 Il progetto **non** ha la parità con la Casio fx-CG50 e non va presentato come
 tale: le tabelle sotto elencano ciò che manca. Il documento storico
 `archive/CG50_PARITY_ROADMAP.md` descrive gli obiettivi delle versioni precedenti.
-Le release successive (v1.9.0, v2.0.0) si creano solo quando i rispettivi
-incrementi sono completati e verificati. La matrice di parità di GRAPH è in
+La v1.9.0 (`main`) ha unito la v1.8.0 al supporto del Pimoroni Pico Plus 2 W
+([reports/CONSOLIDAMENTO_v1.9.0.md](reports/CONSOLIDAMENTO_v1.9.0.md)). Le release
+successive si creano solo quando i rispettivi incrementi sono completati e
+verificati. La matrice di parità di GRAPH è in
 [GRAPH_PARITY.md](GRAPH_PARITY.md).
 
 ## 1. Collaudo su hardware (priorità massima, richiede la PicoCalc)
 
-Nessuna funzione è stata provata sulla PicoCalc. Procedura in
-[HARDWARE.md](HARDWARE.md#collaudo-consigliato-sul-dispositivo): display
+Nessuna funzione è stata provata sulla PicoCalc, né con il Pimoroni Pico Plus 2 W
+né con il Pico 2 W. Procedure in [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md)
+(PSRAM: rilevamento, self-test, frequenza, convivenza con la cache XIP e le
+scritture flash; partizioni della flash da 16 MB; JEDEC ID; 3D; prestazioni con
+i limiti della PSRAM; guasti), [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md)
+e [HARDWARE.md](HARDWARE.md#collaudo-consigliato-sul-dispositivo): display
 (RGB666/RGB565, orientamento), tastiera (codici, ripetizione, tempi I2C), flash
 (salvataggio, blackout), batteria, Wi-Fi/TLS/relay, stabilità. Per Run-Matrix:
 tempi di risposta della valutazione esatta (fattorizzazione di radicandi grandi)
-e del ricalcolo della cronologia (40 righe). Per GRAPH: tempi del disegno
+e del ricalcolo della cronologia (40 righe sul Pico 2 W, 200 sulla Plus). Per GRAPH: tempi del disegno
 incrementale (600 valutazioni per ciclo), reattività della tastiera durante il
 disegno, colori delle curve e dei riempimenti sul pannello, memoria libera con
 20 grafici e immagini di sfondo. Per la microSD (SPI0, GP16–19, GP22):
 inizializzazione di schede SDHC e SDXC exFAT reali, clock massimo affidabile,
 estrazione durante il salvataggio, progetti scritti dal PC.
 
-## 2. Prossima sessione — v1.9.0 (proposta)
+## 2. Prossima sessione (proposta)
 
 Il collaudo software di GRAPH e della microSD e il completamento di TABLE
 sono stati fatti nella v1.8.0 (rapporto
-[reports/SESSIONE_v1.8.0_COLLAUDO_TABLE.md](reports/SESSIONE_v1.8.0_COLLAUDO_TABLE.md)).
-Restano, in ordine:
+[reports/SESSIONE_v1.8.0_COLLAUDO_TABLE.md](reports/SESSIONE_v1.8.0_COLLAUDO_TABLE.md));
+la v1.9.0 ha aggiunto il supporto della Pico Plus 2 W, il 3D Graph e le liste da
+999 elementi sulla Plus. Restano, in ordine:
 
 | # | Voce | Note |
 |---|---|---|
-| 0 | **Esito del collaudo fisico** della v1.8.0 | procedura [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md); correggere i KO prima del resto e aggiornare a TESTED ON HARDWARE solo le voci provate |
+| 0 | **Esito del collaudo fisico** della v1.9.0 sulla Pico Plus 2 W | procedure [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) e [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md); correggere i KO prima del resto e aggiornare a TESTED ON HARDWARE solo le voci provate |
 | 1 | Dual Screen G+G (COPY, SWAP), GtoT e T+G, Graph to Table | `graph::Viewport` accetta già un'area diversa da 320×282 |
 | 2 | Dyna Graph, Recursion, Conic Graphs | sul servizio GraphCore (`sampleStep`, `Viewport`, G-Solve, `table_model` per le tabelle delle successioni) |
 | 3 | FORMAT durante lo SKETCH, suffissi angolari °/ʳ/ᵍ | piccoli completamenti di GRAPH |
-| 4 | Liste di 999 elementi (LISTMEM di tabelle lunghe) | oggi 255 |
+| 4 | Editor MAT di Run-Matrix e matrici grandi | l'API supporta matrici fino a 999×999 con la PSRAM; le liste da 999 elementi esistono già sulla Plus (sul Pico 2 W 255, record da 64 KB) |
 | 5 | Punto 3: Natural V.P.A.M. ↔ formato lineare | descritto sotto |
 
 ### Punto 3: Natural V.P.A.M. ↔ formato lineare
@@ -79,12 +86,13 @@ Stato e progetto di ogni modalità in [APPLICATIONS_ARCHITECTURE.md](APPLICATION
 |---|---|
 | Statistics | regressioni sinusoidale e logistica; test χ², F, 2 campioni, ANOVA nell'interfaccia; grafici a torta e a barre |
 | Graph | Dual Screen G+G/GtoT, Graph to Table, comandi grafici di Run-Matrix/programmi, FORMAT nello SKETCH (dettaglio in [GRAPH_PARITY.md](GRAPH_PARITY.md)) |
-| Table | Dual Screen T+G; liste di 999 elementi per LISTMEM |
+| Table | Dual Screen T+G (LISTMEM con 999 elementi già sulla Plus; 255 sul Pico 2 W) |
 | Equation | interfaccia per i sistemi di disequazioni; risultati esatti (servizio Exact) |
 | Recursion, Conic Graphs, Dyna Graph | modelli dati pronti (`app_models.hpp`) e servizio GraphCore per il disegno; mancano controller e UI |
 | Financial | TVM (modello pronto), flussi di cassa, ammortamento |
 | Spreadsheet, eActivity, Program | modelli pronti; l'area file su microSD esiste (servizio Files, v1.8.0); Program richiede l'interprete |
-| Geometry, Picture Plot, 3D Graph | modelli pronti; 3D usa `sample3DSurface()` esistente |
+| Geometry, Picture Plot | modelli pronti |
+| 3D Graph | disponibile dalla v1.9.0 per z = f(x, y); mancano sfere, piani, rette e superfici parametriche della fx-CG50, TRACE sulla superficie |
 | Link | trasferimento del record del workspace via USB seriale (formato proprio) |
 | Python | MicroPython come libreria con heap separato |
 | E-CON4 | non realizzabile (data logger esterno); al più import CSV nelle liste |
@@ -95,6 +103,9 @@ Stato e progetto di ogni modalità in [APPLICATIONS_ARCHITECTURE.md](APPLICATION
   recupero dopo estrazione verificato sul PC, diagnostica SYSTEM → DIAG;
   da collaudare su hardware; da estendere a programmi, documenti e backup del
   workspace; accesso multiblocco (CMD18/CMD25) per file grandi.
+- PSRAM: collaudo del timing (oggi valori SparkFun per l'APS6404L) e, se stabile,
+  frequenza più alta; `PSRAM_PICOCALC` (PSRAM della mainboard) è solo
+  un'interfaccia.
 - Gestione energetica: spegnimento del display, sospensione, risveglio da tastiera.
 - DMA e clock SPI più alto per il display, se il collaudo lo consente.
 - Animazioni di transizione tra le schermate (primitiva già presente).

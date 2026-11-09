@@ -1,4 +1,4 @@
-# Motore GRAPH e G-Solve (v1.8.0)
+# Motore GRAPH e G-Solve (v1.8.0, limiti di memoria della v1.9.0)
 
 La modalità GRAPH è divisa in un motore portabile senza interfaccia e in
 un'applicazione che lo disegna. Ogni valore mostrato (curve, TRACE, G-Solve,
@@ -117,19 +117,29 @@ punti isolati invece di segmenti. Per le disequazioni il motore salva anche il
 
 ### Memoria
 
-| Limite | Valore |
-|---|---|
-| Punti per curva (`MaxCurvePoints`) | 6 000 (24 KB) |
-| Punti dei tratti PEN di tutto lo SKETCH (`MaxSketchPenPoints`) | 1 200 (9,6 KB nel record in flash) |
-| Punti di tutte le curve insieme (`MaxTotalCurvePoints`) | 24 000 (96 KB): il renderer assegna a ogni curva ciò che le altre non usano (`Curve::limit`) |
-| Bordo di una disequazione | 320 float (1,25 KB) |
-| Immagine RLE (sfondo o immagine richiamata) | ≤ 96 KB ciascuna |
+Dalla v1.9.0 i limiti dei buffer che non vengono salvati dipendono dalla
+memoria presente (`limits::ram()`, [PICO_PLUS_2W.md](PICO_PLUS_2W.md#41-limiti-tre-categorie-includelimitshpp)):
+profilo SRAM sul Pico 2 W o sulla Plus con la PSRAM disattivata, profilo PSRAM
+sulla Plus.
+
+| Limite | Solo SRAM | Con PSRAM |
+|---|---|---|
+| Punti per curva (`maxCurvePoints()`) | 6 000 (24 KB) | 40 000 (160 KB) |
+| Punti di tutte le curve insieme (`maxTotalCurvePoints()`): il renderer assegna a ogni curva ciò che le altre non usano (`Curve::limit`) | 24 000 (96 KB) | 400 000 (1,6 MB) |
+| Immagine RLE (sfondo, immagine richiamata, BMP importato) | ≤ 96 KB ciascuna | ≤ 1 MB |
+| Poligoni pieni (scratch dai pool) | 256 vertici | 4 096 vertici |
+| Cache dei layer statici durante TRACE | no | sì (≈ 180 KB in PSRAM) |
+| Punti dei tratti PEN di tutto lo SKETCH (`MaxSketchPenPoints`, salvati nel record) | 1 200 | 1 200 |
+| Bordo di una disequazione | 320 float (1,25 KB) | uguale |
 
 Una curva che raggiunge il limite si ferma (`truncated`) e il grafico mostra
 "Memory ERROR: grafici troppo complessi, disegno parziale" una volta. Se l'heap
 si esaurisce comunque (immagini grandi + curve), il disegno si ferma con
-"Memory ERROR" senza ripetere l'errore a ogni ciclo. Heap disponibile sul
-firmware: circa 194 KB (vedi [BUILD_STATUS.md](BUILD_STATUS.md)).
+"Memory ERROR" senza ripetere l'errore a ogni ciclo. Heap SRAM disponibile sul
+firmware: circa 190 KB; con la PSRAM i buffer grandi (punti, immagini, layer)
+vanno nel pool PSRAM da 8 MB (vedi [BUILD_STATUS.md](BUILD_STATUS.md)). Con la
+PSRAM le 20 parametriche dense della prova HW-17 vengono disegnate per intero
+(`graphics_memory_test`).
 
 ## Rendering incrementale
 
@@ -161,6 +171,16 @@ Livelli del grafico, dal basso verso l'alto:
 
 PICTURE STORE salva i livelli 1–9 (senza le sovrapposizioni del livello 10)
 dopo il disegno completo.
+
+**Cache dei layer (v1.9.0, solo con la PSRAM).** Durante TRACE e lo
+spostamento del puntatore cambia solo il livello 10: a disegno completato i
+livelli 1–9 vengono copiati in un buffer della PSRAM (`drawLayers()` /
+`drawOverlays()`) e a ogni tasto cursore si ricopia quel buffer invece di
+ridisegnare curve e regioni. Un'impronta FNV dello stato (modello, V-Window,
+impostazioni, SKETCH, immagini) e qualunque altro tasto invalidano la cache.
+Misurato sul PC con 249 000 punti: 0,05 ms per passo invece di 18,6 ms;
+l'immagine è identica al pixel a quella ridisegnata (`graphics_memory_test`).
+Senza PSRAM la cache non esiste e il comportamento è quello della v1.8.0.
 
 ## ZOOM e V-Window
 

@@ -1,4 +1,4 @@
-# Architettura delle applicazioni — v1.8.0
+# Architettura delle applicazioni — v1.9.0
 
 Questo documento descrive **come sono costruite tutte le modalità** (quelle
 disponibili e quelle future), quali servizi condivisi usano, quali dati si
@@ -84,7 +84,9 @@ display) → `tick()` per lavoro periodico (rete) → `leave()`.
 | Models | `app_models.hpp` | modelli dati delle modalità future |
 | GraphCore | `graph_model.hpp`, `graph_engine.hpp`, `graph_solve.hpp`, `table_model.hpp` | Graph, Table; previsto per Dyna Graph, Recursion, Conic Graphs (campionamento, viewport, G-Solve) — [GRAPH_ENGINE.md](GRAPH_ENGINE.md) |
 | Files | `file_store.hpp`, `graph_file.hpp`, `pict.hpp` | Graph (progetti `.pcgraph`, immagini `.pcpict`, BMP sulla microSD); previsto per Picture Plot, Program, eActivity — [STORAGE.md](STORAGE.md) |
-| Diag | `diagnostics.hpp` | System (SYSTEM → DIAG: test della microSD e tempi di GRAPH sul dispositivo, log USB) |
+| Diag | `diagnostics.hpp` | System (SYSTEM → DIAG: memoria, PSRAM, allocatore, flash, LCD, microSD, flash interna, tempi di GRAPH sul dispositivo, log USB) |
+| Graph3D | `graph3d.hpp`, `limits.hpp` | 3D Graph (campionamento delle superfici, proiezione, z-buffer o pittore, budget dalla memoria presente) |
+| Hardware | `board_config.hpp`, `mem_pools.hpp`, `psram.hpp`, `limits.hpp`, `system_info.hpp`, `system_runtime.hpp` | System (INFO, "Archivio file", DIAG): scheda, pool di memoria, PSRAM, stack — [PICO_PLUS_2W.md](PICO_PLUS_2W.md) |
 
 Errori: il motore lancia `SyntaxError`, `MathError`, `NonRealError` con testi
 nello stile CG50; `AppManager` li mostra nella finestra di errore. Memoria:
@@ -105,6 +107,7 @@ nessuna allocazione dinamica nei percorsi ricorsivi; limiti espliciti
 | `Graph` | Setup di Graph, memorie V-Window e grafiche, SKETCH, immagine richiamata, progetto aperto | Graph | Graph, Table (Setup Derivative) |
 | `Equation` | coefficienti, solver | Equation | Equation |
 | `Chat` | conversazione AI | AI Chat | AI Chat |
+| `Graph3D` | Z1–Z3, selezione, finestra x/y/z, griglia, vista (rotazione, zoom) | 3D Graph | 3D Graph, Memory |
 
 Memory e System (RESET) possono cancellare ogni sezione. Le variabili di altre
 modalità entrano in un'espressione **solo** tramite `NameResolver`
@@ -113,10 +116,11 @@ Le funzioni di Graph entrano in un'altra funzione solo tramite
 `FunctionResolver` (riferimenti `Y1(x)` … delle funzioni composte).
 Non esistono sistemi di variabili separati per modalità.
 
-Persistenza: `serializeWorkspace()` (versione 4 dalla v1.8.0 con TABLE; le
-versioni 1 della v1.6.0, 2 della v1.7.0 e 3 vengono ancora lette) → `RecordStore` con due slot
-e CRC-32. I file dell'utente (progetti GRAPH, immagini) sono sulla microSD
-tramite il servizio Files ([STORAGE.md](STORAGE.md)).
+Persistenza: `serializeWorkspace()` (versione 5 dalla v1.9.0 con 3D Graph e
+archivio dei file; le versioni 1 della v1.6.0, 2 della v1.7.0, 3 e 4 della
+v1.8.0 vengono ancora lette) → `RecordStore` con due slot e CRC-32. I file
+dell'utente (progetti GRAPH, immagini) sono sulla microSD o nella flash interna
+(LittleFS), scelta in SYSTEM, tramite il servizio Files ([STORAGE.md](STORAGE.md)).
 
 ## 5. Modalità disponibili
 
@@ -127,8 +131,9 @@ tramite il servizio Files ([STORAGE.md](STORAGE.md)).
 | Graph | `GraphApp` (`graph_app.cpp`, `graph_plot.cpp`, `graph_files.cpp`) | grafici Y=, r=, parametrici, X=, disequazioni (Y1–Y20); TRACE, ZOOM, V-Window, SKETCH, G-SOLVE, Modify, memorie, PICT, progetti `.pcgraph` — [GRAPH_PARITY.md](GRAPH_PARITY.md) | Expression, Editor, Format, Widgets, MathRender, Storage, GraphCore, Files | Settings, Memory, Functions, View, Table, Lists, Graph | Table |
 | Table | `TableApp` + `table_model` | tabelle di Y=, r= e parametriche da range o lista, derivate, EDIT/ROW/DELETE, LISTMEM, GPH-CON/GPH-PLT — [TABLE.md](TABLE.md) | Expression, Editor, Format, Widgets, MathRender, Storage, GraphCore | Settings, Memory, Functions, View, Table, Lists, Graph | Graph |
 | Equation | `EquationApp` | sistemi, polinomi, solver, disequazioni | Expression, Solvers | Settings, Memory, Equation | — |
-| Memory | `MemoryApp` | uso e cancellazione dei dati | Widgets, Storage | tutte | — |
-| System | `SystemApp` | SET UP, retroilluminazione, Wi-Fi, relay, reset, DIAG | Widgets, Network, Diag | tutte (RESET) | — |
+| 3D Graph | `Graph3DApp` (`graph3d_app.cpp`) + motore `graph3d.cpp` | superfici z = f(x, y) Z1–Z3, finestra 3D, griglia, rotazione/zoom senza ricalcolo, AUTO, calcolo incrementale | Expression, Widgets, Editor, Format, Storage, Models, Graph3D | Settings, Memory, Graph3D | — |
+| Memory | `MemoryApp` | uso e cancellazione dei dati (anche delle funzioni 3D) | Widgets, Storage | tutte | — |
+| System | `SystemApp` | SET UP, retroilluminazione, archivio dei file, Wi-Fi, relay, reset, INFO, DIAG | Widgets, Editor, Format, Network, Storage, Diag, Hardware | tutte (RESET) | — |
 | Conversion | `ConversionApp` | conversioni di unità, risultato in Ans | Expression, Units | Settings, Memory | — |
 | AI Chat | `AiChatApp` | chat con Claude/ChatGPT tramite relay | Network, Editor | Settings, Chat | System |
 | Symbols | `SymbolsApp` | guida dei simboli | Help | — | — |
@@ -221,15 +226,9 @@ I modelli **non** sono ancora nel record salvato: entreranno nel `Workspace`
 - **Modello**: `PicturePlotModel { background, points[] }`.
 - **Dipendenze**: `Lists` e `Functions` (copia della regressione, come Statistics).
 
-### 3D Graph — Planned
-- **Responsabilità**: superfici z = f(x, y) (fino a 3), finestra 3D, rotazione.
-- **Servizi**: Expression (`CompiledExpression::eval2`), Storage. Esiste già `sample3DSurface()` in `graph.hpp`.
-- **Modello**: `Graph3DModel` (funzioni, selezione, finestra x/y/z, griglia 5–50).
-- **Test**: proiezione e campionamento.
-
 ### Python — Planned
 - **Responsabilità**: script MicroPython.
-- **Requisiti**: integrazione del runtime come libreria con **heap separato** (la RAM disponibile è ~200 KB) e I/O sul display; file `.py` (`validateScriptName()`).
+- **Requisiti**: integrazione del runtime come libreria con **heap separato** (heap SRAM ≈ 190 KB; sulla Pico Plus 2 W l'heap dell'interprete può stare nel pool PSRAM) e I/O sul display; file `.py` (`validateScriptName()`).
 
 ## 7. Verifica: `tests/architecture_test.cpp`
 

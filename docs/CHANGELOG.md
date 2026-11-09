@@ -1,5 +1,114 @@
 # Changelog
 
+## v1.9.0 — consolidamento: v1.8.0 completa + Pimoroni Pico Plus 2 W
+
+Branch canonico: `main` (tag `v1.9.0`). Il primo lavoro sulla 1.9.0 era stato
+sviluppato su `main`/`version/v1.5.4` e non conteneva le 24 commit della
+v1.6.0–v1.8.0; questa versione le riunisce: architettura e funzioni della
+v1.8.0 al completo, layer hardware e di memoria della prima 1.9.0 portato su
+quell'architettura. Rapporto completo:
+[reports/CONSOLIDAMENTO_v1.9.0.md](reports/CONSOLIDAMENTO_v1.9.0.md).
+**Nessuna prova su hardware fisico**: procedura
+[HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md).
+
+### Scheda e build
+- Scheda principale **Pimoroni Pico Plus 2 W** (`FXAI_BOARD=PICO_PLUS_2W`,
+  predefinita), profilo alternativo Raspberry Pi Pico 2 W (`PICO2W`); una
+  cartella di build e un UF2 per scheda (`picocalc_fxai_<scheda>.uf2`);
+  `scripts/build.sh --board ...`, `build_pico2w.sh` invariato nell'uso.
+- `-O2` predefinito su entrambe (era `-O3`), `-fstack-usage`, controllo della
+  dimensione dell'immagine nella partizione firmware, LTO sperimentale.
+- Pin della PicoCalc invariati (driver ufficiali della v1.8.0: LCD su SPI1,
+  tastiera STM32 su I²C1, microSD su SPI0), raccolti in `board_config.hpp`.
+
+### Memoria (Pico Plus 2 W)
+- Driver PSRAM APS6404L con self-test all'avvio e avvio solo in SRAM in caso
+  di guasto; pool SRAM/PSRAM (TLSF), `operator new` instradato (≥ 512 byte in
+  PSRAM), `std::pmr`, sicuro su due core.
+- Limiti: persistenti per scheda (Plus: liste da **999** elementi come la
+  fx-CG50, cronologia di 200 righe; Pico 2 W invariato); RAM scelti dai pool
+  presenti (curve di GRAPH 400 000 punti, PICT 1 MB, 3D griglia 128 con
+  z-buffer); strutturali invariati.
+- Record del workspace da 1 MB (2 × 512 KB) sulla Plus.
+
+### Flash
+- Partizioni: firmware, settore diagnostico, **LittleFS** (≈ 11 MB sulla Plus,
+  ≈ 1,9 MB sul Pico 2 W) come archivio interno per progetti e immagini GRAPH
+  (SYSTEM → "Archivio file"), BTstack, workspace.
+- **Corretto**: lo slot B del workspace usava l'ultimo settore della flash, che
+  il workaround del bootrom per l'erratum RP2350-E10 sovrascrive durante gli
+  aggiornamenti UF2; ora nessun salvataggio lo scrive (sul Pico 2 W la
+  posizione della v1.8.0 è conservata: i dati sopravvivono all'aggiornamento).
+- **Corretto per le schede con PSRAM**: `flash_range_program` riceveva i dati
+  direttamente dal buffer del chiamante; ora passano da un buffer di rimbalzo
+  in SRAM (un buffer in PSRAM non è leggibile con l'XIP fermo); cancellazione
+  un settore alla volta; verifica/ripristino della configurazione QMI M1.
+- Migrazione una tantum del workspace di una v1.8.0 eseguita sulla stessa Plus.
+- **UF2 della scheda sbagliata**: all'avvio viene letto il JEDEC ID della flash;
+  con un'immagine Plus su un Pico 2 W (chip da 4 MB) le regioni oltre il chip
+  sono disattivate invece di finire, per aliasing degli indirizzi, sul
+  firmware e sui dati; l'avvio dice quale UF2 installare.
+
+### Applicazioni
+- **3D Graph** (prima solo modello dati): Z1–Z3, finestra 3D, griglia,
+  rotazione, zoom, AUTO, campionamento incrementale, z-buffer in PSRAM o
+  algoritmo del pittore, una famiglia di colore per superficie (blu, rosso,
+  verde), salvato nel workspace (record **v5**); screenshot 40–43 dal
+  simulatore, che con il profilo Plus usa ora il pool PSRAM come il modulo.
+- GRAPH: budget dei punti dalla memoria presente; **layer statici in PSRAM**
+  durante TRACE e puntatore (immagine identica al pixel; sul PC 0,05 ms invece
+  di 18,6 ms per passo con 249 000 punti).
+- SYSTEM: INFO con SRAM/PSRAM; DIAG con memoria/PSRAM, allocatore su 1 e 2
+  core, flash↔PSRAM, LCD, flash interna, oltre a microSD e GRAPH; impostazione
+  "Archivio file". MEMORY: cancellazione delle funzioni 3D.
+
+### Robustezza
+- Stack del core 0 con guardia MSPLIM, HardFault con rapporto al riavvio.
+- **Corretto**: segnalare "Memory ERROR" allocava memoria (il messaggio era una
+  `std::string`), quindi con la memoria esaurita l'eccezione usciva dal ciclo
+  principale; errori, toast e finestra d'errore ora usano buffer riservati.
+- **Corretto**: un `std::bad_alloc` durante l'autosalvataggio usciva dal ciclo
+  principale (terminazione del firmware); ora "Memory ERROR: salvataggio
+  rimandato" e le modifiche restano in attesa: il salvataggio riparte da solo
+  quando la memoria torna (prima la modifica andava persa se non ne seguiva
+  un'altra). Il ciclo principale intercetta comunque ogni eccezione residua.
+- `deserializeWorkspace` non tiene più un `Workspace` (5,4 KB) sullo stack.
+- 3D: corretta la normalizzazione dello yaw per rotazioni negative oltre 360°.
+
+### Test
+- Suite host eseguita per **entrambi i profili** (`FXAI_TEST_BOARD`), con
+  ASan/UBSan e ThreadSanitizer (allocatore su due thread). Nuove suite:
+  `mem_pools_smoke`, `mem_new_smoke`, `psram_selftest_smoke`, `limits_smoke`
+  (dalla prima 1.9.0, adattate), `internal_fs_test`, `graphics_memory_test`,
+  `graph3d_test`, `board_profile_test`, `system_diag_test`, `oom_test`.
+  Numeri in [BUILD_STATUS.md](BUILD_STATUS.md) e [TESTING.md](TESTING.md).
+
+### Rimosso (sostituito già nella v1.6.0–v1.8.0)
+- Window manager, `ui.cpp`, driver LCD PIO, `main.cpp`, `graph_renderer` e
+  emulatore SDL2 della base v1.5.4 modificati dalla prima 1.9.0: le loro
+  funzioni esistono nell'architettura della v1.8.0 (framework delle app,
+  driver ufficiali, motore GRAPH, simulatore con screenshot).
+- `FXAI_ENABLE_CAS` (riservava memoria per un modulo CAS inesistente),
+  `FXAI_ENABLE_SD` (la v1.8.0 ha lo stack microSD completo), contatore di avvii
+  scritto in flash a ogni accensione, buffer AI da 2 MB (il protocollo del
+  relay limita le risposte a 4000 caratteri).
+- Opzione `FXAI_ENABLE_3D` della prima 1.9.0: non aveva effetto su alcun
+  sorgente (la modalità 3D è sempre compilata e si adatta alla memoria).
+- Test `flash_fs_smoke`, `graphics_memory_smoke`, `oom_smoke`,
+  `system_app_smoke` della prima 1.9.0: non più compilati (API della base
+  v1.5.4); i loro controlli sono in `internal_fs_test`, `board_profile_test`,
+  `graphics_memory_test`, `graph3d_test`, `oom_test`, `expression_test` e
+  `system_diag_test`.
+
+## 1.9.0 (prima versione, sostituita) — supporto Pico Plus 2 W sulla base v1.5.4
+
+Branch `version/v1.9.0` (= `main` fino al consolidamento), commit `f1f3089` e
+`9ed7fdb`. Driver PSRAM, memoria multi-pool, limiti dinamici, LittleFS,
+grafico 3D, diagnostica e test della memoria sviluppati sul codice della
+v1.5.4 (senza la v1.6.0–v1.8.0). Questi componenti sono stati portati nella
+v1.9.0 consolidata; il resto (UI e driver della v1.5.4) era già stato
+sostituito dalla v1.6.0–v1.8.0. La cronologia completa resta nella storia Git.
+
 ## v1.8.0 (continuazione) — collaudo di GRAPH e microSD, completamento di TABLE
 
 Sullo stesso branch `version/v1.8.0`. Verifiche su PC; **nessuna prova sulla

@@ -1,8 +1,49 @@
-# Build status — v1.8.0 (collaudo software e TABLE)
+# Build status — v1.9.0 (consolidamento: v1.8.0 + Pimoroni Pico Plus 2 W)
 
 Le note storiche delle versioni v0.3–v1.5.4 restano nella cronologia Git e in
-[CHANGELOG.md](CHANGELOG.md). Le sezioni dopo "v1.8.0" descrivono le build
-precedenti e l'audit della v1.6.0 e restano valide come base.
+[CHANGELOG.md](CHANGELOG.md). Le sezioni dopo "v1.9.0" descrivono le build
+precedenti e restano valide come confronto.
+
+## v1.9.0 — `main`
+
+Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`),
+una cartella per scheda. Ambiente in fondo alla pagina (invariato; relay con
+`anthropic` 2.7.0 e `openai` 3.48.0). **Nessuna prova su hardware.**
+
+| Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (2 772 992 byte) | `build/pico2w/picocalc_fxai_pico2w.uf2` (2 755 584 byte) |
+| `picotool info` | "PicoCalc FX-CG50 AI", versione `1.9.0 (pico_plus_2w)`, RP2350 ARM Secure, `pimoroni_pico_plus2_w_rp2350`, SDK 2.2.0 | "PicoCalc FX-CG50 AI", versione `1.9.0 (pico2w)`, RP2350 ARM Secure, `pico2_w`, SDK 2.2.0 |
+| Immagine flash | 1 386 216 byte (`__flash_binary_end` = `0x101526E8`) = 33 % della partizione firmware da 4 MB | 1 377 516 byte (`0x101504EC`) = 65 % della partizione da 2 MB |
+| Resto della flash | diagnostica 4 KB, LittleFS 11 248 KB, BTstack 8 KB, workspace 1024 KB (2 × 512 KB), ultimo settore libero (E10) | diagnostica 4 KB, LittleFS 1908 KB, BTstack 8 KB, workspace 128 KB nella posizione della v1.8.0 |
+| RAM statica | 299 444 byte fino a `__end__` = `0x200491B4` (di cui 200 KB framebuffer) | 295 520 byte (`0x20048260`) |
+| Heap SRAM | 192 076 byte (`__end__` → `0x20078000`) | 196 000 byte |
+| PSRAM | 8 MB come pool TLSF separato, creato a runtime dopo il self-test; nessuna sezione statica in PSRAM | — |
+| Stack | core 0: 32 KB (`0x20078000`–`0x20080000`, guardia MSPLIM); core 1: 4 KB in SCRATCH_X | uguale |
+| Frame di stack massimi (`-fstack-usage`) | `diag::testMemory` 1712 B, `GraphApp::openProject` 1696 B, `main` 1584 B; moduli nuovi: `graph3d` 552 B, `Graph3DApp` 520 B, `board_pico` 608 B, `flash_fs` 456 B, `psram` 128 B, TLSF 40 B | uguale |
+| Warning | **nessuno** (0 in tutta la build, SDK incluso; FatFs e LittleFS compilati con `-w`) | nessuno |
+| Avvisi CMake | solo quello dell'SDK su picotool (non installato: compilato dai sorgenti) | uguale |
+
+Rispetto alla v1.8.0 (`-O3`, 1 505 640 byte di immagine) l'immagine è più
+piccola perché il livello predefinito ora è `-O2` (codice più compatto per la
+cache XIP da 16 KB condivisa con la PSRAM); `-O3` resta disponibile
+(`--opt O3`). La RAM statica cresce di 6,7 KB sulla Plus (stato del 3D,
+metadati dei pool, buffer di rimbalzo della flash, buffer riservati per i
+messaggi d'errore) e di 2,9 KB sul Pico 2 W, che non ha l'oggetto del pool
+PSRAM.
+
+### Test
+
+| Suite | Pico Plus 2 W | Pico 2 W |
+|---|---|---|
+| CTest (`tests/run_host_tests.sh`) | 35/35: 33 suite C++ con 7 705 controlli, `mem_pools_smoke` (≈ 333 000 verifiche di integrità, numero variabile perché due thread si contendono i pool) e `sd_interop_test` (41) | 35/35: 7 699 controlli + ≈ 333 000 + 41 |
+| AddressSanitizer + UBSan (`--sanitize`) | 35/35 | 35/35 |
+| ThreadSanitizer (`--tsan`, allocatore su due thread) | superato | superato |
+| Relay AI (Python, `unittest`) | 15/15 | — |
+| v1.8.0 rieseguita come riferimento | 25/25, **7 179** controlli + 41 (la documentazione della v1.8.0 indicava 7169: il conteggio di `architecture_test` era fermo a 529, il test ne esegue 539) | |
+
+Dettagli per suite in [TESTING.md](TESTING.md). Le build dei test usano gli
+stessi sorgenti portabili del firmware; il dispositivo non è stato usato.
 
 ## v1.8.0 — collaudo software di GRAPH e microSD, completamento di TABLE
 
@@ -72,12 +113,13 @@ statica (forme esatte di A–Z/Ans nel workspace).
 
 | Componente | Versione |
 |---|---|
-| Sistema | Ubuntu 24.04 (container x86_64) |
+| Sistema | Ubuntu 24.04.5 (container x86_64) |
 | Toolchain ARM | `arm-none-eabi-gcc` 13.2.1 (pacchetto `gcc-arm-none-eabi` 15:13.2.rel1-2) |
 | Pico SDK | 2.2.0 (submodule: tinyusb, cyw43-driver, lwip, mbedtls 3.6.2) |
 | CMake / Ninja | 3.28.3 / 1.11 |
 | Compilatore host | g++ 13.3 (C++20, `-Wall -Wextra -Werror`) |
-| Python (relay) | 3.13, `anthropic` 2.6.0, `openai` 3.46.0 |
+| Python (relay) | 3.13, `anthropic` 2.7.0, `openai` 3.48.0 (v1.9.0; v1.8.0: 2.6.0 / 3.46.0) |
+| picotool | 2.2.0, compilato dall'SDK durante la build |
 
 ## Audit della v1.5.4 di partenza
 
@@ -149,6 +191,9 @@ Relay AI (`cd relay && python -m unittest discover -s tests`): **15 test superat
 - Tastiera: tutti i codici, tenuta/ripetizione, modificatori, tempi I2C.
 - Batteria e retroilluminazione via registri STM32.
 - Scrittura flash con `flash_safe_execute` e ripristino dopo riavvio/blackout.
+- PSRAM APS6404L: rilevamento, self-test, frequenza, convivenza con la cache XIP e con le scritture flash (v1.9.0).
+- Lettura del JEDEC ID della flash all'avvio e partizioni della flash da 16 MB della Pico Plus 2 W.
+- Stack con guardia MSPLIM, rapporto HardFault, core 1 della diagnostica.
 - Wi-Fi CYW43, DNS, handshake TLS con verifica del certificato, consumo di RAM di mbedTLS.
 - Stabilità prolungata e consumi.
 
