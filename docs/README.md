@@ -39,7 +39,7 @@ eliminare ([rapporto](reports/CONSOLIDAMENTO_v1.9.0.md#16-branch-e-tag)).
 
 | Branch / tag | Contenuto |
 |---|---|
-| **`main`** (tag `v1.9.0`) | v1.9.0: v1.8.0 completa + Pimoroni Pico Plus 2 W (PSRAM, flash 16 MB, 3D Graph) |
+| **`main`** (tag `v1.9.0` da creare) | v1.9.0: v1.8.0 completa + Pimoroni Pico Plus 2 W (PSRAM, flash 16 MB, 3D Graph) |
 | `version/v1.5.4` | codice originale caricato (non compilava per RP2350) |
 | `version/v1.6.0` | prima build RP2350, modalità complete della v1.6.0, relay AI |
 | `version/v1.7.0` | Sessione 1: audit, architettura delle applicazioni, Run-Matrix con risultati esatti |

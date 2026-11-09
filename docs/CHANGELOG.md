@@ -2,7 +2,7 @@
 
 ## v1.9.0 — consolidamento: v1.8.0 completa + Pimoroni Pico Plus 2 W
 
-Branch canonico: `main` (tag `v1.9.0`). Il primo lavoro sulla 1.9.0 era stato
+Branch canonico: `main` (tag `v1.9.0` da creare su `main`). Il primo lavoro sulla 1.9.0 era stato
 sviluppato su `main`/`version/v1.5.4` e non conteneva le 24 commit della
 v1.6.0–v1.8.0; questa versione le riunisce: architettura e funzioni della
 v1.8.0 al completo, layer hardware e di memoria della prima 1.9.0 portato su

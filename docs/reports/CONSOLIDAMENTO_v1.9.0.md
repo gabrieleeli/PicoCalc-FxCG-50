@@ -1,6 +1,7 @@
 # Consolidamento della v1.9.0 — rapporto
 
-Data: 9 novembre 2026. Branch risultante: **`main`** (tag `v1.9.0`).
+Data: 9 novembre 2026. Branch risultante: **`main`** (il tag `v1.9.0` va creato
+dal proprietario: §16).
 Obiettivo: una 1.9.0 che contenga tutta la v1.8.0 più il supporto completo del
 Pimoroni Pico Plus 2 W (RP2350B, 8 MB di PSRAM, 16 MB di flash), scegliendo per
 ogni componente l'implementazione migliore, senza merge indiscriminati.
@@ -321,9 +322,26 @@ git push origin --delete version/v1.9.0 release/1.9.0 claude/laughing-mendel-jew
 
 Nessun lavoro va perso: ogni commit di quei branch è già in `main`.
 
-Tag: `v1.9.0` sull'ultima commit del consolidamento in `main`. La protezione
-del branch `main` su GitHub (Settings → Branches) va attivata dal
-proprietario del repository: non è configurabile dagli strumenti usati.
+Tag: **non creato**. Il tag annotato `v1.9.0` è stato preparato sull'ultima
+commit di `main`, ma l'ambiente ha rifiutato anche il push dei tag (HTTP 403,
+come per le eliminazioni) e gli strumenti GitHub disponibili non creano tag o
+release. Il proprietario può crearlo dalla pagina *Releases* di GitHub (nuovo
+tag `v1.9.0` su `main`) oppure da un clone locale:
+
+```bash
+git fetch origin
+```
+
+```bash
+git tag -a v1.9.0 origin/main -m "PicoCalc FX-CG50 AI 1.9.0"
+```
+
+```bash
+git push origin v1.9.0
+```
+
+La protezione del branch `main` su GitHub (Settings → Branches) va attivata
+dal proprietario del repository: non è configurabile dagli strumenti usati.
 
 ## 17. Problemi ancora presenti
 

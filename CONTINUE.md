@@ -2,7 +2,8 @@
 
 Documento di checkpoint per riprendere lo sviluppo esattamente da qui.
 Ultimo aggiornamento: **v1.9.0 — consolidamento della v1.8.0 con il supporto
-del Pimoroni Pico Plus 2 W**, branch **`main`** (tag `v1.9.0`). Rapporto
+del Pimoroni Pico Plus 2 W**, branch **`main`** (tag `v1.9.0` da creare: vedi
+il rapporto, §16). Rapporto
 completo: `docs/reports/CONSOLIDAMENTO_v1.9.0.md`.
 
 ## 0. Branch
@@ -47,7 +48,7 @@ versione; mai force-push; nessuna release o tag nuovi senza richiesta.
 
 | Area | Contenuto |
 |---|---|
-| Git | analisi di tutti i branch; merge della v1.8.0 nella linea 1.9.0 con l'architettura della v1.8.0; `main` avanzato solo con fast-forward; branch duplicati verificati (eliminazione rifiutata dall'ambiente, da fare); tag `v1.9.0` |
+| Git | analisi di tutti i branch; merge della v1.8.0 nella linea 1.9.0 con l'architettura della v1.8.0; `main` avanzato solo con fast-forward; branch duplicati verificati; eliminazione dei branch e push del tag `v1.9.0` rifiutati dall'ambiente (HTTP 403), da fare |
 | Hardware | profili `PICO_PLUS_2W` (predefinito) e `PICO2W`, mappa della flash per scheda, PSRAM con self-test e avvio solo SRAM in caso di guasto, pool TLSF, `operator new` instradato, limiti per scheda e per memoria presente, MSPLIM, HardFault, core 1 per la diagnostica, lettura del JEDEC ID della flash |
 | Correzioni | ultimo settore (RP2350-E10), scrittura flash da buffer in PSRAM, "Memory ERROR" che allocava (terminazione), `bad_alloc` dell'autosalvataggio, modifiche perse dopo un salvataggio fallito per memoria, `Workspace` di 5,4 KB sullo stack, yaw 3D, UF2 della scheda sbagliata |
 | Applicazioni | 3D Graph; cache dei layer di GRAPH in PSRAM; archivio dei file su LittleFS; SYSTEM INFO/DIAG estesi; MEMORY per il 3D |
