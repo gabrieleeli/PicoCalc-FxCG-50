@@ -558,9 +558,9 @@ void appendNumber(ast::Node& row, double value, DisplayFormat format) {
 }
 // "Mat 10×12 → Mat Ans": a result too large for the natural display.
 std::string collectionSummary(const CalcValue& v) {
-    if (v.isList()) return "List (" + std::to_string(v.rows) + ") â List Ans";
+    if (v.isList()) return "List (" + std::to_string(v.rows) + ") \xE2\x86\x92 List Ans";
     const char* word = v.type == ValueType::Vector ? "Vct " : "Mat ";
-    return word + std::to_string(v.rows) + "Ã" + std::to_string(v.cols) + " â " + (v.type == ValueType::Vector ? "Vct Ans" : "Mat Ans");
+    return word + std::to_string(v.rows) + "\xC3\x97" + std::to_string(v.cols) + " \xE2\x86\x92 " + (v.type == ValueType::Vector ? "Vct Ans" : "Mat Ans");
 }
 std::string collectionText(const HistoryEntry& e, const Settings& s) {
     const CalcValue& v = e.collection->value;

@@ -115,8 +115,37 @@ std::vector<std::string> splitArgs(const std::string& s) {
     out.push_back(s.substr(start));
     return out;
 }
-void importInto(NaturalNode& target, const std::string& s, int depth);
+void importInto(NaturalNode& target, const std::string& s, int depth, bool linear = false);
 NodePtr importRow(const std::string& s, int depth) { auto r = row(); importInto(*r, s, depth + 1); return r; }
+// "[[a,b][c,d]]" starting at `open`: Matrix template with one row per cell.
+// Returns the index after the closing bracket, or npos when the text is not a
+// rectangular matrix literal (it is then imported as plain tokens).
+std::size_t importMatrix(NaturalNode& target, const std::string& s, std::size_t open, int depth) {
+    if (open + 1 >= s.size() || s[open] != '[' || s[open + 1] != '[') return std::string::npos;
+    std::vector<std::string> cells;
+    std::size_t cols = 0, i = open + 1;
+    while (i < s.size() && s[i] == '[') {
+        // One row: cells separated by commas at depth 0, up to the matching ']'.
+        int level = 0;
+        std::size_t start = i + 1, j = i + 1, count = 0;
+        for (; j < s.size(); ++j) {
+            const char c = s[j];
+            if (c == '(' || c == '[' || c == '{') ++level;
+            else if (c == ')' || c == '}' || (c == ']' && level > 0)) --level;
+            else if (c == ']' && level == 0) break;
+            else if (c == ',' && level == 0) { cells.push_back(s.substr(start, j - start)); ++count; start = j + 1; }
+        }
+        if (j >= s.size()) return std::string::npos;
+        cells.push_back(s.substr(start, j - start)); ++count;
+        if (cols == 0) cols = count; else if (count != cols) return std::string::npos;
+        i = j + 1;
+    }
+    if (i >= s.size() || s[i] != ']' || cells.empty() || cols > 99) return std::string::npos;
+    auto m = node(Kind::Matrix, std::to_string(cols));
+    for (const auto& c : cells) m->children.push_back(importRow(c, depth));
+    target.children.push_back(m);
+    return i + 1;
+}
 std::size_t utf8Len(unsigned char c) { return c < 0x80 ? 1 : (c & 0xE0) == 0xC0 ? 2 : (c & 0xF0) == 0xE0 ? 3 : 4; }
 void appendToken(NaturalNode& r, std::string text) {
     r.children.push_back(token(std::move(text)));
@@ -137,12 +166,44 @@ void appendToken(NaturalNode& r, std::string text) {
         offset += r.children[pos]->text.size(); ++pos;
     }
 }
-void importInto(NaturalNode& target, const std::string& s, int depth) {
+void importInto(NaturalNode& target, const std::string& s, int depth, bool linear) {
     if (depth > static_cast<int>(NaturalEditor::MaxTemplateDepth)) throw MathError("Stack ERROR: annidamento eccessivo");
     std::size_t i = 0;
     while (i < s.size()) {
         const unsigned char c = static_cast<unsigned char>(s[i]);
         if (std::isspace(c)) { ++i; continue; }
+        // Mat / Vct / List (OPTN commands) are one token each, also when the
+        // name follows without a space ("MatA" = Mat A).
+        if (c == 'M' || c == 'V' || c == 'L') {
+            bool done = false;
+            for (const char* word : {"Mat", "Vct", "List"}) {
+                const std::size_t n = std::strlen(word);
+                if (s.compare(i, n, word) != 0) continue;
+                std::size_t e = i; while (e < s.size() && (std::isalnum(static_cast<unsigned char>(s[e])) || s[e] == '_')) ++e;
+                const std::string rest = s.substr(i + n, e - i - n);
+                const bool number = !rest.empty() && std::all_of(rest.begin(), rest.end(), [](char ch) { return ch >= '0' && ch <= '9'; });
+                if (!number && isReservedWord(lowerCopy(s.substr(i, e - i)))) break;   // nome di funzione, es. "mattolist"
+                target.children.push_back(token(word)); i += n; done = true;
+                break;
+            }
+            if (done) continue;
+        }
+        if (linear) {
+            if (c == '@') {
+                std::size_t e = i + 1;
+                while (e < s.size() && std::isalpha(static_cast<unsigned char>(s[e]))) ++e;
+                while (e < s.size() && std::isdigit(static_cast<unsigned char>(s[e]))) ++e;
+                target.children.push_back(token(s.substr(i, e - i))); i = e; continue;
+            }
+            const std::size_t len = utf8Len(c);
+            appendToken(target, s.substr(i, len));
+            i += len;
+            continue;
+        }
+        if (c == '[') {
+            const std::size_t next = importMatrix(target, s, i, depth);
+            if (next != std::string::npos) { i = next; continue; }
+        }
         // "(a)/(b)" -> fraction, "(a)^(b)" -> power
         if (c == '(') {
             const std::size_t close = matchParen(s, i);
@@ -231,13 +292,15 @@ ast::NodePtr cloneTree(const NaturalNode& n) {
 NaturalEditor::NaturalEditor() { clear(); undo_.clear(); }
 void NaturalEditor::clear() {
     if (root_ && !root_->children.empty()) pushUndo();
+    selecting_ = false; errorMark_ = Range{};
     root_ = row(); rowPath_.clear(); cursor_ = 0; error_.clear();
     autoRootParenPending_ = false; autoRootParenOpened_ = false;
 }
 bool NaturalEditor::empty() const noexcept { return !root_ || root_->children.empty(); }
 void NaturalEditor::setExpression(const std::string& expression) {
     auto r = row();
-    importInto(*r, expression, 0);
+    importInto(*r, expression, 0, linear_);
+    selecting_ = false; errorMark_ = Range{};
     // Imported text may be slightly larger than the tree it was produced from.
     if (countNodes(*r) > 2 * MaxNodes) throw MathError("Memory ERROR: espressione troppo lunga");
     if (templateDepth(*r) > MaxTemplateDepth) throw MathError("Stack ERROR: annidamento eccessivo");
@@ -245,6 +308,7 @@ void NaturalEditor::setExpression(const std::string& expression) {
     autoRootParenPending_ = false; autoRootParenOpened_ = false;
 }
 void NaturalEditor::setTree(const NaturalNode& tree) {
+    selecting_ = false; errorMark_ = Range{};
     root_ = cloneTree(tree);
     if (root_->kind != Kind::Row) { auto r = row(); r->children.push_back(root_); root_ = r; }
     rowPath_.clear(); cursor_ = root_->children.size(); error_.clear();
@@ -275,12 +339,16 @@ void NaturalEditor::checkLimits() {
     throw MathError(depth > MaxTemplateDepth ? "Stack ERROR: troppi modelli annidati" : "Memory ERROR: espressione troppo lunga");
 }
 void NaturalEditor::pushUndo() {
+    // Any edit ends the CLIP selection and removes the error highlight.
+    selecting_ = false;
+    errorMark_ = Range{};
     if (!root_) return;
     undo_.push_back({cloneTree(*root_), rowPath_, cursor_});
     if (undo_.size() > MaxUndo) undo_.erase(undo_.begin());
     redo_.clear();
 }
 bool NaturalEditor::undo() {
+    selecting_ = false; errorMark_ = Range{};
     if (undo_.empty()) return false;
     redo_.push_back({cloneTree(*root_), rowPath_, cursor_});
     auto s = std::move(undo_.back()); undo_.pop_back();
@@ -289,6 +357,7 @@ bool NaturalEditor::undo() {
     return true;
 }
 bool NaturalEditor::redo() {
+    selecting_ = false; errorMark_ = Range{};
     if (redo_.empty()) return false;
     undo_.push_back({cloneTree(*root_), rowPath_, cursor_});
     auto s = std::move(redo_.back()); redo_.pop_back();
@@ -298,8 +367,15 @@ bool NaturalEditor::redo() {
 }
 ast::NodePtr NaturalEditor::copyTree() const { return cloneTree(*root_); }
 void NaturalEditor::paste(const NaturalNode& tree) {
+    selecting_ = false;
     pushUndo();
     auto copy = cloneTree(tree);
+    if (linear_) {
+        // Line mode: templates are pasted as their linear text.
+        auto flat = row();
+        importInto(*flat, ast::serialize(*copy), 0, true);
+        copy = flat;
+    }
     auto& r = activeRow();
     std::vector<NodePtr> items;
     if (copy->kind == Kind::Row) items = copy->children; else items.push_back(copy);
@@ -349,13 +425,14 @@ void NaturalEditor::insert(char c) {
         autoRootParenOpened_ = false; error_.clear(); return;
     }
     autoRootParenPending_ = false;
-    // '[' ']' delimit the GRAPH suffixes ",[a,b]" / ",[A=...]", '@' starts a graph
-    // function reference; the parser rejects them where they are not valid.
-    if (!(std::isalnum(static_cast<unsigned char>(c)) || std::strchr(".+-*/%!,()=<>~[]@", c) != nullptr))
+    // '[' ']' delimit matrices and the GRAPH suffixes ",[a,b]" / ",[A=...]",
+    // '{' '}' lists, '@' starts a graph function reference; the parser rejects
+    // them where they are not valid.
+    if (!(std::isalnum(static_cast<unsigned char>(c)) || std::strchr(".+-*/%!,()=<>~[]{}@", c) != nullptr))
         throw std::invalid_argument("Carattere non ammesso nell'espressione");
     pushUndo();
     insertNode(token(std::string(1, c)));
-    if (std::isalnum(static_cast<unsigned char>(c))) {
+    if (std::isalnum(static_cast<unsigned char>(c)) && !linear_) {
         auto& r = activeRow();
         std::string tail; std::size_t begin = cursor_;
         while (begin > 0 && alnumToken(*r.children[begin - 1])) { tail.insert(0, r.children[begin - 1]->text); --begin; }
@@ -380,7 +457,22 @@ void NaturalEditor::insert(char c) {
             return;
         }
         if (std::isalpha(static_cast<unsigned char>(c))) mergeWord();
+    } else if (std::isalpha(static_cast<unsigned char>(c))) {
+        mergeWord();
     }
+    checkLimits();
+}
+// Line mode: a template key inserts its linear text; the cursor ends
+// `cursorBack` tokens before the end of it (inside "[[,][,]]").
+void NaturalEditor::insertLinear(const std::string& text, std::size_t cursorBack) {
+    autoRootParenPending_ = false;
+    pushUndo();
+    auto flat = row();
+    importInto(*flat, text, 0, true);
+    auto& r = activeRow();
+    r.children.insert(r.children.begin() + static_cast<std::ptrdiff_t>(cursor_), flat->children.begin(), flat->children.end());
+    cursor_ += flat->children.size() - std::min(cursorBack, flat->children.size());
+    error_.clear();
     checkLimits();
 }
 void NaturalEditor::insertText(const std::string& text) {
@@ -399,6 +491,7 @@ void NaturalEditor::insertSymbol(const std::string& utf8) {
     checkLimits();
 }
 void NaturalEditor::insertBox(NodePtr box, std::size_t focusChild) {
+    if (linear_) throw std::invalid_argument("Modello non disponibile in modalit\xC3\xA0 Line");
     pushUndo();
     autoRootParenPending_ = false;
     auto& r = activeRow();
@@ -409,6 +502,7 @@ void NaturalEditor::insertBox(NodePtr box, std::size_t focusChild) {
     checkLimits();
 }
 void NaturalEditor::insertFraction() {
+    if (linear_) { insertLinear("/"); return; }
     pushUndo();
     auto f = node(Kind::Fraction); f->children = {row(), row()};
     auto& r = activeRow();
@@ -429,6 +523,8 @@ void NaturalEditor::insertFraction() {
     checkLimits();
 }
 void NaturalEditor::insertMixedFraction() {
+    // fx-CG50: mixed fractions exist in the Math input/output mode only.
+    if (linear_) throw std::invalid_argument("Frazione mista disponibile solo in modalit\xC3\xA0 Math");
     auto m = node(Kind::Call, "mixed"); m->children = {row(), row(), row()};
     insertBox(m, 0);
 }
@@ -443,20 +539,24 @@ void NaturalEditor::insertPeriod() {
         if (!std::isdigit(static_cast<unsigned char>(t.text[0]))) break;
     }
     if (!point) throw SyntaxError("Syntax ERROR: il periodo va dopo la parte decimale (es. 0.1)");
+    if (linear_) { pushUndo(); insertNode(token("_")); return; }
     auto p = node(Kind::Call, "period"); p->children = {row()};
     insertBox(p, 0);
 }
 void NaturalEditor::insertRadical() { insertNthRoot(2); }
 void NaturalEditor::insertRootTemplate() {
+    if (linear_) { insertLinear("root("); return; }
     auto r = node(Kind::Call, "root"); r->children = {row(), row()};
     insertBox(r, 0);
 }
 void NaturalEditor::insertNthRoot(unsigned index) {
     if (index < 2 || index > 99) throw std::invalid_argument("Indice della radice: usare 2-99");
+    if (linear_) { insertLinear(index == 2 ? "\xE2\x88\x9A(" : index == 3 ? "\xE2\x88\x9B(" : "root(" + std::to_string(index) + ","); return; }
     auto f = node(Kind::Radical, std::to_string(index)); f->children = {row()};
     insertBox(f, 0);
 }
 void NaturalEditor::insertPower() {
+    if (linear_) { pushUndo(); autoRootParenPending_ = false; insertNode(token("^")); checkLimits(); return; }
     auto& r = activeRow();
     pushUndo();
     autoRootParenPending_ = false;
@@ -477,12 +577,14 @@ void NaturalEditor::insertPower() {
     checkLimits();
 }
 void NaturalEditor::insertSquare() {
+    if (linear_) { insertLinear("^2"); return; }
     insertPower();
     insertNode(token("2"));
     (void)leaveChild(true);
     checkLimits();
 }
 void NaturalEditor::insertSubscript() {
+    if (linear_) throw std::invalid_argument("Modello non disponibile in modalit\xC3\xA0 Line");
     auto& r = activeRow();
     pushUndo();
     auto operand = takeTrailingOperand(r, cursor_);
@@ -491,19 +593,47 @@ void NaturalEditor::insertSubscript() {
     rowPath_.push_back(operand.first); rowPath_.push_back(1); cursor_ = 0;
     checkLimits();
 }
-void NaturalEditor::insertGroup() { auto g = node(Kind::Group); g->children = {row()}; insertBox(g, 0); }
-void NaturalEditor::insertAbs() { auto g = node(Kind::Call, "abs"); g->children = {row()}; insertBox(g, 0); }
-void NaturalEditor::insertLogBase() { auto g = node(Kind::Call, "log"); g->children = {row(), row()}; insertBox(g, 0); }
+void NaturalEditor::insertGroup() { if (linear_) { insertLinear("("); return; } auto g = node(Kind::Group); g->children = {row()}; insertBox(g, 0); }
+void NaturalEditor::insertAbs() { if (linear_) { insertLinear("abs("); return; } auto g = node(Kind::Call, "abs"); g->children = {row()}; insertBox(g, 0); }
+void NaturalEditor::insertLogBase() { if (linear_) { insertLinear("log("); return; } auto g = node(Kind::Call, "log"); g->children = {row(), row()}; insertBox(g, 0); }
 void NaturalEditor::insertExp() {
+    if (linear_) { insertLinear("e^("); return; }
     auto p = node(Kind::Power); auto base = row(); base->children.push_back(token("e")); p->children = {base, row()}; insertBox(p, 1);
 }
 void NaturalEditor::insertTenPower() {
+    if (linear_) { insertLinear("10^("); return; }
     auto p = node(Kind::Power); auto base = row(); base->children = {token("1"), token("0")}; p->children = {base, row()}; insertBox(p, 1);
 }
-void NaturalEditor::insertIntegral() { auto n = node(Kind::Calculus, "integral"); n->children = {row(), row(), row()}; insertBox(n, 0); }
-void NaturalEditor::insertDerivative() { auto n = node(Kind::Calculus, "derivative"); n->children = {row(), row()}; insertBox(n, 0); }
-void NaturalEditor::insertSummation() { auto n = node(Kind::Calculus, "sum"); n->children = {row(), row(), row()}; insertBox(n, 0); }
-void NaturalEditor::insertProduct() { auto n = node(Kind::Calculus, "prod"); n->children = {row(), row(), row()}; insertBox(n, 0); }
+void NaturalEditor::insertIntegral() { if (linear_) { insertLinear("integral("); return; } auto n = node(Kind::Calculus, "integral"); n->children = {row(), row(), row()}; insertBox(n, 0); }
+void NaturalEditor::insertDerivative() { if (linear_) { insertLinear("derivative("); return; } auto n = node(Kind::Calculus, "derivative"); n->children = {row(), row()}; insertBox(n, 0); }
+void NaturalEditor::insertSummation() { if (linear_) { insertLinear("sum("); return; } auto n = node(Kind::Calculus, "sum"); n->children = {row(), row(), row()}; insertBox(n, 0); }
+void NaturalEditor::insertProduct() { if (linear_) { insertLinear("prod("); return; } auto n = node(Kind::Calculus, "prod"); n->children = {row(), row(), row()}; insertBox(n, 0); }
+void NaturalEditor::insertMatrix(std::size_t rows, std::size_t cols) {
+    if (rows < 1 || rows > 6 || cols < 1 || cols > 6) throw std::invalid_argument("Modello MAT/VCT: da 1x1 a 6x6");
+    if (linear_) {
+        std::string text = "[[";
+        for (std::size_t r = 0; r < rows; ++r) {
+            if (r) text += "[";
+            for (std::size_t c = 1; c < cols; ++c) text += ",";
+            text += "]";
+        }
+        text += "]";
+        insertLinear(text, text.size() - 2);           // every character is one token: cursor after "[["
+        return;
+    }
+    auto m = node(Kind::Matrix, std::to_string(cols));
+    for (std::size_t i = 0; i < rows * cols; ++i) m->children.push_back(row());
+    insertBox(m, 0);
+}
+void NaturalEditor::setLinear(bool linear) {
+    if (linear == linear_) return;
+    std::string text;
+    try { text = toExpression(); } catch (...) { text.clear(); }
+    linear_ = linear;
+    selecting_ = false; errorMark_ = Range{};
+    autoRootParenPending_ = autoRootParenOpened_ = false;
+    try { setExpression(text); } catch (...) { root_ = row(); rowPath_.clear(); cursor_ = 0; }
+}
 
 bool NaturalEditor::enterChild(std::size_t boxIndex, std::size_t child, bool atEnd) {
     auto& r = activeRow();
@@ -524,6 +654,7 @@ bool NaturalEditor::leaveChild(bool right) {
     return true;
 }
 bool NaturalEditor::moveLeft() {
+    selecting_ = false;
     autoRootParenPending_ = false;
     auto& r = activeRow();
     if (cursor_ > 0) {
@@ -539,13 +670,14 @@ bool NaturalEditor::moveLeft() {
     if (rowPath_.size() >= 2) {
         NaturalNode* box = parentBox();
         const std::size_t slot = rowPath_.back();
-        if (box && (box->kind == Kind::Calculus || box->kind == Kind::Call) && slot > 0) {
+        if (box && (box->kind == Kind::Calculus || box->kind == Kind::Call || box->kind == Kind::Matrix) && slot > 0) {
             rowPath_.back() = slot - 1; cursor_ = box->children[slot - 1]->children.size(); return true;
         }
     }
     return leaveChild(false);
 }
 bool NaturalEditor::moveRight() {
+    selecting_ = false;
     autoRootParenPending_ = false;
     auto& r = activeRow();
     if (cursor_ < r.children.size()) {
@@ -559,15 +691,16 @@ bool NaturalEditor::moveRight() {
     if (rowPath_.size() >= 2) {
         NaturalNode* box = parentBox();
         const std::size_t slot = rowPath_.back();
-        if (box && (box->kind == Kind::Calculus || box->kind == Kind::Call) && slot + 1 < box->children.size()) {
+        if (box && (box->kind == Kind::Calculus || box->kind == Kind::Call || box->kind == Kind::Matrix) && slot + 1 < box->children.size()) {
             rowPath_.back() = slot + 1; cursor_ = 0; return true;
         }
     }
     return leaveChild(true);
 }
-void NaturalEditor::moveHome() { rowPath_.clear(); cursor_ = 0; autoRootParenPending_ = autoRootParenOpened_ = false; }
-void NaturalEditor::moveEnd() { rowPath_.clear(); cursor_ = root_->children.size(); autoRootParenPending_ = autoRootParenOpened_ = false; }
+void NaturalEditor::moveHome() { selecting_ = false; rowPath_.clear(); cursor_ = 0; autoRootParenPending_ = autoRootParenOpened_ = false; }
+void NaturalEditor::moveEnd() { selecting_ = false; rowPath_.clear(); cursor_ = root_->children.size(); autoRootParenPending_ = autoRootParenOpened_ = false; }
 bool NaturalEditor::moveUp() {
+    selecting_ = false;
     // Innermost enclosing box that supports vertical movement wins.
     for (std::size_t depth = rowPath_.size(); depth >= 2; depth -= 2) {
         NaturalNode* parent = root_.get();
@@ -578,6 +711,7 @@ bool NaturalEditor::moveUp() {
         const std::size_t slot = rowPath_[depth - 1];
         std::size_t target = slot;
         if (box->kind == Kind::Calculus || box->kind == Kind::Call) { if (slot > 0) target = slot - 1; }
+        else if (box->kind == Kind::Matrix) { const std::size_t cols = ast::matrixColumns(*box); if (cols && slot >= cols) target = slot - cols; }
         else if ((box->kind == Kind::Fraction || box->kind == Kind::Power || box->kind == Kind::Subscript) && slot == 1) target = 0;
         if (target != slot && box->children[target]->kind == Kind::Row) {
             rowPath_.resize(depth); rowPath_[depth - 1] = target; cursor_ = box->children[target]->children.size(); return true;
@@ -586,6 +720,7 @@ bool NaturalEditor::moveUp() {
     return false;
 }
 bool NaturalEditor::moveDown() {
+    selecting_ = false;
     for (std::size_t depth = rowPath_.size(); depth >= 2; depth -= 2) {
         NaturalNode* parent = root_.get();
         for (std::size_t i = 0; i + 2 < depth; ++i) parent = parent->children.at(rowPath_[i]).get();
@@ -595,6 +730,7 @@ bool NaturalEditor::moveDown() {
         const std::size_t slot = rowPath_[depth - 1];
         std::size_t target = slot;
         if (box->kind == Kind::Calculus || box->kind == Kind::Call) { if (slot + 1 < box->children.size()) target = slot + 1; }
+        else if (box->kind == Kind::Matrix) { const std::size_t cols = ast::matrixColumns(*box); if (cols && slot + cols < box->children.size()) target = slot + cols; }
         else if ((box->kind == Kind::Fraction || box->kind == Kind::Power || box->kind == Kind::Subscript) && slot == 0) target = 1;
         if (target != slot && box->children[target]->kind == Kind::Row) {
             rowPath_.resize(depth); rowPath_[depth - 1] = target; cursor_ = box->children[target]->children.size(); return true;
@@ -657,8 +793,154 @@ void NaturalEditor::handle(const NaturalKeyEvent& e) {
     } catch (const std::exception& ex) { error_ = ex.what(); }
 }
 std::string NaturalEditor::toExpression() const { return ast::serialize(*root_); }
+
+// ---- CLIP selection ----------------------------------------------------------
+namespace {
+bool isOpening(const NaturalNode& n) { return n.kind == Kind::Token && (n.text == "(" || n.text == "[" || n.text == "{"); }
+bool isClosing(const NaturalNode& n) { return n.kind == Kind::Token && (n.text == ")" || n.text == "]" || n.text == "}"); }
+// Function words that own the parenthesis after them ("sin" "(").
+bool ownsParenthesis(const NaturalNode& n) {
+    if (n.kind != Kind::Token || n.text.size() < 2 || !alphaWord(n.text)) return false;
+    return isReservedWord(lowerCopy(n.text));
+}
+} // namespace
+void NaturalEditor::beginSelection() {
+    autoRootParenPending_ = false;
+    selecting_ = true;
+    anchor_ = cursor_;
+    errorMark_ = Range{};
+}
+bool NaturalEditor::selectLeft() {
+    if (!selecting_) beginSelection();
+    if (cursor_ > 0) { --cursor_; return true; }
+    if (rowPath_.size() < 2) return false;
+    // Past the start of a template field: the whole template becomes the unit.
+    const std::size_t box = rowPath_[rowPath_.size() - 2];
+    rowPath_.resize(rowPath_.size() - 2);
+    anchor_ = box + 1;
+    cursor_ = box;
+    return true;
+}
+bool NaturalEditor::selectRight() {
+    if (!selecting_) beginSelection();
+    const auto& r = activeRow();
+    if (cursor_ < r.children.size()) { ++cursor_; return true; }
+    if (rowPath_.size() < 2) return false;
+    const std::size_t box = rowPath_[rowPath_.size() - 2];
+    rowPath_.resize(rowPath_.size() - 2);
+    anchor_ = box;
+    cursor_ = box + 1;
+    return true;
+}
+NaturalEditor::Range NaturalEditor::selection() const {
+    Range out;
+    if (!selecting_) return out;
+    const auto& r = activeRow();
+    out.row = &r;
+    std::size_t b = std::min(anchor_, cursor_), e = std::max(anchor_, cursor_);
+    e = std::min(e, r.children.size());
+    b = std::min(b, e);
+    // Balance the brackets: an unmatched closing one pulls the start back to
+    // its opening one (with the function name before it), an unmatched opening
+    // one pushes the end to its closing one. Repeated until stable.
+    for (bool changed = true; changed && b < e;) {
+        changed = false;
+        int depth = 0;
+        for (std::size_t i = b; i < e; ++i) {
+            if (isOpening(*r.children[i])) ++depth;
+            else if (isClosing(*r.children[i])) {
+                if (depth > 0) { --depth; continue; }
+                // find the matching opening before b (none: a stray closing bracket stays as it is)
+                int d = 0; std::size_t k = b;
+                bool found = false;
+                while (k > 0) {
+                    --k;
+                    if (isClosing(*r.children[k])) ++d;
+                    else if (isOpening(*r.children[k])) { if (d == 0) { found = true; break; } --d; }
+                }
+                if (found) { b = k; changed = true; }
+                break;
+            }
+        }
+        if (changed) continue;
+        depth = 0;
+        for (std::size_t i = e; i-- > b;) {
+            if (isClosing(*r.children[i])) ++depth;
+            else if (isOpening(*r.children[i])) {
+                if (depth > 0) { --depth; continue; }
+                int d = 0; std::size_t k = e;
+                for (; k < r.children.size(); ++k) {
+                    if (isOpening(*r.children[k])) ++d;
+                    else if (isClosing(*r.children[k])) { if (d == 0) break; --d; }
+                }
+                if (k < r.children.size()) { e = k + 1; changed = true; }
+                else { e = r.children.size(); }     // closing parenthesis omitted at the end of the input
+                break;
+            }
+        }
+    }
+    // A selection that starts with "(" keeps the function word that owns it.
+    while (b > 0 && b < e && isOpening(*r.children[b]) && ownsParenthesis(*r.children[b - 1])) --b;
+    out.begin = b; out.end = e;
+    return out;
+}
+ast::NodePtr NaturalEditor::copySelection() const {
+    const Range s = selection();
+    if (s.empty()) return nullptr;
+    auto out = row();
+    for (std::size_t i = s.begin; i < s.end; ++i) out->children.push_back(cloneTree(*s.row->children[i]));
+    return out;
+}
+bool NaturalEditor::deleteSelection() {
+    const Range s = selection();
+    selecting_ = false;
+    if (s.empty()) return false;
+    pushUndo();
+    auto& r = activeRow();
+    r.children.erase(r.children.begin() + static_cast<std::ptrdiff_t>(s.begin), r.children.begin() + static_cast<std::ptrdiff_t>(s.end));
+    cursor_ = s.begin;
+    return true;
+}
+ast::NodePtr NaturalEditor::cutSelection() {
+    auto copy = copySelection();
+    (void)deleteSelection();
+    return copy;
+}
+
+// ---- cause of an error -------------------------------------------------------
+bool NaturalEditor::markError(std::size_t position, std::size_t length) {
+    selecting_ = false;
+    errorMark_ = Range{};
+    ast::SerializeMap map;
+    std::string text;
+    try { text = ast::serialize(*root_, &map); } catch (...) { return false; }
+    if (position > text.size()) return false;
+    const std::size_t end = std::min(text.size(), position + length);
+    // Deepest row whose text contains the whole range (the root contains everything).
+    const ast::SerializeMap::RowSpan* best = nullptr;
+    for (const auto& span : map.rows) {
+        if (span.begin <= position && end <= span.end && (!best || span.path.size() > best->path.size())) best = &span;
+    }
+    if (!best) return false;
+    const std::size_t n = best->childStart.size();
+    // First child that the range touches and first child after it.
+    std::size_t b = 0;
+    while (b + 1 < n && best->childStart[b + 1] <= position) ++b;
+    if (n == 0 || position >= best->end) b = n;
+    std::size_t e = b;
+    while (e < n && best->childStart[e] < end) ++e;
+    if (length == 0) e = b;
+    rowPath_ = best->path;
+    cursor_ = e;
+    autoRootParenPending_ = autoRootParenOpened_ = false;
+    if (e > b) errorMark_ = Range{best->row, b, e};
+    return true;
+}
 std::vector<NaturalDrawOp> NaturalEditor::layout(int x, int baseline, int maxWidth) const {
-    const math::CursorTarget target{activeRowPtr(), cursor_};
+    math::CursorTarget target{activeRowPtr(), cursor_};
+    target.colorParens = true;
+    const Range mark = selecting_ ? selection() : errorMark_;
+    if (!mark.empty()) { target.markRow = mark.row; target.markBegin = mark.begin; target.markEnd = mark.end; target.markIsError = !selecting_; }
     auto l = math::layout(*root_, x, baseline, maxWidth, 220, math::Align::Left, &target);
     return std::move(l.ops);
 }

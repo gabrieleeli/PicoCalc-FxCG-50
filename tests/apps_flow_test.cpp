@@ -133,6 +133,7 @@ int main() {
     r.home();
     // ---------------- SYSTEM, CONVERSION, MEMORY
     r.type("g"); CHECK(r.fw.apps().activeId() == AppId::System);
+    r.key(pckey::Down);                                   // Input/Output (first Setup item since v1.10.0) -> Angolo
     r.key(pckey::Right);                                  // Angle: Rad -> Gra
     CHECK(ws.settings.angle == AngleMode::Gradians);
     r.key(pckey::Left); r.key(pckey::Left);               // -> Deg

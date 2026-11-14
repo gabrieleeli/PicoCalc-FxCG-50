@@ -94,7 +94,7 @@ int main() {
     // ---- "Archivio file": Right on the choice switches to the internal flash
     auto* sys = r.active<SA>();
     CHECK(sys != nullptr);
-    for (int i = 0; i < 7; ++i) r.key(pckey::Down);                       // Angolo .. Luce tastiera -> Archivio file
+    for (int i = 0; i < 8; ++i) r.key(pckey::Down);                       // Input/Output, Angolo .. Luce tastiera -> Archivio file
     r.key(pckey::Right);
     CHECK(r.ws().settings.fileStore == Settings::FileStore::Internal);
     r.key(pckey::Left);

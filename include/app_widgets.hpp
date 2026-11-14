@@ -60,8 +60,10 @@ public:
     bool growRows{false};                 // statistics lists grow when typing below the last row
     bool rowMajor{false};                 // EXE advances to the next column (coefficient entry)
     std::function<int(int)> columnLength; // optional: cursor may not go past the first empty cell
+    bool rowLabels{false};                // row numbers at the left (also without growRows)
     std::function<std::string(int)> header;
     std::function<bool(int, int, double&)> get;     // false = empty cell
+    std::function<std::string(int, int)> text;      // optional: text of a cell (complex values...)
     std::function<void(int, int, double)> set;
     std::function<void(int, int)> erase;
     int row{0}, col{0};

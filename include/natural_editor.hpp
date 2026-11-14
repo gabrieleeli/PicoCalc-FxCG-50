@@ -14,21 +14,32 @@ struct NaturalKeyEvent { NaturalKey key{NaturalKey::Character}; char character{}
 
 // Drawing operation emitted by the math layout engine. Text ops carry the font
 // face (0 = Medium 8x16, 1 = Small 6x12); y is the TOP of the text cell.
+// color: 0 = ink; for parentheses 1..5 = nesting level colour (blue, red,
+// green, magenta, black, as on the fx-CG50); for Highlight 0 = selection
+// (CLIP), 1 = cause of an error. Highlight ops are filled rectangles drawn
+// below the text.
 struct NaturalDrawOp {
-    enum class Kind { Text, Line, Cursor, Placeholder };
+    enum class Kind { Text, Line, Cursor, Placeholder, Highlight };
     Kind kind{Kind::Text};
     int x{}, y{}, x2{}, y2{};
     std::string text;
     std::uint8_t face{};
+    std::uint8_t color{};
 };
 
 // Deep copy of an editor tree (history entries, clipboard, undo snapshots).
 ast::NodePtr cloneTree(const NaturalNode& node);
 
-// Structured fx-CG50 style "Math" input editor. The tree uses the shared
-// ast::Node type: Row nodes hold Token leaves and template boxes (Fraction,
-// Radical, Power, Subscript, Group, Calculus, Call). toExpression() produces
-// the canonical linear text consumed by the single expression parser.
+// Structured fx-CG50 style input editor. The tree uses the shared ast::Node
+// type: Row nodes hold Token leaves and template boxes (Fraction, Radical,
+// Power, Subscript, Group, Calculus, Call, Matrix). toExpression() produces the
+// canonical linear text consumed by the single expression parser.
+//
+// Two input modes, as the fx-CG50 Setup "Input/Output" item:
+//  * Math (default): templates are 2D boxes (fractions, roots, powers,
+//    matrices) and text is imported structurally;
+//  * Line: every key inserts linear text ("/", "^", "√(", "[["), the input is
+//    one line of tokens and linear text is imported as it is.
 class NaturalEditor {
 public:
     // Input limits (bounded recursion and memory on the RP2350): an edit that
@@ -67,6 +78,38 @@ public:
     void insertDerivative();
     void insertSummation();
     void insertProduct();
+    // MAT/VCT template: rows x cols cells (1..6), cursor in the first cell.
+    // Line mode: "[[,][,]]" with the cursor after "[[".
+    void insertMatrix(std::size_t rows, std::size_t cols);
+
+    // Input mode (fx-CG50 Setup "Input/Output"); switching converts the input.
+    void setLinear(bool linear);
+    bool linear() const noexcept { return linear_; }
+
+    // ---- CLIP: selection of part of the input (fx-CG50 SHIFT 8).
+    // The selection stays in one row of the tree, as the cursor of the Math
+    // mode does; moving past the start or the end of a template field selects
+    // the whole template. Copy and cut extend the range so that parentheses,
+    // brackets and braces stay balanced: a valid expression is never split.
+    struct Range { const NaturalNode* row{}; std::size_t begin{}, end{}; bool empty() const noexcept { return begin >= end; } };
+    void beginSelection();
+    void cancelSelection() noexcept { selecting_ = false; }
+    bool selecting() const noexcept { return selecting_; }
+    bool selectLeft();
+    bool selectRight();
+    Range selection() const;                       // normalised (balanced) range of the active row
+    ast::NodePtr copySelection() const;            // Row with copies of the selected nodes (nullptr when empty)
+    ast::NodePtr cutSelection();                   // copy + delete (undoable); ends the selection
+    bool deleteSelection();                        // delete without copying; ends the selection
+
+    // ---- Cause of an error: position/length are a byte range of toExpression()
+    // (the parser and the evaluator report it). The cursor moves to the end of
+    // the cause, as on the fx-CG50 (example 14÷0×2.3: after the 0), and the
+    // range is highlighted until clearErrorMark(). False when the text does
+    // not match the input.
+    bool markError(std::size_t position, std::size_t length);
+    Range errorMark() const noexcept { return errorMark_; }
+    void clearErrorMark() noexcept { errorMark_ = Range{}; }
 
     void handle(const NaturalKeyEvent& event);
     bool moveLeft(); bool moveRight(); bool moveUp(); bool moveDown();
@@ -96,6 +139,10 @@ private:
     std::string error_;
     bool autoRootParenPending_{};
     bool autoRootParenOpened_{};
+    bool linear_{};
+    bool selecting_{};
+    std::size_t anchor_{};          // other end of the selection, in the active row
+    Range errorMark_;
     std::vector<Snapshot> undo_, redo_;
 
     NaturalNode& activeRow();
@@ -105,6 +152,7 @@ private:
     bool leaveChild(bool toRight);
     void insertBox(ast::NodePtr box, std::size_t focusChild);
     void insertNode(ast::NodePtr node);
+    void insertLinear(const std::string& text, std::size_t cursorBack = 0);   // Line-mode template
     void mergeWord();
     void pushUndo();
     void checkLimits();   // rolls back the edit recorded by the last pushUndo() and throws

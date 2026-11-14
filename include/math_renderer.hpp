@@ -9,7 +9,26 @@ struct Size { int width{}, height{}, baseline{}; };   // baseline = ascent above
 enum class Align { Left, Center, Right };
 
 // Where to draw the editing cursor: a Row of the tree and an index in it.
-struct CursorTarget { const NaturalNode* row{}; std::size_t index{}; };
+// Optionally a highlighted range of one row (CLIP selection or the cause of
+// an error) and the colouring of parentheses by nesting level (live input
+// only: once a calculation is executed its parentheses are black again).
+struct CursorTarget {
+    const NaturalNode* row{};
+    std::size_t index{};
+    const NaturalNode* markRow{};
+    std::size_t markBegin{}, markEnd{};
+    bool markIsError{};
+    bool colorParens{};
+};
+
+// Colours used to draw a layout.
+struct Palette {
+    std::uint16_t ink{}, cursor{}, placeholder{};
+    std::uint16_t paren[5]{};          // nesting levels 1..5 (fx-CG50: blue, red, green, magenta, black)
+    std::uint16_t selection{}, error{};  // backgrounds of the highlighted ranges
+};
+// Colour of the parentheses of nesting level `level` (0-based, repeats every 5).
+constexpr std::uint8_t parenColorIndex(int level) noexcept { return static_cast<std::uint8_t>(1 + (level < 0 ? 0 : level % 5)); }
 
 struct Layout {
     std::vector<NaturalDrawOp> ops;
@@ -30,7 +49,10 @@ Size measure(const NaturalNode& node) noexcept;
 Layout layout(const NaturalNode& node, int x, int baseline, int maxWidth, int maxHeight = 220,
               Align align = Align::Left, const CursorTarget* cursor = nullptr);
 
-// Renders layout operations onto a canvas.
+// Renders layout operations onto a canvas: highlights first, then text,
+// lines, placeholders and the cursor.
+void draw(gfx::Canvas& canvas, const Layout& layout, const Palette& palette);
+// Single-colour drawing (parentheses in the ink colour, default highlights).
 void draw(gfx::Canvas& canvas, const Layout& layout, std::uint16_t ink,
           std::uint16_t cursorColor, std::uint16_t placeholderColor);
 
