@@ -70,6 +70,11 @@ creato su quel commit dal workflow di release). Analisi delle fonti:
   sono le liste di Statistics (in GRAPH restano un elemento per grafico).
 - `^` e la frazione dopo una lista o una matrice digitate (`{1,2}^2`) creavano
   una base vuota: ora l'intero gruppo è l'operando.
+- Un record salvato più grande della memoria libera all'avvio (es. Pico Plus
+  2 W con la PSRAM disattivata) faceva terminare il firmware con
+  `std::bad_alloc` prima del ciclo principale: ora l'avvio prosegue con un
+  workspace vuoto, mostra "Memory ERROR" e **sospende i salvataggi**, così i
+  dati in flash non vengono sovrascritti (`oom_test`).
 
 ### Compilazione e pubblicazione
 - Nuovo workflow GitHub Actions `.github/workflows/release.yml`: test host di

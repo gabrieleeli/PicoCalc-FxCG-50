@@ -4,7 +4,7 @@
 
 | Livello | Strumento | Stato |
 |---|---|---|
-| Logica portabile (motore, editor, app, grafici, tabelle, 3D, file, storage, memoria, protocollo AI) | test host C++ (CTest), **per entrambi i profili di scheda** (`FXAI_TEST_BOARD=PICO_PLUS_2W` e `PICO2W`) | eseguito: 36 suite; 8 581 controlli (Plus) / 8 575 (Pico 2 W) più ≈ 333 000 verifiche dello stress dell'allocatore (`mem_pools_smoke`) |
+| Logica portabile (motore, editor, app, grafici, tabelle, 3D, file, storage, memoria, protocollo AI) | test host C++ (CTest), **per entrambi i profili di scheda** (`FXAI_TEST_BOARD=PICO_PLUS_2W` e `PICO2W`) | eseguito: 36 suite; 8 587 controlli (Plus) / 8 581 (Pico 2 W) più ≈ 333 000 verifiche dello stress dell'allocatore (`mem_pools_smoke`) |
 | Integrazione continua | GitHub Actions (`.github/workflows/release.yml`, `ubuntu-24.04`) | a ogni push: test host dei due profili, ASan/UBSan, TSan, relay, firmware dei due moduli, pacchetto |
 | Architettura (registro ↔ sorgenti ↔ firmware) | `architecture_test` | eseguito |
 | Stessi test con AddressSanitizer + UBSan | `--sanitize` | eseguito su entrambi i profili |
@@ -80,12 +80,12 @@ errore, non solo il primo.
 | mem_pools_smoke **nuova** | ≈ 333 000 | ≈ 334 000 | TLSF (base, allineamento, stress, esaurimento e frammentazione), `PlacementScope`, registro dei pool per Plus e Pico 2 W, stress su due thread (anche con ThreadSanitizer). Il numero di verifiche varia a ogni esecuzione (contesa tra i thread) |
 | mem_new_smoke **nuova** | 13 | 13 | instradamento di `operator new` (soglia 512 byte, politiche, allineamenti) |
 | psram_selftest_smoke **nuova** | 10 | 10 | self-test della PSRAM con modelli di guasto (bus dati, pattern, percorso con cache) |
-| oom_test **nuova** | 18 | 18 | "Memory ERROR" con `operator new` instradato nei pool e SRAM limitata (condizioni del Pico 2 W): Run-Matrix, autosalvataggio rimandato e ripreso da solo, GRAPH, 3D (griglia ridotta o errore), editor; stato intatto e nessuna perdita di memoria |
+| oom_test (v1.9.0: 18) | 24 | 24 | "Memory ERROR" con `operator new` instradato nei pool e SRAM limitata (condizioni del Pico 2 W): Run-Matrix, autosalvataggio rimandato e ripreso da solo, GRAPH, 3D (griglia ridotta o errore), editor; stato intatto e nessuna perdita di memoria; v1.10.0: avvio con un record più grande della memoria libera (nessuna terminazione, salvataggi sospesi, dati in flash intatti) |
 | graphics_memory_test **nuova** | 23 | 23 | poligoni pieni oltre i 32 vertici, copie di layer e invalidate, regioni sporche per scheda, budget PICT, 20 parametriche dense disegnate per intero con la PSRAM, cache dei layer di GRAPH identica al pixel |
 | internal_fs_test **nuova** | 197 | 197 | LittleFS su flash NOR simulata: contratto `files::FileSystem` come FatFs, partizione piena, interruzione di alimentazione durante `writeAtomic`, rimontaggio senza riformattare, progetti GRAPH nell'archivio interno |
 | graph3d_test **nuova** | 111 | 111 | motore 3D (campionamento, poli e domini, proiezione, z-buffer e pittore, rotazione, colori per superficie) e modalità 3D Graph (lista, editor, V-Window, campionamento incrementale, rotazione/zoom senza ricalcolo, AUTO, persistenza, budget di memoria con e senza PSRAM) |
 | system_diag_test **nuova** | 15 | 12 | SYSTEM → DIAG completa (MEM, PSR, ALC, FLS, LCD, SD, INT, GPH) con la memoria della scheda; Plus con PSRAM fallita; pagina INFO; "Archivio file"; riga del chip della flash; kernel di stress dell'allocatore |
-| **Totale** | **8 581** + ≈ 333 000 dello stress + 41 dello script | **8 575** + ≈ 334 000 + 41 | 0 errori, con e senza sanitizer (ASan + UBSan); `mem_pools_tsan` con ThreadSanitizer |
+| **Totale** | **8 587** + ≈ 333 000 dello stress + 41 dello script | **8 581** + ≈ 334 000 + 41 | 0 errori, con e senza sanitizer (ASan + UBSan); `mem_pools_tsan` con ThreadSanitizer |
 
 `run_matrix_test` usa `tests/fixtures/workspace_v1_6_0.inc`, un record salvato
 dai sorgenti della v1.6.0 (commit 7dc65cd), per verificare la compatibilità.
@@ -96,9 +96,9 @@ generato con i sorgenti della v1.9.0 (commit `bb2bdee`), per la lettura nel
 formato v6.
 
 v1.10.0: rispetto alla v1.9.0 (7 705 / 7 699 controlli) si aggiungono le due
-suite nuove (834 controlli); `architecture_test` cresce perché il registro ha
-un file e una sezione dati in più, `storage_test` perché il record è più lungo
-(più tagli provati). Due test esistenti sono stati adattati a cambiamenti
+suite nuove (834 controlli) e 6 controlli in `oom_test`; `architecture_test`
+cresce perché il registro ha un file e una sezione dati in più, `storage_test`
+perché il record è più lungo (più tagli provati). Due test esistenti sono stati adattati a cambiamenti
 voluti: `board_profile_test` e `table_test` (il record ora è alla versione 6),
 `system_diag_test` e `apps_flow_test` (il primo campo del SET UP è
 Input/Output, come sulla fx-CG50). Nessuna verifica è stata tolta.

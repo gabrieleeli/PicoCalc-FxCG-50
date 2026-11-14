@@ -121,7 +121,7 @@ all'avvio compare "Memory ERROR: PSRAM disabilitata, avvio solo in SRAM".
 
 | Categoria | Pico 2 W | Pico Plus 2 W | Note |
 |---|---|---|---|
-| **Persistenti** (record del workspace) | cronologia 40, liste 255 | cronologia **200**, liste **999** (fx-CG50) | fissi per scheda: un record salvato è sempre rileggibile |
+| **Persistenti** (record del workspace) | cronologia 40, liste 255; matrici: lato 40, 400 elementi per matrice, 1 200 in tutto | cronologia **200**, liste **999** (fx-CG50); matrici: lato **999**, **10 000** elementi per matrice, **20 000** in tutto | fissi per scheda: un record salvato è sempre rileggibile. Se all'avvio il record non entra nella memoria libera (PSRAM disattivata) il firmware parte vuoto e **non salva** (v1.10.0) |
 | **RAM** (scelti a runtime dai pool presenti) | curve 6000/24 000 punti, PICT 96 KB, 3D griglia 24 senza z-buffer, nessuna cache dei layer | curve **40 000/400 000** punti, PICT **1 MB**, 3D griglia **128 con z-buffer**, cache dei layer di GRAPH | con la PSRAM disabilitata la Plus usa i valori del Pico 2 W |
 | **Strutturali** (stack, tempo CPU) | 320 token, 32 livelli, editor 12 livelli, budget di valutazione 16 KB | identici | protezione dello stack da 32 KB |
 

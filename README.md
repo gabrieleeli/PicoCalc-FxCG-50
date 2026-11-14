@@ -25,7 +25,7 @@ fonti: [docs/reports/ANALISI_FONTI_v1.10.0.md](docs/reports/ANALISI_FONTI_v1.10.
 | | Stato |
 |---|---|
 | Compilazione UF2 (Pico SDK 2.2.0) per Pimoroni Pico Plus 2 W e per Pico 2 W | ✅ entrambe compilano, nessun warning; cartelle e UF2 separati per scheda |
-| Test automatici host | ✅ 37 test per ciascun profilo di scheda: 36 suite C++ (8 581 controlli sulla Plus e 8 575 sul Pico 2 W, più le ≈ 333 000 verifiche di integrità dello stress dell'allocatore su due thread) e l'interoperabilità FAT/exFAT con fsck e mtools (41); tutti superati anche con AddressSanitizer/UBSan, allocatore su due thread con ThreadSanitizer; gli stessi test girano su GitHub Actions a ogni push |
+| Test automatici host | ✅ 37 test per ciascun profilo di scheda: 36 suite C++ (8 587 controlli sulla Plus e 8 581 sul Pico 2 W, più le ≈ 333 000 verifiche di integrità dello stress dell'allocatore su due thread) e l'interoperabilità FAT/exFAT con fsck e mtools (41); tutti superati anche con AddressSanitizer/UBSan, allocatore su due thread con ThreadSanitizer; gli stessi test girano su GitHub Actions a ogni push |
 | Test relay AI | ✅ 15 test (SDK ufficiali contro API simulate, TLS reale in loopback) |
 | Parità con la fx-CG50 | ❌ **non completa** — GRAPH: matrice voce per voce in [docs/GRAPH_PARITY.md](docs/GRAPH_PARITY.md); Run-Matrix: [docs/RUN_MATRIX.md](docs/RUN_MATRIX.md#limiti-noti) |
 | **Prova su PicoCalc fisica** | ❌ **non ancora eseguita**, né con il Pico Plus 2 W né con il Pico 2 W: display, tastiera, flash, PSRAM, microSD, Wi-Fi e TLS vanno collaudati con [docs/HARDWARE_TEST_v1.10.0.md](docs/HARDWARE_TEST_v1.10.0.md), [v1.9.0](docs/HARDWARE_TEST_v1.9.0.md) e [v1.8.0](docs/HARDWARE_TEST_v1.8.0.md), diagnostica SYSTEM → DIAG |
