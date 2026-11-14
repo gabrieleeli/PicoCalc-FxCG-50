@@ -5,8 +5,10 @@
 #include "math_engine.hpp"
 #include "memory.hpp"
 #include "number_format.hpp"
+#include "value.hpp"
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -33,6 +35,20 @@ struct Settings {
     // or LittleFS on the internal flash (about 11 MB on the Pico Plus 2 W).
     enum class FileStore : std::uint8_t { MicroSd = 0, Internal = 1 };
     FileStore fileStore{FileStore::MicroSd};
+    // fx-CG50 Setup "Input/Output" (record v6): Math = natural input and
+    // display (fractions, roots, powers, matrices drawn as in a textbook),
+    // Line = input and results on one line.
+    enum class InputMode : std::uint8_t { Math = 0, Line = 1 };
+    InputMode inputMode{InputMode::Math};
+};
+
+// Result of a calculation that is a list, a matrix or a vector. Results
+// larger than the natural display (limits::kNaturalMatrixDim, kNaturalListLength)
+// keep only type and dimensions here: their elements are in the answer memory.
+struct CollectionResult {
+    CalcValue value;
+    std::vector<exact::Value> exact;     // one per element when every element has an exact form, else empty
+    bool decimal{false};                 // the exact forms come from decimal input
 };
 
 struct HistoryEntry {
@@ -43,6 +59,21 @@ struct HistoryEntry {
     ExactSlot exact;                     // exact form of the value, when one exists
     bool numerical{false};               // produced by a numerical method (integral, d/dx, SOLVE)
     bool flipMixed{false};               // this result shows the other fraction format (ab/c <-> d/c)
+    std::shared_ptr<const CollectionResult> collection;   // list / matrix / vector result (value is then 0)
+};
+
+// Mat A-Z, Vct A-Z and the answer memories MatAns, VctAns, ListAns (record
+// v6). An empty CalcValue is a memory that is not defined ("None" in the editor).
+// Shared by Run-Matrix calculations and by the MAT/VCT editor; kept in the
+// workspace, so the values survive switching application and power cycles.
+struct CollectionMemory {
+    static constexpr std::size_t Slots = 26;
+    std::vector<CalcValue> mat, vct;
+    CalcValue matAns, vctAns, listAns;
+    CollectionMemory() : mat(Slots), vct(Slots) {}
+    void clear();
+    // Elements held by Mat, Vct, MatAns and VctAns together (limits::kMatrixStoreElements).
+    std::size_t elements() const noexcept;
 };
 
 // Graph functions, V-Window and the other GRAPH data: graph_model.hpp.
@@ -84,8 +115,9 @@ struct Graph3DState {
 };
 
 // Shared data of every application. It also resolves the variables that
-// Run-Matrix reads from other modes through VARS (V-Window, Table range).
-struct Workspace final : NameResolver {
+// Run-Matrix reads from other modes through VARS (V-Window, Table range) and
+// the matrices, vectors and lists referenced by an expression.
+struct Workspace final : NameResolver, CollectionResolver {
     // Per-board limits of the persistent data (limits.hpp): Pico 2 W 40 history
     // lines and lists of 255 elements (v1.8.0), Pico Plus 2 W 200 lines and
     // lists of 999 elements (fx-CG50) in its 2 x 512 KB record store.
@@ -105,14 +137,33 @@ struct Workspace final : NameResolver {
     EquationState equation;
     std::vector<ChatMessage> chat;
     Graph3DState graph3d;
+    CollectionMemory matrices;
 
     Workspace();
     void resetAll();
     // Applies the global angle mode used by the evaluator.
     void apply() const;
-    EvalContext evalContext() const;            // memory + complex mode + shared names
+    EvalContext evalContext() const;            // memory + complex mode + shared names + Mat/Vct/List
     void addHistory(HistoryEntry entry);
     bool resolve(const std::string& lowerName, double& out) const override;
+
+    // CollectionResolver: Mat A-Z, Vct A-Z, List 1-6 (the Statistics lists) and
+    // the answer memories.
+    bool collection(Memory memory, int index, CalcValue& out) const override;
+    // Assignments (-> Mat A, -> Vct A, -> List 1). They check the type, the
+    // shape and the per-board limits and throw TypeError / DimensionError /
+    // MathError ("Memory ERROR") without changing anything.
+    void storeMatrix(std::size_t slot, CalcValue value);     // slot 0..25 = A..Z
+    void storeVector(std::size_t slot, CalcValue value);
+    void storeList(std::size_t index, const CalcValue& value);   // index 0..5 = List 1..6 (real elements)
+    // Stores a list / matrix / vector result in ListAns, or in MatAns (and in
+    // VctAns too when it has one row or one column, as on the fx-CG50).
+    void storeCollectionAnswer(const CalcValue& value);
+    // Copy of every matrix, vector and list (history recalculation restores it
+    // when the edited line fails).
+    struct CollectionSnapshot { CollectionMemory matrices; std::array<std::vector<double>, ListCount> lists; };
+    std::unique_ptr<CollectionSnapshot> snapshotCollections() const;
+    void restoreCollections(CollectionSnapshot& snapshot);
 };
 
 // Binary, versioned serialisation used by the flash record store.

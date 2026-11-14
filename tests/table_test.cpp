@@ -368,6 +368,9 @@ int main() {
             // v5 appends the file store and the 3D Graph block at the end
             std::size_t tail = 2 + 6 * 8 + 1 + 3 * 4;
             for (const auto& z : w3.graph3d.model.z) tail += 3 + z.size();
+            // v6 appends the Input/Output mode, 55 empty Mat/Vct/answer memories
+            // and the (empty) list of collection results of the history
+            tail += 1 + 55 + 2;
             blob.resize(blob.size() - tail);
             blob.erase(at + 24, at + 24 + 6);                         // variable, list, type, generated, row count
             const std::uint16_t three = 3;

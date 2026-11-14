@@ -29,7 +29,7 @@ const char* statusName(AppStatus status) noexcept;
 
 // Shared services: each exists once and every mode uses the same instance of the engine.
 namespace service {
-constexpr std::uint32_t Expression = 1u << 0;    // expression.hpp  parser -> AST -> evaluator (real/complex)
+constexpr std::uint32_t Expression = 1u << 0;    // expression.hpp  parser -> AST -> evaluators (numbers, lists, matrices, vectors)
 constexpr std::uint32_t Exact      = 1u << 1;    // exact.hpp       fractions, surds, multiples of pi
 constexpr std::uint32_t Editor     = 1u << 2;    // natural_editor.hpp, line_editor.hpp
 constexpr std::uint32_t MathRender = 1u << 3;    // math_renderer.hpp  2D layout of expressions/results
@@ -65,7 +65,8 @@ constexpr std::uint32_t Equation  = 1u << 7;     // Equation coefficients and so
 constexpr std::uint32_t Chat      = 1u << 8;     // AI conversation
 constexpr std::uint32_t Graph     = 1u << 9;     // GRAPH Setup, V-Window/graph memories, sketches, project
 constexpr std::uint32_t Graph3D   = 1u << 10;    // 3D Graph functions, 3D V-Window and view
-constexpr std::uint32_t Count     = 11;
+constexpr std::uint32_t Matrices  = 1u << 11;    // Mat A-Z, Vct A-Z, MatAns, VctAns, ListAns
+constexpr std::uint32_t Count     = 12;
 } // namespace data
 
 constexpr std::uint32_t linkTo(AppId id) noexcept { return 1u << static_cast<unsigned>(id); }

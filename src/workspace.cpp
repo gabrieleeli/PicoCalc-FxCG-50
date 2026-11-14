@@ -1,4 +1,6 @@
 #include "workspace.hpp"
+#include "mem_pools.hpp"
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <memory>
@@ -19,6 +21,113 @@ void Workspace::resetAll() {
     equation = EquationState{};
     chat.clear();
     graph3d = Graph3DState{};
+    matrices.clear();
+}
+
+// ---------------------------------------------------------------- matrices, vectors, lists
+void CollectionMemory::clear() {
+    for (CalcValue& v : mat) v = CalcValue{};
+    for (CalcValue& v : vct) v = CalcValue{};
+    matAns = vctAns = listAns = CalcValue{};
+}
+std::size_t CollectionMemory::elements() const noexcept {
+    std::size_t total = matAns.size() + vctAns.size();
+    for (const CalcValue& v : mat) total += v.size();
+    for (const CalcValue& v : vct) total += v.size();
+    return total;
+}
+namespace {
+// A matrix or vector that may be stored: shape and per-board limits.
+void checkStorable(const CalcValue& v, const char* what) {
+    if (!v.isMatrixLike() || v.empty() || static_cast<std::size_t>(v.rows) * v.cols != v.size())
+        throw TypeError(std::string("Type ERROR: in ") + what + " si memorizza una matrice, non una " + valueTypeName(v.type));
+    if (v.rows > limits::kMatrixMaxDim || v.cols > limits::kMatrixMaxDim || v.size() > limits::kMatrixElements)
+        throw DimensionError("Dimension ERROR: matrice troppo grande (massimo " + std::to_string(limits::kMatrixMaxDim) +
+                             " per lato e " + std::to_string(limits::kMatrixElements) + " elementi)");
+}
+// The memories together stay within the board budget (RAM and flash record).
+void checkBudget(const CollectionMemory& m, std::size_t freed, std::size_t added) {
+    const std::size_t used = m.elements() - std::min(freed, m.elements());
+    if (used + added > limits::kMatrixStoreElements)
+        throw MathError("Memory ERROR: memoria di matrici e vettori piena (" + std::to_string(used + added) + " elementi, massimo " +
+                        std::to_string(limits::kMatrixStoreElements) + ")");
+}
+} // namespace
+
+bool Workspace::collection(Memory memory, int index, CalcValue& out) const {
+    const CalcValue* src = nullptr;
+    if (memory == Memory::List) {
+        if (index == Answer) src = &matrices.listAns;
+        else if (index >= 0 && static_cast<std::size_t>(index) < lists.size()) {
+            const auto& l = lists[static_cast<std::size_t>(index)];
+            if (l.empty()) return false;
+            mem::PlacementScope heavy(mem::Policy::PREFER_PSRAM);
+            out = CalcValue{};
+            out.type = ValueType::List; out.rows = static_cast<std::uint16_t>(l.size()); out.cols = 1;
+            out.re = l;
+            return true;
+        } else return false;
+    } else {
+        const auto& slots = memory == Memory::Mat ? matrices.mat : matrices.vct;
+        if (index == Answer) src = memory == Memory::Mat ? &matrices.matAns : &matrices.vctAns;
+        else if (index >= 0 && static_cast<std::size_t>(index) < slots.size()) src = &slots[static_cast<std::size_t>(index)];
+        else return false;
+    }
+    if (src->empty()) return false;
+    mem::PlacementScope heavy(mem::Policy::PREFER_PSRAM);
+    out = *src;
+    return true;
+}
+void Workspace::storeMatrix(std::size_t slot, CalcValue value) {
+    if (slot >= matrices.mat.size()) throw std::out_of_range("Mat A-Z");
+    checkStorable(value, "Mat");
+    checkBudget(matrices, matrices.mat[slot].size(), value.size());
+    value.type = ValueType::Matrix;
+    value.normalize();
+    matrices.mat[slot] = std::move(value);
+}
+void Workspace::storeVector(std::size_t slot, CalcValue value) {
+    if (slot >= matrices.vct.size()) throw std::out_of_range("Vct A-Z");
+    checkStorable(value, "Vct");
+    if (!value.vectorShaped())
+        throw DimensionError("Dimension ERROR: un vettore ha una riga o una colonna, non " + dimensionText(value));
+    checkBudget(matrices, matrices.vct[slot].size(), value.size());
+    value.type = ValueType::Vector;
+    value.normalize();
+    matrices.vct[slot] = std::move(value);
+}
+void Workspace::storeList(std::size_t index, const CalcValue& value) {
+    if (index >= lists.size()) throw MathError("Math ERROR: sono disponibili List 1-" + std::to_string(lists.size()));
+    if (!value.isList() || value.empty()) throw TypeError(std::string("Type ERROR: in List si memorizza una lista, non una ") + valueTypeName(value.type));
+    if (value.size() > MaxListLength) throw DimensionError("Dimension ERROR: massimo " + std::to_string(MaxListLength) + " elementi in una lista");
+    if (value.complex() && std::any_of(value.im.begin(), value.im.end(), [](double d) { return d != 0.0; }))
+        throw MathError("Math ERROR: le liste 1-6 contengono solo numeri reali");
+    mem::PlacementScope heavy(mem::Policy::PREFER_PSRAM);
+    std::vector<double> fresh = value.re;       // strong guarantee on std::bad_alloc
+    lists[index].swap(fresh);
+}
+void Workspace::storeCollectionAnswer(const CalcValue& value) {
+    mem::PlacementScope heavy(mem::Policy::PREFER_PSRAM);
+    if (value.isList()) { matrices.listAns = value; matrices.listAns.normalize(); return; }
+    if (!value.isMatrixLike()) return;
+    checkStorable(value, "MatAns");
+    const bool vector = value.vectorShaped();
+    checkBudget(matrices, matrices.matAns.size() + (vector ? matrices.vctAns.size() : 0), value.size() * (vector ? 2 : 1));
+    CalcValue m = value;
+    m.type = ValueType::Matrix; m.normalize();
+    if (vector) { CalcValue v = m; v.type = ValueType::Vector; matrices.vctAns = std::move(v); }
+    matrices.matAns = std::move(m);
+}
+std::unique_ptr<Workspace::CollectionSnapshot> Workspace::snapshotCollections() const {
+    mem::PlacementScope heavy(mem::Policy::PREFER_PSRAM);
+    auto s = std::make_unique<CollectionSnapshot>();
+    s->matrices = matrices;
+    s->lists = lists;
+    return s;
+}
+void Workspace::restoreCollections(CollectionSnapshot& snapshot) {
+    matrices = std::move(snapshot.matrices);
+    lists = std::move(snapshot.lists);
 }
 
 void Workspace::apply() const { setAngleMode(settings.angle); }
@@ -28,6 +137,7 @@ EvalContext Workspace::evalContext() const {
     c.memory = &memory;
     c.complexMode = settings.complex;
     c.names = this;
+    c.collections = this;
     return c;
 }
 
@@ -55,7 +165,12 @@ constexpr std::uint32_t Magic = 0x46584157;   // "WAXF"
 // Version 4 (v1.8.0, TABLE completion) adds the table variable, the table
 // function type and the generated (possibly edited) rows.
 // Version 5 (v1.9.0) appends the file store setting and the 3D Graph data.
-constexpr std::uint16_t Version = 5;
+// Version 6 (v1.10.0) appends the Input/Output mode, the matrix and vector
+// memories (Mat A-Z, Vct A-Z, MatAns, VctAns, ListAns) and the list / matrix /
+// vector results of the history. Records of versions 1-5 load with the
+// defaults: Math mode, no matrices.
+constexpr std::uint16_t Version = 6;
+constexpr std::uint8_t NoValue = 0xFF;      // type byte of a memory that is not defined
 constexpr std::size_t LegacyFunctions = 6;
 
 struct Writer {
@@ -72,6 +187,17 @@ struct Writer {
         u8(static_cast<std::uint8_t>((e.valid ? 1 : 0) | (e.decimal ? 2 : 0) | (e.value.form() == exact::Value::Form::Pi ? 4 : 0)));
         u8(static_cast<std::uint8_t>(e.value.termCount()));
         for (std::size_t i = 0; i < e.value.termCount(); ++i) { const auto& t = e.value.term(i); i64(t.coef.num); i64(t.coef.den); i64(t.radicand); }
+    }
+    // List / matrix / vector: type, rows, columns, flags (1 = imaginary parts,
+    // 2 = elements omitted), then the elements (8 bytes each, 16 when complex).
+    void value(const CalcValue& v, bool withElements = true) {
+        if (v.rows == 0 || v.cols == 0 || (withElements && v.empty())) { u8(NoValue); return; }
+        const bool elements = withElements && !v.empty();
+        u8(static_cast<std::uint8_t>(v.type)); u16(v.rows); u16(v.cols);
+        u8(static_cast<std::uint8_t>((elements && v.complex() ? 1 : 0) | (elements ? 0 : 2)));
+        if (!elements) return;
+        for (double d : v.re) f64(d);
+        if (v.complex()) for (double d : v.im) f64(d);
     }
 };
 struct Reader {
@@ -103,6 +229,30 @@ struct Reader {
         } else if (!exact::Value::fromTerms(t, count, e.value) || e.value.termCount() != count) { ok = false; return e; }
         e.valid = (flags & 1) != 0; e.decimal = (flags & 2) != 0;
         return e;
+    }
+    // Reads what Writer::value() wrote and checks it against the limits of
+    // this board (a record is only ever read by the board that wrote it).
+    // allowOmitted: history results may keep type and dimensions only.
+    bool value(CalcValue& out, bool allowOmitted = false) {
+        out = CalcValue{};
+        const std::uint8_t type = u8();
+        if (!ok) return false;
+        if (type == NoValue) return true;
+        if (type < 1 || type > 3) return ok = false;
+        const std::uint16_t rows = u16(), cols = u16();
+        const std::uint8_t flags = u8();
+        if (!ok || flags > 3 || rows < 1 || cols < 1) return ok = false;
+        const std::size_t count = static_cast<std::size_t>(rows) * cols;
+        const bool list = type == static_cast<std::uint8_t>(ValueType::List);
+        if (list ? (cols != 1 || rows > limits::kListMaxLength)
+                 : (rows > limits::kMatrixMaxDim || cols > limits::kMatrixMaxDim || count > limits::kMatrixElements)) return ok = false;
+        out.type = static_cast<ValueType>(type); out.rows = rows; out.cols = cols;
+        if (flags & 2) return allowOmitted ? true : (ok = false);
+        if (!need(count * ((flags & 1) ? 16 : 8))) return false;
+        out.re.resize(count);
+        for (double& d : out.re) { d = f64(); if (!std::isfinite(d)) return ok = false; }
+        if (flags & 1) { out.im.resize(count); for (double& d : out.im) { d = f64(); if (!std::isfinite(d)) return ok = false; } }
+        return ok;
     }
 };
 } // namespace
@@ -171,6 +321,24 @@ std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws) {
     for (double d : {g3.model.xmin, g3.model.xmax, g3.model.ymin, g3.model.ymax, g3.model.zmin, g3.model.zmax}) w.f64(d);
     w.u8(static_cast<std::uint8_t>(g3.model.grid));
     w.f32(g3.yaw); w.f32(g3.pitch); w.f32(g3.zoom);
+    // v6
+    w.u8(static_cast<std::uint8_t>(ws.settings.inputMode));
+    const CollectionMemory& cm = ws.matrices;
+    for (const CalcValue& v : cm.mat) w.value(v);
+    for (const CalcValue& v : cm.vct) w.value(v);
+    w.value(cm.matAns); w.value(cm.vctAns); w.value(cm.listAns);
+    std::uint16_t results = 0;
+    for (const auto& h : ws.history) if (h.collection) ++results;
+    w.u16(results);
+    for (std::size_t i = 0; i < ws.history.size(); ++i) {
+        const auto& c = ws.history[i].collection;
+        if (!c) continue;
+        w.u16(static_cast<std::uint16_t>(i));
+        w.value(c->value, !c->value.empty());
+        const bool exact = !c->value.empty() && c->exact.size() == c->value.size();
+        w.u8(static_cast<std::uint8_t>((exact ? 1 : 0) | (c->decimal ? 2 : 0)));
+        if (exact) for (const exact::Value& e : c->exact) w.slot(ExactSlot{e, true, false});
+    }
     return std::move(w.out);
 }
 
@@ -313,6 +481,34 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
         if (r.ok && (!models::validate(g3.model).empty() || !std::isfinite(g3.yaw) || !std::isfinite(g3.pitch) ||
                      !(g3.zoom > 0.05F && g3.zoom < 20.0F)))
             return false;
+    }
+    if (version >= 6) {
+        const auto mode = r.u8(); if (mode > 1) return false;
+        s.inputMode = static_cast<Settings::InputMode>(mode);
+        CollectionMemory& cm = ws.matrices;
+        for (CalcValue& v : cm.mat) { if (!r.value(v)) return false; if (!v.empty() && v.type != ValueType::Matrix) return false; }
+        for (CalcValue& v : cm.vct) { if (!r.value(v)) return false; if (!v.empty() && (v.type != ValueType::Vector || !v.vectorShaped())) return false; }
+        if (!r.value(cm.matAns) || !r.value(cm.vctAns) || !r.value(cm.listAns)) return false;
+        if ((!cm.matAns.empty() && cm.matAns.type != ValueType::Matrix) || (!cm.listAns.empty() && !cm.listAns.isList()) ||
+            (!cm.vctAns.empty() && (cm.vctAns.type != ValueType::Vector || !cm.vctAns.vectorShaped()))) return false;
+        if (cm.elements() > limits::kMatrixStoreElements) return false;
+        const auto results = r.u16(); if (results > ws.history.size()) return false;
+        std::size_t next = 0;                       // indices are strictly increasing
+        for (std::uint16_t k = 0; k < results && r.ok; ++k) {
+            const std::size_t index = r.u16();
+            if (index < next || index >= ws.history.size()) return false;
+            next = index + 1;
+            auto c = std::make_shared<CollectionResult>();
+            if (!r.value(c->value, true) || c->value.rows == 0) return false;
+            const auto flags = r.u8(); if (flags > 3) return false;
+            c->decimal = (flags & 2) != 0;
+            if (flags & 1) {
+                if (c->value.empty()) return false;
+                c->exact.resize(c->value.size());
+                for (exact::Value& e : c->exact) { const ExactSlot slot = r.slot(); if (!r.ok || !slot.valid) return false; e = slot.value; }
+            }
+            ws.history[index].collection = std::move(c);
+        }
     }
     if (!r.ok || r.i != r.n) return false;
     if (version < 3) {

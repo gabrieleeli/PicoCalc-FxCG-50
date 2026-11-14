@@ -28,6 +28,17 @@ namespace fx::limits {
 inline constexpr std::size_t kHistoryEntries = board::config::kIsPicoPlus2W ? 200 : 40;   // Run-Matrix history
 inline constexpr std::size_t kListMaxLength = board::config::kIsPicoPlus2W ? 999 : 255;   // statistics lists (fx-CG50: 999)
 inline constexpr std::size_t kChatMessages = 30;   // AI conversation (the relay keeps the last 20 turns)
+// Matrices and vectors of Run-Matrix (Mat A-Z, Vct A-Z, MatAns, VctAns; record
+// v6). The two boards do not have the same memory: the Pico 2 W keeps them in
+// its ~190 KB SRAM heap and in a 64 KB record slot, the Pico Plus 2 W in the
+// 8 MB PSRAM and in a 512 KB slot. A real element costs 8 bytes, a complex one 16.
+inline constexpr std::size_t kMatrixElements = board::config::kIsPicoPlus2W ? 10000 : 400;        // one matrix or vector
+inline constexpr std::size_t kMatrixStoreElements = board::config::kIsPicoPlus2W ? 20000 : 1200;  // all the memories together
+// Results shown in natural form in the history (fx-CG50: matrices up to 6 x 6,
+// vectors up to 6 elements, lists up to 20); larger results are read from the
+// answer memories (MatAns, VctAns, ListAns).
+inline constexpr std::size_t kNaturalMatrixDim = 6;
+inline constexpr std::size_t kNaturalListLength = 20;
 
 // ---- RAM limits -------------------------------------------------------------------
 struct RamProfile {

@@ -5,11 +5,13 @@
 // multiplication binds tighter than * and /, prefix functions without
 // parentheses take an implicit-product argument (sin 2x = sin(2x)).
 #include "expression.hpp"
+#include "limits.hpp"
 #include "math_engine.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <limits>
 #include <numeric>
 #include <type_traits>
@@ -43,15 +45,29 @@ constexpr FnInfo kFunctions[] = {
     {"intg",1,1,false},{"frac",1,2,false},{"sign",1,1,false},{"recip",1,1,false},{"percent",1,1,false},
     {"deg",1,1,false},{"rad",1,1,false},{"grad",1,1,false},{"fact",1,1,false},{"factorial",1,1,false},
     {"re",1,1,false},{"im",1,1,false},{"arg",1,1,false},{"conj",1,1,false},{"real",1,1,false},
-    {"imag",1,1,false},{"min",2,2,false},{"max",2,2,false},{"root",2,2,false},{"ncr",2,2,false},
+    {"imag",1,1,false},{"min",1,2,false},{"max",1,2,false},{"root",2,2,false},{"ncr",2,2,false},
     {"npr",2,2,false},{"atan2",2,2,false},{"hypot",2,2,false},{"pow",2,2,false},{"mod",2,2,false},
     {"gcd",2,2,false},{"lcm",2,2,false},{"randint",2,2,false},{"rand",0,0,false},{"ran",0,0,false},
     {"dms",1,3,false},{"pol",2,2,false},{"rec",2,2,false},
     {"mixed",3,3,false},{"modexp",3,3,false},{"rndfix",2,2,false},{"rannorm",2,2,false},{"ranbin",2,2,false},
     {"not",1,1,false},
     {"integral",3,3,true},{"integrate",3,3,true},{"derivative",2,2,true},{"diff",2,2,true},
-    {"derivative2",2,2,true},{"sum",3,3,true},{"prod",3,3,true},{"solve",2,2,true},
+    {"derivative2",2,2,true},{"sum",1,3,true},{"prod",1,3,true},{"solve",2,2,true},
+    // Matrices, vectors and lists (fx-CG50 OPTN > MAT/VCT and OPTN > LIST).
+    {"det",1,1,false},{"trn",1,1,false},{"identity",1,1,false},{"dim",1,1,false},{"augment",2,2,false},
+    {"fill",2,2,false},{"ref",1,1,false},{"rref",1,1,false},{"mattolist",2,2,false},{"listtomat",1,26,false},
+    {"dotp",2,2,false},{"crossp",2,2,false},{"angle",2,2,false},{"unitv",1,1,false},{"norm",1,1,false},
+    {"seq",5,5,true},{"mean",1,1,false},{"median",1,1,false},{"cuml",1,1,false},{"dlist",1,1,false},
+    {"sorta",1,1,false},{"sortd",1,1,false},
 };
+// Functions whose arguments or result are a list, a matrix or a vector: their
+// nodes are evaluated by the collection evaluator (see CollEval).
+bool isCollectionFunction(const std::string& f,std::size_t argCount){
+    static const char* const names[]={"det","trn","identity","dim","augment","fill","ref","rref","mattolist","listtomat",
+        "dotp","crossp","angle","unitv","norm","seq","mean","median","cuml","dlist","sorta","sortd","elem"};
+    for(const char* n:names)if(f==n)return true;
+    return argCount==1&&(f=="sum"||f=="prod"||f=="min"||f=="max");
+}
 struct ConstInfo { const char* name; double value; };
 const ConstInfo kConstants[] = {
     {"pi",kPi},{"tau",2*kPi},{"phi",1.6180339887498948482},{"goldenratio",1.6180339887498948482},
@@ -87,6 +103,12 @@ bool isSystemName(const std::string& lowerName){
     for(const char* const* n=kSystemNames;*n;++n)if(lowerName==*n)return true;
     return false;
 }
+// "list1".."list6": the Statistics lists. In GRAPH a list in a function stands
+// for one of its elements (one graph per element, resolved by the NameResolver
+// of the graph engine); everywhere else it is the whole list.
+bool isListName(const std::string& lowerName){
+    return lowerName.size()==5&&lowerName.compare(0,4,"list")==0&&lowerName[4]>='1'&&lowerName[4]<='6';
+}
 bool isConstantName(const std::string& lowerName){
     for(const auto& c:kConstants)if(lowerName==c.name)return true;
     for(const char* s:kSpecialNames)if(lowerName==s)return true;
@@ -103,17 +125,22 @@ bool referenceName(const std::string& low){
 }
 
 // ---------------------------------------------------------------- lexer
-enum class TT { Num, Ident, Op, End };
-struct Tok { TT type{TT::End}; std::string text; char op{}; };
+// Every token keeps its byte range in the source text: the parser reports a
+// syntax error at the token it could not use and stores the range of each
+// sub-expression in its node (see ast::Node::pos/len).
+enum class TT { Num, Ident, Op, Ref, End };
+struct Tok { TT type{TT::End}; std::string text; char op{}; std::uint16_t pos{}, len{}; };
 
 class Lexer {
 public:
-    explicit Lexer(const std::string& s):s_(s){}
+    explicit Lexer(const std::string& s):s_(s){
+        if(s_.size()>60000)throw MathError("Memory ERROR: espressione troppo lunga");
+    }
     std::vector<Tok> run(){
         std::vector<Tok> out;
         while(true){
             skipSpace();
-            if(p_>=s_.size()){out.push_back({TT::End,{},0});return out;}
+            if(p_>=s_.size()){out.push_back({TT::End,{},0,at(p_),0});return out;}
             const unsigned char c=static_cast<unsigned char>(s_[p_]);
             if(std::isdigit(c)||(c=='.'&&p_+1<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[p_+1])))){out.push_back(number());continue;}
             if(std::isalpha(c)||c=='_'){identifier(out);continue;}
@@ -121,45 +148,47 @@ public:
             if(c>=0x80){utf8(out);continue;}
             if(c=='<'||c=='>'){
                 const bool eq=p_+1<s_.size()&&s_[p_+1]=='=';
-                out.push_back({TT::Op,{},c=='<'?(eq?'l':'<'):(eq?'g':'>')});p_+=eq?2:1;continue;
+                out.push_back({TT::Op,{},c=='<'?(eq?'l':'<'):(eq?'g':'>'),at(p_),static_cast<std::uint16_t>(eq?2:1)});p_+=eq?2:1;continue;
             }
-            if(std::strchr("+-*/%^!,()=",static_cast<int>(c))){out.push_back({TT::Op,{},static_cast<char>(c)});++p_;continue;}
-            throw SyntaxError(std::string("Syntax ERROR: carattere non valido '")+static_cast<char>(c)+"'");
+            if(std::strchr("+-*/%^!,()=[]{}",static_cast<int>(c))){out.push_back({TT::Op,{},static_cast<char>(c),at(p_),1});++p_;continue;}
+            throw SyntaxError(std::string("Syntax ERROR: carattere non valido '")+static_cast<char>(c)+"'",static_cast<int>(p_),1);
         }
     }
 private:
     const std::string& s_; std::size_t p_{};
+    static std::uint16_t at(std::size_t p){return static_cast<std::uint16_t>(p);}
     void skipSpace(){while(p_<s_.size()&&std::isspace(static_cast<unsigned char>(s_[p_])))++p_;}
     Tok number(){
         const std::size_t b=p_;
+        auto tok=[&](std::string text){return Tok{TT::Num,std::move(text),0,at(b),at(p_-b)};};
         if(s_[p_]=='0'&&p_+2<s_.size()&&(s_[p_+1]=='x'||s_[p_+1]=='X'||s_[p_+1]=='b'||s_[p_+1]=='B'||s_[p_+1]=='o'||s_[p_+1]=='O')){
             const char kind=static_cast<char>(std::tolower(static_cast<unsigned char>(s_[p_+1])));
             const unsigned base=kind=='x'?16:kind=='b'?2:8;
             std::size_t q=p_+2,start=q;
             auto digitOk=[&](char ch){const int d=std::isdigit(static_cast<unsigned char>(ch))?ch-'0':std::isalpha(static_cast<unsigned char>(ch))?std::tolower(static_cast<unsigned char>(ch))-'a'+10:99;return d<static_cast<int>(base);};
             while(q<s_.size()&&digitOk(s_[q]))++q;
-            if(q>start){p_=q;const std::uint64_t v=fromBase(s_.substr(start,q-start),base);return {TT::Num,std::to_string(v),0};}
+            if(q>start){p_=q;const std::uint64_t v=fromBase(s_.substr(start,q-start),base);return tok(std::to_string(v));}
         }
         while(p_<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[p_])))++p_;
         if(p_<s_.size()&&s_[p_]=='.'){++p_;while(p_<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[p_])))++p_;}
         // Repeating decimal: "0.1_6" = 0.1666... (written with an overline in the editor).
         if(p_<s_.size()&&s_[p_]=='_'){
-            if(s_.find('.',b)>=p_)throw SyntaxError("Syntax ERROR: il periodo segue la virgola");
+            if(s_.find('.',b)>=p_)throw SyntaxError("Syntax ERROR: il periodo segue la virgola",static_cast<int>(p_),1);
             const std::size_t q=++p_;
             while(p_<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[p_])))++p_;
-            if(p_==q)throw SyntaxError("Syntax ERROR: periodo vuoto");
+            if(p_==q)throw SyntaxError("Syntax ERROR: periodo vuoto",static_cast<int>(q-1),1);
             const std::string t=s_.substr(b,p_-b);
             exact::Rational r;
-            if(!exact::parseDecimal(t,r))throw MathError("Memory ERROR: numero periodico troppo lungo");
-            return {TT::Num,t,0};
+            if(!exact::parseDecimal(t,r))throw MathError("Memory ERROR: numero periodico troppo lungo",static_cast<int>(b),static_cast<int>(p_-b));
+            return tok(t);
         }
         if(p_<s_.size()&&(s_[p_]=='e'||s_[p_]=='E')){
             std::size_t q=p_+1;if(q<s_.size()&&(s_[q]=='+'||s_[q]=='-'))++q;
             if(q<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[q]))){p_=q;while(p_<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[p_])))++p_;}
         }
         std::string t=s_.substr(b,p_-b);
-        if(std::count(t.begin(),t.end(),'.')>1)throw SyntaxError("Syntax ERROR: numero non valido");
-        return {TT::Num,t,0};
+        if(std::count(t.begin(),t.end(),'.')>1)throw SyntaxError("Syntax ERROR: numero non valido",static_cast<int>(b),static_cast<int>(p_-b));
+        return tok(std::move(t));
     }
     // "@Y3", "@Xt2": reference to a graph function (VARS > GRAPH on the fx-CG50).
     void reference(std::vector<Tok>& out){
@@ -167,22 +196,39 @@ private:
         while(q<s_.size()&&std::isalpha(static_cast<unsigned char>(s_[q])))++q;
         while(q<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[q])))++q;
         const std::string low=lower(s_.substr(p_+1,q-p_-1));
-        if(!referenceName(low))throw SyntaxError("Syntax ERROR: riferimento a funzione non valido");
-        out.push_back({TT::Ident,"@"+low,0});p_=q;
+        if(!referenceName(low))throw SyntaxError("Syntax ERROR: riferimento a funzione non valido",static_cast<int>(p_),static_cast<int>(q-p_));
+        out.push_back({TT::Ident,"@"+low,0,at(p_),at(q-p_)});p_=q;
     }
     void identifier(std::vector<Tok>& out){
         const std::size_t b=p_;
         while(p_<s_.size()&&(std::isalnum(static_cast<unsigned char>(s_[p_]))||s_[p_]=='_'))++p_;
         const std::string raw=s_.substr(b,p_-b);
         // fx-CG50 "Int÷" (integer quotient) is written as Int followed by the division sign.
-        if(lower(raw)=="int"&&s_.compare(p_,2,"\xC3\xB7")==0){p_+=2;out.push_back({TT::Op,{},'q'});return;}
-        splitIdentifier(raw,out);
+        if(lower(raw)=="int"&&s_.compare(p_,2,"\xC3\xB7")==0){p_+=2;out.push_back({TT::Op,{},'q',at(b),at(p_-b)});return;}
+        // Mat / Vct / List (exactly this capitalisation, as inserted by the OPTN
+        // menu): reference to a matrix, vector or list memory. The name that
+        // follows may be glued to the word ("MatA", "List1", "MatAns"). Typed
+        // lower-case letters keep their meaning (m*a*t is still a product).
+        if(!isFunctionName(lower(raw))){
+            for(const char* word:{"Mat","Vct","List"}){
+                const std::size_t n=std::strlen(word);
+                if(raw.compare(0,n,word)!=0)continue;
+                out.push_back({TT::Ref,lower(std::string(word)),0,at(b),at(n)});
+                // "List12": the number glued to the word, then whatever follows.
+                std::size_t k=n;
+                while(k<raw.size()&&std::isdigit(static_cast<unsigned char>(raw[k])))++k;
+                if(k>n)out.push_back({TT::Num,raw.substr(n,k-n),0,at(b+n),at(k-n)});
+                if(k<raw.size())splitIdentifier(raw.substr(k),b+k,out);
+                return;
+            }
+        }
+        splitIdentifier(raw,b,out);
     }
     // Resolves an identifier, splitting e.g. "sinx" -> sin x, "2pix" -> pi x, "ab" -> a b.
-    static void splitIdentifier(const std::string& raw,std::vector<Tok>& out){
+    static void splitIdentifier(const std::string& raw,std::size_t base,std::vector<Tok>& out){
         const std::string low=lower(raw);
-        if(const char op=operatorWord(low)){out.push_back({TT::Op,{},op});return;}
-        if(raw.size()==1||isFunctionName(low)||isConstantName(low)){out.push_back({TT::Ident,raw.size()==1?raw:low,0});return;}
+        if(const char op=operatorWord(low)){out.push_back({TT::Op,{},op,at(base),at(raw.size())});return;}
+        if(raw.size()==1||isFunctionName(low)||isConstantName(low)){out.push_back({TT::Ident,raw.size()==1?raw:low,0,at(base),at(raw.size())});return;}
         std::size_t k=0;
         while(k<raw.size()){
             std::size_t best=0;
@@ -192,16 +238,16 @@ private:
             }
             if(best){
                 const std::string word=lower(raw.substr(k,best));
-                if(const char op=operatorWord(word))out.push_back({TT::Op,{},op});
-                else out.push_back({TT::Ident,word,0});
+                if(const char op=operatorWord(word))out.push_back({TT::Op,{},op,at(base+k),at(best)});
+                else out.push_back({TT::Ident,word,0,at(base+k),at(best)});
                 k+=best;continue;
             }
             if(std::isdigit(static_cast<unsigned char>(raw[k]))){
                 std::size_t e=k;while(e<raw.size()&&std::isdigit(static_cast<unsigned char>(raw[e])))++e;
-                out.push_back({TT::Num,raw.substr(k,e-k),0});k=e;continue;
+                out.push_back({TT::Num,raw.substr(k,e-k),0,at(base+k),at(e-k)});k=e;continue;
             }
-            if(!std::isalpha(static_cast<unsigned char>(raw[k])))throw SyntaxError("Syntax ERROR: nome non valido '"+raw+"'");
-            out.push_back({TT::Ident,raw.substr(k,1),0});++k;
+            if(!std::isalpha(static_cast<unsigned char>(raw[k])))throw SyntaxError("Syntax ERROR: nome non valido '"+raw+"'",static_cast<int>(base+k),1);
+            out.push_back({TT::Ident,raw.substr(k,1),0,at(base+k),1});++k;
         }
     }
     void utf8(std::vector<Tok>& out){
@@ -214,9 +260,11 @@ private:
             {"\xE2\x89\xA5",TT::Op,'g',nullptr},
         };
         for(const auto& m:maps){const std::size_t n=std::strlen(m.seq);
-            if(s_.compare(p_,n,m.seq)==0){p_+=n;out.push_back({m.type,m.name?m.name:"",m.op});return;}}
-        if(s_.compare(p_,3,"\xE2\x86\x92")==0)throw SyntaxError("Syntax ERROR: -> ammesso solo a fine espressione");
-        throw SyntaxError("Syntax ERROR: simbolo non supportato");
+            if(s_.compare(p_,n,m.seq)==0){out.push_back({m.type,m.name?m.name:"",m.op,at(p_),at(n)});p_+=n;return;}}
+        const unsigned char c=static_cast<unsigned char>(s_[p_]);
+        const int n=(c&0xE0)==0xC0?2:(c&0xF0)==0xE0?3:(c&0xF8)==0xF0?4:1;
+        if(s_.compare(p_,3,"\xE2\x86\x92")==0)throw SyntaxError("Syntax ERROR: -> ammesso solo a fine espressione",static_cast<int>(p_),3);
+        throw SyntaxError("Syntax ERROR: simbolo non supportato",static_cast<int>(p_),n);
     }
 };
 
@@ -225,14 +273,15 @@ class Parser {
 public:
     explicit Parser(std::vector<Tok> t):t_(std::move(t)){
         // t_ always ends with an End token.
-        if(t_.size()>MaxExpressionTokens+1)throw MathError("Memory ERROR: espressione troppo lunga");
+        if(t_.size()>MaxExpressionTokens+1)throw MathError("Memory ERROR: espressione troppo lunga",t_[MaxExpressionTokens].pos,t_[MaxExpressionTokens].len);
     }
     ast::NodePtr run(){
-        if(t_.size()==1)throw SyntaxError("Syntax ERROR: espressione vuota");
+        if(t_.size()==1)throw SyntaxError("Syntax ERROR: espressione vuota",0,0);
         auto n=expr();
         if(peek().type!=TT::End){
-            if(isOp(')'))throw SyntaxError("Syntax ERROR: ) in eccesso");
-            throw SyntaxError("Syntax ERROR: caratteri extra");
+            if(isOp(')'))throw error("Syntax ERROR: ) in eccesso");
+            if(isOp(']')||isOp('}'))throw error(std::string("Syntax ERROR: ")+peek().op+" in eccesso");
+            throw error("Syntax ERROR: caratteri extra");
         }
         return n;
     }
@@ -244,8 +293,8 @@ private:
     // recursion of the parser and of the evaluator.
     struct Nest {
         int& d;
-        explicit Nest(int& depth):d(depth){
-            if(++d>MaxExpressionNesting){--d;throw MathError("Stack ERROR: troppi livelli annidati");}
+        Nest(int& depth,const Tok& where):d(depth){
+            if(++d>MaxExpressionNesting){--d;throw MathError("Stack ERROR: troppi livelli annidati",where.pos,where.len);}
         }
         ~Nest(){--d;}
         Nest(const Nest&)=delete;
@@ -254,42 +303,70 @@ private:
     const Tok& peek() const {return t_[i_];}
     bool isOp(char c) const {return peek().type==TT::Op&&peek().op==c;}
     bool eat(char c){if(isOp(c)){++i_;return true;}return false;}
-    static ast::NodePtr bin(char op,ast::NodePtr a,ast::NodePtr b){auto n=ast::make(ast::Kind::Binary,std::string(1,op));n->children={std::move(a),std::move(b)};return n;}
+    // Syntax error at the token the parser is looking at (the end of the text
+    // when the input stopped too early).
+    SyntaxError error(const std::string& what) const {return SyntaxError(what,peek().pos,peek().len);}
+    static SyntaxError errorAt(const std::string& what,const Tok& k){return SyntaxError(what,k.pos,k.len);}
+    // Byte range of a node: from the first token of the production (index s)
+    // to the end of the last token consumed.
+    ast::NodePtr span(ast::NodePtr n,std::size_t s) const {
+        const std::size_t first=std::min(s,t_.size()-1);
+        const std::uint16_t begin=t_[first].pos;
+        const std::uint16_t end=i_>first?static_cast<std::uint16_t>(t_[i_-1].pos+t_[i_-1].len):begin;
+        n->pos=begin;n->len=static_cast<std::uint16_t>(end>begin?end-begin:0);
+        return n;
+    }
+    static std::uint8_t flagsOf(const ast::Node& n){
+        std::uint8_t f=0;
+        for(const auto& c:n.children)if(c)f|=c->flags;
+        return f;
+    }
+    ast::NodePtr bin(char op,ast::NodePtr a,ast::NodePtr b,std::size_t s) const {
+        auto n=ast::make(ast::Kind::Binary,std::string(1,op));
+        n->children={std::move(a),std::move(b)};
+        n->flags=flagsOf(*n);
+        return span(n,s);
+    }
     bool startsAtom() const {
         const Tok& k=peek();
-        return k.type==TT::Num||k.type==TT::Ident||(k.type==TT::Op&&k.op=='(');
+        return k.type==TT::Num||k.type==TT::Ident||k.type==TT::Ref||(k.type==TT::Op&&(k.op=='('||k.op=='['||k.op=='{'));
     }
     bool atFunction() const {return peek().type==TT::Ident&&isFunctionName(peek().text);}
     // Lowest priorities (fx-CG50 order): Or/Xor < And < relational operators < + -.
     ast::NodePtr expr(){
+        const std::size_t s=i_;
         auto n=logicAnd();
-        for(;;){if(eat('|'))n=bin('|',n,logicAnd());else if(eat('x'))n=bin('x',n,logicAnd());else return n;}
+        for(;;){if(eat('|'))n=bin('|',n,logicAnd(),s);else if(eat('x'))n=bin('x',n,logicAnd(),s);else return n;}
     }
     ast::NodePtr logicAnd(){
+        const std::size_t s=i_;
         auto n=relation();
-        while(eat('&'))n=bin('&',n,relation());
+        while(eat('&'))n=bin('&',n,relation(),s);
         return n;
     }
     ast::NodePtr relation(){
+        const std::size_t s=i_;
         auto n=addSub();
         for(;;){
             bool matched=false;
-            for(char op:{'=','n','<','>','l','g'})if(eat(op)){n=bin(op,n,addSub());matched=true;break;}
+            for(char op:{'=','n','<','>','l','g'})if(eat(op)){n=bin(op,n,addSub(),s);matched=true;break;}
             if(!matched)return n;
         }
     }
     ast::NodePtr addSub(){
+        const std::size_t s=i_;
         auto n=mulDiv();
-        for(;;){if(eat('+'))n=bin('+',n,mulDiv());else if(eat('-'))n=bin('-',n,mulDiv());else return n;}
+        for(;;){if(eat('+'))n=bin('+',n,mulDiv(),s);else if(eat('-'))n=bin('-',n,mulDiv(),s);else return n;}
     }
     ast::NodePtr mulDiv(){
+        const std::size_t s=i_;
         auto n=implicitProduct();
         for(;;){
-            if(eat('*'))n=bin('*',n,implicitProduct());
-            else if(eat('/'))n=bin('/',n,implicitProduct());
-            else if(eat('%'))n=bin('%',n,implicitProduct());
-            else if(eat('q'))n=bin('q',n,implicitProduct());
-            else if(eat('r'))n=bin('r',n,implicitProduct());
+            if(eat('*'))n=bin('*',n,implicitProduct(),s);
+            else if(eat('/'))n=bin('/',n,implicitProduct(),s);
+            else if(eat('%'))n=bin('%',n,implicitProduct(),s);
+            else if(eat('q'))n=bin('q',n,implicitProduct(),s);
+            else if(eat('r'))n=bin('r',n,implicitProduct(),s);
             else return n;
         }
     }
@@ -297,50 +374,131 @@ private:
     // stopAtFunction: the argument of a prefix function ends before the next
     // function name, so "sin x cos x" is sin(x)*cos(x).
     ast::NodePtr implicitProduct(bool stopAtFunction=false){
+        const std::size_t s=i_;
         auto n=unary();
         while(startsAtom()&&!(stopAtFunction&&atFunction())){
-            if(peek().type==TT::Num&&i_>0&&t_[i_-1].type==TT::Num)throw SyntaxError("Syntax ERROR: numeri adiacenti");
-            n=bin('*',n,unary());
+            if(peek().type==TT::Num&&i_>0&&t_[i_-1].type==TT::Num)throw error("Syntax ERROR: numeri adiacenti");
+            n=bin('*',n,unary(),s);
         }
         return n;
     }
     ast::NodePtr unary(){
-        const Nest nest(depth_);
+        const Nest nest(depth_,peek());
+        const std::size_t s=i_;
         if(eat('+'))return unary();
-        if(eat('-')){auto n=ast::make(ast::Kind::Unary,"-");n->children={unary()};return n;}
+        if(eat('-')){auto n=ast::make(ast::Kind::Unary,"-");n->children={unary()};n->flags=flagsOf(*n);return span(n,s);}
         return power();
     }
     ast::NodePtr power(){
+        const std::size_t s=i_;
         auto base=postfix();
         if(eat('^')){
             // Right-associative; the exponent may carry its own sign (2^-2).
             ast::NodePtr e;
-            if(eat('-')){e=ast::make(ast::Kind::Unary,"-");e->children={powerOperand()};}
+            const std::size_t es=i_;
+            if(eat('-')){e=ast::make(ast::Kind::Unary,"-");e->children={powerOperand()};e->flags=flagsOf(*e);e=span(e,es);}
             else{(void)eat('+');e=powerOperand();}
-            return bin('^',base,e);
+            return bin('^',base,e,s);
         }
         return base;
     }
-    ast::NodePtr powerOperand(){const Nest nest(depth_);return power();}
+    ast::NodePtr powerOperand(){const Nest nest(depth_,peek());return power();}
     ast::NodePtr postfix(){
+        const std::size_t s=i_;
         auto n=atom();
         for(;;){
-            if(eat('!')){auto c=ast::make(ast::Kind::Call,"factorial");c->children={n};n=c;}
-            else if(eat('d')){auto c=ast::make(ast::Kind::Call,"fromdeg");c->children={n};n=c;}
+            if(eat('!')){auto c=ast::make(ast::Kind::Call,"factorial");c->children={n};c->flags=flagsOf(*c);n=span(c,s);}
+            else if(eat('d')){auto c=ast::make(ast::Kind::Call,"fromdeg");c->children={n};c->flags=flagsOf(*c);n=span(c,s);}
             else return n;
         }
     }
+    // [[a,b][c,d]]: fx-CG50 matrix (and vector) input format, one [ ] group per row.
+    ast::NodePtr matrixLiteral(){
+        const std::size_t s=i_;
+        ++i_;                                    // outer '['
+        if(!isOp('['))throw error("Syntax ERROR: una matrice si scrive [[a,b][c,d]]");
+        auto m=ast::make(ast::Kind::Matrix);
+        std::size_t cols=0;
+        while(isOp('[')){
+            const Tok rowStart=peek();
+            ++i_;
+            std::size_t n=0;
+            do{m->children.push_back(expr());++n;}while(eat(','));
+            if(!eat(']')&&peek().type!=TT::End)throw error("Syntax ERROR: manca ] in una riga della matrice");
+            if(cols==0)cols=n;
+            else if(n!=cols)throw DimensionError("Dimension ERROR: le righe della matrice hanno lunghezze diverse",rowStart.pos,
+                                                 static_cast<int>(t_[i_-1].pos+t_[i_-1].len)-rowStart.pos);
+        }
+        // Like parentheses, the closing bracket may be omitted at the end of the input.
+        if(!eat(']')&&peek().type!=TT::End)throw error("Syntax ERROR: manca ] alla fine della matrice");
+        m->text=std::to_string(cols);
+        m->flags=ast::FlagCollection;
+        return span(m,s);
+    }
+    // {a,b,c}: list literal.
+    ast::NodePtr listLiteral(){
+        const std::size_t s=i_;
+        ++i_;                                    // '{'
+        if(isOp('}'))throw error("Syntax ERROR: lista vuota");
+        auto l=ast::make(ast::Kind::List);
+        do{l->children.push_back(expr());}while(eat(','));
+        if(!eat('}')&&peek().type!=TT::End)throw error("Syntax ERROR: manca } alla fine della lista");
+        l->flags=ast::FlagCollection;
+        return span(l,s);
+    }
+    // Mat A, Vct B, List 3, Mat Ans, Vct Ans, List Ans, with an optional element
+    // index: Mat A[2,1], Vct B[3], List 1[4].
+    ast::NodePtr memoryReference(){
+        const std::size_t s=i_;
+        const Tok word=peek();
+        ++i_;
+        const Tok& k=peek();
+        std::string name=word.text=="mat"?"Mat ":word.text=="vct"?"Vct ":"List ";
+        if(k.type==TT::Ident&&k.text=="ans"){name+="Ans";++i_;}
+        else if(word.text=="list"){
+            bool digits=k.type==TT::Num&&!k.text.empty()&&k.text.size()<=2;
+            if(digits)for(char c:k.text)digits=digits&&std::isdigit(static_cast<unsigned char>(c));
+            const int index=digits?std::atoi(k.text.c_str()):0;
+            if(index<1||index>CollectionResolver::Slots)throw errorAt("Syntax ERROR: dopo List serve un numero 1-26 o Ans",k);
+            // List 1-6 keep the token of the shared list variables ("list1"),
+            // which GRAPH and the VARS names already use.
+            if(index<=6)name="list"+std::to_string(index);else name+=std::to_string(index);
+            ++i_;
+        }else{
+            if(k.type!=TT::Ident||k.text.size()!=1||!std::isalpha(static_cast<unsigned char>(k.text[0])))
+                throw errorAt("Syntax ERROR: dopo "+name.substr(0,3)+" serve una lettera A-Z o Ans",k);
+            name+=static_cast<char>(std::toupper(static_cast<unsigned char>(k.text[0])));++i_;
+        }
+        auto ref=ast::make(ast::Kind::Token,name);
+        ref->flags=ast::FlagCollection;
+        ref=span(ref,s);
+        // "[" followed by "[" starts a matrix literal (implicit product), not an index.
+        if(isOp('[')&&!(t_[i_+1].type==TT::Op&&t_[i_+1].op=='[')){
+            ++i_;
+            auto call=ast::make(ast::Kind::Call,"elem");
+            call->children={ref,expr()};
+            if(eat(','))call->children.push_back(expr());
+            if(!eat(']')&&peek().type!=TT::End)throw error("Syntax ERROR: manca ] dopo l'indice");
+            call->flags=ast::FlagCollection;
+            return span(call,s);
+        }
+        return ref;
+    }
     ast::NodePtr atom(){
+        const std::size_t s=i_;
         const Tok k=peek();
-        if(k.type==TT::Num){++i_;return ast::make(ast::Kind::Token,k.text);}
+        if(k.type==TT::Num){++i_;return span(ast::make(ast::Kind::Token,k.text),s);}
         if(k.type==TT::Op&&k.op=='('){
             ++i_;
-            if(isOp(')'))throw SyntaxError("Syntax ERROR: parentesi vuote");
+            if(isOp(')'))throw error("Syntax ERROR: parentesi vuote");
             auto inner=expr();
             // Casio allows omitting closing parentheses at the end of the input.
-            if(!eat(')')&&peek().type!=TT::End)throw SyntaxError("Syntax ERROR: manca )");
-            auto g=ast::make(ast::Kind::Group);g->children={inner};return g;
+            if(!eat(')')&&peek().type!=TT::End)throw error("Syntax ERROR: manca )");
+            auto g=ast::make(ast::Kind::Group);g->children={inner};g->flags=flagsOf(*g);return span(g,s);
         }
+        if(k.type==TT::Op&&k.op=='[')return matrixLiteral();
+        if(k.type==TT::Op&&k.op=='{')return listLiteral();
+        if(k.type==TT::Ref)return memoryReference();
         if(k.type==TT::Ident){
             ++i_;
             if(!k.text.empty()&&k.text[0]=='@'){
@@ -348,10 +506,11 @@ private:
                 auto call=ast::make(ast::Kind::Call,k.text);
                 if(eat('(')){
                     if(!isOp(')')){do{call->children.push_back(expr());}while(eat(','));}
-                    if(!eat(')')&&peek().type!=TT::End)throw SyntaxError("Syntax ERROR: manca ) in un riferimento");
+                    if(!eat(')')&&peek().type!=TT::End)throw error("Syntax ERROR: manca ) in un riferimento");
                 }
-                if(call->children.size()>3)throw SyntaxError("Argument ERROR: troppi argomenti nel riferimento");
-                return call;
+                if(call->children.size()>3)throw errorAt("Argument ERROR: troppi argomenti nel riferimento",k);
+                call->flags=flagsOf(*call);
+                return span(call,s);
             }
             if(isFunctionName(k.text)){
                 auto call=ast::make(ast::Kind::Call,k.text);
@@ -361,21 +520,29 @@ private:
                     if(!isOp(')')){
                         do{call->children.push_back(expr());}while(eat(','));
                     }
-                    if(!eat(')')&&peek().type!=TT::End)throw SyntaxError("Syntax ERROR: manca ) in "+k.text);
+                    if(!eat(')')&&peek().type!=TT::End)throw error("Syntax ERROR: manca ) in "+k.text);
                 }else{
                     if(minArgs==0){/* rand */}
-                    else if(maxArgs>1&&minArgs>1)throw SyntaxError("Syntax ERROR: "+k.text+" richiede parentesi");
+                    else if(minArgs>1)throw errorAt("Syntax ERROR: "+k.text+" richiede parentesi",k);
                     else call->children.push_back(implicitProduct(true));
                 }
-                if(call->children.size()<minArgs||call->children.size()>maxArgs)
-                    throw SyntaxError("Argument ERROR: "+k.text+" numero di argomenti errato");
-                return call;
+                const std::size_t count=call->children.size();
+                // Sum / Prod of a list take one argument, the Σ / Π calculations three.
+                const bool sumLike=k.text=="sum"||k.text=="prod";
+                if(count<minArgs||count>maxArgs||(sumLike&&count==2))
+                    throw SyntaxError("Argument ERROR: "+k.text+" numero di argomenti errato",k.pos,
+                                      static_cast<int>(t_[i_-1].pos+t_[i_-1].len)-k.pos);
+                call->flags=flagsOf(*call);
+                if(isCollectionFunction(k.text,count))call->flags|=ast::FlagCollection;
+                return span(call,s);
             }
-            return ast::make(ast::Kind::Token,k.text);
+            auto token=ast::make(ast::Kind::Token,k.text);
+            if(isListName(k.text))token->flags=ast::FlagCollection;
+            return span(token,s);
         }
-        if(k.type==TT::End)throw SyntaxError("Syntax ERROR: operando mancante");
-        if(k.type==TT::Op&&k.op==')')throw SyntaxError("Syntax ERROR: ) inattesa");
-        throw SyntaxError(std::string("Syntax ERROR: operatore '")+k.op+"' inatteso");
+        if(k.type==TT::End)throw error("Syntax ERROR: operando mancante");
+        if(k.type==TT::Op&&k.op==')')throw error("Syntax ERROR: ) inattesa");
+        throw error(std::string("Syntax ERROR: operatore '")+k.op+"' inatteso");
     }
 };
 
@@ -447,6 +614,30 @@ struct Env {
     std::uint8_t refDepth{};   // nested graph-function references
     std::uintptr_t stackBase{};
     bool decimal{};            // exact evaluation met a plain decimal literal
+    // Node of the parsed expression whose operation is being carried out: when
+    // an error is thrown its text range is reported through EvalInfo::error.
+    const ast::Node* at{};
+};
+// Copies the range of the failing sub-expression into EvalInfo while the
+// exception unwinds (no catch/rethrow: callers that sample functions in a
+// loop, such as GRAPH, pay nothing for it).
+struct ErrorLocationGuard {
+    Env& env;
+    int pending;
+    explicit ErrorLocationGuard(Env& e):env(e),pending(std::uncaught_exceptions()){}
+    ~ErrorLocationGuard(){
+        if(env.ctx.info&&std::uncaught_exceptions()>pending&&env.at&&env.at->len>0)
+            env.ctx.info->error={static_cast<int>(env.at->pos),static_cast<int>(env.at->len)};
+    }
+};
+// While a graph function body (another parsed text) is evaluated, an error is
+// reported at the reference in the expression being calculated.
+struct ErrorNodeGuard {
+    Env& env;
+    const ast::Node* node;
+    int pending;
+    ErrorNodeGuard(Env& e,const ast::Node& n):env(e),node(&n),pending(std::uncaught_exceptions()){}
+    ~ErrorNodeGuard(){if(std::uncaught_exceptions()>pending)env.at=node;}
 };
 // Current stack position. The frame address (not a local's address) is used so
 // that AddressSanitizer's fake stack does not distort the measurement.
@@ -541,7 +732,7 @@ template<typename T> FXAI_NOINLINE T callCalculus(const ast::Node& n,Env& env){
         const ast::Node& body=*n.children.at(0);
         if(env.ctx.info&&f!="sum"&&f!="prod")env.ctx.info->numerical=true;
         LocalBind bind(env,"x",0.0);
-        auto fx=[&](double v)->double{bind.set(v);const T r=evalNode<T>(body,env);return asReal<T>(r,"funzione integranda");};
+        auto fx=[&](double v)->double{bind.set(v);const T r=evalNode<T>(body,env);env.at=&n;return asReal<T>(r,"funzione integranda");};
         if(f=="integral"||f=="integrate"){const double a=rarg(1),b=rarg(2);return R(integrateFn(fx,a,b,1e-10));}
         if(f=="derivative"||f=="diff"){return R(ridders(fx,rarg(1)));}
         if(f=="derivative2"){const double x0=rarg(1);auto d1=[&](double v){return ridders(fx,v);};return R(ridders(d1,x0));}
@@ -566,6 +757,7 @@ template<typename T> FXAI_NOINLINE T callCalculus(const ast::Node& n,Env& env){
         T acc=R(f=="sum"?0.0:1.0);
         const long long lo=static_cast<long long>(a),hi=static_cast<long long>(b);
         if(lo<=hi){for(long long k=lo;k<=hi;++k){bind.set(static_cast<double>(k));const T v=evalNode<T>(body,env);if(f=="sum")acc+=v;else acc*=v;}}
+        env.at=&n;
         return acc;
     }
     throw SyntaxError("Syntax ERROR: funzione sconosciuta "+f);
@@ -573,8 +765,7 @@ template<typename T> FXAI_NOINLINE T callCalculus(const ast::Node& n,Env& env){
 
 // Non-recursive part of a function call: the arguments are already evaluated,
 // so the large frame of this function is never live across the recursion.
-template<typename T> FXAI_NOINLINE T applyFunction(const ast::Node& n,const T* args,std::size_t count){
-    const std::string& f=n.text;
+template<typename T> FXAI_NOINLINE T applyFunction(const std::string& f,const T* args,std::size_t count){
     auto arg=[&](std::size_t i)->T{if(i>=count)throw SyntaxError("Argument ERROR: "+f+" numero di argomenti errato");return args[i];};
     auto rarg=[&](std::size_t i)->double{return asReal<T>(arg(i),f.c_str());};
     auto R=[](double v){return fromReal<T>(v);};
@@ -590,7 +781,7 @@ template<typename T> FXAI_NOINLINE T applyFunction(const ast::Node& n,const T* a
         else{const Complex z=arg(0);if(std::abs(z)==0)throw MathError("Math ERROR: argomento di zero");return R(fromRadians(std::arg(z)));}}
 
     // ---- one argument
-    if(n.children.size()==1){
+    if(count==1){
         const T a=arg(0);
         if(f=="sin"||f=="cos"||f=="tan"){
             if constexpr(std::is_same_v<T,double>){
@@ -695,7 +886,7 @@ template<typename T> FXAI_NOINLINE T applyFunction(const ast::Node& n,const T* a
         return R(static_cast<double>(result));
     }
     if(f=="dms"){
-        const double d=rarg(0),m=rarg(1),s=n.children.size()>2?rarg(2):0.0;
+        const double d=rarg(0),m=rarg(1),s=count>2?rarg(2):0.0;
         const double sign=(d<0||m<0||s<0)?-1.0:1.0;
         return R(sign*(std::abs(d)+std::abs(m)/60.0+std::abs(s)/3600.0));
     }
@@ -767,6 +958,7 @@ template<typename T> FXAI_NOINLINE T callReference(const ast::Node& n,Env& env){
     if(env.refDepth>=MaxFunctionReferenceDepth)throw MathError("Stack ERROR: piu' di 5 funzioni composte");
     ++env.refDepth;
     struct DepthGuard{Env& e;~DepthGuard(){--e.refDepth;}} guard{env};
+    const ErrorNodeGuard errorNode(env,n);
     char names[3][2]={};double values[3]={};int assigned=0;
     double positional=0;bool hasPositional=false;
     for(const auto& c:n.children){
@@ -804,7 +996,8 @@ template<typename T> FXAI_NOINLINE T callFunction(const ast::Node& n,Env& env){
         if(!n.children[i])throw SyntaxError("Syntax ERROR: argomento mancante");
         args[i]=evalNode<T>(*n.children[i],env);
     }
-    return applyFunction<T>(n,args,count);
+    env.at=&n;
+    return applyFunction<T>(n.text,args,count);
 }
 
 template<typename T> FXAI_NOINLINE T evalToken(const ast::Node& n,Env& env){
@@ -906,10 +1099,17 @@ template<typename T> FXAI_NOINLINE T evalChain(const ast::Node& top,Env& env){
     while(count>0){
         const ast::Node& b=*spine[--count];
         const T rhs=evalNode<T>(*b.children[1],env);
+        env.at=&b;
         acc=applyBinary<T>(b.text[0],acc,rhs);
     }
     return acc;
 }
+
+// Sub-expression that involves matrices, vectors or lists but must yield a
+// number here (Det Mat A, Mat A[1,2], DotP(...)): evaluated by the collection
+// evaluator (defined below); TypeError when the result is not a number.
+Complex evalCollectionScalar(const ast::Node& n,Env& env);
+bool exactCollectionScalar(const ast::Node& n,Env& env,exact::Value& out);
 
 template<typename T> T evalNode(const ast::Node& node,Env& env){
     using ast::Kind;
@@ -920,8 +1120,13 @@ template<typename T> T evalNode(const ast::Node& node,Env& env){
         np=np->children[0].get();
     }
     const ast::Node& n=*np;
+    if(n.flags&ast::FlagCollection){
+        const Complex z=evalCollectionScalar(n,env);
+        if constexpr(std::is_same_v<T,double>)return requireReal(z,"il calcolo");
+        else return z;
+    }
     switch(n.kind){
-    case Kind::Token: return evalToken<T>(n,env);
+    case Kind::Token: env.at=&n;return evalToken<T>(n,env);
     case Kind::Unary:{
         const T a=evalNode<T>(*n.children.at(0),env);
         if(n.text!="-")return a;
@@ -937,9 +1142,10 @@ template<typename T> T evalNode(const ast::Node& node,Env& env){
         if(isChainNode(n))return evalChain<T>(n,env);
         const T a=evalNode<T>(*n.children.at(0),env);
         const T b=evalNode<T>(*n.children.at(1),env);
+        env.at=&n;
         return applyBinary<T>(n.text.empty()?'?':n.text[0],a,b);
     }
-    case Kind::Call:{T r=callFunction<T>(n,env);checkFinite(r);return r;}
+    case Kind::Call:{T r=callFunction<T>(n,env);env.at=&n;checkFinite(r);return r;}
     default: break;
     }
     throw SyntaxError("Syntax ERROR: nodo non valutabile");
@@ -1310,6 +1516,7 @@ bool exactNode(const ast::Node& node,Env& env,Value& out){
         np=np->children[0].get();
     }
     const ast::Node& n=*np;
+    if(n.flags&ast::FlagCollection)return exactCollectionScalar(n,env,out);
     switch(n.kind){
     case Kind::Token: return exactToken(n,env,out);
     case Kind::Unary:
@@ -1327,12 +1534,760 @@ bool exactNode(const ast::Node& node,Env& env,Value& out){
     }
 }
 
+// ---------------------------------------------------------------- matrices, vectors and lists
+// One evaluator for every kind of value. A sub-expression that does not
+// involve collections is handed to the scalar evaluators above, so numbers
+// keep exactly the semantics they have everywhere else; the collection rules
+// (element-wise list arithmetic, matrix product, inverse, Det, DotP...) are
+// written once, as templates over the element domain: floating point (double
+// or complex, by the Complex Mode setting) or exact values.
+template<typename E> struct Coll {
+    ValueType type{ValueType::Scalar};
+    std::size_t rows{1},cols{1};
+    E s{};                  // value of a scalar
+    std::vector<E> v;       // row-major elements of a list, matrix or vector
+    bool scalar() const noexcept {return type==ValueType::Scalar;}
+    bool list() const noexcept {return type==ValueType::List;}
+    bool mat() const noexcept {return type==ValueType::Matrix||type==ValueType::Vector;}
+    bool vectorShaped() const noexcept {return mat()&&(rows==1||cols==1);}
+};
+void checkMatrixSize(std::size_t rows,std::size_t cols){
+    if(rows<1||cols<1)throw DimensionError("Dimension ERROR: una matrice ha almeno una riga e una colonna");
+    if(rows>limits::kMatrixMaxDim||cols>limits::kMatrixMaxDim||rows*cols>limits::kMatrixElements)
+        throw DimensionError("Dimension ERROR: matrice troppo grande (massimo "+std::to_string(limits::kMatrixMaxDim)+" per lato e "+
+                             std::to_string(limits::kMatrixElements)+" elementi)");
+}
+void checkListSize(std::size_t n){
+    if(n<1)throw DimensionError("Dimension ERROR: una lista ha almeno un elemento");
+    if(n>limits::kListMaxLength)throw DimensionError("Dimension ERROR: massimo "+std::to_string(limits::kListMaxLength)+" elementi in una lista");
+}
+
+// Thrown inside the exact domain when a step has no exact form.
+struct NoExactForm {};
+
+// Floating-point elements: real arithmetic in Real mode, complex otherwise.
+struct NumDomain {
+    using Elem=Complex;
+    static bool real(const Env& env){return env.ctx.complexMode==ComplexMode::Real;}
+    static Elem node(const ast::Node& n,Env& env){
+        if(real(env))return Complex(evalNode<double>(n,env),0.0);
+        return evalNode<Complex>(n,env);
+    }
+    static Elem lazy(const ast::Node& n,Env& env){
+        if(real(env)){const double r=callFunction<double>(n,env);checkFinite(r);return Complex(r,0.0);}
+        const Complex r=callFunction<Complex>(n,env);checkFinite(r);return r;
+    }
+    static Elem binary(char op,const Elem& a,const Elem& b,Env& env){
+        if(real(env))return Complex(applyBinary<double>(op,a.real(),b.real()),0.0);
+        return applyBinary<Complex>(op,a,b);
+    }
+    static Elem negate(const Elem& a,Env&){const double re=-a.real(),im=-a.imag();return Complex(re==0.0?0.0:re,im==0.0?0.0:im);}
+    static Elem apply(const std::string& f,const Elem* args,std::size_t count,Env& env){
+        if(real(env)){
+            double r[3]={};
+            for(std::size_t i=0;i<count&&i<3;++i)r[i]=args[i].real();
+            const double v=applyFunction<double>(f,r,count);checkFinite(v);return Complex(v,0.0);
+        }
+        const Complex v=applyFunction<Complex>(f,args,count);checkFinite(v);return v;
+    }
+    static Elem fromInt(long long v){return Complex(static_cast<double>(v),0.0);}
+    static Elem fromDouble(double v){return Complex(v,0.0);}
+    static bool isZero(const Elem& a){return a.real()==0.0&&a.imag()==0.0;}
+    static double magnitude(const Elem& a){return std::abs(a);}
+    static double toReal(const Elem& a,const char* what){return requireReal(a,what);}
+    static int compare(const Elem& a,const Elem& b){
+        const double x=requireReal(a,"il confronto"),y=requireReal(b,"il confronto");
+        return (x>y)-(x<y);
+    }
+    static bool negligible(const Elem& pivot,double scale){return std::abs(pivot)<=1e-12*scale;}
+    static void load(const CalcValue& src,Coll<Elem>& out,Env& env){
+        if(real(env)&&src.complex())throw NonRealError("Non-Real ERROR: elementi complessi (serve il modo complesso)");
+        out.rows=src.rows;out.cols=src.cols;
+        out.v.resize(src.size());
+        for(std::size_t i=0;i<src.size();++i)out.v[i]=src.at(i);
+    }
+};
+// Exact elements (rationals, surds, multiples of pi): every step either is
+// exact or abandons the exact evaluation.
+struct ExactDomain {
+    using Elem=exact::Value;
+    static Elem node(const ast::Node& n,Env& env){Elem out;if(!exactNode(n,env,out))throw NoExactForm{};return out;}
+    static Elem lazy(const ast::Node& n,Env& env){Elem out;if(!exactCall(n,env,out))throw NoExactForm{};return out;}
+    static Elem binary(char op,const Elem& a,const Elem& b,Env&){Elem out;if(!exactBinary(op,a,b,out))throw NoExactForm{};return out;}
+    static Elem negate(const Elem& a,Env&){Elem out;if(!exact::neg(a,out))throw NoExactForm{};return out;}
+    static Elem apply(const std::string& f,const Elem* args,std::size_t count,Env& env){
+        Elem out;
+        if(count>3||!exactApply(f,args,count,out))throw NoExactForm{};
+        if(f=="rndfix"||(f=="round"&&count==2))env.decimal=true;
+        return out;
+    }
+    static Elem fromInt(long long v){return exactInt(v);}
+    static Elem fromDouble(double v){
+        if(!isInteger(v)||std::abs(v)>9e15)throw NoExactForm{};
+        return exactInt(static_cast<long long>(v));
+    }
+    static bool isZero(const Elem& a){return a.isZero();}
+    static double magnitude(const Elem& a){return std::abs(a.toDouble());}
+    static double toReal(const Elem& a,const char*){Rational r;if(!a.rational(r))throw NoExactForm{};return r.toDouble();}
+    static int compare(const Elem& a,const Elem& b){int c=0;if(!exactCompare(a,b,c))throw NoExactForm{};return c;}
+    static bool negligible(const Elem& pivot,double){return pivot.isZero();}
+    // A stored element is exact when it is an integer (an integer double is
+    // exactly that integer); anything else has no known exact form.
+    static void load(const CalcValue& src,Coll<Elem>& out,Env&){
+        if(src.complex())throw NoExactForm{};
+        out.rows=src.rows;out.cols=src.cols;
+        out.v.resize(src.size());
+        for(std::size_t i=0;i<src.size();++i){
+            const double d=src.re[i];
+            if(!isInteger(d)||std::abs(d)>9e15)throw NoExactForm{};
+            out.v[i]=exactInt(static_cast<long long>(d));
+        }
+    }
+};
+
+template<class D> class CollEval {
+public:
+    using E=typename D::Elem;
+    using C=Coll<E>;
+    explicit CollEval(Env& e):env(e){}
+
+    C eval(const ast::Node& node){
+        using ast::Kind;
+        checkStack(env);
+        const ast::Node* np=&node;
+        while(np->kind==Kind::Group){
+            if(np->children.size()!=1||!np->children[0])throw SyntaxError("Syntax ERROR: gruppo vuoto");
+            np=np->children[0].get();
+        }
+        const ast::Node& n=*np;
+        if(!(n.flags&ast::FlagCollection))return scalarOf(D::node(n,env));
+        switch(n.kind){
+        case Kind::Token: return reference(n);
+        case Kind::Matrix: return matrixLiteral(n);
+        case Kind::List: return listLiteral(n);
+        case Kind::Unary:{
+            C a=eval(*n.children.at(0));
+            if(n.text!="-")return a;
+            env.at=&n;
+            if(a.scalar())a.s=D::negate(a.s,env);
+            else for(E& e:a.v)e=D::negate(e,env);
+            return a;
+        }
+        case Kind::Binary:{
+            if(isChainNode(n))return chain(n);
+            C a=eval(*n.children.at(0));
+            C b=eval(*n.children.at(1));
+            env.at=&n;
+            return binary(n.text.empty()?'?':n.text[0],a,b);
+        }
+        case Kind::Call: return call(n);
+        default: break;
+        }
+        throw SyntaxError("Syntax ERROR: nodo non valutabile");
+    }
+
+private:
+    Env& env;
+
+    // Left-associative chains are walked iteratively, like evalChain(): the
+    // recursion depth follows the nesting of the input, not its length.
+    C chain(const ast::Node& top){
+        constexpr std::size_t kChunk=16;
+        const ast::Node* spine[kChunk];
+        std::size_t count=0;
+        const ast::Node* cur=&top;
+        auto walkable=[](const ast::Node& x){return isChainNode(x)&&(x.flags&ast::FlagCollection);};
+        while(count<kChunk&&walkable(*cur)){spine[count++]=cur;cur=cur->children[0].get();}
+        C acc=walkable(*cur)?chain(*cur):eval(*cur);
+        while(count>0){
+            const ast::Node& b=*spine[--count];
+            const C rhs=eval(*b.children[1]);
+            env.at=&b;
+            acc=binary(b.text[0],acc,rhs);
+        }
+        return acc;
+    }
+
+    // ---- construction helpers
+    static C scalarOf(const E& e){C c;c.s=e;return c;}
+    static C shaped(ValueType type,std::size_t rows,std::size_t cols){
+        C c;c.type=type;c.rows=rows;c.cols=cols;c.v.resize(rows*cols);return c;
+    }
+    static C matrixOf(std::size_t rows,std::size_t cols,ValueType type=ValueType::Matrix){checkMatrixSize(rows,cols);return shaped(type,rows,cols);}
+    static C listOf(std::size_t n){checkListSize(n);return shaped(ValueType::List,n,1);}
+    static std::string dims(const C& c){
+        if(c.scalar())return "numero";
+        if(c.list())return "lista di "+std::to_string(c.v.size());
+        return std::to_string(c.rows)+"x"+std::to_string(c.cols);
+    }
+    [[noreturn]] static void typeError(const std::string& what){throw TypeError("Type ERROR: "+what);}
+    E op(char o,const E& a,const E& b){return D::binary(o,a,b,env);}
+    E fn(const char* name,const E& a){return D::apply(name,&a,1,env);}
+    static double maxMagnitude(const C& c){double m=0;for(const E& e:c.v)m=std::max(m,D::magnitude(e));return m;}
+    static void swapRows(C& m,std::size_t a,std::size_t b){
+        if(a==b)return;
+        for(std::size_t j=0;j<m.cols;++j)std::swap(m.v[a*m.cols+j],m.v[b*m.cols+j]);
+    }
+    E scalarArg(const C& c,const char* what){
+        if(!c.scalar())typeError(std::string(what)+" deve essere un numero, non una "+valueTypeName(c.type));
+        return c.s;
+    }
+    long long integerArg(const C& c,const char* what){
+        const double d=D::toReal(scalarArg(c,what),what);
+        if(!isInteger(d)||std::abs(d)>1e9)throw MathError(std::string("Argument ERROR: ")+what+" deve essere un intero");
+        return static_cast<long long>(d);
+    }
+    const C& listArg(const C& c,const char* f){
+        if(!c.list())typeError(std::string(f)+" richiede una lista, non "+article(c));
+        return c;
+    }
+    const C& matrixArg(const C& c,const char* f){
+        if(!c.mat())typeError(std::string(f)+" richiede una matrice, non "+article(c));
+        return c;
+    }
+    const C& vectorArg(const C& c,const char* f){
+        if(!c.mat())typeError(std::string(f)+" richiede un vettore, non "+article(c));
+        if(!c.vectorShaped())throw DimensionError(std::string("Dimension ERROR: ")+f+" richiede un vettore (1xn o nx1), non una matrice "+dims(c));
+        return c;
+    }
+    static std::string article(const C& c){
+        switch(c.type){
+        case ValueType::Scalar: return "un numero";
+        case ValueType::List: return "una lista";
+        case ValueType::Matrix: return "una matrice";
+        case ValueType::Vector: return "un vettore";
+        }
+        return "?";
+    }
+
+    // ---- literals and memories
+    E element(const ast::Node& cell,const char* what){
+        C v=eval(cell);
+        if(!v.scalar()){env.at=&cell;typeError(std::string(what)+" devono essere numeri");}
+        return v.s;
+    }
+    C matrixLiteral(const ast::Node& n){
+        const std::size_t cols=ast::matrixColumns(n);
+        if(cols==0||n.children.empty()||n.children.size()%cols!=0)throw SyntaxError("Syntax ERROR: matrice non valida");
+        env.at=&n;
+        C out=matrixOf(n.children.size()/cols,cols);
+        for(std::size_t i=0;i<n.children.size();++i){
+            if(!n.children[i])throw SyntaxError("Syntax ERROR: elemento mancante");
+            out.v[i]=element(*n.children[i],"gli elementi di una matrice");
+        }
+        return out;
+    }
+    C listLiteral(const ast::Node& n){
+        env.at=&n;
+        C out=listOf(n.children.size());
+        for(std::size_t i=0;i<n.children.size();++i){
+            if(!n.children[i])throw SyntaxError("Syntax ERROR: elemento mancante");
+            out.v[i]=element(*n.children[i],"gli elementi di una lista");
+        }
+        return out;
+    }
+    C reference(const ast::Node& n){
+        using Memory=CollectionResolver::Memory;
+        env.at=&n;
+        std::string t=n.text;                        // "Mat A", "Vct Ans", "List 12", "list3"
+        Memory memory=Memory::List;
+        int index=CollectionResolver::Answer;
+        if(isListName(t)){
+            // A graph function with a list is drawn once per element: there the
+            // name is the element of the graph being drawn, a number.
+            double element=0;
+            if(env.ctx.names&&env.ctx.names->resolve(t,element))return scalarOf(D::fromDouble(element));
+            index=t[4]-'1';
+            t=std::string("List ")+t[4];
+        }else{
+            const std::size_t space=t.find(' ');
+            if(space==std::string::npos||space+1>=t.size())throw SyntaxError("Syntax ERROR: nome sconosciuto "+t);
+            memory=t[0]=='M'?Memory::Mat:t[0]=='V'?Memory::Vct:Memory::List;
+            const std::string name=t.substr(space+1);
+            if(name!="Ans")index=memory==Memory::List?std::atoi(name.c_str())-1:name[0]-'A';
+        }
+        if(!env.ctx.collections)throw MathError("Math ERROR: "+t+" non disponibile qui");
+        CalcValue stored;
+        if(!env.ctx.collections->collection(memory,index,stored)||stored.empty())
+            throw DimensionError("Dimension ERROR: "+t+" non definita");
+        C out;
+        D::load(stored,out,env);
+        out.type=memory==Memory::Mat?ValueType::Matrix:memory==Memory::Vct?ValueType::Vector:ValueType::List;
+        return out;
+    }
+
+    // ---- arithmetic
+    static ValueType resultType(const C& a,const C& b){
+        if(a.scalar())return b.type;
+        if(b.scalar())return a.type;
+        if(a.list())return ValueType::List;
+        return a.type==ValueType::Vector&&b.type==ValueType::Vector?ValueType::Vector:ValueType::Matrix;
+    }
+    // Element by element; a number is combined with every element.
+    C zip(char o,const C& a,const C& b){
+        const C& shape=a.scalar()?b:a;
+        if(!a.scalar()&&!b.scalar()&&a.v.size()!=b.v.size())
+            throw DimensionError("Dimension ERROR: lunghezze diverse ("+std::to_string(a.v.size())+" e "+std::to_string(b.v.size())+")");
+        C out=shaped(resultType(a,b),shape.rows,shape.cols);
+        for(std::size_t i=0;i<out.v.size();++i)out.v[i]=op(o,a.scalar()?a.s:a.v[i],b.scalar()?b.s:b.v[i]);
+        return out;
+    }
+    C binary(char o,const C& a,const C& b){
+        if(a.scalar()&&b.scalar())return scalarOf(op(o,a.s,b.s));
+        if(a.list()||b.list()){
+            if(a.mat()||b.mat())typeError("operazione tra una lista e una matrice");
+            return zip(o,a,b);
+        }
+        switch(o){
+        case '+': case '-':
+            if(a.scalar()||b.scalar())typeError(std::string(o=='+'?"somma":"differenza")+" tra un numero e una matrice");
+            if(a.rows!=b.rows||a.cols!=b.cols)
+                throw DimensionError("Dimension ERROR: "+dims(a)+" e "+dims(b)+" hanno dimensioni diverse");
+            return zip(o,a,b);
+        case '*':
+            if(a.scalar()||b.scalar())return zip(o,a,b);
+            return multiply(a,b);
+        case '/':
+            if(b.scalar())return zip(o,a,b);
+            typeError("divisione per una matrice (usa l'inversa ^-1)");
+        case '^': return power(a,b);
+        default: break;
+        }
+        typeError("operatore non definito per matrici e vettori");
+    }
+    C multiply(const C& a,const C& b){
+        if(a.cols!=b.rows)throw DimensionError("Dimension ERROR: il prodotto "+dims(a)+" per "+dims(b)+" non e' definito");
+        C out=matrixOf(a.rows,b.cols);
+        if(a.type==ValueType::Vector&&b.type==ValueType::Vector&&out.vectorShaped())out.type=ValueType::Vector;
+        const E zero=D::fromInt(0);
+        for(std::size_t i=0;i<a.rows;++i)for(std::size_t j=0;j<b.cols;++j){
+            E acc=zero;
+            for(std::size_t k=0;k<a.cols;++k)acc=op('+',acc,op('*',a.v[i*a.cols+k],b.v[k*b.cols+j]));
+            out.v[i*b.cols+j]=acc;
+        }
+        return out;
+    }
+    C identity(std::size_t n){
+        C out=matrixOf(n,n);
+        const E zero=D::fromInt(0),one=D::fromInt(1);
+        for(std::size_t i=0;i<n;++i)for(std::size_t j=0;j<n;++j)out.v[i*n+j]=i==j?one:zero;
+        return out;
+    }
+    static void requireSquare(const C& a,const char* what){
+        if(a.rows!=a.cols)throw DimensionError(std::string("Dimension ERROR: ")+what+" richiede una matrice quadrata, non "+dims(a));
+    }
+    // Gauss-Jordan elimination with partial pivoting.
+    C inverse(const C& a){
+        requireSquare(a,"l'inversa");
+        const std::size_t n=a.rows;
+        C m=a;
+        C inv=identity(n);
+        const double scale=maxMagnitude(a);
+        for(std::size_t c=0;c<n;++c){
+            std::size_t p=c;
+            double best=D::magnitude(m.v[c*n+c]);
+            for(std::size_t r=c+1;r<n;++r){const double g=D::magnitude(m.v[r*n+c]);if(g>best){best=g;p=r;}}
+            if(D::negligible(m.v[p*n+c],scale))throw MathError("Math ERROR: matrice singolare (determinante nullo)");
+            swapRows(m,p,c);swapRows(inv,p,c);
+            const E d=m.v[c*n+c];
+            for(std::size_t j=0;j<n;++j){m.v[c*n+j]=op('/',m.v[c*n+j],d);inv.v[c*n+j]=op('/',inv.v[c*n+j],d);}
+            for(std::size_t r=0;r<n;++r){
+                if(r==c)continue;
+                const E f=m.v[r*n+c];
+                if(D::isZero(f))continue;
+                for(std::size_t j=0;j<n;++j){
+                    m.v[r*n+j]=op('-',m.v[r*n+j],op('*',f,m.v[c*n+j]));
+                    inv.v[r*n+j]=op('-',inv.v[r*n+j],op('*',f,inv.v[c*n+j]));
+                }
+            }
+        }
+        return inv;
+    }
+    C power(const C& a,const C& b){
+        if(a.scalar())typeError("un numero elevato a una matrice non e' definito");
+        if(!b.scalar())typeError("l'esponente di una matrice deve essere un numero");
+        const double e=D::toReal(b.s,"l'esponente");
+        if(!isInteger(e)||std::abs(e)>32766)throw MathError("Math ERROR: l'esponente di una matrice e' un intero tra -32766 e 32766");
+        requireSquare(a,"la potenza");
+        long long n=static_cast<long long>(e);
+        C base=a;
+        base.type=ValueType::Matrix;
+        if(n<0){base=inverse(base);n=-n;}
+        if(n==0)return identity(a.rows);
+        // Square and multiply; the first factor is copied, not multiplied by the identity.
+        C result;
+        bool have=false;
+        while(n){
+            if(n&1){if(have)result=multiply(result,base);else{result=base;have=true;}}
+            n>>=1;
+            if(n)base=multiply(base,base);
+        }
+        return result;
+    }
+    E determinant(const C& a){
+        requireSquare(a,"Det");
+        const std::size_t n=a.rows;
+        C m=a;
+        const double scale=maxMagnitude(a);
+        E det=D::fromInt(1);
+        bool negative=false;
+        for(std::size_t c=0;c<n;++c){
+            std::size_t p=c;
+            double best=D::magnitude(m.v[c*n+c]);
+            for(std::size_t r=c+1;r<n;++r){const double g=D::magnitude(m.v[r*n+c]);if(g>best){best=g;p=r;}}
+            if(D::negligible(m.v[p*n+c],scale))return D::fromInt(0);
+            if(p!=c){swapRows(m,p,c);negative=!negative;}
+            const E pivot=m.v[c*n+c];
+            det=op('*',det,pivot);
+            for(std::size_t r=c+1;r<n;++r){
+                if(D::isZero(m.v[r*n+c]))continue;
+                const E f=op('/',m.v[r*n+c],pivot);
+                for(std::size_t j=c;j<n;++j)m.v[r*n+j]=op('-',m.v[r*n+j],op('*',f,m.v[c*n+j]));
+            }
+        }
+        return negative?D::negate(det,env):det;
+    }
+    // Row echelon form (Ref) and reduced row echelon form (Rref): Gaussian
+    // elimination with partial pivoting, leading entries scaled to 1.
+    C echelon(const C& a,bool reduced){
+        C m=a;
+        m.type=ValueType::Matrix;
+        const std::size_t rows=m.rows,cols=m.cols;
+        const double scale=maxMagnitude(a);
+        const E zero=D::fromInt(0),one=D::fromInt(1);
+        std::size_t row=0;
+        for(std::size_t c=0;c<cols&&row<rows;++c){
+            std::size_t p=row;
+            double best=D::magnitude(m.v[row*cols+c]);
+            for(std::size_t r=row+1;r<rows;++r){const double g=D::magnitude(m.v[r*cols+c]);if(g>best){best=g;p=r;}}
+            if(D::negligible(m.v[p*cols+c],scale)){for(std::size_t r=row;r<rows;++r)m.v[r*cols+c]=zero;continue;}
+            swapRows(m,p,row);
+            const E d=m.v[row*cols+c];
+            for(std::size_t j=c+1;j<cols;++j)m.v[row*cols+j]=op('/',m.v[row*cols+j],d);
+            m.v[row*cols+c]=one;
+            for(std::size_t r=reduced?0:row+1;r<rows;++r){
+                if(r==row)continue;
+                const E f=m.v[r*cols+c];
+                if(D::isZero(f))continue;
+                for(std::size_t j=c+1;j<cols;++j)m.v[r*cols+j]=op('-',m.v[r*cols+j],op('*',f,m.v[row*cols+j]));
+                m.v[r*cols+c]=zero;
+            }
+            ++row;
+        }
+        return m;
+    }
+    C transpose(const C& a){
+        C out=shaped(a.type,a.cols,a.rows);
+        for(std::size_t i=0;i<a.rows;++i)for(std::size_t j=0;j<a.cols;++j)out.v[j*a.rows+i]=a.v[i*a.cols+j];
+        return out;
+    }
+    E fold(const C& l,char o,long long start){
+        E acc=D::fromInt(start);
+        for(const E& e:l.v)acc=op(o,acc,e);
+        return acc;
+    }
+    E dot(const C& a,const C& b){
+        E acc=D::fromInt(0);
+        for(std::size_t i=0;i<a.v.size();++i)acc=op('+',acc,op('*',a.v[i],b.v[i]));
+        return acc;
+    }
+    E norm(const C& a){
+        E acc=D::fromInt(0);
+        for(const E& e:a.v){const E m=fn("abs",e);acc=op('+',acc,op('*',m,m));}
+        return fn("sqrt",acc);
+    }
+    std::vector<E> sorted(const C& l,bool descending){
+        std::vector<E> v=l.v;
+        // Insertion sort: lists are short and the comparison may give up (exact domain).
+        for(std::size_t i=1;i<v.size();++i){
+            E key=v[i];
+            std::size_t j=i;
+            while(j>0&&(descending?D::compare(v[j-1],key)<0:D::compare(v[j-1],key)>0)){v[j]=v[j-1];--j;}
+            v[j]=key;
+        }
+        return v;
+    }
+
+    // ---- functions
+    // Seq(expression, variable, start, end, increment)
+    C sequence(const ast::Node& n){
+        const ast::Node* var=n.children[1].get();
+        while(var->kind==ast::Kind::Group&&var->children.size()==1&&var->children[0])var=var->children[0].get();
+        if(var->kind!=ast::Kind::Token||var->text.size()!=1||!std::isalpha(static_cast<unsigned char>(var->text[0]))){
+            env.at=var;
+            throw SyntaxError("Syntax ERROR: il secondo argomento di Seq e' la variabile (es. X)");
+        }
+        const char name[2]={static_cast<char>(std::tolower(static_cast<unsigned char>(var->text[0]))),0};
+        double range[3]={};
+        for(std::size_t i=0;i<3;++i){
+            const ast::Node& a=*n.children[i+2];
+            const C v=eval(a);
+            env.at=&a;
+            range[i]=D::toReal(scalarArg(v,"un estremo di Seq"),"Seq");
+        }
+        env.at=&n;
+        const double start=range[0],end=range[1],step=range[2];
+        if(step==0||!std::isfinite(step)||!std::isfinite(start)||!std::isfinite(end))throw MathError("Math ERROR: incremento di Seq nullo o non finito");
+        const double steps=(end-start)/step;
+        if(steps<0)throw MathError("Math ERROR: Seq non raggiunge il valore finale con questo incremento");
+        const double countValue=std::floor(steps+1e-9)+1;
+        if(countValue>static_cast<double>(limits::kListMaxLength))checkListSize(limits::kListMaxLength+1);
+        C out=listOf(static_cast<std::size_t>(countValue));
+        if(++env.depth>4){--env.depth;throw MathError("Stack ERROR: calcoli annidati troppo profondi");}
+        struct DepthGuard{Env& e;~DepthGuard(){--e.depth;}} guard{env};
+        LocalBind bind(env,name,start);
+        for(std::size_t k=0;k<out.v.size();++k){
+            bind.set(start+static_cast<double>(k)*step);
+            const C v=eval(*n.children[0]);
+            if(!v.scalar()){env.at=n.children[0].get();typeError("l'espressione di Seq deve dare un numero");}
+            out.v[k]=v.s;
+        }
+        env.at=&n;
+        return out;
+    }
+    // Scalar function applied to lists element by element (and Abs, Int, Frac,
+    // Intg and the complex parts to the elements of a matrix).
+    C mapCall(const std::string& f,const std::vector<C>& args){
+        const std::size_t count=args.size();
+        if(count>3)throw SyntaxError("Argument ERROR: "+f+" numero di argomenti errato");
+        const C* shape=nullptr;
+        bool anyList=false,anyMatrix=false;
+        for(const C& a:args){
+            if(a.scalar())continue;
+            anyList=anyList||a.list();anyMatrix=anyMatrix||a.mat();
+            if(shape&&shape->v.size()!=a.v.size())
+                throw DimensionError("Dimension ERROR: lunghezze diverse ("+std::to_string(shape->v.size())+" e "+std::to_string(a.v.size())+")");
+            if(!shape)shape=&a;
+        }
+        E in[3]={};
+        if(!shape){
+            for(std::size_t i=0;i<count;++i)in[i]=args[i].s;
+            return scalarOf(D::apply(f,in,count,env));
+        }
+        if(anyMatrix){
+            static const char* const allowed[]={"abs","int","frac","intg","re","im","real","imag","conj"};
+            bool ok=count==1&&!anyList;
+            if(ok){ok=false;for(const char* a:allowed)ok=ok||f==a;}
+            if(!ok)typeError(f+" non si applica a matrici e vettori");
+        }
+        C out=shaped(shape->type,shape->rows,shape->cols);
+        for(std::size_t k=0;k<out.v.size();++k){
+            for(std::size_t i=0;i<count;++i)in[i]=args[i].scalar()?args[i].s:args[i].v[k];
+            out.v[k]=D::apply(f,in,count,env);
+        }
+        return out;
+    }
+    C elementOf(const std::vector<C>& a){
+        const C& target=a[0];
+        if(target.list()){
+            if(a.size()!=2)throw SyntaxError("Argument ERROR: una lista ha un solo indice, es. List 1[3]");
+            const long long i=integerArg(a[1],"l'indice");
+            if(i<1||static_cast<std::size_t>(i)>target.v.size())
+                throw DimensionError("Dimension ERROR: indice "+std::to_string(i)+" fuori dalla lista di "+std::to_string(target.v.size()));
+            return scalarOf(target.v[static_cast<std::size_t>(i-1)]);
+        }
+        if(!target.mat())typeError("l'indice [ ] si applica a Mat, Vct e List");
+        if(a.size()==2){
+            if(!target.vectorShaped())throw SyntaxError("Argument ERROR: una matrice ha due indici, es. Mat A[1,2]");
+            const long long i=integerArg(a[1],"l'indice");
+            if(i<1||static_cast<std::size_t>(i)>target.v.size())
+                throw DimensionError("Dimension ERROR: indice "+std::to_string(i)+" fuori dal vettore di "+std::to_string(target.v.size()));
+            return scalarOf(target.v[static_cast<std::size_t>(i-1)]);
+        }
+        const long long r=integerArg(a[1],"l'indice di riga"),c=integerArg(a[2],"l'indice di colonna");
+        if(r<1||c<1||static_cast<std::size_t>(r)>target.rows||static_cast<std::size_t>(c)>target.cols)
+            throw DimensionError("Dimension ERROR: ["+std::to_string(r)+","+std::to_string(c)+"] fuori dalla matrice "+dims(target));
+        return scalarOf(target.v[static_cast<std::size_t>(r-1)*target.cols+static_cast<std::size_t>(c-1)]);
+    }
+    C call(const ast::Node& n){
+        const std::string& f=n.text;
+        const std::size_t count=n.children.size();
+        for(const auto& c:n.children)if(!c)throw SyntaxError("Syntax ERROR: argomento mancante");
+        if(f=="seq"){if(count!=5)throw SyntaxError("Argument ERROR: Seq(espressione,variabile,inizio,fine,incremento)");return sequence(n);}
+        // Graph function references and the calculus functions keep their own
+        // (lazy) evaluation; a collection may appear inside their arguments.
+        if((!f.empty()&&f[0]=='@')||(isLazyFunction(f)&&count!=1)){
+            const E r=D::lazy(n,env);
+            env.at=&n;
+            return scalarOf(r);
+        }
+        std::vector<C> a;
+        a.reserve(count);
+        for(const auto& c:n.children)a.push_back(eval(*c));
+        env.at=&n;
+        if(f=="elem")return elementOf(a);
+        // ---- matrices
+        if(f=="det")return scalarOf(determinant(matrixArg(a[0],"Det")));
+        if(f=="trn")return transpose(matrixArg(a[0],"Trn"));
+        if(f=="ref"||f=="rref")return echelon(matrixArg(a[0],f=="ref"?"Ref":"Rref"),f=="rref");
+        if(f=="identity"){
+            const long long size=integerArg(a[0],"la dimensione di Identity");
+            if(size<1)throw DimensionError("Dimension ERROR: Identity richiede una dimensione positiva");
+            return identity(static_cast<std::size_t>(size));
+        }
+        if(f=="dim"){
+            if(a[0].list())return scalarOf(D::fromInt(static_cast<long long>(a[0].v.size())));
+            if(!a[0].mat())typeError("Dim richiede una matrice, un vettore o una lista");
+            C out=listOf(2);
+            out.v[0]=D::fromInt(static_cast<long long>(a[0].rows));out.v[1]=D::fromInt(static_cast<long long>(a[0].cols));
+            return out;
+        }
+        if(f=="augment"){
+            if(a[0].list()&&a[1].list()){
+                C out=listOf(a[0].v.size()+a[1].v.size());
+                std::copy(a[0].v.begin(),a[0].v.end(),out.v.begin());
+                std::copy(a[1].v.begin(),a[1].v.end(),out.v.begin()+static_cast<std::ptrdiff_t>(a[0].v.size()));
+                return out;
+            }
+            if(!a[0].mat()||!a[1].mat())typeError("Augment unisce due matrici (o due liste)");
+            if(a[0].rows!=a[1].rows)throw DimensionError("Dimension ERROR: Augment richiede lo stesso numero di righe ("+dims(a[0])+" e "+dims(a[1])+")");
+            C out=matrixOf(a[0].rows,a[0].cols+a[1].cols);
+            for(std::size_t i=0;i<out.rows;++i){
+                for(std::size_t j=0;j<a[0].cols;++j)out.v[i*out.cols+j]=a[0].v[i*a[0].cols+j];
+                for(std::size_t j=0;j<a[1].cols;++j)out.v[i*out.cols+a[0].cols+j]=a[1].v[i*a[1].cols+j];
+            }
+            return out;
+        }
+        if(f=="fill"){
+            const E value=scalarArg(a[0],"il valore di Fill");
+            if(a[1].scalar())typeError("Fill(valore, matrice o lista)");
+            C out=a[1];
+            for(E& e:out.v)e=value;
+            return out;
+        }
+        if(f=="mattolist"){
+            const C& m=matrixArg(a[0],"Mat\xE2\x86\x92List");
+            const long long col=integerArg(a[1],"la colonna");
+            if(col<1||static_cast<std::size_t>(col)>m.cols)throw DimensionError("Dimension ERROR: colonna "+std::to_string(col)+" fuori dalla matrice "+dims(m));
+            C out=listOf(m.rows);
+            for(std::size_t i=0;i<m.rows;++i)out.v[i]=m.v[i*m.cols+static_cast<std::size_t>(col-1)];
+            return out;
+        }
+        if(f=="listtomat"){
+            const std::size_t length=listArg(a[0],"List\xE2\x86\x92Mat").v.size();
+            for(const C& l:a)if(listArg(l,"List\xE2\x86\x92Mat").v.size()!=length)
+                throw DimensionError("Dimension ERROR: List\xE2\x86\x92Mat richiede liste della stessa lunghezza");
+            C out=matrixOf(length,count);
+            for(std::size_t j=0;j<count;++j)for(std::size_t i=0;i<length;++i)out.v[i*count+j]=a[j].v[i];
+            return out;
+        }
+        // ---- vectors
+        if(f=="dotp"||f=="crossp"||f=="angle"){
+            const char* label=f=="dotp"?"DotP":f=="crossp"?"CrossP":"Angle";
+            const C& x=vectorArg(a[0],label);
+            const C& y=vectorArg(a[1],label);
+            if(x.v.size()!=y.v.size())throw DimensionError(std::string("Dimension ERROR: ")+label+" richiede vettori della stessa dimensione ("+
+                                                           std::to_string(x.v.size())+" e "+std::to_string(y.v.size())+")");
+            if(f=="dotp")return scalarOf(dot(x,y));
+            if(f=="crossp"){
+                if(x.v.size()!=2&&x.v.size()!=3)throw DimensionError("Dimension ERROR: CrossP richiede vettori di dimensione 2 o 3");
+                const E zero=D::fromInt(0);
+                const E x3=x.v.size()==3?x.v[2]:zero,y3=y.v.size()==3?y.v[2]:zero;
+                C out=x.rows==1?shaped(ValueType::Vector,1,3):shaped(ValueType::Vector,3,1);
+                out.v[0]=op('-',op('*',x.v[1],y3),op('*',x3,y.v[1]));
+                out.v[1]=op('-',op('*',x3,y.v[0]),op('*',x.v[0],y3));
+                out.v[2]=op('-',op('*',x.v[0],y.v[1]),op('*',x.v[1],y.v[0]));
+                return out;
+            }
+            const E product=op('*',norm(x),norm(y));
+            if(D::isZero(product))throw MathError("Math ERROR: Angle con un vettore nullo");
+            return scalarOf(fn("acos",op('/',dot(x,y),product)));
+        }
+        if(f=="norm")return scalarOf(norm(matrixArg(a[0],"Norm")));
+        if(f=="unitv"){
+            const C& x=vectorArg(a[0],"UnitV");
+            const E length=norm(x);
+            if(D::isZero(length))throw MathError("Math ERROR: UnitV di un vettore nullo");
+            C out=x;
+            out.type=ValueType::Vector;
+            for(E& e:out.v)e=op('/',e,length);
+            return out;
+        }
+        // ---- lists
+        if(count==1&&(f=="sum"||f=="prod"))return scalarOf(fold(listArg(a[0],f=="sum"?"Sum":"Prod"),f=="sum"?'+':'*',f=="sum"?0:1));
+        if(f=="mean"){
+            const C& l=listArg(a[0],"Mean");
+            return scalarOf(op('/',fold(l,'+',0),D::fromInt(static_cast<long long>(l.v.size()))));
+        }
+        if(f=="median"){
+            const std::vector<E> v=sorted(listArg(a[0],"Median"),false);
+            const std::size_t n2=v.size();
+            if(n2%2==1)return scalarOf(v[n2/2]);
+            return scalarOf(op('/',op('+',v[n2/2-1],v[n2/2]),D::fromInt(2)));
+        }
+        if(count==1&&(f=="min"||f=="max")){
+            const C& l=listArg(a[0],f=="min"?"Min":"Max");
+            E best=l.v[0];
+            for(const E& e:l.v){const int c=D::compare(e,best);if(f=="min"?c<0:c>0)best=e;}
+            return scalarOf(best);
+        }
+        if(f=="cuml"){
+            C out=listArg(a[0],"Cuml");
+            for(std::size_t i=1;i<out.v.size();++i)out.v[i]=op('+',out.v[i-1],out.v[i]);
+            return out;
+        }
+        if(f=="percent"&&a[0].list()){
+            const E total=fold(a[0],'+',0);
+            if(D::isZero(total))throw MathError("Math ERROR: Percent di una lista con somma nulla");
+            C out=a[0];
+            const E hundred=D::fromInt(100);
+            for(E& e:out.v)e=op('*',op('/',e,total),hundred);
+            return out;
+        }
+        if(f=="dlist"){
+            const C& l=listArg(a[0],"\xCE\x94List");
+            if(l.v.size()<2)throw DimensionError("Dimension ERROR: \xCE\x94List richiede almeno due elementi");
+            C out=listOf(l.v.size()-1);
+            for(std::size_t i=0;i+1<l.v.size();++i)out.v[i]=op('-',l.v[i+1],l.v[i]);
+            return out;
+        }
+        if(f=="sorta"||f=="sortd"){
+            C out=listArg(a[0],f=="sorta"?"SortA":"SortD");
+            out.v=sorted(out,f=="sortd");
+            return out;
+        }
+        return mapCall(f,a);
+    }
+};
+
+Complex evalCollectionScalar(const ast::Node& n,Env& env){
+    CollEval<NumDomain> evaluator(env);
+    const Coll<Complex> c=evaluator.eval(n);
+    if(!c.scalar()){
+        env.at=&n;
+        throw TypeError(std::string("Type ERROR: qui serve un numero, il risultato e' una ")+valueTypeName(c.type));
+    }
+    return c.s;
+}
+bool exactCollectionScalar(const ast::Node& n,Env& env,exact::Value& out){
+    try{
+        CollEval<ExactDomain> evaluator(env);
+        const Coll<exact::Value> c=evaluator.eval(n);
+        if(!c.scalar())return false;
+        out=c.s;
+        return true;
+    }catch(const NoExactForm&){return false;}
+    catch(const std::exception&){return false;}
+}
+double tidyReal(double v){
+    if(!std::isfinite(v))throw MathError("Math ERROR: risultato non finito");
+    return v==0.0?0.0:v;   // normalise -0
+}
+Complex tidyComplex(Complex v){
+    const double scale=std::max(std::abs(v.real()),std::abs(v.imag()));
+    double re=v.real(),im=v.imag();
+    if(std::abs(re)<1e-14*scale)re=0;
+    if(std::abs(im)<1e-14*scale)im=0;
+    return {re==0.0?0.0:re,im==0.0?0.0:im};
+}
 bool isEditorKind(ast::Kind k){
     using ast::Kind;
-    return k==Kind::Row||k==Kind::Fraction||k==Kind::Radical||k==Kind::Power||k==Kind::Subscript||k==Kind::Calculus||k==Kind::Matrix;
+    // A Matrix node is an editor template when its cells are rows.
+    return k==Kind::Row||k==Kind::Fraction||k==Kind::Radical||k==Kind::Power||k==Kind::Subscript||k==Kind::Calculus;
 }
 bool containsEditorNodes(const ast::Node& n){
     if(isEditorKind(n.kind))return true;
+    if(n.kind==ast::Kind::Matrix&&!(n.flags&ast::FlagCollection))return true;
     for(const auto& c:n.children)if(c&&containsEditorNodes(*c))return true;
     return false;
 }
@@ -1353,19 +2308,57 @@ std::size_t evalStackBudget() noexcept{return gEvalStackBudget;}
 double evaluateReal(const ast::Node& parsed,const EvalContext& context){
     Env env{context};
     env.stackBase=stackPosition();
+    const ErrorLocationGuard location(env);
     const double v=evalNode<double>(parsed,env);
-    if(!std::isfinite(v))throw MathError("Math ERROR: risultato non finito");
-    return v==0.0?0.0:v;   // normalise -0
+    env.at=&parsed;
+    return tidyReal(v);
 }
 Complex evaluateComplex(const ast::Node& parsed,const EvalContext& context){
     Env env{context};
     env.stackBase=stackPosition();
-    Complex v=evalNode<Complex>(parsed,env);
-    const double scale=std::max(std::abs(v.real()),std::abs(v.imag()));
-    double re=v.real(),im=v.imag();
-    if(std::abs(re)<1e-14*scale)re=0;
-    if(std::abs(im)<1e-14*scale)im=0;
-    return {re==0.0?0.0:re,im==0.0?0.0:im};
+    const ErrorLocationGuard location(env);
+    return tidyComplex(evalNode<Complex>(parsed,env));
+}
+CalcValue evaluateAny(const ast::Node& parsed,const EvalContext& context){
+    Env env{context};
+    env.stackBase=stackPosition();
+    const ErrorLocationGuard location(env);
+    const bool real=context.complexMode==ComplexMode::Real;
+    CollEval<NumDomain> evaluator(env);
+    Coll<Complex> c=evaluator.eval(parsed);
+    env.at=&parsed;
+    auto tidy=[real](const Complex& z){return real?Complex(tidyReal(z.real()),0.0):tidyComplex(z);};
+    if(c.scalar())return CalcValue::scalarOf(tidy(c.s));
+    CalcValue out;
+    out.type=c.type;
+    out.rows=static_cast<std::uint16_t>(c.rows);out.cols=static_cast<std::uint16_t>(c.cols);
+    out.re.assign(c.v.size(),0.0);
+    for(std::size_t i=0;i<c.v.size();++i){
+        const Complex z=tidy(c.v[i]);
+        if(!std::isfinite(z.real())||!std::isfinite(z.imag()))throw MathError("Math ERROR: risultato non finito");
+        out.set(i,z);
+    }
+    return out;
+}
+bool evaluateExactAny(const ast::Node& parsed,const EvalContext& context,ExactCollection& out){
+    try{
+        Env env{context};
+        env.stackBase=stackPosition();
+        CollEval<ExactDomain> evaluator(env);
+        Coll<exact::Value> c=evaluator.eval(parsed);
+        ExactCollection result;
+        result.type=c.type;
+        result.decimal=env.decimal;
+        if(c.scalar()){result.rows=result.cols=1;result.elements.assign(1,c.s);}
+        else{
+            result.rows=static_cast<std::uint16_t>(c.rows);result.cols=static_cast<std::uint16_t>(c.cols);
+            result.elements=std::move(c.v);
+        }
+        for(const exact::Value& e:result.elements)if(!std::isfinite(e.toDouble()))return false;
+        out=std::move(result);
+        return true;
+    }catch(const NoExactForm&){return false;}
+    catch(...){return false;}
 }
 bool evaluateExact(const ast::Node& parsed,const EvalContext& context,exact::Value& out,bool* decimalInput){
     try{
@@ -1452,6 +2445,7 @@ std::string rewriteIdentifiers(const std::string& expression,const std::function
         switch(t.type){
         case TT::End: break;
         case TT::Num: append(t.text); break;
+        case TT::Ref: append(t.text=="mat"?"Mat":t.text=="vct"?"Vct":"List"); break;
         case TT::Ident:{const std::string r=map(t.text);append(r.empty()?t.text:r);break;}
         case TT::Op:
             switch(t.op){

@@ -12,7 +12,7 @@ namespace d = data;
 constexpr std::uint32_t AllData = (1u << data::Count) - 1;
 constexpr std::uint32_t Ui = s::Widgets | s::Editor | s::Format;
 
-const char* const kRunMatrixSrc[] = {"src/apps/run_matrix_app.cpp", "src/run_matrix.cpp", nullptr};
+const char* const kRunMatrixSrc[] = {"src/apps/run_matrix_app.cpp", "src/apps/matrix_editor.cpp", "src/run_matrix.cpp", nullptr};
 const char* const kStatisticsSrc[] = {"src/apps/statistics_app.cpp", nullptr};
 const char* const kGraphSrc[] = {"src/apps/graph_app.cpp", "src/apps/graph_plot.cpp", "src/apps/graph_files.cpp", nullptr};
 const char* const kTableSrc[] = {"src/apps/table_app.cpp", nullptr};
@@ -26,9 +26,9 @@ const char* const kGraph3DSrc[] = {"src/apps/graph3d_app.cpp", nullptr};
 
 const AppInfo kApps[AppCount] = {
     {AppId::RunMatrix, "Run-Matrix", "1", rgb888To565(232, 96, 30), AppStatus::Available,
-     "Calcoli e risultati: input naturale, risultati esatti e decimali, cronologia modificabile, variabili, Base-N, DMS",
+     "Calcoli e risultati: input Math o Line, risultati esatti e decimali, matrici, vettori e liste con l'editor MAT/VCT, cronologia modificabile, variabili, Base-N, DMS",
      nullptr, s::Expression | s::Exact | Ui | s::MathRender | s::MathCore | s::RunCore | s::Storage,
-     d::Settings | d::Memory | d::History, 0, kRunMatrixSrc},
+     d::Settings | d::Memory | d::History | d::Matrices, 0, kRunMatrixSrc},
     {AppId::Statistics, "Statistics", "2", rgb888To565(30, 160, 90), AppStatus::Available,
      "Liste, statistiche 1/2 variabili, regressioni, grafici statistici, distribuzioni, test e intervalli",
      nullptr, s::Expression | Ui | s::Stats | s::Storage, d::Settings | d::Lists | d::Functions, 0, kStatisticsSrc},
@@ -112,14 +112,14 @@ const AppInfo kApps[AppCount] = {
      "Guida di simboli e funzioni", nullptr, s::Widgets | s::Help, 0, 0, kSymbolsSrc},
 };
 
-const char* const kHExpression[] = {"expression.hpp", "expression_ast.hpp", nullptr};
+const char* const kHExpression[] = {"expression.hpp", "expression_ast.hpp", "value.hpp", nullptr};
 const char* const kHExact[] = {"exact.hpp", nullptr};
 const char* const kHEditor[] = {"natural_editor.hpp", "line_editor.hpp", nullptr};
 const char* const kHRender[] = {"math_renderer.hpp", nullptr};
 const char* const kHFormat[] = {"number_format.hpp", nullptr};
 const char* const kHSolvers[] = {"solvers.hpp", nullptr};
 const char* const kHStats[] = {"statistics.hpp", nullptr};
-const char* const kHMathCore[] = {"math_engine.hpp", nullptr};
+const char* const kHMathCore[] = {"math_engine.hpp", "limits.hpp", nullptr};
 const char* const kHWidgets[] = {"ui_kit.hpp", "app_widgets.hpp", "graphics_engine.hpp", "font_renderer.hpp", nullptr};
 const char* const kHNetwork[] = {"net.hpp", "ai_protocol.hpp", "ai_client.hpp", nullptr};
 const char* const kHStorage[] = {"storage.hpp", nullptr};
@@ -141,7 +141,7 @@ const ServiceInfo kServices[service::Count] = {
     {s::GraphCore, "GraphCore", kHGraphCore}, {s::Files, "Files", kHFiles}, {s::Diag, "Diag", kHDiag},
     {s::Graph3D, "Graph3D", kHGraph3D}, {s::Hardware, "Hardware", kHHardware},
 };
-const char* const kDataNames[data::Count] = {"settings", "memory", "history", "functions", "view", "table", "lists", "equation", "chat", "graph", "graph3d"};
+const char* const kDataNames[data::Count] = {"settings", "memory", "history", "functions", "view", "table", "lists", "equation", "chat", "graph", "graph3d", "matrices"};
 } // namespace
 
 const AppInfo& appInfo(AppId id) noexcept {

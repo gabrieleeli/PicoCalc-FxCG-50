@@ -2,21 +2,43 @@
 #include "exact.hpp"
 #include "expression_ast.hpp"
 #include "memory.hpp"
+#include "value.hpp"
 #include <complex>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace fx {
-using Complex = std::complex<double>;
+
+// Where an error was raised: a byte range of the parsed text (position < 0:
+// unknown). The parser fills it for syntax errors; for errors raised during
+// the evaluation it is the range of the failing sub-expression (EvalInfo).
+struct ErrorLocation {
+    int position{-1};
+    int length{0};
+    bool known() const noexcept { return position >= 0; }
+};
 
 // Casio-style error classes. All are std::runtime_error/std::domain_error
 // subclasses so existing callers that catch std::exception keep working.
-struct SyntaxError : std::runtime_error { using std::runtime_error::runtime_error; };
-struct MathError : std::domain_error { using std::domain_error::domain_error; };
+struct SyntaxError : std::runtime_error {
+    using std::runtime_error::runtime_error;
+    SyntaxError(const std::string& what, int position, int length = 0) : std::runtime_error(what), where{position, length} {}
+    ErrorLocation where;
+};
+struct MathError : std::domain_error {
+    using std::domain_error::domain_error;
+    MathError(const std::string& what, int position, int length = 0) : std::domain_error(what), where{position, length} {}
+    ErrorLocation where;
+};
 struct NonRealError : MathError { using MathError::MathError; };
+// fx-CG50 "Dimension ERROR": sizes of matrices, vectors or lists that do not fit the operation.
+struct DimensionError : MathError { using MathError::MathError; };
+// fx-CG50 "Invalid Type" / "Input value must be a matrix...": wrong kind of value for the operation.
+struct TypeError : MathError { using MathError::MathError; };
 
 enum class ComplexMode : std::uint8_t { Real = 0, Rectangular = 1, Polar = 2 };
 
@@ -51,9 +73,23 @@ constexpr int MaxFunctionReferenceDepth = 5;       // fx-CG50: a composite funct
 // True for a valid reference word without the '@' marker ("y1", "xt20", ...).
 bool isFunctionReferenceName(const std::string& lowerName) noexcept;
 
+// Matrices, vectors and lists owned by the caller (the workspace implements
+// it: Mat A-Z, Vct A-Z, List 1-26 and the answer memories MatAns, VctAns,
+// ListAns). Without a resolver a reference is a Math ERROR.
+class CollectionResolver {
+public:
+    virtual ~CollectionResolver() = default;
+    enum class Memory : std::uint8_t { Mat = 0, Vct = 1, List = 2 };
+    static constexpr int Answer = -1;            // index of MatAns / VctAns / ListAns
+    static constexpr int Slots = 26;             // A..Z, List 1..26 (index 0..25)
+    // Copies the stored value; false when the memory is not defined ("None").
+    virtual bool collection(Memory memory, int index, CalcValue& out) const = 0;
+};
+
 // Facts about one evaluation that the caller may want to show.
 struct EvalInfo {
     bool numerical{};      // an iterative numerical method (integral, d/dx, SOLVE) produced the value
+    ErrorLocation error;   // sub-expression being evaluated when an error was thrown
 };
 
 struct EvalContext {
@@ -64,6 +100,7 @@ struct EvalContext {
     ComplexMode complexMode{ComplexMode::Real};
     const NameResolver* names{};
     const FunctionResolver* functions{};
+    const CollectionResolver* collections{};
     EvalInfo* info{};
     EvalContext& bind(const char* name, double value);
 };
@@ -78,7 +115,12 @@ constexpr std::size_t MaxExpressionTokens = 320;   // lexer tokens per expressio
 constexpr int MaxExpressionNesting = 32;           // parentheses, signs, exponents, arguments
 
 // Parses linear text into the canonical expression AST (Binary/Unary/Call/
-// Group/Token nodes). Throws SyntaxError, or MathError for the limits above.
+// Group/Token nodes, plus Matrix and List literals). Matrices, vectors and
+// lists are first-class values of the same grammar:
+//   [[1,2][3,4]]  {1,2,3}  Mat A  Vct B  List 1  Mat Ans  Mat A[1,2]  List 1[3]
+// Every node records its byte range in the text (ast::Node::pos/len) and
+// whether it involves collections (ast::FlagCollection). Throws SyntaxError
+// with the position of the offending token, or MathError for the limits above.
 ast::NodePtr parseExpression(const std::string& expression);
 
 // Stack bytes one evaluation may use before it stops with "Stack ERROR". This
@@ -93,6 +135,12 @@ double evaluateReal(const ast::Node& parsed, const EvalContext& context);
 Complex evaluateComplex(const ast::Node& parsed, const EvalContext& context);
 // Evaluates according to context.complexMode.
 Complex evaluateValue(const ast::Node& parsed, const EvalContext& context);
+// Evaluates an expression whose result may be a number, a list, a matrix or a
+// vector (context.complexMode selects real or complex elements). The scalar
+// evaluators above accept the same expressions when the result is a number
+// (Det, DotP, Norm, Mat A[1,2]...) and throw TypeError otherwise. Dimension
+// and type mismatches throw DimensionError / TypeError.
+CalcValue evaluateAny(const ast::Node& parsed, const EvalContext& context);
 
 // Exact evaluation of the same AST with rationals, surds (a√b/c ± d√e/f) and
 // rational multiples of π (see exact.hpp). Returns false when any step has no
@@ -102,6 +150,17 @@ Complex evaluateValue(const ast::Node& parsed, const EvalContext& context);
 // decimal literal or a value that came from one (fx-CG50: such results are
 // shown as decimals, S<->D converts them).
 bool evaluateExact(const ast::Node& parsed, const EvalContext& context, exact::Value& out, bool* decimalInput = nullptr);
+// Exact evaluation of an expression with a list, matrix or vector result: one
+// exact value per element (row-major, same shape as evaluateAny()). All or
+// nothing: false when any element has no exact form. Stored matrices take
+// part with their integer elements only (an integer double is exact).
+struct ExactCollection {
+    ValueType type{ValueType::Scalar};
+    std::uint16_t rows{0}, cols{0};
+    std::vector<exact::Value> elements;
+    bool decimal{false};               // the expression contained decimal input
+};
+bool evaluateExactAny(const ast::Node& parsed, const EvalContext& context, ExactCollection& out);
 
 // Parsed-once expression for graphs, tables and solvers.
 class CompiledExpression {
