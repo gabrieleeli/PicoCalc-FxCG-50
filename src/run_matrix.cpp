@@ -47,21 +47,21 @@ ast::NodePtr radical(std::int64_t radicand) {
 bool rationalOf(const HistoryEntry& e, exact::Rational& r) { return e.exact.valid && e.exact.value.rational(r); }
 bool isIntegerExact(const HistoryEntry& e) { exact::Rational r; return rationalOf(e, r) && r.isInteger(); }
 bool plainResult(const HistoryEntry& e) { return e.error.empty() && e.value.imag() == 0; }
-// ---------------------------------------------------------------- store targets
-// What the store arrow names: A, A~F, Mat A, Vct A, List 1, one element of
-// them, or "Dim Mat A" (a list {rows, columns} creates a zero matrix).
+// ---------------------------------------------------------------- destinazioni della memorizzazione
+// Cosa indica la freccia di memorizzazione: A, A~F, Mat A, Vct A, List 1, un
+// loro elemento, o "Dim Mat A" (una lista {righe, colonne} crea una matrice di zeri).
 struct StoreTarget {
     enum class Kind : std::uint8_t { None, Variables, Memory, Element, Dim } kind{Kind::None};
     char first{}, last{};                                   // Variables
     CollectionResolver::Memory memory{CollectionResolver::Memory::Mat};
     int index{};                                            // 0..25
-    ast::NodePtr row, column;                               // Element: index expressions (column: matrices only)
+    ast::NodePtr row, column;                               // Element: espressioni degli indici (column: solo matrici)
     std::string label;                                      // "Mat A", "List 1[3]"...
-    ErrorLocation where;                                    // range of the arrow and the target in the input
+    ErrorLocation where;                                    // intervallo della freccia e della destinazione nell'input
 };
 bool memoryName(const std::string& text, CollectionResolver::Memory& memory, int& index) {
     using Memory = CollectionResolver::Memory;
-    // List 1-6 are parsed as the shared list variables "list1".."list6".
+    // Il parser legge List 1-6 come le variabili di lista condivise "list1".."list6".
     if (text.size() == 5 && text.compare(0, 4, "list") == 0 && text[4] >= '1' && text[4] <= '6') { memory = Memory::List; index = text[4] - '1'; return true; }
     const std::size_t space = text.find(' ');
     if (space == std::string::npos || space + 1 >= text.size()) return false;
@@ -85,8 +85,8 @@ StoreTarget parseTarget(const std::string& text) {
         if (t.last >= t.first) return t;
         throw SyntaxError("Syntax ERROR: dopo -> serve una variabile A-Z o un intervallo A~F");
     }
-    // Mat A, Vct A, List 1, one of their elements or Dim Mat A: the target is
-    // read by the expression parser itself.
+    // Mat A, Vct A, List 1, un loro elemento o Dim Mat A: la destinazione la
+    // legge lo stesso parser delle espressioni.
     ast::NodePtr tree;
     try { tree = parseExpression(text); } catch (const std::exception&) { tree.reset(); }
     if (tree) {
@@ -114,12 +114,12 @@ StoreTarget parseTarget(const std::string& text) {
 }
 std::size_t indexValue(const ast::NodePtr& n, const EvalContext& ctx, const char* what) {
     EvalContext quiet = ctx;
-    quiet.info = nullptr;                    // positions inside the target text are not positions of the input
+    quiet.info = nullptr;                    // le posizioni nel testo della destinazione non sono posizioni dell'input
     const double d = evaluateReal(*n, quiet);
     if (d != std::floor(d) || d < 1 || d > 1e6) throw MathError(std::string("Argument ERROR: ") + what + " deve essere un intero positivo");
     return static_cast<std::size_t>(d);
 }
-// number -> Mat A[r,c], Vct A[n], List 1[n]
+// numero -> Mat A[r,c], Vct A[n], List 1[n]
 void storeElement(Workspace& ws, const StoreTarget& t, Complex value, const EvalContext& ctx) {
     using Memory = CollectionResolver::Memory;
     const std::string name = t.label.substr(0, t.label.find('['));
@@ -128,7 +128,7 @@ void storeElement(Workspace& ws, const StoreTarget& t, Complex value, const Eval
         CalcValue list;
         if (!ws.collection(Memory::List, t.index, list)) { list = CalcValue{}; list.type = ValueType::List; list.cols = 1; }
         const std::size_t i = indexValue(t.row, ctx, "l'indice");
-        // As on the fx-CG50 a list grows by one cell at a time.
+        // Come sulla fx-CG50 una lista cresce di una cella alla volta.
         if (i > list.size() + 1) throw DimensionError("Dimension ERROR: indice " + std::to_string(i) + " oltre la fine di " + name);
         if (value.imag() != 0) throw MathError("Math ERROR: le liste 1-6 contengono solo numeri reali");
         if (i == list.size() + 1) { list.re.push_back(value.real()); list.rows = static_cast<std::uint16_t>(list.re.size()); }
@@ -152,7 +152,7 @@ void storeElement(Workspace& ws, const StoreTarget& t, Complex value, const Eval
     m.set(pos, value);
     m.normalize();
 }
-// Errors of the assignment are reported at the arrow.
+// Gli errori dell'assegnazione si segnalano sulla freccia.
 template <typename F> void atTarget(const StoreTarget& t, F&& store) {
     try { store(); }
     catch (SyntaxError& e) { if (!e.where.known()) e.where = t.where; throw; }
@@ -166,7 +166,7 @@ bool naturalSize(const CalcValue& v) {
     if (v.isList()) return v.size() <= limits::kNaturalListLength;
     return v.rows <= limits::kNaturalMatrixDim && v.cols <= limits::kNaturalMatrixDim;
 }
-// Elements for which the exact evaluation is attempted (it repeats the calculation).
+// Elementi per cui si tenta la valutazione esatta (che ripete il calcolo).
 constexpr std::size_t kExactElements = 64;
 
 void scalarResult(Workspace& ws, const std::string& raw, const ast::Node& tree, const EvalContext& ctx, const EvalInfo& info,
@@ -232,8 +232,8 @@ void collectionResult(Workspace& ws, const std::string& raw, const ast::Node& tr
     using Memory = CollectionResolver::Memory;
     out.type = value.type;
     auto result = std::make_shared<CollectionResult>();
-    // Exact forms of the elements, from the same AST. As for numbers, when
-    // they exist their floating-point images are the stored values.
+    // Forme esatte degli elementi, dallo stesso AST. Come per i numeri, quando
+    // esistono i loro valori in virgola mobile sono quelli memorizzati.
     if (value.size() <= kExactElements && !value.complex()) {
         ExactCollection ex;
         if (evaluateExactAny(tree, ctx, ex) && ex.type == value.type && ex.rows == value.rows && ex.cols == value.cols &&
@@ -260,7 +260,7 @@ void collectionResult(Workspace& ws, const std::string& raw, const ast::Node& tr
             out.storedIn = target.label;
             break;
         case StoreTarget::Kind::Dim: {
-            // {rows, columns} -> Dim Mat A: a new matrix filled with zeros.
+            // {righe, colonne} -> Dim Mat A: una nuova matrice piena di zeri.
             if (target.memory == Memory::List || !value.isList() || value.size() != 2 || value.complex())
                 throw TypeError("Type ERROR: {righe,colonne}\xE2\x86\x92" "Dim Mat A crea una matrice di zeri");
             const double r = value.re[0], c = value.re[1];
@@ -275,8 +275,8 @@ void collectionResult(Workspace& ws, const std::string& raw, const ast::Node& tr
     });
     entry = HistoryEntry{};
     entry.expression = raw;
-    // The history keeps what the natural display shows; larger results are
-    // read from the answer memory (their line shows where they are).
+    // La cronologia conserva cio' che mostra la vista naturale; i risultati piu'
+    // grandi si leggono dalla memoria delle risposte (la riga indica dove sono).
     if (naturalSize(value)) result->value = std::move(value);
     else { result->value.type = value.type; result->value.rows = value.rows; result->value.cols = value.cols; result->exact.clear(); }
     entry.collection = std::move(result);
@@ -300,7 +300,7 @@ RunOutcome evaluateEntry(Workspace& ws, const std::string& raw, HistoryEntry& en
             catch (SyntaxError& e) { e.where = where; throw; }
             target.where = where;
             expr = expr.substr(0, arrow);
-            expr.erase(expr.find_last_not_of(" \t") + 1);       // positions before the arrow are unchanged
+            expr.erase(expr.find_last_not_of(" \t") + 1);       // le posizioni prima della freccia non cambiano
         }
         ws.apply();
         const auto tree = parseExpression(expr);
@@ -328,7 +328,7 @@ std::size_t recalculateHistory(Workspace& ws, std::size_t from, ErrorLocation* f
     if (from >= hist.size()) return 0;
     // Ans before the first recalculated entry is the result of the entry before
     // it (0 when there is none, as on the fx-CG50); PreAns the one before that.
-    // Lists, matrices and vectors go to their own answer memories, not to Ans.
+    // Liste, matrici e vettori vanno nelle loro memorie delle risposte, non in Ans.
     auto answerOf = [&](std::size_t count, double& re, double& im, ExactSlot& slot) {
         re = im = 0; slot = ExactSlot{exact::Value{}, true, false};
         for (std::size_t k = count; k-- > 0;) {
@@ -373,9 +373,9 @@ std::size_t recalculateHistory(Workspace& ws, std::size_t from, ErrorLocation* f
 
 std::size_t editHistoryEntry(Workspace& ws, std::size_t index, const std::string& expression) {
     if (index >= ws.history.size()) throw std::out_of_range("Voce della cronologia inesistente");
-    // Copies kept on the heap: CalculatorMemory with its exact slots is ~1.7 KB,
-    // too large for a frame on the 32 KB RP2350 stack. The replay may also
-    // assign matrices, vectors and lists: they are restored with the rest.
+    // Copie sullo heap: CalculatorMemory con le forme esatte occupa ~1,7 KB,
+    // troppo per un frame sullo stack di 32 KB dell'RP2350. Il ricalcolo puo'
+    // anche assegnare matrici, vettori e liste: vengono ripristinati con il resto.
     const std::vector<HistoryEntry> savedHistory = ws.history;
     const auto savedMemory = std::make_unique<CalculatorMemory>(ws.memory);
     const auto savedCollections = ws.snapshotCollections();
@@ -398,15 +398,15 @@ std::size_t editHistoryEntry(Workspace& ws, std::size_t index, const std::string
 // ---------------------------------------------------------------- views
 namespace {
 bool integerValue(const exact::Value& v) { exact::Rational r; return v.rational(r) && r.isInteger(); }
-// A list / matrix / vector result shows the exact forms of its elements.
+// Un risultato lista / matrice / vettore mostra le forme esatte dei suoi elementi.
 bool collectionExactView(const HistoryEntry& e, const Settings& s) {
     const CollectionResult& c = *e.collection;
     if (!e.error.empty() || c.value.empty() || c.exact.size() != c.value.size()) return false;
     if (e.view == ViewExact) return true;
     return e.view == ViewAuto && s.fractionResults && !c.decimal;
 }
-// Exact form shown for element i (integers and forms outside the display
-// limits are shown as decimals, like scalar results).
+// Forma esatta mostrata per l'elemento i (interi e forme oltre i limiti di
+// visualizzazione si mostrano come decimali, come i risultati numerici).
 const exact::Value* elementExact(const HistoryEntry& e, std::size_t i, const Settings& s) {
     if (!collectionExactView(e, s)) return nullptr;
     const exact::Value& v = e.collection->exact[i];
@@ -437,7 +437,7 @@ bool isApproximation(const HistoryEntry& e, const Settings& s) {
 bool toggleExactDecimal(HistoryEntry& e, const Settings& s) {
     if (!e.error.empty()) return false;
     if (e.collection) {
-        // All the elements change together between exact forms and decimals.
+        // Tutti gli elementi passano insieme tra forme esatte e decimali.
         if (anyElementExact(e, s)) { e.view = ViewDecimal; return true; }
         HistoryEntry probe = e;
         probe.view = ViewAuto;
@@ -545,7 +545,7 @@ ast::NodePtr exactTree(const exact::Value& v, bool mixed) {
 } // namespace
 
 namespace {
-// Number as drawn in a result: mantissa and, in scientific notation, x10^n.
+// Numero come si disegna in un risultato: mantissa e, in notazione scientifica, x10^n.
 void appendNumber(ast::Node& row, double value, DisplayFormat format) {
     const FormattedNumber fnum = formatNumber(value, format);
     appendText(row, fnum.mantissa);
@@ -556,7 +556,7 @@ void appendNumber(ast::Node& row, double value, DisplayFormat format) {
         row.children.push_back(p);
     }
 }
-// "Mat 10×12 → Mat Ans": a result too large for the natural display.
+// "Mat 10×12 → Mat Ans": un risultato troppo grande per la vista naturale.
 std::string collectionSummary(const CalcValue& v) {
     if (v.isList()) return "List (" + std::to_string(v.rows) + ") \xE2\x86\x92 List Ans";
     const char* word = v.type == ValueType::Vector ? "Vct " : "Mat ";
@@ -611,11 +611,12 @@ ast::NodePtr resultTree(const HistoryEntry& e, const Settings& s) {
         const CalcValue& v = e.collection->value;
         if (v.empty()) { appendText(*root, collectionSummary(v)); return root; }
         if (v.isList()) {
-            // Natural display of a list: {a, b, c} with every element drawn in 2D.
+            // Vista naturale di una lista: {a, b, c} con ogni elemento disegnato in 2D.
             root->children.push_back(tok("{"));
             for (std::size_t i = 0; i < v.size(); ++i) {
                 if (i) root->children.push_back(tok(","));
-                for (auto& c : cellTree(e, i, s)->children) root->children.push_back(c);
+                const ast::NodePtr cell = cellTree(e, i, s);       // tenuto in vita durante il ciclo
+                for (const auto& c : cell->children) root->children.push_back(c);
             }
             root->children.push_back(tok("}"));
             return root;
@@ -657,7 +658,7 @@ std::string resultExpression(const HistoryEntry& e) {
     if (e.collection) {
         const CollectionResult& c = *e.collection;
         const CalcValue& v = c.value;
-        // A result kept only in the answer memory is reused through it.
+        // Un risultato tenuto solo nella memoria delle risposte si riusa attraverso di essa.
         if (v.empty()) return v.isList() ? "List Ans" : v.type == ValueType::Vector ? "Vct Ans" : "Mat Ans";
         const bool exactForms = c.exact.size() == v.size();
         std::string out = v.isList() ? "{" : "[";

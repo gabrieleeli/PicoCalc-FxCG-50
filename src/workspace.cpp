@@ -24,7 +24,7 @@ void Workspace::resetAll() {
     matrices.clear();
 }
 
-// ---------------------------------------------------------------- matrices, vectors, lists
+// ---------------------------------------------------------------- matrici, vettori, liste
 void CollectionMemory::clear() {
     for (CalcValue& v : mat) v = CalcValue{};
     for (CalcValue& v : vct) v = CalcValue{};
@@ -37,7 +37,7 @@ std::size_t CollectionMemory::elements() const noexcept {
     return total;
 }
 namespace {
-// A matrix or vector that may be stored: shape and per-board limits.
+// Una matrice o un vettore memorizzabile: forma e limiti della scheda.
 void checkStorable(const CalcValue& v, const char* what) {
     if (!v.isMatrixLike() || v.empty() || static_cast<std::size_t>(v.rows) * v.cols != v.size())
         throw TypeError(std::string("Type ERROR: in ") + what + " si memorizza una matrice, non una " + valueTypeName(v.type));
@@ -45,7 +45,7 @@ void checkStorable(const CalcValue& v, const char* what) {
         throw DimensionError("Dimension ERROR: matrice troppo grande (massimo " + std::to_string(limits::kMatrixMaxDim) +
                              " per lato e " + std::to_string(limits::kMatrixElements) + " elementi)");
 }
-// The memories together stay within the board budget (RAM and flash record).
+// Le memorie insieme restano nel budget della scheda (RAM e record in flash).
 void checkBudget(const CollectionMemory& m, std::size_t freed, std::size_t added) {
     const std::size_t used = m.elements() - std::min(freed, m.elements());
     if (used + added > limits::kMatrixStoreElements)
@@ -165,12 +165,12 @@ constexpr std::uint32_t Magic = 0x46584157;   // "WAXF"
 // Version 4 (v1.8.0, TABLE completion) adds the table variable, the table
 // function type and the generated (possibly edited) rows.
 // Version 5 (v1.9.0) appends the file store setting and the 3D Graph data.
-// Version 6 (v1.10.0) appends the Input/Output mode, the matrix and vector
-// memories (Mat A-Z, Vct A-Z, MatAns, VctAns, ListAns) and the list / matrix /
-// vector results of the history. Records of versions 1-5 load with the
-// defaults: Math mode, no matrices.
+// Version 6 (v1.10.0) aggiunge in coda la modalita' Input/Output, le memorie
+// di matrici e vettori (Mat A-Z, Vct A-Z, MatAns, VctAns, ListAns) e i
+// risultati lista / matrice / vettore della cronologia. I record delle
+// versioni 1-5 si caricano con i valori predefiniti: Math, nessuna matrice.
 constexpr std::uint16_t Version = 6;
-constexpr std::uint8_t NoValue = 0xFF;      // type byte of a memory that is not defined
+constexpr std::uint8_t NoValue = 0xFF;      // byte di tipo di una memoria non definita
 constexpr std::size_t LegacyFunctions = 6;
 
 struct Writer {
@@ -188,8 +188,9 @@ struct Writer {
         u8(static_cast<std::uint8_t>(e.value.termCount()));
         for (std::size_t i = 0; i < e.value.termCount(); ++i) { const auto& t = e.value.term(i); i64(t.coef.num); i64(t.coef.den); i64(t.radicand); }
     }
-    // List / matrix / vector: type, rows, columns, flags (1 = imaginary parts,
-    // 2 = elements omitted), then the elements (8 bytes each, 16 when complex).
+    // Lista / matrice / vettore: tipo, righe, colonne, indicatori (1 = parti
+    // immaginarie, 2 = elementi omessi), poi gli elementi (8 byte l'uno, 16 se
+    // complessi).
     void value(const CalcValue& v, bool withElements = true) {
         if (v.rows == 0 || v.cols == 0 || (withElements && v.empty())) { u8(NoValue); return; }
         const bool elements = withElements && !v.empty();
@@ -230,9 +231,9 @@ struct Reader {
         e.valid = (flags & 1) != 0; e.decimal = (flags & 2) != 0;
         return e;
     }
-    // Reads what Writer::value() wrote and checks it against the limits of
-    // this board (a record is only ever read by the board that wrote it).
-    // allowOmitted: history results may keep type and dimensions only.
+    // Legge cio' che Writer::value() ha scritto e lo controlla con i limiti di
+    // questa scheda (un record lo legge solo la scheda che l'ha scritto).
+    // allowOmitted: i risultati della cronologia possono avere solo tipo e dimensioni.
     bool value(CalcValue& out, bool allowOmitted = false) {
         out = CalcValue{};
         const std::uint8_t type = u8();
@@ -493,7 +494,7 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
             (!cm.vctAns.empty() && (cm.vctAns.type != ValueType::Vector || !cm.vctAns.vectorShaped()))) return false;
         if (cm.elements() > limits::kMatrixStoreElements) return false;
         const auto results = r.u16(); if (results > ws.history.size()) return false;
-        std::size_t next = 0;                       // indices are strictly increasing
+        std::size_t next = 0;                       // indici strettamente crescenti
         for (std::uint16_t k = 0; k < results && r.ok; ++k) {
             const std::size_t index = r.u16();
             if (index < next || index >= ws.history.size()) return false;

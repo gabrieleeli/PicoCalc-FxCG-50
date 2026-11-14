@@ -75,7 +75,7 @@ void MatrixEditorView::key(Context& ctx, const KeyEvent& ev) {
     }
 }
 
-// ---------------------------------------------------------------- list of the memories
+// ---------------------------------------------------------------- elenco delle memorie
 void MatrixEditorView::listKey(Context& ctx, const KeyEvent& ev) {
     auto& m = ctx.ws.matrices;
     if (confirm_ != Confirm::None) {
@@ -162,7 +162,7 @@ void MatrixEditorView::dimKey(Context& ctx, const KeyEvent& ev) {
     }
 }
 
-// ---------------------------------------------------------------- cells
+// ---------------------------------------------------------------- celle
 void MatrixEditorView::openCells(Context& ctx) {
     const CalcValue* v = current(ctx);
     if (!v || v->empty()) { screen_ = Screen::List; return; }
@@ -291,7 +291,7 @@ void MatrixEditorView::cellsKey(Context& ctx, const KeyEvent& ev) {
     }
 }
 
-// ---------------------------------------------------------------- drawing
+// ---------------------------------------------------------------- disegno
 void MatrixEditorView::draw(Context& ctx, gfx::Canvas& c) {
     ui::clear(c);
     ctx.drawStatus(c, vectors_ ? "RUN-MATRIX  VCT" : "RUN-MATRIX  MAT");

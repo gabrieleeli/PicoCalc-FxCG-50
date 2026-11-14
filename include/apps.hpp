@@ -58,16 +58,16 @@ struct PopupMenu {
     void draw(gfx::Canvas& c) const;
 };
 
-// MAT/VCT editor of Run-Matrix (fx-CG50 SHIFT 3 'MAT/VCT', manual 2-42…2-48,
-// 2-59…2-60): list of Mat A-Z (or Vct A-Z) with their dimensions, DIM, cell
-// editing (EXE moves to the next cell), ROW-OP (SWAP, ×Rw, ×Rw+, Rw+), ROW and
-// COLUMN DELETE/INSERT/ADD, DELETE/DEL-ALL, M⇔V. The values live in the
-// workspace (ws.matrices): they are the ones the calculations use and they
-// are saved with the rest of the data.
+// Editor MAT/VCT di Run-Matrix (fx-CG50 SHIFT 3 'MAT/VCT', manuale 2-42…2-48,
+// 2-59…2-60): elenco di Mat A-Z (o Vct A-Z) con le dimensioni, DIM, modifica
+// delle celle (EXE passa alla cella successiva), ROW-OP (SWAP, ×Rw, ×Rw+, Rw+),
+// ROW e COLUMN DELETE/INSERT/ADD, DELETE/DEL-ALL, M⇔V. I valori stanno nel
+// workspace (ws.matrices): sono quelli usati dai calcoli e vengono salvati con
+// il resto dei dati.
 class MatrixEditorView {
 public:
     enum class Screen : std::uint8_t { List, Dim, Cells };
-    static constexpr int AnsRow = 26;                    // "Mat Ans" / "Vct Ans" after Z (read-only)
+    static constexpr int AnsRow = 26;                    // "Mat Ans" / "Vct Ans" dopo Z (sola lettura)
     bool isOpen() const noexcept { return open_; }
     void open(Context& ctx, bool vectors = false);
     void close() noexcept { open_ = false; }
@@ -80,28 +80,28 @@ public:
 private:
     enum class Confirm : std::uint8_t { None, Delete, DeleteAll };
     enum class Menu : std::uint8_t { None, RowOp, Row, Column };
-    CalcValue* current(Context& ctx) const;              // memory of the selected row (nullptr: Ans of the other kind)
+    CalcValue* current(Context& ctx) const;              // memoria della riga selezionata
     std::string name(int row) const;                     // "Mat A", "Vct Ans"
     void listKey(Context& ctx, const KeyEvent& ev);
     void dimKey(Context& ctx, const KeyEvent& ev);
     void cellsKey(Context& ctx, const KeyEvent& ev);
     void openDim(Context& ctx);
     void openCells(Context& ctx);
-    void store(Context& ctx, CalcValue value);           // checked assignment of the selected memory
+    void store(Context& ctx, CalcValue value);           // assegnazione controllata della memoria selezionata
     void menuChoice(Context& ctx, int choice);
-    void askNext(Context& ctx);                          // collects the numbers of a ROW-OP
+    void askNext(Context& ctx);                          // raccoglie i numeri di una ROW-OP
     bool open_{false};
     bool vectors_{false};
     Screen screen_{Screen::List};
     int selected_{0}, first_{0};
     Confirm confirm_{Confirm::None};
-    // DIM: rows and columns being typed
+    // DIM: righe e colonne in digitazione
     LineEditor dim_[2]{LineEditor{4}, LineEditor{4}};
     int dimField_{0};
     CellGrid grid_;
     PopupMenu menu_;
     Menu menuKind_{Menu::None};
-    // ROW-OP parameters: prompts still to answer and the values given so far
+    // Parametri di ROW-OP: domande ancora da rispondere e valori gia' dati
     int rowOp_{-1};
     std::vector<double> args_;
     LineEditor ask_{24};
@@ -121,9 +121,9 @@ public:
     MatrixEditorView& matrixEditor() noexcept { return matrices_; }
     enum class Menu : std::uint8_t { None, Math, MatVct, OptnCategories, OptnItems, VarsCategories, VarsItems, MatRows, MatCols };
 private:
-    void syncInputMode(Context& ctx);                    // Setup Input/Output -> editor mode
-    bool clipKey(Context& ctx, const KeyEvent& ev);      // keys while a CLIP selection is active
-    void markError(const ErrorLocation& where);           // cursor to the cause of an error
+    void syncInputMode(Context& ctx);                    // Setup Input/Output -> modalita' dell'editor
+    bool clipKey(Context& ctx, const KeyEvent& ev);      // tasti durante una selezione CLIP
+    void markError(const ErrorLocation& where);           // cursore sulla causa di un errore
     void evaluate(Context& ctx);
     void insertCatalogItem(Context& ctx, const std::string& item);
     void beginEdit(Context& ctx, int index);

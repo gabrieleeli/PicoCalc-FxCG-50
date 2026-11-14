@@ -9,19 +9,19 @@
 
 namespace fx::ast {
 // Canonical VPAM tree shared by the editor, layout engine and evaluator.
-//   Matrix: text = number of columns ("3"), children = the cells in row-major
-//           order (Row nodes in the editor, expressions in a parsed tree).
-//   List:   children = the elements of a list literal {a,b,c} (parsed trees).
+//   Matrix: text = numero di colonne ("3"), children = le celle per righe
+//           (nodi Row nell'editor, espressioni in un albero del parser).
+//   List:   children = gli elementi di una lista letterale {a,b,c} (alberi del parser).
 enum class Kind : std::uint8_t { Row, Token, Fraction, Radical, Power, Subscript, Group, Matrix, Calculus, Binary, Unary, Call, List };
 
-// Node flags set by the parser.
-constexpr std::uint8_t FlagCollection = 1;   // the subtree involves matrices, vectors or lists
+// Indicatori impostati dal parser.
+constexpr std::uint8_t FlagCollection = 1;   // il sotto-albero contiene matrici, vettori o liste
 
 struct Node {
     Kind kind{Kind::Row};
     std::uint8_t flags{0};
-    // Byte range of the node in the parsed text (parser trees only): the whole
-    // sub-expression, used to place the cursor where an error occurred.
+    // Intervallo di byte del nodo nel testo analizzato (solo alberi del parser):
+    // l'intera sotto-espressione, usata per portare il cursore sull'errore.
     std::uint16_t pos{0}, len{0};
     std::string text;
     std::vector<std::shared_ptr<Node>> children;
@@ -31,7 +31,7 @@ inline NodePtr make(Kind kind, std::string text = {}) {
     auto n = std::make_shared<Node>(); n->kind = kind; n->text = std::move(text); return n;
 }
 inline bool involvesCollections(const Node& n) noexcept { return (n.flags & FlagCollection) != 0; }
-// Columns of a Matrix node (0 when the text is not a valid column count).
+// Colonne di un nodo Matrix (0 quando il testo non e' un numero di colonne valido).
 inline std::size_t matrixColumns(const Node& n) noexcept {
     if (n.kind != Kind::Matrix || n.text.empty() || n.text.size() > 3) return 0;
     for (char c : n.text) if (c < '0' || c > '9') return 0;
@@ -52,18 +52,18 @@ inline bool validShape(const Node& n) noexcept {
     return false;
 }
 
-// Optional observer of serialize(): records where every Row of the tree lands
-// in the linear text, so that a text offset (the position of a parser error)
-// can be mapped back to a cursor position of the editor.
+// Osservatore facoltativo di serialize(): registra dove finisce ogni Row
+// dell'albero nel testo lineare, cosi' una posizione nel testo (quella di un
+// errore del parser) si riporta a una posizione del cursore dell'editor.
 struct SerializeMap {
     struct RowSpan {
         const Node* row{};
-        std::vector<std::size_t> path;        // child indices from the root to the row
-        std::size_t begin{}, end{};           // byte range of the row in the text
-        std::vector<std::size_t> childStart;  // start offset of each child of the row
+        std::vector<std::size_t> path;        // indici dei figli dalla radice alla riga
+        std::size_t begin{}, end{};           // intervallo di byte della riga nel testo
+        std::vector<std::size_t> childStart;  // posizione iniziale di ogni figlio della riga
     };
     std::vector<RowSpan> rows;
-    std::vector<std::size_t> path;            // working state while serializing
+    std::vector<std::size_t> path;            // stato di lavoro durante la serializzazione
 };
 
 namespace detail {
@@ -102,7 +102,7 @@ inline void serializeInto(const Node& n, std::string& out, SerializeMap* map) {
     case Kind::Group: out+="("; child(0); out+=")"; return;
     case Kind::Subscript: throw std::runtime_error("Gli indici non sono ancora valutabili");
     case Kind::Matrix: {
-        // fx-CG50 linear form: [[a,b][c,d]]
+        // forma lineare della fx-CG50: [[a,b][c,d]]
         const std::size_t cols=matrixColumns(n);
         out+="[";
         for(std::size_t i=0;i<n.children.size();++i){
@@ -125,7 +125,7 @@ inline void serializeInto(const Node& n, std::string& out, SerializeMap* map) {
 }
 } // namespace detail
 
-// Canonical linear text of a tree; `map` (optional) receives the row spans.
+// Testo lineare canonico di un albero; `map` (facoltativo) riceve gli intervalli delle righe.
 inline std::string serialize(const Node& n, SerializeMap* map = nullptr) {
     std::string out;
     if(map){ map->rows.clear(); map->path.clear(); }

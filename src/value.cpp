@@ -14,7 +14,7 @@ const char* valueTypeName(ValueType t) noexcept {
 
 void CalcValue::set(std::size_t i, Complex z) {
     re[i] = z.real();
-    if (z.imag() != 0.0 && im.empty()) im.assign(re.size(), 0.0);   // may throw std::bad_alloc
+    if (z.imag() != 0.0 && im.empty()) im.assign(re.size(), 0.0);   // puo' lanciare std::bad_alloc
     if (!im.empty()) im[i] = z.imag();
 }
 void CalcValue::normalize() {

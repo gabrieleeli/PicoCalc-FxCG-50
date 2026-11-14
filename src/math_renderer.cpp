@@ -34,7 +34,7 @@ struct Ctx {
     const CursorTarget* cursor{};
     std::vector<NaturalDrawOp>* out{};
     Layout* layout{};
-    int parenDepth{};          // nesting level of the parentheses drawn so far
+    int parenDepth{};          // livello delle parentesi disegnate finora
 };
 
 int textWidth(const std::string& s, const Face& f) { return static_cast<int>(font::glyphCount(s.c_str())) * f.adv; }
@@ -59,8 +59,8 @@ bool shapeOk(const NaturalNode& n) {
     return true;
 }
 
-// Grid of a Matrix node: cells in row-major order, `cols` per row; every
-// column is as wide as its widest cell, every row as tall as its tallest one.
+// Griglia di un nodo Matrix: celle per righe, `cols` per riga; ogni colonna e'
+// larga quanto la sua cella piu' larga, ogni riga alta quanto la piu' alta.
 struct MatrixGrid {
     std::size_t rows{}, cols{};
     std::vector<int> width, asc, desc;
@@ -202,9 +202,9 @@ void parens(Ctx& c, int x, int base, int width, int asc, int desc, const Face& f
     addLine(c, l + 2, top, l, top + 2, color); addLine(c, l, top + 2, l, bottom - 2, color); addLine(c, l, bottom - 2, l + 2, bottom, color);
     addLine(c, r - 2, top, r, top + 2, color); addLine(c, r, top + 2, r, bottom - 2, color); addLine(c, r, bottom - 2, r - 2, bottom, color);
 }
-// Colour of a parenthesis token: an opening one takes the colour of the
-// current level and opens the next, a closing one closes a level and takes
-// its colour, so matching parentheses have the same colour.
+// Colore di un token parentesi: una parentesi aperta prende il colore del
+// livello corrente e apre il successivo, una chiusa chiude un livello e ne
+// prende il colore, cosi' le parentesi corrispondenti hanno lo stesso colore.
 std::uint8_t parenToken(Ctx& c, const std::string& t) {
     if (!colorParens(c)) return 0;
     if (t == "(") return parenColorIndex(c.parenDepth++);
@@ -228,8 +228,8 @@ void drawRow(Ctx& c, const NaturalNode& n, int x, int base, int level, bool isRo
         if (cursorHere) emitCursor(c, x, base, rowBox);
         return;
     }
-    // Parentheses left open inside a template field do not change the colours
-    // after the template.
+    // Le parentesi lasciate aperte in un campo di un modello non cambiano i
+    // colori dopo il modello.
     const int parenDepth = c.parenDepth;
     int px = x, markX = x;
     for (std::size_t i = 0; i < n.children.size(); ++i) {
@@ -409,7 +409,7 @@ void drawNode(Ctx& c, const NaturalNode& n, int x, int base, int level, bool isR
         return;
     }
     case Kind::Matrix: {
-        // Square brackets around a grid of cells (each cell centred in its column).
+        // Parentesi quadre attorno a una griglia di celle (ogni cella centrata nella sua colonna).
         const Box mb = measureNode(n, level, false, depth);
         const MatrixGrid g = matrixGrid(n, level, depth);
         const int top = base - mb.asc, bottom = base + mb.desc - 1;
@@ -454,7 +454,7 @@ void clipOps(Layout& r, int left, int top, int right, int bottom) {
             op.text = std::move(sliced); op.x = startX;
             kept.push_back(std::move(op));
         } else if (op.kind == NaturalDrawOp::Kind::Highlight) {
-            // Cut to the visible area (the input may be scrolled horizontally).
+            // Ritagliata sull'area visibile (l'input puo' scorrere in orizzontale).
             op.x = std::max(op.x, left); op.x2 = std::min(op.x2, right);
             op.y = std::max(op.y, top); op.y2 = std::min(op.y2, bottom);
             if (op.x > op.x2 || op.y > op.y2) { r.clipped = true; continue; }
@@ -509,13 +509,15 @@ std::string displayToken(const std::string& t) {
     if (low == "preans") return "PreAns";
     // Shared variables (VARS) and operator words in fx-CG50 spelling.
     static const struct { const char* name; const char* shown; } kNames[] = {
-        // Matrices, vectors and lists (fx-CG50 spelling of the OPTN commands).
+        // Matrici, vettori e liste (grafia dei comandi OPTN della fx-CG50).
         {"mat", "Mat "}, {"vct", "Vct "}, {"list", "List "}, {"list1", "List 1"}, {"list2", "List 2"}, {"list3", "List 3"},
         {"list4", "List 4"}, {"list5", "List 5"}, {"list6", "List 6"}, {"det", "Det "}, {"trn", "Trn "}, {"identity", "Identity "},
         {"dim", "Dim "}, {"augment", "Augment"}, {"fill", "Fill"}, {"ref", "Ref "}, {"rref", "Rref "},
         {"mattolist", "Mat\xE2\x86\x92List"}, {"listtomat", "List\xE2\x86\x92Mat"}, {"dotp", "DotP"}, {"crossp", "CrossP"},
         {"angle", "Angle"}, {"unitv", "UnitV"}, {"norm", "Norm"}, {"seq", "Seq"}, {"mean", "Mean"}, {"median", "Median"},
         {"cuml", "Cuml "}, {"dlist", "\xCE\x94List "}, {"sorta", "SortA"}, {"sortd", "SortD"},
+        // Radici scritte come parola (modalita' Line): il simbolo, come sulla calcolatrice.
+        {"sqrt", "\xE2\x88\x9A"}, {"cbrt", "\xE2\x88\x9B"},
         {"xmin", "Xmin"}, {"xmax", "Xmax"}, {"xscl", "Xscl"}, {"ymin", "Ymin"}, {"ymax", "Ymax"}, {"yscl", "Yscl"},
         {"tmin", "Tmin"}, {"tmax", "Tmax"}, {"tptch", "Tptch"}, {"tblstart", "TblStart"}, {"tblend", "TblEnd"},
         {"tblpitch", "TblPitch"}, {"and", " And "}, {"or", " Or "}, {"xor", " Xor "}, {"not", "Not "}, {"rmdr", " Rmdr "},

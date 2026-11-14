@@ -1,12 +1,10 @@
-// RUN-MATRIX: Math (2D) or Line input, history with in-place editing and
-// recalculation (fx-CG50 history function), exact results with S<->D, mixed
-// fractions and repeating decimals, matrices, vectors and lists (MAT/VCT
-// editor: matrix_editor.cpp), OPTN catalogue, VARS (A-Z and the variables
-// shared by Graph/Table), store arrow, Base-N and DMS views, CLIP selection
-// (SHIFT 8 / SHIFT 9), coloured parentheses and the cursor placed on the
-// cause of an error.
-// Only calculations and results live here: graphs, statistics, tables and
-// conversions belong to their own modes (see docs/APPLICATIONS_ARCHITECTURE.md).
+// RUN-MATRIX: input Math (2D) o Line, cronologia modificabile sul posto con
+// ricalcolo (funzione History della fx-CG50), risultati esatti con S<->D,
+// frazioni miste e decimali periodici, matrici, vettori e liste (editor
+// MAT/VCT: matrix_editor.cpp), catalogo OPTN, VARS (A-Z e le variabili
+// condivise con Graph/Table), freccia di memorizzazione, viste Base-N e DMS,
+// selezione CLIP (SHIFT 8 / SHIFT 9), parentesi colorate e cursore sulla
+// causa di un errore.
 #include "apps.hpp"
 #include "math_renderer.hpp"
 #include "run_matrix.hpp"
@@ -41,7 +39,7 @@ const std::vector<CatalogCategory>& catalog() {
     };
     return c;
 }
-// MATH menu (fx-CG50 order: MAT/VCT first, then the other templates).
+// Menu MATH (ordine della fx-CG50: prima MAT/VCT, poi gli altri modelli).
 const std::vector<std::string>& mathTemplates() {
     static const std::vector<std::string> t = {
         "MAT/VCT  \xE2\x96\xB6",
@@ -50,14 +48,14 @@ const std::vector<std::string>& mathTemplates() {
         "|\xE2\x96\xA1|  valore assoluto", "d/dx", "\xE2\x88\xAB dx", "\xCE\xA3", "\xCE\xA0", "( )  gruppo", "0.1\xE2\x80\xBE  periodo"};
     return t;
 }
-// MATH > MAT/VCT (manual 1-16): matrix and vector templates, m×n up to 6×6.
+// MATH > MAT/VCT (manuale 1-16): modelli di matrici e vettori, m×n fino a 6×6.
 const std::vector<std::string>& matrixTemplates() {
     static const std::vector<std::string> t = {
         "2\xC3\x97" "2  matrice", "3\xC3\x97" "3  matrice", "m\xC3\x97n  (fino a 6\xC3\x97" "6)", "2\xC3\x97" "1  vettore",
         "3\xC3\x97" "1  vettore", "1\xC3\x97" "2  vettore", "1\xC3\x97" "3  vettore"};
     return t;
 }
-// OPTN words inserted as one token: display text -> token of the parser.
+// Parole OPTN inserite come un solo token: testo mostrato -> token del parser.
 struct CommandToken { const char* item; const char* token; };
 const CommandToken kCommandTokens[] = {
     {"Mat\xE2\x86\x92List(", "mattolist"}, {"List\xE2\x86\x92Mat(", "listtomat"}, {"\xCE\x94List(", "dlist"},
@@ -65,7 +63,7 @@ const CommandToken kCommandTokens[] = {
     {"Ref(", "Ref"}, {"Rref(", "Rref"}, {"DotP(", "DotP"}, {"CrossP(", "CrossP"}, {"Angle(", "Angle"}, {"UnitV(", "UnitV"},
     {"Norm(", "Norm"}, {"Seq(", "Seq"}, {"Sum(", "Sum"}, {"Prod(", "Prod"}, {"Min(", "Min"}, {"Max(", "Max"}, {"Mean(", "Mean"},
     {"Median(", "Median"}, {"Cuml(", "Cuml"}, {"Percent(", "Percent"}, {"SortA(", "SortA"}, {"SortD(", "SortD"}};
-// Palette of the input line: parentheses by nesting level, highlights.
+// Colori della riga di input: parentesi per livello, evidenziazioni.
 math::Palette inputPalette(std::uint16_t ink) {
     math::Palette p;
     p.ink = ink; p.cursor = Cursor; p.placeholder = Placeholder;
@@ -73,7 +71,7 @@ math::Palette inputPalette(std::uint16_t ink) {
     p.selection = Highlight; p.error = ErrorHighlight;
     return p;
 }
-// One line of text drawn as it is (Line output mode).
+// Una riga di testo disegnata cosi' com'e' (output Line).
 ast::NodePtr textRow(const std::string& text) {
     auto r = ast::make(ast::Kind::Row);
     r->children.push_back(ast::make(ast::Kind::Token, text));
@@ -102,8 +100,9 @@ void RunMatrixApp::syncInputMode(Context& ctx) {
 void RunMatrixApp::markError(const ErrorLocation& where) {
     if (where.known()) (void)editor_.markError(static_cast<std::size_t>(where.position), static_cast<std::size_t>(where.length));
 }
-// CLIP (fx-CG50 SHIFT 8): arrows extend the selection, F1 COPY, F2 CUT, DEL
-// deletes it, EXIT cancels. Other keys end the selection and work as usual.
+// CLIP (fx-CG50 SHIFT 8): le frecce estendono la selezione, F1 COPY, F2 CUT,
+// DEL la elimina, EXIT annulla. Gli altri tasti terminano la selezione e
+// funzionano come sempre.
 bool RunMatrixApp::clipKey(Context& ctx, const KeyEvent& ev) {
     if (ev.is(Key::Char) && ev.ctrl && (ev.ch == 'c' || ev.ch == 'C' || ev.ch == 'x' || ev.ch == 'X')) {
         const bool cut = ev.ch == 'x' || ev.ch == 'X';
@@ -189,9 +188,9 @@ void RunMatrixApp::insertCatalogItem(Context& ctx, const std::string& item) {
 }
 
 void RunMatrixApp::evaluate(Context& ctx) {
-    // On an error the cursor goes to its cause in the input (fx-CG50: "Cursor
-    // is positioned automatically at the location of the cause of the error")
-    // and the cause is highlighted; the error box is shown by the AppManager.
+    // In caso di errore il cursore va sulla causa nell'input (fx-CG50: "Cursor
+    // is positioned automatically at the location of the cause of the error") e
+    // la causa viene evidenziata; la finestra d'errore la mostra l'AppManager.
     try {
     if (editIndex_ >= 0) {
         // fx-CG50 history editing: the edited line and every line after it are recalculated.
@@ -266,7 +265,7 @@ void RunMatrixApp::menuChoice(Context& ctx, int choice) {
         menuKind_ = Menu::None;
         break;
     case Menu::MatVct: {
-        if (choice == 2) {                                   // m×n: rows, then columns
+        if (choice == 2) {                                   // m×n: righe, poi colonne
             menu_.show("MAT/VCT: righe m", {"1", "2", "3", "4", "5", "6"});
             menuKind_ = Menu::MatRows;
             return;
@@ -374,9 +373,9 @@ bool RunMatrixApp::browseKey(Context& ctx, const KeyEvent& ev) {
 
 void RunMatrixApp::key(Context& ctx, const KeyEvent& ev) {
     syncInputMode(ctx);
-    // --- MAT/VCT editor (SHIFT 3)
+    // --- editor MAT/VCT (SHIFT 3)
     if (matrices_.isOpen()) { matrices_.key(ctx, ev); return; }
-    // The highlight of the cause of an error lasts until the next key.
+    // L'evidenziazione della causa di un errore dura fino al tasto successivo.
     editor_.clearErrorMark();
     // --- popup menus
     if (menu_.open) {
@@ -388,7 +387,7 @@ void RunMatrixApp::key(Context& ctx, const KeyEvent& ev) {
     }
     // --- history browsing (UP from the input line)
     if (browse_ >= 0 && browseKey(ctx, ev)) return;
-    // --- CLIP selection
+    // --- selezione CLIP
     if (editor_.selecting() && clipKey(ctx, ev)) return;
     const bool shift = ctx.shift();
     // fx-CG50 SHIFT 3 'MAT/VCT', SHIFT 8 CLIP, SHIFT 9 PASTE.
@@ -467,8 +466,8 @@ void RunMatrixApp::draw(Context& ctx, gfx::Canvas& c) {
     const bool lineMode = s.inputMode == Settings::InputMode::Line;
     const auto& hist = ctx.ws.history;
     math::CursorTarget cursor{editor_.activeRowPtr(), editor_.cursorIndex()};
-    // Parentheses coloured by level while typing; the selection (CLIP) or the
-    // cause of the last error highlighted.
+    // Parentesi colorate per livello durante la digitazione; evidenziata la
+    // selezione (CLIP) o la causa dell'ultimo errore.
     cursor.colorParens = browse_ < 0;
     const NaturalEditor::Range mark = editor_.selecting() ? editor_.selection() : editor_.errorMark();
     if (!mark.empty()) { cursor.markRow = mark.row; cursor.markBegin = mark.begin; cursor.markEnd = mark.end; cursor.markIsError = !editor_.selecting(); }
@@ -483,7 +482,7 @@ void RunMatrixApp::draw(Context& ctx, gfx::Canvas& c) {
     for (std::size_t i = 0; i < hist.size(); ++i) {
         const bool live = editIndex_ == static_cast<int>(i);
         if (!live) {
-            // Math: the expression drawn in 2D; Line: on one line, as typed.
+            // Math: l'espressione disegnata in 2D; Line: su una riga, come digitata.
             NaturalEditor tmp;
             tmp.setLinear(lineMode);
             try { tmp.setExpression(hist[i].expression); } catch (...) { tmp.clear(); tmp.insertText("?"); }

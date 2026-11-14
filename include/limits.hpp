@@ -28,15 +28,16 @@ namespace fx::limits {
 inline constexpr std::size_t kHistoryEntries = board::config::kIsPicoPlus2W ? 200 : 40;   // Run-Matrix history
 inline constexpr std::size_t kListMaxLength = board::config::kIsPicoPlus2W ? 999 : 255;   // statistics lists (fx-CG50: 999)
 inline constexpr std::size_t kChatMessages = 30;   // AI conversation (the relay keeps the last 20 turns)
-// Matrices and vectors of Run-Matrix (Mat A-Z, Vct A-Z, MatAns, VctAns; record
-// v6). The two boards do not have the same memory: the Pico 2 W keeps them in
-// its ~190 KB SRAM heap and in a 64 KB record slot, the Pico Plus 2 W in the
-// 8 MB PSRAM and in a 512 KB slot. A real element costs 8 bytes, a complex one 16.
-inline constexpr std::size_t kMatrixElements = board::config::kIsPicoPlus2W ? 10000 : 400;        // one matrix or vector
-inline constexpr std::size_t kMatrixStoreElements = board::config::kIsPicoPlus2W ? 20000 : 1200;  // all the memories together
-// Results shown in natural form in the history (fx-CG50: matrices up to 6 x 6,
-// vectors up to 6 elements, lists up to 20); larger results are read from the
-// answer memories (MatAns, VctAns, ListAns).
+// Matrici e vettori di Run-Matrix (Mat A-Z, Vct A-Z, MatAns, VctAns; record
+// v6). Le due schede non hanno la stessa memoria: il Pico 2 W li tiene nel suo
+// heap SRAM di ~190 KB e in uno slot del record da 64 KB, il Pico Plus 2 W
+// nella PSRAM da 8 MB e in uno slot da 512 KB. Un elemento reale costa 8 byte,
+// uno complesso 16.
+inline constexpr std::size_t kMatrixElements = board::config::kIsPicoPlus2W ? 10000 : 400;        // una matrice o un vettore
+inline constexpr std::size_t kMatrixStoreElements = board::config::kIsPicoPlus2W ? 20000 : 1200;  // tutte le memorie insieme
+// Risultati mostrati in forma naturale nella cronologia (fx-CG50: matrici fino
+// a 6 x 6, vettori fino a 6 elementi, liste fino a 20); i risultati piu' grandi
+// si leggono dalle memorie delle risposte (MatAns, VctAns, ListAns).
 inline constexpr std::size_t kNaturalMatrixDim = 6;
 inline constexpr std::size_t kNaturalListLength = 20;
 

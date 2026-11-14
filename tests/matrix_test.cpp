@@ -203,6 +203,21 @@ int main() {
         CHECK(failsAt<NonRealError>(ws, "1+ln(-1)+2", 2, 6));
         CHECK(failsAt<DimensionError>(ws, "2+Mat Q", 2, 5));
     }
+    // ---------------------------------------------------------------- stack: annidamento profondo di collezioni
+    {
+        std::string deep = "[[1,2][3,4]]";
+        for (int i = 0; i < 20; ++i) deep = "Trn(" + deep + ")";
+        CHECK(same(any(ws, deep), ValueType::Matrix, 2, 2, {1, 2, 3, 4}));         // 20 livelli: entro i limiti
+        const std::size_t budget = evalStackBudget();
+        setEvalStackBudget(2048);                                                   // budget ridotto: Stack ERROR, mai un crash
+        bool stackError = false;
+        try { (void)any(ws, deep); } catch (const MathError& e) { stackError = std::string(e.what()).rfind("Stack ERROR", 0) == 0; }
+        CHECK(stackError);
+        exact::Value v;
+        CHECK(!evaluateExact(*parseExpression("Det(" + deep + ")"), ws.evalContext(), v));   // l'esatto si arrende
+        setEvalStackBudget(budget);
+        CHECK(evaluateExact(*parseExpression("Det(" + deep + ")"), ws.evalContext(), v) && exact::toText(v, false) == "-2");
+    }
     // ---------------------------------------------------------------- forme esatte
     {
         ExactCollection ex;
@@ -274,6 +289,10 @@ int main() {
         CHECK(tree->children.size() == 1 && tree->children[0]->kind == ast::Kind::Matrix && tree->children[0]->children.size() == 4);
         CHECK(tree->children[0]->children[0]->children[0]->kind == ast::Kind::Fraction);   // 1/2 come frazione
         CHECK_EQ_STR(resultExpression(w.history.back()), "[[(1)/(2),1][0,1]]");
+        runCalculation(w, "{1/2,3}");
+        const auto listTree = resultTree(w.history.back(), w.settings);         // { 1/2 , 3 }
+        CHECK(listTree->children.size() == 5 && listTree->children[0]->text == "{" && listTree->children[1]->kind == ast::Kind::Fraction &&
+              listTree->children[4]->text == "}");
         // Posizione degli errori in evaluateEntry (spazi iniziali compresi)
         CHECK(entryError<DimensionError>(w, "  1+Det([[1,2]])").position == 4);
         CHECK(entryError<SyntaxError>(w, "1+)").position == 2);

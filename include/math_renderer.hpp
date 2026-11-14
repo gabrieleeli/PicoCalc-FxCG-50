@@ -8,10 +8,10 @@ namespace fx::math {
 struct Size { int width{}, height{}, baseline{}; };   // baseline = ascent above the baseline
 enum class Align { Left, Center, Right };
 
-// Where to draw the editing cursor: a Row of the tree and an index in it.
-// Optionally a highlighted range of one row (CLIP selection or the cause of
-// an error) and the colouring of parentheses by nesting level (live input
-// only: once a calculation is executed its parentheses are black again).
+// Dove disegnare il cursore: una Row dell'albero e un indice in essa.
+// Facoltativi: un intervallo evidenziato di una riga (selezione CLIP o causa
+// di un errore) e la colorazione delle parentesi per livello (solo per
+// l'input in corso: dopo l'esecuzione le parentesi tornano nere).
 struct CursorTarget {
     const NaturalNode* row{};
     std::size_t index{};
@@ -21,13 +21,13 @@ struct CursorTarget {
     bool colorParens{};
 };
 
-// Colours used to draw a layout.
+// Colori usati per disegnare un layout.
 struct Palette {
     std::uint16_t ink{}, cursor{}, placeholder{};
-    std::uint16_t paren[5]{};          // nesting levels 1..5 (fx-CG50: blue, red, green, magenta, black)
-    std::uint16_t selection{}, error{};  // backgrounds of the highlighted ranges
+    std::uint16_t paren[5]{};          // livelli 1..5 (fx-CG50: blu, rosso, verde, magenta, nero)
+    std::uint16_t selection{}, error{};  // sfondi degli intervalli evidenziati
 };
-// Colour of the parentheses of nesting level `level` (0-based, repeats every 5).
+// Colore delle parentesi del livello `level` (da 0, si ripete ogni 5).
 constexpr std::uint8_t parenColorIndex(int level) noexcept { return static_cast<std::uint8_t>(1 + (level < 0 ? 0 : level % 5)); }
 
 struct Layout {
@@ -49,10 +49,10 @@ Size measure(const NaturalNode& node) noexcept;
 Layout layout(const NaturalNode& node, int x, int baseline, int maxWidth, int maxHeight = 220,
               Align align = Align::Left, const CursorTarget* cursor = nullptr);
 
-// Renders layout operations onto a canvas: highlights first, then text,
-// lines, placeholders and the cursor.
+// Disegna le operazioni del layout: prima le evidenziazioni, poi testo,
+// linee, segnaposto e cursore.
 void draw(gfx::Canvas& canvas, const Layout& layout, const Palette& palette);
-// Single-colour drawing (parentheses in the ink colour, default highlights).
+// Disegno in un solo colore (parentesi del colore dell'inchiostro, evidenziazioni predefinite).
 void draw(gfx::Canvas& canvas, const Layout& layout, std::uint16_t ink,
           std::uint16_t cursorColor, std::uint16_t placeholderColor);
 

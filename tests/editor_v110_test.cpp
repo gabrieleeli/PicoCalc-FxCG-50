@@ -80,6 +80,11 @@ int main() {
         // Liste e parentesi quadre si digitano
         e.clear(); type(e, "{1,2}+[[3,4]]");
         CHECK_EQ_STR(e.toExpression(), "{1,2}+[[3,4]]");
+        // ^ dopo una lista o una matrice digitate: l'intero gruppo e' la base
+        e.clear(); type(e, "{1,2}^2");
+        CHECK_EQ_STR(e.toExpression(), "({1,2})^(2)");
+        e.clear(); type(e, "[[1,1][0,1]]"); e.insertFraction(); type(e, "2");
+        CHECK_EQ_STR(e.toExpression(), "([[1,1][0,1]])/(2)");
         // Backspace all'inizio di un modello vuoto lo elimina
         e.clear(); e.insertMatrix(1, 3);
         CHECK(e.backspace() && e.empty());

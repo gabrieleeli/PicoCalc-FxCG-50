@@ -53,15 +53,15 @@ constexpr FnInfo kFunctions[] = {
     {"not",1,1,false},
     {"integral",3,3,true},{"integrate",3,3,true},{"derivative",2,2,true},{"diff",2,2,true},
     {"derivative2",2,2,true},{"sum",1,3,true},{"prod",1,3,true},{"solve",2,2,true},
-    // Matrices, vectors and lists (fx-CG50 OPTN > MAT/VCT and OPTN > LIST).
+    // Matrici, vettori e liste (fx-CG50 OPTN > MAT/VCT e OPTN > LIST).
     {"det",1,1,false},{"trn",1,1,false},{"identity",1,1,false},{"dim",1,1,false},{"augment",2,2,false},
     {"fill",2,2,false},{"ref",1,1,false},{"rref",1,1,false},{"mattolist",2,2,false},{"listtomat",1,26,false},
     {"dotp",2,2,false},{"crossp",2,2,false},{"angle",2,2,false},{"unitv",1,1,false},{"norm",1,1,false},
     {"seq",5,5,true},{"mean",1,1,false},{"median",1,1,false},{"cuml",1,1,false},{"dlist",1,1,false},
     {"sorta",1,1,false},{"sortd",1,1,false},
 };
-// Functions whose arguments or result are a list, a matrix or a vector: their
-// nodes are evaluated by the collection evaluator (see CollEval).
+// Funzioni con argomenti o risultato lista, matrice o vettore: i loro nodi
+// li valuta il valutatore delle collezioni (vedi CollEval).
 bool isCollectionFunction(const std::string& f,std::size_t argCount){
     static const char* const names[]={"det","trn","identity","dim","augment","fill","ref","rref","mattolist","listtomat",
         "dotp","crossp","angle","unitv","norm","seq","mean","median","cuml","dlist","sorta","sortd","elem"};
@@ -103,9 +103,9 @@ bool isSystemName(const std::string& lowerName){
     for(const char* const* n=kSystemNames;*n;++n)if(lowerName==*n)return true;
     return false;
 }
-// "list1".."list6": the Statistics lists. In GRAPH a list in a function stands
-// for one of its elements (one graph per element, resolved by the NameResolver
-// of the graph engine); everywhere else it is the whole list.
+// "list1".."list6": le liste di Statistics. In GRAPH una lista in una funzione
+// indica uno dei suoi elementi (un grafico per elemento, risolto dal
+// NameResolver del motore dei grafici); altrove e' l'intera lista.
 bool isListName(const std::string& lowerName){
     return lowerName.size()==5&&lowerName.compare(0,4,"list")==0&&lowerName[4]>='1'&&lowerName[4]<='6';
 }
@@ -125,9 +125,9 @@ bool referenceName(const std::string& low){
 }
 
 // ---------------------------------------------------------------- lexer
-// Every token keeps its byte range in the source text: the parser reports a
-// syntax error at the token it could not use and stores the range of each
-// sub-expression in its node (see ast::Node::pos/len).
+// Ogni token conserva il suo intervallo di byte nel testo: il parser segnala un
+// errore di sintassi sul token che non puo' usare e registra l'intervallo di
+// ogni sotto-espressione nel suo nodo (vedi ast::Node::pos/len).
 enum class TT { Num, Ident, Op, Ref, End };
 struct Tok { TT type{TT::End}; std::string text; char op{}; std::uint16_t pos{}, len{}; };
 
@@ -205,16 +205,17 @@ private:
         const std::string raw=s_.substr(b,p_-b);
         // fx-CG50 "Int÷" (integer quotient) is written as Int followed by the division sign.
         if(lower(raw)=="int"&&s_.compare(p_,2,"\xC3\xB7")==0){p_+=2;out.push_back({TT::Op,{},'q',at(b),at(p_-b)});return;}
-        // Mat / Vct / List (exactly this capitalisation, as inserted by the OPTN
-        // menu): reference to a matrix, vector or list memory. The name that
-        // follows may be glued to the word ("MatA", "List1", "MatAns"). Typed
-        // lower-case letters keep their meaning (m*a*t is still a product).
+        // Mat / Vct / List (esattamente con queste maiuscole, come li inserisce il
+        // menu OPTN): riferimento a una memoria di matrice, vettore o lista. Il nome
+        // che segue puo' essere attaccato alla parola ("MatA", "List1", "MatAns").
+        // Le lettere minuscole digitate mantengono il loro significato (m*a*t resta
+        // un prodotto).
         if(!isFunctionName(lower(raw))){
             for(const char* word:{"Mat","Vct","List"}){
                 const std::size_t n=std::strlen(word);
                 if(raw.compare(0,n,word)!=0)continue;
                 out.push_back({TT::Ref,lower(std::string(word)),0,at(b),at(n)});
-                // "List12": the number glued to the word, then whatever follows.
+                // "List12": il numero attaccato alla parola, poi il resto.
                 std::size_t k=n;
                 while(k<raw.size()&&std::isdigit(static_cast<unsigned char>(raw[k])))++k;
                 if(k>n)out.push_back({TT::Num,raw.substr(n,k-n),0,at(b+n),at(k-n)});
@@ -303,12 +304,12 @@ private:
     const Tok& peek() const {return t_[i_];}
     bool isOp(char c) const {return peek().type==TT::Op&&peek().op==c;}
     bool eat(char c){if(isOp(c)){++i_;return true;}return false;}
-    // Syntax error at the token the parser is looking at (the end of the text
-    // when the input stopped too early).
+    // Errore di sintassi sul token che il parser sta esaminando (la fine del
+    // testo quando l'input si ferma troppo presto).
     SyntaxError error(const std::string& what) const {return SyntaxError(what,peek().pos,peek().len);}
     static SyntaxError errorAt(const std::string& what,const Tok& k){return SyntaxError(what,k.pos,k.len);}
-    // Byte range of a node: from the first token of the production (index s)
-    // to the end of the last token consumed.
+    // Intervallo di byte di un nodo: dal primo token della produzione (indice s)
+    // alla fine dell'ultimo token consumato.
     ast::NodePtr span(ast::NodePtr n,std::size_t s) const {
         const std::size_t first=std::min(s,t_.size()-1);
         const std::uint16_t begin=t_[first].pos;
@@ -412,10 +413,10 @@ private:
             else return n;
         }
     }
-    // [[a,b][c,d]]: fx-CG50 matrix (and vector) input format, one [ ] group per row.
+    // [[a,b][c,d]]: formato di input delle matrici (e dei vettori) della fx-CG50, un gruppo [ ] per riga.
     ast::NodePtr matrixLiteral(){
         const std::size_t s=i_;
-        ++i_;                                    // outer '['
+        ++i_;                                    // '[' esterna
         if(!isOp('['))throw error("Syntax ERROR: una matrice si scrive [[a,b][c,d]]");
         auto m=ast::make(ast::Kind::Matrix);
         std::size_t cols=0;
@@ -429,13 +430,13 @@ private:
             else if(n!=cols)throw DimensionError("Dimension ERROR: le righe della matrice hanno lunghezze diverse",rowStart.pos,
                                                  static_cast<int>(t_[i_-1].pos+t_[i_-1].len)-rowStart.pos);
         }
-        // Like parentheses, the closing bracket may be omitted at the end of the input.
+        // Come per le parentesi, la quadra di chiusura puo' mancare alla fine dell'input.
         if(!eat(']')&&peek().type!=TT::End)throw error("Syntax ERROR: manca ] alla fine della matrice");
         m->text=std::to_string(cols);
         m->flags=ast::FlagCollection;
         return span(m,s);
     }
-    // {a,b,c}: list literal.
+    // {a,b,c}: lista letterale.
     ast::NodePtr listLiteral(){
         const std::size_t s=i_;
         ++i_;                                    // '{'
@@ -446,8 +447,8 @@ private:
         l->flags=ast::FlagCollection;
         return span(l,s);
     }
-    // Mat A, Vct B, List 3, Mat Ans, Vct Ans, List Ans, with an optional element
-    // index: Mat A[2,1], Vct B[3], List 1[4].
+    // Mat A, Vct B, List 3, Mat Ans, Vct Ans, List Ans, con un indice facoltativo
+    // dell'elemento: Mat A[2,1], Vct B[3], List 1[4].
     ast::NodePtr memoryReference(){
         const std::size_t s=i_;
         const Tok word=peek();
@@ -460,8 +461,8 @@ private:
             if(digits)for(char c:k.text)digits=digits&&std::isdigit(static_cast<unsigned char>(c));
             const int index=digits?std::atoi(k.text.c_str()):0;
             if(index<1||index>CollectionResolver::Slots)throw errorAt("Syntax ERROR: dopo List serve un numero 1-26 o Ans",k);
-            // List 1-6 keep the token of the shared list variables ("list1"),
-            // which GRAPH and the VARS names already use.
+            // List 1-6 usano il token delle variabili di lista condivise ("list1"), gia'
+            // usato da GRAPH e dai nomi di VARS.
             if(index<=6)name="list"+std::to_string(index);else name+=std::to_string(index);
             ++i_;
         }else{
@@ -472,7 +473,7 @@ private:
         auto ref=ast::make(ast::Kind::Token,name);
         ref->flags=ast::FlagCollection;
         ref=span(ref,s);
-        // "[" followed by "[" starts a matrix literal (implicit product), not an index.
+        // "[" seguita da "[" inizia una matrice letterale (prodotto implicito), non un indice.
         if(isOp('[')&&!(t_[i_+1].type==TT::Op&&t_[i_+1].op=='[')){
             ++i_;
             auto call=ast::make(ast::Kind::Call,"elem");
@@ -527,7 +528,7 @@ private:
                     else call->children.push_back(implicitProduct(true));
                 }
                 const std::size_t count=call->children.size();
-                // Sum / Prod of a list take one argument, the Σ / Π calculations three.
+                // Sum / Prod di una lista hanno un argomento, i calcoli Σ / Π tre.
                 const bool sumLike=k.text=="sum"||k.text=="prod";
                 if(count<minArgs||count>maxArgs||(sumLike&&count==2))
                     throw SyntaxError("Argument ERROR: "+k.text+" numero di argomenti errato",k.pos,
@@ -614,13 +615,13 @@ struct Env {
     std::uint8_t refDepth{};   // nested graph-function references
     std::uintptr_t stackBase{};
     bool decimal{};            // exact evaluation met a plain decimal literal
-    // Node of the parsed expression whose operation is being carried out: when
-    // an error is thrown its text range is reported through EvalInfo::error.
+    // Nodo dell'espressione analizzata la cui operazione e' in corso: quando
+    // viene lanciato un errore il suo intervallo arriva a EvalInfo::error.
     const ast::Node* at{};
 };
-// Copies the range of the failing sub-expression into EvalInfo while the
-// exception unwinds (no catch/rethrow: callers that sample functions in a
-// loop, such as GRAPH, pay nothing for it).
+// Copia in EvalInfo l'intervallo della sotto-espressione che non riesce
+// mentre l'eccezione risale (senza catch/rethrow: chi campiona funzioni in un
+// ciclo, come GRAPH, non paga nulla).
 struct ErrorLocationGuard {
     Env& env;
     int pending;
@@ -630,8 +631,8 @@ struct ErrorLocationGuard {
             env.ctx.info->error={static_cast<int>(env.at->pos),static_cast<int>(env.at->len)};
     }
 };
-// While a graph function body (another parsed text) is evaluated, an error is
-// reported at the reference in the expression being calculated.
+// Mentre si valuta il corpo di una funzione di GRAPH (un altro testo), un
+// errore viene segnalato sul riferimento nell'espressione calcolata.
 struct ErrorNodeGuard {
     Env& env;
     const ast::Node* node;
@@ -1105,9 +1106,9 @@ template<typename T> FXAI_NOINLINE T evalChain(const ast::Node& top,Env& env){
     return acc;
 }
 
-// Sub-expression that involves matrices, vectors or lists but must yield a
-// number here (Det Mat A, Mat A[1,2], DotP(...)): evaluated by the collection
-// evaluator (defined below); TypeError when the result is not a number.
+// Sotto-espressione con matrici, vettori o liste che qui deve dare un numero
+// (Det Mat A, Mat A[1,2], DotP(...)): la valuta il valutatore delle collezioni
+// (definito sotto); TypeError quando il risultato non e' un numero.
 Complex evalCollectionScalar(const ast::Node& n,Env& env);
 bool exactCollectionScalar(const ast::Node& n,Env& env,exact::Value& out);
 
@@ -1534,18 +1535,19 @@ bool exactNode(const ast::Node& node,Env& env,Value& out){
     }
 }
 
-// ---------------------------------------------------------------- matrices, vectors and lists
-// One evaluator for every kind of value. A sub-expression that does not
-// involve collections is handed to the scalar evaluators above, so numbers
-// keep exactly the semantics they have everywhere else; the collection rules
-// (element-wise list arithmetic, matrix product, inverse, Det, DotP...) are
-// written once, as templates over the element domain: floating point (double
-// or complex, by the Complex Mode setting) or exact values.
+// ---------------------------------------------------------------- matrici, vettori e liste
+// Un solo valutatore per ogni tipo di valore. Una sotto-espressione senza
+// collezioni passa ai valutatori scalari sopra, cosi' i numeri mantengono
+// esattamente il comportamento che hanno ovunque; le regole delle collezioni
+// (aritmetica elemento per elemento delle liste, prodotto di matrici, inversa,
+// Det, DotP...) sono scritte una sola volta, come template sul dominio degli
+// elementi: virgola mobile (double o complessi, secondo il Complex Mode) o
+// valori esatti.
 template<typename E> struct Coll {
     ValueType type{ValueType::Scalar};
     std::size_t rows{1},cols{1};
-    E s{};                  // value of a scalar
-    std::vector<E> v;       // row-major elements of a list, matrix or vector
+    E s{};                  // valore di un numero
+    std::vector<E> v;       // elementi per righe di una lista, matrice o vettore
     bool scalar() const noexcept {return type==ValueType::Scalar;}
     bool list() const noexcept {return type==ValueType::List;}
     bool mat() const noexcept {return type==ValueType::Matrix||type==ValueType::Vector;}
@@ -1562,10 +1564,10 @@ void checkListSize(std::size_t n){
     if(n>limits::kListMaxLength)throw DimensionError("Dimension ERROR: massimo "+std::to_string(limits::kListMaxLength)+" elementi in una lista");
 }
 
-// Thrown inside the exact domain when a step has no exact form.
+// Lanciata nel dominio esatto quando un passaggio non ha forma esatta.
 struct NoExactForm {};
 
-// Floating-point elements: real arithmetic in Real mode, complex otherwise.
+// Elementi in virgola mobile: aritmetica reale nel modo Real, complessa negli altri.
 struct NumDomain {
     using Elem=Complex;
     static bool real(const Env& env){return env.ctx.complexMode==ComplexMode::Real;}
@@ -1607,8 +1609,8 @@ struct NumDomain {
         for(std::size_t i=0;i<src.size();++i)out.v[i]=src.at(i);
     }
 };
-// Exact elements (rationals, surds, multiples of pi): every step either is
-// exact or abandons the exact evaluation.
+// Elementi esatti (razionali, radicali, multipli di pi): ogni passaggio e'
+// esatto oppure la valutazione esatta viene abbandonata.
 struct ExactDomain {
     using Elem=exact::Value;
     static Elem node(const ast::Node& n,Env& env){Elem out;if(!exactNode(n,env,out))throw NoExactForm{};return out;}
@@ -1631,8 +1633,8 @@ struct ExactDomain {
     static double toReal(const Elem& a,const char*){Rational r;if(!a.rational(r))throw NoExactForm{};return r.toDouble();}
     static int compare(const Elem& a,const Elem& b){int c=0;if(!exactCompare(a,b,c))throw NoExactForm{};return c;}
     static bool negligible(const Elem& pivot,double){return pivot.isZero();}
-    // A stored element is exact when it is an integer (an integer double is
-    // exactly that integer); anything else has no known exact form.
+    // Un elemento memorizzato e' esatto quando e' intero (un double intero e'
+    // esattamente quell'intero); per gli altri non c'e' una forma esatta nota.
     static void load(const CalcValue& src,Coll<Elem>& out,Env&){
         if(src.complex())throw NoExactForm{};
         out.rows=src.rows;out.cols=src.cols;
@@ -1689,8 +1691,9 @@ public:
 private:
     Env& env;
 
-    // Left-associative chains are walked iteratively, like evalChain(): the
-    // recursion depth follows the nesting of the input, not its length.
+    // Le catene associative a sinistra si percorrono in modo iterativo, come in
+    // evalChain(): la profondita' della ricorsione segue l'annidamento
+    // dell'input, non la sua lunghezza.
     C chain(const ast::Node& top){
         constexpr std::size_t kChunk=16;
         const ast::Node* spine[kChunk];
@@ -1708,7 +1711,7 @@ private:
         return acc;
     }
 
-    // ---- construction helpers
+    // ---- funzioni di costruzione
     static C scalarOf(const E& e){C c;c.s=e;return c;}
     static C shaped(ValueType type,std::size_t rows,std::size_t cols){
         C c;c.type=type;c.rows=rows;c.cols=cols;c.v.resize(rows*cols);return c;
@@ -1760,7 +1763,7 @@ private:
         return "?";
     }
 
-    // ---- literals and memories
+    // ---- valori letterali e memorie
     E element(const ast::Node& cell,const char* what){
         C v=eval(cell);
         if(!v.scalar()){env.at=&cell;typeError(std::string(what)+" devono essere numeri");}
@@ -1793,8 +1796,8 @@ private:
         Memory memory=Memory::List;
         int index=CollectionResolver::Answer;
         if(isListName(t)){
-            // A graph function with a list is drawn once per element: there the
-            // name is the element of the graph being drawn, a number.
+            // Una funzione di GRAPH con una lista si disegna una volta per elemento: li'
+            // il nome e' l'elemento del grafico in corso, un numero.
             double element=0;
             if(env.ctx.names&&env.ctx.names->resolve(t,element))return scalarOf(D::fromDouble(element));
             index=t[4]-'1';
@@ -1816,14 +1819,14 @@ private:
         return out;
     }
 
-    // ---- arithmetic
+    // ---- aritmetica
     static ValueType resultType(const C& a,const C& b){
         if(a.scalar())return b.type;
         if(b.scalar())return a.type;
         if(a.list())return ValueType::List;
         return a.type==ValueType::Vector&&b.type==ValueType::Vector?ValueType::Vector:ValueType::Matrix;
     }
-    // Element by element; a number is combined with every element.
+    // Elemento per elemento; un numero si combina con ogni elemento.
     C zip(char o,const C& a,const C& b){
         const C& shape=a.scalar()?b:a;
         if(!a.scalar()&&!b.scalar()&&a.v.size()!=b.v.size())
@@ -1876,7 +1879,7 @@ private:
     static void requireSquare(const C& a,const char* what){
         if(a.rows!=a.cols)throw DimensionError(std::string("Dimension ERROR: ")+what+" richiede una matrice quadrata, non "+dims(a));
     }
-    // Gauss-Jordan elimination with partial pivoting.
+    // Eliminazione di Gauss-Jordan con pivot parziale.
     C inverse(const C& a){
         requireSquare(a,"l'inversa");
         const std::size_t n=a.rows;
@@ -1914,7 +1917,7 @@ private:
         base.type=ValueType::Matrix;
         if(n<0){base=inverse(base);n=-n;}
         if(n==0)return identity(a.rows);
-        // Square and multiply; the first factor is copied, not multiplied by the identity.
+        // Quadrati e prodotti; il primo fattore si copia, non si moltiplica per l'identita'.
         C result;
         bool have=false;
         while(n){
@@ -1947,8 +1950,8 @@ private:
         }
         return negative?D::negate(det,env):det;
     }
-    // Row echelon form (Ref) and reduced row echelon form (Rref): Gaussian
-    // elimination with partial pivoting, leading entries scaled to 1.
+    // Forma a scala (Ref) e forma a scala ridotta (Rref): eliminazione di Gauss
+    // con pivot parziale, primi elementi delle righe portati a 1.
     C echelon(const C& a,bool reduced){
         C m=a;
         m.type=ValueType::Matrix;
@@ -1998,7 +2001,7 @@ private:
     }
     std::vector<E> sorted(const C& l,bool descending){
         std::vector<E> v=l.v;
-        // Insertion sort: lists are short and the comparison may give up (exact domain).
+        // Ordinamento per inserimento: le liste sono corte e il confronto puo' arrendersi (dominio esatto).
         for(std::size_t i=1;i<v.size();++i){
             E key=v[i];
             std::size_t j=i;
@@ -2008,8 +2011,8 @@ private:
         return v;
     }
 
-    // ---- functions
-    // Seq(expression, variable, start, end, increment)
+    // ---- funzioni
+    // Seq(espressione, variabile, inizio, fine, incremento)
     C sequence(const ast::Node& n){
         const ast::Node* var=n.children[1].get();
         while(var->kind==ast::Kind::Group&&var->children.size()==1&&var->children[0])var=var->children[0].get();
@@ -2045,8 +2048,8 @@ private:
         env.at=&n;
         return out;
     }
-    // Scalar function applied to lists element by element (and Abs, Int, Frac,
-    // Intg and the complex parts to the elements of a matrix).
+    // Funzione scalare applicata alle liste elemento per elemento (e Abs, Int,
+    // Frac, Intg e le parti complesse agli elementi di una matrice).
     C mapCall(const std::string& f,const std::vector<C>& args){
         const std::size_t count=args.size();
         if(count>3)throw SyntaxError("Argument ERROR: "+f+" numero di argomenti errato");
@@ -2104,8 +2107,8 @@ private:
         const std::size_t count=n.children.size();
         for(const auto& c:n.children)if(!c)throw SyntaxError("Syntax ERROR: argomento mancante");
         if(f=="seq"){if(count!=5)throw SyntaxError("Argument ERROR: Seq(espressione,variabile,inizio,fine,incremento)");return sequence(n);}
-        // Graph function references and the calculus functions keep their own
-        // (lazy) evaluation; a collection may appear inside their arguments.
+        // I riferimenti alle funzioni di GRAPH e le funzioni di calcolo mantengono
+        // la loro valutazione (pigra); una collezione puo' stare nei loro argomenti.
         if((!f.empty()&&f[0]=='@')||(isLazyFunction(f)&&count!=1)){
             const E r=D::lazy(n,env);
             env.at=&n;
@@ -2116,7 +2119,7 @@ private:
         for(const auto& c:n.children)a.push_back(eval(*c));
         env.at=&n;
         if(f=="elem")return elementOf(a);
-        // ---- matrices
+        // ---- matrici
         if(f=="det")return scalarOf(determinant(matrixArg(a[0],"Det")));
         if(f=="trn")return transpose(matrixArg(a[0],"Trn"));
         if(f=="ref"||f=="rref")return echelon(matrixArg(a[0],f=="ref"?"Ref":"Rref"),f=="rref");
@@ -2171,7 +2174,7 @@ private:
             for(std::size_t j=0;j<count;++j)for(std::size_t i=0;i<length;++i)out.v[i*count+j]=a[j].v[i];
             return out;
         }
-        // ---- vectors
+        // ---- vettori
         if(f=="dotp"||f=="crossp"||f=="angle"){
             const char* label=f=="dotp"?"DotP":f=="crossp"?"CrossP":"Angle";
             const C& x=vectorArg(a[0],label);
@@ -2203,7 +2206,7 @@ private:
             for(E& e:out.v)e=op('/',e,length);
             return out;
         }
-        // ---- lists
+        // ---- liste
         if(count==1&&(f=="sum"||f=="prod"))return scalarOf(fold(listArg(a[0],f=="sum"?"Sum":"Prod"),f=="sum"?'+':'*',f=="sum"?0:1));
         if(f=="mean"){
             const C& l=listArg(a[0],"Mean");
@@ -2271,7 +2274,7 @@ bool exactCollectionScalar(const ast::Node& n,Env& env,exact::Value& out){
 }
 double tidyReal(double v){
     if(!std::isfinite(v))throw MathError("Math ERROR: risultato non finito");
-    return v==0.0?0.0:v;   // normalise -0
+    return v==0.0?0.0:v;   // normalizza -0
 }
 Complex tidyComplex(Complex v){
     const double scale=std::max(std::abs(v.real()),std::abs(v.imag()));
@@ -2282,7 +2285,7 @@ Complex tidyComplex(Complex v){
 }
 bool isEditorKind(ast::Kind k){
     using ast::Kind;
-    // A Matrix node is an editor template when its cells are rows.
+    // Un nodo Matrix e' un modello dell'editor quando le sue celle sono righe.
     return k==Kind::Row||k==Kind::Fraction||k==Kind::Radical||k==Kind::Power||k==Kind::Subscript||k==Kind::Calculus;
 }
 bool containsEditorNodes(const ast::Node& n){

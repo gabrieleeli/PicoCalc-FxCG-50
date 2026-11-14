@@ -63,12 +63,15 @@ std::pair<std::size_t, NodePtr> takeTrailingOperand(NaturalNode& line, std::size
     if (cursor == 0) throw SyntaxError("Syntax ERROR: manca l'operando a sinistra");
     std::size_t begin = cursor;
     const NaturalNode& last = *line.children[cursor - 1];
-    if (last.kind == Kind::Token && last.text == ")") {
+    auto closing = [](const NaturalNode& n) { return n.kind == Kind::Token && (n.text == ")" || n.text == "]" || n.text == "}"); };
+    auto opening = [](const NaturalNode& n) { return n.kind == Kind::Token && (n.text == "(" || n.text == "[" || n.text == "{"); };
+    if (closing(last)) {
+        // Gruppo tra parentesi, matrice [[...]] o lista {...} digitati: tutto il gruppo e' l'operando.
         int depth = 0;
         while (begin > 0) {
             const NaturalNode& n = *line.children[begin - 1];
-            if (n.kind == Kind::Token && n.text == ")") ++depth;
-            if (n.kind == Kind::Token && n.text == "(") --depth;
+            if (closing(n)) ++depth;
+            if (opening(n)) --depth;
             --begin;
             if (depth == 0) break;
         }
@@ -117,15 +120,15 @@ std::vector<std::string> splitArgs(const std::string& s) {
 }
 void importInto(NaturalNode& target, const std::string& s, int depth, bool linear = false);
 NodePtr importRow(const std::string& s, int depth) { auto r = row(); importInto(*r, s, depth + 1); return r; }
-// "[[a,b][c,d]]" starting at `open`: Matrix template with one row per cell.
-// Returns the index after the closing bracket, or npos when the text is not a
-// rectangular matrix literal (it is then imported as plain tokens).
+// "[[a,b][c,d]]" a partire da `open`: modello Matrix con una riga per cella.
+// Restituisce l'indice dopo la quadra di chiusura, oppure npos quando il testo
+// non e' una matrice rettangolare (allora si importa come token semplici).
 std::size_t importMatrix(NaturalNode& target, const std::string& s, std::size_t open, int depth) {
     if (open + 1 >= s.size() || s[open] != '[' || s[open + 1] != '[') return std::string::npos;
     std::vector<std::string> cells;
     std::size_t cols = 0, i = open + 1;
     while (i < s.size() && s[i] == '[') {
-        // One row: cells separated by commas at depth 0, up to the matching ']'.
+        // Una riga: celle separate da virgole al livello 0, fino alla ']' corrispondente.
         int level = 0;
         std::size_t start = i + 1, j = i + 1, count = 0;
         for (; j < s.size(); ++j) {
@@ -172,8 +175,8 @@ void importInto(NaturalNode& target, const std::string& s, int depth, bool linea
     while (i < s.size()) {
         const unsigned char c = static_cast<unsigned char>(s[i]);
         if (std::isspace(c)) { ++i; continue; }
-        // Mat / Vct / List (OPTN commands) are one token each, also when the
-        // name follows without a space ("MatA" = Mat A).
+        // Mat / Vct / List (comandi OPTN) sono un token ciascuno, anche quando il
+        // nome segue senza spazio ("MatA" = Mat A).
         if (c == 'M' || c == 'V' || c == 'L') {
             bool done = false;
             for (const char* word : {"Mat", "Vct", "List"}) {
@@ -339,7 +342,7 @@ void NaturalEditor::checkLimits() {
     throw MathError(depth > MaxTemplateDepth ? "Stack ERROR: troppi modelli annidati" : "Memory ERROR: espressione troppo lunga");
 }
 void NaturalEditor::pushUndo() {
-    // Any edit ends the CLIP selection and removes the error highlight.
+    // Ogni modifica termina la selezione CLIP e toglie l'evidenziazione dell'errore.
     selecting_ = false;
     errorMark_ = Range{};
     if (!root_) return;
@@ -371,7 +374,7 @@ void NaturalEditor::paste(const NaturalNode& tree) {
     pushUndo();
     auto copy = cloneTree(tree);
     if (linear_) {
-        // Line mode: templates are pasted as their linear text.
+        // Modalita' Line: i modelli si incollano come testo lineare.
         auto flat = row();
         importInto(*flat, ast::serialize(*copy), 0, true);
         copy = flat;
@@ -425,9 +428,9 @@ void NaturalEditor::insert(char c) {
         autoRootParenOpened_ = false; error_.clear(); return;
     }
     autoRootParenPending_ = false;
-    // '[' ']' delimit matrices and the GRAPH suffixes ",[a,b]" / ",[A=...]",
-    // '{' '}' lists, '@' starts a graph function reference; the parser rejects
-    // them where they are not valid.
+    // '[' ']' delimitano le matrici e i suffissi di GRAPH ",[a,b]" / ",[A=...]",
+    // '{' '}' le liste, '@' inizia un riferimento a una funzione di GRAPH; il
+    // parser li rifiuta dove non sono validi.
     if (!(std::isalnum(static_cast<unsigned char>(c)) || std::strchr(".+-*/%!,()=<>~[]{}@", c) != nullptr))
         throw std::invalid_argument("Carattere non ammesso nell'espressione");
     pushUndo();
@@ -462,8 +465,8 @@ void NaturalEditor::insert(char c) {
     }
     checkLimits();
 }
-// Line mode: a template key inserts its linear text; the cursor ends
-// `cursorBack` tokens before the end of it (inside "[[,][,]]").
+// Modalita' Line: un tasto di modello inserisce il suo testo lineare; il
+// cursore finisce `cursorBack` token prima della fine (dentro "[[,][,]]").
 void NaturalEditor::insertLinear(const std::string& text, std::size_t cursorBack) {
     autoRootParenPending_ = false;
     pushUndo();
@@ -512,7 +515,7 @@ void NaturalEditor::insertFraction() {
     // and the cursor moves to the denominator.
     if (cursor_ > 0) {
         const auto& prev = *r.children[cursor_ - 1];
-        if (alnumToken(prev) || (prev.kind == Kind::Token && prev.text == ")") || isBox(prev)) {
+        if (alnumToken(prev) || (prev.kind == Kind::Token && (prev.text == ")" || prev.text == "]" || prev.text == "}")) || isBox(prev)) {
             auto operand = takeTrailingOperand(r, cursor_); at = operand.first; f->children[0] = operand.second; tookOperand = true;
         }
     }
@@ -523,7 +526,7 @@ void NaturalEditor::insertFraction() {
     checkLimits();
 }
 void NaturalEditor::insertMixedFraction() {
-    // fx-CG50: mixed fractions exist in the Math input/output mode only.
+    // fx-CG50: le frazioni miste esistono solo nella modalita' di input/output Math.
     if (linear_) throw std::invalid_argument("Frazione mista disponibile solo in modalit\xC3\xA0 Math");
     auto m = node(Kind::Call, "mixed"); m->children = {row(), row(), row()};
     insertBox(m, 0);
@@ -561,7 +564,8 @@ void NaturalEditor::insertPower() {
     pushUndo();
     autoRootParenPending_ = false;
     const bool hasOperand = cursor_ > 0 && (alnumToken(*r.children[cursor_ - 1]) ||
-        (r.children[cursor_ - 1]->kind == Kind::Token && r.children[cursor_ - 1]->text == ")") || isBox(*r.children[cursor_ - 1]));
+        (r.children[cursor_ - 1]->kind == Kind::Token && (r.children[cursor_ - 1]->text == ")" || r.children[cursor_ - 1]->text == "]" ||
+                                                          r.children[cursor_ - 1]->text == "}")) || isBox(*r.children[cursor_ - 1]));
     if (!hasOperand) {
         // Like the CG50 x^ key without a preceding value: empty base box, cursor in the base.
         auto p = node(Kind::Power); p->children = {row(), row()};
@@ -618,7 +622,7 @@ void NaturalEditor::insertMatrix(std::size_t rows, std::size_t cols) {
             text += "]";
         }
         text += "]";
-        insertLinear(text, text.size() - 2);           // every character is one token: cursor after "[["
+        insertLinear(text, text.size() - 2);           // ogni carattere e' un token: cursore dopo "[["
         return;
     }
     auto m = node(Kind::Matrix, std::to_string(cols));
@@ -794,11 +798,11 @@ void NaturalEditor::handle(const NaturalKeyEvent& e) {
 }
 std::string NaturalEditor::toExpression() const { return ast::serialize(*root_); }
 
-// ---- CLIP selection ----------------------------------------------------------
+// ---- selezione CLIP ----------------------------------------------------------
 namespace {
 bool isOpening(const NaturalNode& n) { return n.kind == Kind::Token && (n.text == "(" || n.text == "[" || n.text == "{"); }
 bool isClosing(const NaturalNode& n) { return n.kind == Kind::Token && (n.text == ")" || n.text == "]" || n.text == "}"); }
-// Function words that own the parenthesis after them ("sin" "(").
+// Nomi di funzione a cui appartiene la parentesi che segue ("sin" "(").
 bool ownsParenthesis(const NaturalNode& n) {
     if (n.kind != Kind::Token || n.text.size() < 2 || !alphaWord(n.text)) return false;
     return isReservedWord(lowerCopy(n.text));
@@ -814,7 +818,7 @@ bool NaturalEditor::selectLeft() {
     if (!selecting_) beginSelection();
     if (cursor_ > 0) { --cursor_; return true; }
     if (rowPath_.size() < 2) return false;
-    // Past the start of a template field: the whole template becomes the unit.
+    // Oltre l'inizio di un campo di un modello: l'intero modello diventa l'unita'.
     const std::size_t box = rowPath_[rowPath_.size() - 2];
     rowPath_.resize(rowPath_.size() - 2);
     anchor_ = box + 1;
@@ -840,9 +844,9 @@ NaturalEditor::Range NaturalEditor::selection() const {
     std::size_t b = std::min(anchor_, cursor_), e = std::max(anchor_, cursor_);
     e = std::min(e, r.children.size());
     b = std::min(b, e);
-    // Balance the brackets: an unmatched closing one pulls the start back to
-    // its opening one (with the function name before it), an unmatched opening
-    // one pushes the end to its closing one. Repeated until stable.
+    // Bilancia le parentesi: una chiusa senza corrispondente riporta l'inizio
+    // alla sua aperta (con il nome di funzione che la precede), un'aperta senza
+    // corrispondente porta la fine alla sua chiusa. Si ripete finche' non cambia.
     for (bool changed = true; changed && b < e;) {
         changed = false;
         int depth = 0;
@@ -850,7 +854,7 @@ NaturalEditor::Range NaturalEditor::selection() const {
             if (isOpening(*r.children[i])) ++depth;
             else if (isClosing(*r.children[i])) {
                 if (depth > 0) { --depth; continue; }
-                // find the matching opening before b (none: a stray closing bracket stays as it is)
+                // cerca l'aperta corrispondente prima di b (se manca, una chiusa isolata resta com'e')
                 int d = 0; std::size_t k = b;
                 bool found = false;
                 while (k > 0) {
@@ -874,12 +878,12 @@ NaturalEditor::Range NaturalEditor::selection() const {
                     else if (isClosing(*r.children[k])) { if (d == 0) break; --d; }
                 }
                 if (k < r.children.size()) { e = k + 1; changed = true; }
-                else { e = r.children.size(); }     // closing parenthesis omitted at the end of the input
+                else { e = r.children.size(); }     // parentesi di chiusura omessa alla fine dell'input
                 break;
             }
         }
     }
-    // A selection that starts with "(" keeps the function word that owns it.
+    // Una selezione che inizia con "(" comprende il nome di funzione a cui appartiene.
     while (b > 0 && b < e && isOpening(*r.children[b]) && ownsParenthesis(*r.children[b - 1])) --b;
     out.begin = b; out.end = e;
     return out;
@@ -907,7 +911,7 @@ ast::NodePtr NaturalEditor::cutSelection() {
     return copy;
 }
 
-// ---- cause of an error -------------------------------------------------------
+// ---- causa di un errore ------------------------------------------------------
 bool NaturalEditor::markError(std::size_t position, std::size_t length) {
     selecting_ = false;
     errorMark_ = Range{};
@@ -916,14 +920,14 @@ bool NaturalEditor::markError(std::size_t position, std::size_t length) {
     try { text = ast::serialize(*root_, &map); } catch (...) { return false; }
     if (position > text.size()) return false;
     const std::size_t end = std::min(text.size(), position + length);
-    // Deepest row whose text contains the whole range (the root contains everything).
+    // Riga piu' interna il cui testo contiene tutto l'intervallo (la radice contiene tutto).
     const ast::SerializeMap::RowSpan* best = nullptr;
     for (const auto& span : map.rows) {
         if (span.begin <= position && end <= span.end && (!best || span.path.size() > best->path.size())) best = &span;
     }
     if (!best) return false;
     const std::size_t n = best->childStart.size();
-    // First child that the range touches and first child after it.
+    // Primo figlio toccato dall'intervallo e primo figlio dopo di esso.
     std::size_t b = 0;
     while (b + 1 < n && best->childStart[b + 1] <= position) ++b;
     if (n == 0 || position >= best->end) b = n;

@@ -29,7 +29,7 @@ const char* statusName(AppStatus status) noexcept;
 
 // Shared services: each exists once and every mode uses the same instance of the engine.
 namespace service {
-constexpr std::uint32_t Expression = 1u << 0;    // expression.hpp  parser -> AST -> evaluators (numbers, lists, matrices, vectors)
+constexpr std::uint32_t Expression = 1u << 0;    // expression.hpp  parser -> AST -> valutatori (numeri, liste, matrici, vettori)
 constexpr std::uint32_t Exact      = 1u << 1;    // exact.hpp       fractions, surds, multiples of pi
 constexpr std::uint32_t Editor     = 1u << 2;    // natural_editor.hpp, line_editor.hpp
 constexpr std::uint32_t MathRender = 1u << 3;    // math_renderer.hpp  2D layout of expressions/results
