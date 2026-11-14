@@ -115,9 +115,10 @@ La memoria è **diversa**, quindi lo sono i limiti delle matrici
 | Spazio nel record in flash | ≤ 9,4 KB (reali) / 18,8 KB (complessi) su 59,75 KB | ≤ 156 KB / 312 KB su 511,75 KB |
 | RAM di lavoro di un calcolo | 16 byte per elemento per matrice temporanea (es. inversa di 20×20: ≈ 19 KB) | idem (inversa di 100×100: ≈ 480 KB in PSRAM) |
 
-Immagine del firmware v1.10.0: ≈ +128 KB rispetto alla v1.9.0 su entrambe le
-schede (Pico 2 W ≈ 72 % della partizione da 2 MB); RAM statica +2 KB. Valori
-esatti in [BUILD_STATUS.md](BUILD_STATUS.md).
+Immagine del firmware v1.10.0: +129 KB circa rispetto alla v1.9.0 su entrambe
+le schede (1 515 272 byte = 36 % della partizione da 4 MB sulla Plus,
+1 506 516 byte = 71 % della partizione da 2 MB sul Pico 2 W); RAM statica
++2 188 byte. Valori esatti in [BUILD_STATUS.md](BUILD_STATUS.md).
 
 ## Collaudo consigliato sul dispositivo
 

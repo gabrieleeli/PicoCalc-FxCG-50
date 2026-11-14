@@ -89,8 +89,9 @@ lato 40 / 999, 400 / 10 000 elementi per matrice, 1 200 / 20 000 in tutto
 | Test host, profilo Raspberry Pi Pico 2 W | 37/37 test, **8 581** controlli + ≈ 334 000 + 41, 0 errori |
 | AddressSanitizer + UBSan (entrambi i profili) | 0 errori |
 | ThreadSanitizer (allocatore su due thread, entrambi i profili) | 0 errori |
+| Relay AI | 15/15 |
 | Simulatore | screenshot 12–19 rigenerati, nuovi 44–51 (`tests/sim/run_matrix_v110.txt`) |
-| GitHub Actions (`.github/workflows/release.yml`) | test host, sanitizer, relay, firmware dei due moduli e pacchetto a ogni push: @@CI_RESULT@@ |
+| GitHub Actions (`.github/workflows/release.yml`) | test host, sanitizer, relay, firmware dei due moduli e pacchetto a ogni push: superati sulle esecuzioni dei commit intermedi del branch di lavoro; l'esecuzione avviata su `main` con *publish* crea tag e release (§8) |
 | **Hardware fisico** | **non eseguito**: nessuna PicoCalc disponibile in questa sessione; procedura [HARDWARE_TEST_v1.10.0.md](../HARDWARE_TEST_v1.10.0.md) |
 
 Nuove suite: `matrix_test` (673 controlli: parsing di matrici, vettori e
@@ -113,13 +114,17 @@ dal simulatore), l'operando di `^` dopo una lista digitata.
 
 | | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
 |---|---|---|
-| Esito | @@FW_PLUS_RESULT@@ | @@FW_PICO2W_RESULT@@ |
-| Immagine flash | @@FLASH_PLUS@@ | @@FLASH_PICO2W@@ |
-| RAM statica | @@RAM_PLUS@@ | @@RAM_PICO2W@@ |
-| SHA-256 dell'UF2 locale | `@@SHA_PLUS@@` | `@@SHA_PICO2W@@` |
+| Esito | compilato, 0 warning | compilato, 0 warning |
+| Immagine flash | 1 515 272 byte (36 % di 4 MB; +129 056 rispetto alla v1.9.0) | 1 506 516 byte (71 % di 2 MB; +129 000) |
+| RAM statica | 301 632 byte (+2 188) | 297 708 byte (+2 188) |
+| SHA-256 dell'UF2 locale | `ad810d07598f8239d485429bdb27ea4fcaff033a4a1d792a97837e465d194553` | `ab6a3d7e8d5cd8eff64d818511873486ce305401b09e3dd02429b6076f58915e` |
 
 Pico SDK 2.2.0, `gcc-arm-none-eabi` 13.2.1, `-O2`, build pulite
-(`scripts/build.sh --clean`). Dettagli in [BUILD_STATUS.md](../BUILD_STATUS.md).
+(`scripts/build.sh --clean`); `picotool info` riporta la versione
+`1.10.0 (pico_plus_2w)` / `1.10.0 (pico2w)` e le schede
+`pimoroni_pico_plus2_w_rp2350` / `pico2_w`. Gli UF2 della release sono quelli
+compilati dal workflow sul commit pubblicato. Dettagli in
+[BUILD_STATUS.md](../BUILD_STATUS.md).
 
 ## 8. Pubblicazione
 

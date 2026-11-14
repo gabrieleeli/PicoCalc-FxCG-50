@@ -35,7 +35,9 @@ MAT/VCT (SHIFT 3), modalità Math/Line (SET UP › Input/Output), CLIP (SHIFT 8,
 F1/F2, SHIFT 9), parentesi colorate, cursore ed evidenziazione sulla causa
 degli errori, record del workspace v6. Test host: 37 per profilo (8 587
 controlli sulla Plus, 8 581 sul Pico 2 W), anche con ASan/UBSan e TSan; firmware
-compilato per le due schede; gli stessi passi girano su GitHub Actions.
+compilato per le due schede senza warning (immagine di 1 515 272 byte sulla
+Plus, 1 506 516 byte sul Pico 2 W; RAM statica 301 632 / 297 708 byte); gli
+stessi passi girano su GitHub Actions (`.github/workflows/release.yml`).
 **Nessuna prova su hardware**: `docs/HARDWARE_TEST_v1.10.0.md` (HW-90…HW-99).
 
 Stato della v1.9.0 (invariato dove non indicato):
