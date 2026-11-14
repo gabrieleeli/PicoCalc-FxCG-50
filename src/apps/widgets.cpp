@@ -157,7 +157,7 @@ bool CellGrid::key(Context& ctx, const KeyEvent& ev) {
     }
 }
 void CellGrid::draw(Context& ctx, gfx::Canvas& c, int top, int bottom) const {
-    const int labelW = growRows ? 26 : 0;
+    const int labelW = growRows || rowLabels ? 26 : 0;
     const int colW = (ui::ScreenW - labelW - 4) / std::max(1, visibleCols);
     const int headerH = 18, rowH = 18, editH = 22;
     const int visibleRows = std::max(1, (bottom - top - headerH - editH) / rowH);
@@ -174,17 +174,20 @@ void CellGrid::draw(Context& ctx, gfx::Canvas& c, int top, int bottom) const {
     for (int r = 0; r < visibleRows; ++r) {
         const int rr = firstRow_ + r, y = top + headerH + r * rowH;
         if (!growRows && rr >= rows) break;          // fixed-size grids: no empty ruled rows
-        if (growRows) { char lbl[16]; std::snprintf(lbl, sizeof(lbl), "%d", rr + 1); ui::textRight(c, labelW - 3, y + 3, lbl, Muted, font::Face::Small); }
+        if (labelW) { char lbl[16]; std::snprintf(lbl, sizeof(lbl), "%d", rr + 1); ui::textRight(c, labelW - 3, y + 3, lbl, Muted, font::Face::Small); }
         for (int k = 0; k < visibleCols && firstCol_ + k < cols; ++k) {
             const int cc = firstCol_ + k, x = labelW + k * colW;
             const bool sel = rr == row && cc == col;
             if (sel) c.rect(x + 1, y, colW - 1, rowH, editing_ ? SelectSoft : Select, true);
             double v = 0;
             if (rr < rows && get && get(rr, cc, v)) {
-                const std::string s = formatReal(v, ctx.ws.settings.display);
+                const std::string s = text ? text(rr, cc) : formatReal(v, ctx.ws.settings.display);
                 const int maxGlyphs = (colW - 4) / 6;
                 std::string shown = s;
-                if (static_cast<int>(font::glyphCount(s.c_str())) > maxGlyphs) shown = formatReal(v, {DisplayMode::Sci, static_cast<std::uint8_t>(std::max(1, maxGlyphs - 5))});
+                if (static_cast<int>(font::glyphCount(s.c_str())) > maxGlyphs) {
+                    if (text) { std::string cut[1]; (void)ui::wrapText(s, static_cast<std::size_t>(std::max(1, maxGlyphs - 1)), cut, 1); shown = cut[0] + "\xE2\x80\xA6"; }
+                    else shown = formatReal(v, {DisplayMode::Sci, static_cast<std::uint8_t>(std::max(1, maxGlyphs - 5))});
+                }
                 ui::textRight(c, x + colW - 3, y + 3, shown.c_str(), sel && !editing_ ? SelectInk : Ink, font::Face::Small);
             }
         }
@@ -196,7 +199,7 @@ void CellGrid::draw(Context& ctx, gfx::Canvas& c, int top, int bottom) const {
     if (editing_) editor_.draw(c, 6, ey, ui::ScreenW - 12, Ink);
     else {
         double v = 0;
-        if (row < rows && get && get(row, col, v)) ui::text(c, 6, ey, formatReal(v, ctx.ws.settings.display).c_str(), Muted);
+        if (row < rows && get && get(row, col, v)) ui::text(c, 6, ey, (text ? text(row, col) : formatReal(v, ctx.ws.settings.display)).c_str(), Muted);
     }
 }
 } // namespace fx::app

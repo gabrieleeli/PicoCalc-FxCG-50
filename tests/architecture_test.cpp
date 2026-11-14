@@ -171,6 +171,11 @@ int main() {
                 ::testutil::report(allowed.count(inc) == 1, "include allowed by declared services", *src, 0, std::string(a.name) + " -> " + inc);
             for (const auto& sec : workspaceSections(code)) {
                 if (sec == "resolve" || sec == "apply" || sec == "evalContext" || sec == "addHistory") continue;   // workspace methods
+                // Mat/Vct/List: letti tramite l'interfaccia CollectionResolver e assegnati
+                // con metodi controllati (le liste restano di Statistics: nessun accesso
+                // diretto a ws.lists)
+                if (sec == "collection" || sec == "storeMatrix" || sec == "storeVector" || sec == "storeList" ||
+                    sec == "storeCollectionAnswer" || sec == "snapshotCollections" || sec == "restoreCollections") continue;
                 const auto it = wsName.find(sec);
                 bool declared = it != wsName.end() && (a.data & (1u << std::stoi(it->second)));
                 if (sec == "resetAll") declared = a.data == (1u << data::Count) - 1;                       // touches every section

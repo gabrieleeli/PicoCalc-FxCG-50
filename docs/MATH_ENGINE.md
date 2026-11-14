@@ -1,4 +1,4 @@
-# Motore matematico — v1.8.0
+# Motore matematico — v1.10.0
 
 Riferimenti storici: `archive/VPAM_SHARED_AST.md`, `archive/RUN_MATRIX_PHASE*.md` e
 `archive/math_engine_original.py` descrivono le versioni precedenti (vedi [README.md](README.md)).
@@ -6,14 +6,16 @@ Riferimenti storici: `archive/VPAM_SHARED_AST.md`, `archive/RUN_MATRIX_PHASE*.md
 ## Pipeline unica
 
 ```
-editor Natural (ast::Node Row/Fraction/Radical/Power/Calculus/Call)
-   │ ast::serialize            testo lineare canonico, es. "(1)/(3)+sqrt(2)"
+editor Natural (ast::Node Row/Fraction/Radical/Power/Calculus/Call/Matrix)
+   │ ast::serialize            testo lineare canonico, es. "(1)/(3)+sqrt(2)", "[[1,2][3,4]]"
    ▼
-Lexer → Parser                 ast::Node Binary/Unary/Call/Group/Token
-   ▼
+Lexer → Parser                 ast::Node Binary/Unary/Call/Group/Token/Matrix/List
+   ▼                           (ogni nodo con pos/len nel testo; FlagCollection)
 evalNode<double>               modo Real
 evalNode<std::complex<double>> modi a+bi e r∠θ
 exactNode → exact::Value       forma esatta (Run-Matrix), sullo stesso AST
+CollEval<NumDomain|ExactDomain> nodi con liste, matrici, vettori (v1.10.0)
+evaluateAny → CalcValue        numero, lista, matrice o vettore
 ```
 
 Esiste **un solo** parser e **un solo** valutatore numerico (templato sul tipo):
@@ -135,12 +137,59 @@ Frazioni, radicali e π per S⇔D vengono dalla **valutazione esatta** (sopra),
 non più dalla ricerca di una frazione vicina al valore in virgola mobile.
 `exactFraction()` (frazioni continue) resta solo come API di compatibilità.
 
+## Matrici, vettori e liste (v1.10.0)
+
+Grammatica aggiunta (stesse priorità di prima; una matrice o una lista è un
+operando come un numero):
+
+```
+atomo   := … | matrice | lista | memoria [ "[" espr ("," espr)? "]" ]
+matrice := "[" ( "[" espr ("," espr)* "]" )+ "]"      righe della stessa lunghezza
+lista   := "{" espr ("," espr)* "}"
+memoria := "Mat" (A–Z | Ans) | "Vct" (A–Z | Ans) | "List" (1–26 | Ans)
+```
+
+- `Mat`, `Vct`, `List` sono riconosciuti solo con questa grafia (come li
+  inserisce OPTN): `mat` digitato resta il prodotto m·a·t. Il nome può essere
+  attaccato (`MatA`, `List1`). `List 1`–`List 6` sono il token `list1`…`list6`
+  già usato da GRAPH (dove indica un elemento per grafico).
+- `[` dopo un riferimento è un indice (`Mat A[1,2]`), `[[` inizia una matrice
+  (prodotto implicito).
+- Il parser marca con `ast::FlagCollection` ogni nodo il cui sotto-albero
+  contiene collezioni; solo questi nodi passano a `CollEval`. Le funzioni
+  `Det`, `Trn`, `Identity`, `Dim`, `Augment`, `Fill`, `Ref`, `Rref`,
+  `mattolist`, `listtomat`, `DotP`, `CrossP`, `Angle`, `UnitV`, `Norm`, `Seq`,
+  `Mean`, `Median`, `Cuml`, `dlist`, `SortA`, `SortD` e `Sum`/`Prod`/`Min`/`Max`
+  con un argomento sono funzioni di collezione.
+- `CollEval<D>` è scritto una volta per i due domini: `NumDomain` (reale nel
+  modo Real, complesso negli altri; gli elementi numerici passano a `evalNode`)
+  e `ExactDomain` (tutto o niente: un passo senza forma esatta abbandona la
+  valutazione esatta). Inversa e Det con eliminazione di Gauss con pivot
+  parziale (un pivot è nullo se |p| ≤ 10⁻¹² × il massimo della matrice; nel
+  dominio esatto se è esattamente 0), potenze con quadrati successivi.
+- Un nodo con collezioni dentro un'espressione numerica (es. `1+Det(Mat A)`)
+  viene valutato da `CollEval` e deve dare un numero (`TypeError` altrimenti).
+
+## Posizione degli errori (v1.10.0)
+
+Il lexer conserva `pos`/`len` di ogni token (testo fino a 60 000 byte); il
+parser lancia `SyntaxError(messaggio, posizione, lunghezza)` sul token che non
+può usare (sulla fine del testo se l'input finisce troppo presto) e registra in
+ogni nodo l'intervallo della sotto-espressione. Durante la valutazione
+`Env::at` indica il nodo dell'operazione in corso; una guardia RAII
+(`ErrorLocationGuard`) lo copia in `EvalInfo::error` solo mentre un'eccezione
+risale, quindi la valutazione senza errori non costa nulla (GRAPH campiona
+milioni di punti). `evaluateEntry` aggiunge lo scostamento degli spazi iniziali
+e riporta gli errori della destinazione dopo `→` sulla freccia.
+
 ## Errori
 
 | Classe | Titolo mostrato | Esempi |
 |---|---|---|
 | `SyntaxError` | Syntax ERROR | parentesi non bilanciate, operando mancante |
-| `MathError` | Math ERROR, Argument ERROR | divisione per zero, dominio, non convergenza |
+| `MathError` | Math ERROR, Argument ERROR | divisione per zero, dominio, non convergenza, matrice singolare |
+| `DimensionError` (v1.10.0) | Dimension ERROR | `[[1,2]]+[[1,2,3]]`, `Det([[1,2,3]])`, `{1,2}+{1,2,3}`, memoria non definita, oltre i limiti |
+| `TypeError` (v1.10.0) | Type ERROR | `{1,2}+[[1,2]]`, `sin([[1]])`, `DotP({1},{2})`, `1/[[1]]` |
 | `NonRealError` | Non-Real ERROR | `√-1` in modo Real |
 | `MathError` | Stack ERROR | annidamento oltre i limiti |
 | `MathError` | Memory ERROR | espressione troppo lunga; `std::bad_alloc` |
@@ -172,11 +221,22 @@ di stack viene controllato: oltre il budget l'esatto rinuncia senza errori.
 Nucleo Run-Matrix: `evaluateEntry` 552 byte, `recalculateHistory` 432,
 `editHistoryEntry` 96 (le copie di sicurezza di memoria e cronologia sono sull'heap).
 
+v1.10.0 (`arm-none-eabi-g++ -O2`, Pico Plus 2 W): `CollEval::eval` 248 byte
+(numerico) / 384 (esatto), `CollEval::call` 504 / 856, `binary` 432 / 832,
+`evaluateAny` 472, `evaluateEntry` 656, `recalculateHistory` 488. Per ogni
+livello di funzioni di collezione annidate servono ≈ 0,75 KB (≈ 1,2 KB
+nell'esatto): `CollEval::eval` controlla lo stesso budget di 16 KB e oltre
+lancia "Stack ERROR" (l'esatto rinuncia senza errori); con 20 livelli
+annidati il calcolo riesce, con un budget ridotto il test `matrix_test`
+verifica lo Stack ERROR invece di un crash. Gli elementi delle matrici sono
+sull'heap (PSRAM sulla Plus), mai sullo stack.
+
 ## Moduli
 
 | File | Contenuto |
 |---|---|
-| `expression.hpp/.cpp` | lexer, parser, valutatore, calcolo numerico, `CompiledExpression` |
+| `expression.hpp/.cpp` | lexer, parser, valutatore (anche `CollEval` per liste, matrici e vettori), calcolo numerico, `CompiledExpression` |
+| `value.hpp/.cpp` | `CalcValue`: numero, lista, matrice o vettore (v1.10.0) |
 | `expression_ast.hpp` | `ast::Node` condiviso con l'editor e `ast::serialize` |
 | `natural_editor.hpp/.cpp` | editor Natural V.P.A.M. (modelli, navigazione, undo/redo, limiti) |
 | `number_format.hpp/.cpp` | formati di visualizzazione e frazioni esatte |
@@ -190,7 +250,6 @@ Nucleo Run-Matrix: `evaluateEntry` 552 byte, `recalculateHistory` 432,
 
 ## Non ancora disponibile
 
-Matrici, vettori e liste come valori del parser (esistono come API C++),
-derivate e integrali simbolici, limiti, operatori bit a bit Base-N (and/or/xor
+Liste 7–26 e nomi delle liste, derivate e integrali simbolici, limiti, operatori bit a bit Base-N (and/or/xor
 come operazioni sui bit nella modalità Base-N intera), simboli ingegneristici,
 regressioni sinusoidale e logistica. Vedi [FEATURE_MATRIX.md](FEATURE_MATRIX.md).

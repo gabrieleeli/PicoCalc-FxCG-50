@@ -1,9 +1,10 @@
-# Installazione — v1.9.0
+# Installazione — v1.10.0
 
 > Il firmware non è ancora stato provato su una PicoCalc fisica (né con il
 > Pimoroni Pico Plus 2 W né con il Pico 2 W). Prima di usarlo, conservare una
 > copia del firmware attuale della propria scheda (se presente) e seguire il
-> collaudo in [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md).
+> collaudo in [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md) e
+> [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md).
 
 ## 1. Requisiti
 
@@ -18,10 +19,14 @@
 
 ## 2. Installare l'UF2
 
-| Modulo | File |
-|---|---|
-| Pimoroni Pico Plus 2 W | `picocalc_fxai_pico_plus_2w.uf2` |
-| Raspberry Pi Pico 2 W | `picocalc_fxai_pico2w.uf2` |
+| Modulo | File compilato | File della release |
+|---|---|---|
+| Pimoroni Pico Plus 2 W | `picocalc_fxai_pico_plus_2w.uf2` | `picocalc_fxai_pico_plus_2w-v1.10.0.uf2` |
+| Raspberry Pi Pico 2 W | `picocalc_fxai_pico2w.uf2` | `picocalc_fxai_pico2w-v1.10.0.uf2` |
+
+La GitHub Release contiene anche lo zip dei sorgenti e `SHA256SUMS`; i file
+sono compilati e verificati dal workflow `.github/workflows/release.yml`
+nella stessa esecuzione che crea la release.
 
 1. Spegnere la PicoCalc.
 2. Tenere premuto **BOOT/BOOTSEL** sul modulo e collegarlo al computer via USB:
@@ -39,12 +44,14 @@ di flash del Pico 2 W: configurazione non consigliata e non provata.
 Controllo dell'immagine prima della copia:
 
 ```bash
-picotool info -a picocalc_fxai_pico_plus_2w.uf2   # "PicoCalc FX-CG50 AI", versione 1.9.0 (pico_plus_2w)
+picotool info -a picocalc_fxai_pico_plus_2w-v1.10.0.uf2   # "PicoCalc FX-CG50 AI", versione 1.10.0 (pico_plus_2w)
 sha256sum -c SHA256SUMS                            # se si usa il pacchetto di release
 ```
 
-Il workspace (impostazioni, variabili, liste, storia, grafici, 3D, conversazioni
-AI) è in un'area della flash che l'aggiornamento non tocca:
+Il workspace (impostazioni, variabili, liste, matrici e vettori, storia,
+grafici, 3D, conversazioni AI) è in un'area della flash che l'aggiornamento non
+tocca; i dati salvati da una v1.6.0–v1.9.0 vengono letti dalla v1.10.0 (record
+v6, con i valori predefiniti per le novità: modalità Math, nessuna matrice):
 
 - **Pico Plus 2 W**: 1 MB prima dell'ultimo settore; i file interni (progetti e
   immagini, se in SYSTEM → "Archivio file" è scelta la flash interna) sono nella
@@ -55,13 +62,18 @@ AI) è in un'area della flash che l'aggiornamento non tocca:
 
 Per ripartire da zero: SYSTEM → F5 (reset, conferma con EXE); Memory permette
 invece di cancellare singole categorie (storia, variabili, liste, funzioni,
-funzioni 3D, Equation, chat).
+funzioni 3D, Equation, chat, matrici e vettori).
 
 ## 3. Compilare dai sorgenti
 
-Requisiti verificati: Ubuntu 24.04, `gcc-arm-none-eabi` 13.2, CMake ≥ 3.13, Ninja,
-Pico SDK 2.2.0 (serve ≥ 2.1 per la scheda `pimoroni_pico_plus2_w_rp2350`) con i
-submodule (tinyusb, cyw43-driver, lwip, mbedtls), Python 3.
+Requisiti verificati (anche dal workflow GitHub Actions su `ubuntu-24.04`):
+Ubuntu 24.04, `gcc-arm-none-eabi` 13.2, CMake ≥ 3.13 (3.16 per i test host),
+Ninja, Pico SDK 2.2.0 (serve ≥ 2.1 per la scheda `pimoroni_pico_plus2_w_rp2350`)
+con i submodule (tinyusb, cyw43-driver, lwip, mbedtls), Python 3.
+
+```bash
+sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib cmake ninja-build
+```
 
 ```bash
 git clone --branch 2.2.0 https://github.com/raspberrypi/pico-sdk.git
@@ -94,7 +106,15 @@ Opzioni CMake:
 
 Test su PC: `tests/run_host_tests.sh` (entrambi i profili di scheda; vedi [TESTING.md](TESTING.md)).
 Pacchetto di release (zip dei sorgenti + i due UF2 + SHA256SUMS): `scripts/make_release.sh`,
-dopo aver compilato entrambe le schede.
+dopo aver compilato entrambe le schede dallo stesso commit.
+
+Su GitHub lo stesso procedimento è in `.github/workflows/release.yml`: a ogni
+push su `main` (e sui branch `claude/**`) esegue i test host dei due profili
+(anche con ASan/UBSan e TSan), i test del relay, compila i due UF2 e allega il
+pacchetto all'esecuzione. Da *Actions › Build, test e release › Run workflow*
+su `main`, con l'opzione *publish*, crea anche il tag `v<VERSION>` sul commit
+compilato e la GitHub Release con le note di `docs/releases/v<VERSION>.md` e i
+file di quella stessa esecuzione (nessun tag esistente viene spostato).
 
 ## 4. Relay AI
 

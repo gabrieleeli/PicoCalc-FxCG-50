@@ -14,21 +14,32 @@ struct NaturalKeyEvent { NaturalKey key{NaturalKey::Character}; char character{}
 
 // Drawing operation emitted by the math layout engine. Text ops carry the font
 // face (0 = Medium 8x16, 1 = Small 6x12); y is the TOP of the text cell.
+// color: 0 = inchiostro; per le parentesi 1..5 = colore del livello (blu,
+// rosso, verde, magenta, nero, come sulla fx-CG50); per Highlight 0 = selezione
+// (CLIP), 1 = causa di un errore. Le operazioni Highlight sono rettangoli pieni
+// disegnati sotto il testo.
 struct NaturalDrawOp {
-    enum class Kind { Text, Line, Cursor, Placeholder };
+    enum class Kind { Text, Line, Cursor, Placeholder, Highlight };
     Kind kind{Kind::Text};
     int x{}, y{}, x2{}, y2{};
     std::string text;
     std::uint8_t face{};
+    std::uint8_t color{};
 };
 
 // Deep copy of an editor tree (history entries, clipboard, undo snapshots).
 ast::NodePtr cloneTree(const NaturalNode& node);
 
-// Structured fx-CG50 style "Math" input editor. The tree uses the shared
-// ast::Node type: Row nodes hold Token leaves and template boxes (Fraction,
-// Radical, Power, Subscript, Group, Calculus, Call). toExpression() produces
-// the canonical linear text consumed by the single expression parser.
+// Editor strutturato in stile fx-CG50. L'albero usa il tipo condiviso
+// ast::Node: i nodi Row contengono foglie Token e modelli (Fraction, Radical,
+// Power, Subscript, Group, Calculus, Call, Matrix). toExpression() produce il
+// testo lineare canonico letto dall'unico parser delle espressioni.
+//
+// Due modalita' di input, come la voce "Input/Output" del Setup della fx-CG50:
+//  * Math (predefinita): i modelli sono riquadri 2D (frazioni, radici, potenze,
+//    matrici) e il testo si importa in modo strutturale;
+//  * Line: ogni tasto inserisce testo lineare ("/", "^", "√(", "[["), l'input e'
+//    una riga di token e il testo lineare si importa cosi' com'e'.
 class NaturalEditor {
 public:
     // Input limits (bounded recursion and memory on the RP2350): an edit that
@@ -67,6 +78,38 @@ public:
     void insertDerivative();
     void insertSummation();
     void insertProduct();
+    // Modello MAT/VCT: rows x cols celle (1..6), cursore nella prima cella.
+    // Modalita' Line: "[[,][,]]" con il cursore dopo "[[".
+    void insertMatrix(std::size_t rows, std::size_t cols);
+
+    // Modalita' di input (Setup "Input/Output" della fx-CG50); il cambio converte l'input.
+    void setLinear(bool linear);
+    bool linear() const noexcept { return linear_; }
+
+    // ---- CLIP: selezione di una parte dell'input (fx-CG50 SHIFT 8).
+    // La selezione resta in una riga dell'albero, come il cursore della modalita'
+    // Math; oltre l'inizio o la fine di un campo di un modello seleziona l'intero
+    // modello. Copia e taglia estendono l'intervallo in modo che parentesi tonde,
+    // quadre e graffe restino bilanciate: un'espressione valida non viene spezzata.
+    struct Range { const NaturalNode* row{}; std::size_t begin{}, end{}; bool empty() const noexcept { return begin >= end; } };
+    void beginSelection();
+    void cancelSelection() noexcept { selecting_ = false; }
+    bool selecting() const noexcept { return selecting_; }
+    bool selectLeft();
+    bool selectRight();
+    Range selection() const;                       // intervallo normalizzato (bilanciato) della riga attiva
+    ast::NodePtr copySelection() const;            // Row con le copie dei nodi selezionati (nullptr se vuota)
+    ast::NodePtr cutSelection();                   // copia + elimina (annullabile); termina la selezione
+    bool deleteSelection();                        // elimina senza copiare; termina la selezione
+
+    // ---- Causa di un errore: posizione/lunghezza sono un intervallo di byte di
+    // toExpression() (li indicano il parser e il valutatore). Il cursore va alla
+    // fine della causa, come sulla fx-CG50 (esempio 14÷0×2.3: dopo lo 0), e
+    // l'intervallo resta evidenziato fino a clearErrorMark(). False quando il
+    // testo non corrisponde all'input.
+    bool markError(std::size_t position, std::size_t length);
+    Range errorMark() const noexcept { return errorMark_; }
+    void clearErrorMark() noexcept { errorMark_ = Range{}; }
 
     void handle(const NaturalKeyEvent& event);
     bool moveLeft(); bool moveRight(); bool moveUp(); bool moveDown();
@@ -96,6 +139,10 @@ private:
     std::string error_;
     bool autoRootParenPending_{};
     bool autoRootParenOpened_{};
+    bool linear_{};
+    bool selecting_{};
+    std::size_t anchor_{};          // altro estremo della selezione, nella riga attiva
+    Range errorMark_;
     std::vector<Snapshot> undo_, redo_;
 
     NaturalNode& activeRow();
@@ -105,6 +152,7 @@ private:
     bool leaveChild(bool toRight);
     void insertBox(ast::NodePtr box, std::size_t focusChild);
     void insertNode(ast::NodePtr node);
+    void insertLinear(const std::string& text, std::size_t cursorBack = 0);   // modello in modalita' Line
     void mergeWord();
     void pushUndo();
     void checkLimits();   // rolls back the edit recorded by the last pushUndo() and throws

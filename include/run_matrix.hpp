@@ -15,12 +15,20 @@ struct RunOutcome {
     char storedLast{};          // last letter of an A~F range (== storedTo for one variable)
     std::string pairText;       // "r=5  θ=53.13" for Pol(), "x=..  y=.." for Rec()
     bool exact{};               // the value has an exact form (fraction, surd, multiple of pi)
+    ValueType type{ValueType::Scalar};   // List, Matrix o Vector per un risultato collezione
+    std::string storedIn;       // "Mat A", "Vct B", "List 1", "Mat A[1,2]"... quando la freccia indica una memoria
 };
 
-// Evaluates a linear expression exactly like the RUN-MATRIX mode into `entry`:
-// store arrow (U+2192 or "->", one variable or a range "A~F"), Pol/Rec pairs,
-// exact evaluation next to the floating-point one, Ans/PreAns update.
-// Throws Syntax/Math errors (the entry is then left untouched).
+// Valuta un'espressione lineare esattamente come la modalita' RUN-MATRIX in
+// `entry`: freccia di memorizzazione (U+2192 o "->"), coppie Pol/Rec,
+// valutazione esatta accanto a quella in virgola mobile, aggiornamento di
+// Ans/PreAns. Il risultato puo' essere un numero, una lista, una matrice o un
+// vettore; liste e matrici aggiornano ListAns / MatAns / VctAns invece di Ans.
+// Destinazioni dopo la freccia:
+//   A   A~F   Mat A   Vct A   List 1   Mat A[1,2]   Vct A[2]   List 1[3]
+//   Dim Mat A  ({righe,colonne} crea una matrice di zeri)
+// Lancia errori Syntax/Math (la voce resta invariata); il loro membro `where`
+// e' l'intervallo di byte della causa in `expression`.
 RunOutcome evaluateEntry(Workspace& ws, const std::string& expression, HistoryEntry& entry);
 // evaluateEntry() + append to the workspace history.
 RunOutcome runCalculation(Workspace& ws, const std::string& expression);
@@ -31,8 +39,9 @@ RunOutcome runCalculation(Workspace& ws, const std::string& expression);
 // restored and the error is thrown; later entries that fail keep their error
 // text. Returns the number of later entries that failed.
 std::size_t editHistoryEntry(Workspace& ws, std::size_t index, const std::string& expression);
-// Recalculates history[from..] with Ans/PreAns taken from the entries before it.
-std::size_t recalculateHistory(Workspace& ws, std::size_t from);
+// Ricalcola history[from..] con Ans/PreAns presi dalle voci precedenti.
+// firstError (facoltativo) riceve la posizione dell'errore di history[from].
+std::size_t recalculateHistory(Workspace& ws, std::size_t from, ErrorLocation* firstError = nullptr);
 
 // Result views stored in HistoryEntry::view.
 enum ResultView : std::uint8_t {
@@ -59,9 +68,14 @@ bool toggleMixedFraction(HistoryEntry& entry, const Settings& settings);
 // Repeating-decimal view of an exact rational (toggles back to the automatic view).
 bool togglePeriodic(HistoryEntry& entry);
 
-// Linear text of a result in its current view ("1/3", "2 1/3", "2√3/3",
-// "π/2", "0.3333333333", "0.1(6)", "0x1F", "30°15'0\"").
+// Testo lineare di un risultato nella vista corrente ("1/3", "2 1/3", "2√3/3",
+// "π/2", "0.3333333333", "0.1(6)", "0x1F", "30°15'0\"", "[[1,2][3,4]]",
+// "{1,2,3}"). E' quello che mostra la modalita' di output Line.
 std::string resultText(const HistoryEntry& entry, const Settings& settings);
+// Vero quando il risultato e' una lista, una matrice o un vettore.
+inline bool isCollection(const HistoryEntry& entry) noexcept { return entry.collection != nullptr; }
+// Testo di un elemento di un risultato collezione nella vista corrente.
+std::string elementText(const HistoryEntry& entry, std::size_t index, const Settings& settings);
 // 2D tree used to draw the result (stacked fraction, radicals, ×10^n, overline).
 ast::NodePtr resultTree(const HistoryEntry& entry, const Settings& settings);
 // Expression that reproduces the stored value exactly when possible (exact

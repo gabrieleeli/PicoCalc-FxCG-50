@@ -34,6 +34,7 @@ struct Ctx {
     const CursorTarget* cursor{};
     std::vector<NaturalDrawOp>* out{};
     Layout* layout{};
+    int parenDepth{};          // livello delle parentesi disegnate finora
 };
 
 int textWidth(const std::string& s, const Face& f) { return static_cast<int>(font::glyphCount(s.c_str())) * f.adv; }
@@ -56,6 +57,32 @@ bool shapeOk(const NaturalNode& n) {
     if (!ast::validShape(n)) return false;
     for (const auto& c : n.children) if (!c) return false;
     return true;
+}
+
+// Griglia di un nodo Matrix: celle per righe, `cols` per riga; ogni colonna e'
+// larga quanto la sua cella piu' larga, ogni riga alta quanto la piu' alta.
+struct MatrixGrid {
+    std::size_t rows{}, cols{};
+    std::vector<int> width, asc, desc;
+    int w{}, h{};
+};
+constexpr int MatrixColumnGap = 8, MatrixRowGap = 2, MatrixBracket = 5;
+MatrixGrid matrixGrid(const NaturalNode& n, int level, unsigned depth) {
+    MatrixGrid g;
+    g.cols = ast::matrixColumns(n);
+    if (g.cols == 0) return g;
+    g.rows = n.children.size() / g.cols;
+    g.width.assign(g.cols, 0); g.asc.assign(g.rows, 0); g.desc.assign(g.rows, 0);
+    for (std::size_t i = 0; i < g.rows * g.cols; ++i) {
+        const Box b = measureNode(*n.children[i], level, false, depth + 1);
+        const std::size_t r = i / g.cols, c = i % g.cols;
+        g.width[c] = std::max(g.width[c], b.w);
+        g.asc[r] = std::max(g.asc[r], b.asc); g.desc[r] = std::max(g.desc[r], b.desc);
+    }
+    for (std::size_t c = 0; c < g.cols; ++c) g.w = satAdd(g.w, g.width[c] + (c ? MatrixColumnGap : 0));
+    for (std::size_t r = 0; r < g.rows; ++r) g.h = satAdd(g.h, g.asc[r] + g.desc[r] + (r ? MatrixRowGap : 0));
+    g.w = satAdd(g.w, 2 * MatrixBracket);
+    return g;
 }
 
 Box measureNode(const NaturalNode& n, int level, bool isRoot, unsigned depth) {
@@ -154,26 +181,35 @@ Box measureNode(const NaturalNode& n, int level, bool isRoot, unsigned depth) {
         return {textWidth(displayToken(n.text), f) + a.w, a.asc, a.desc};
     }
     case Kind::Matrix: {
-        int w = 0, h = 0;
-        for (const auto& r : n.children) { const Box q = measureNode(*r, level, false, depth + 1); w = std::max(w, q.w); h += q.asc + q.desc + 2; }
-        h = std::max(f.height, h - 2);
-        return {w + 8, h / 2 + f.axis(), h - h / 2 - f.axis()};
+        const MatrixGrid g = matrixGrid(n, level, depth);
+        const int h = std::max(f.height, g.h + 2);
+        return {g.w, h / 2 + f.axis(), h - h / 2 - f.axis()};
     }
     default: return faceBox(f, 0);
     }
 }
 
-void addText(Ctx& c, int x, int base, const std::string& s, const Face& f) {
+void addText(Ctx& c, int x, int base, const std::string& s, const Face& f, std::uint8_t color = 0) {
     if (s.empty()) return;
-    c.out->push_back({NaturalDrawOp::Kind::Text, x, base - f.base, 0, 0, s, f.id});
+    c.out->push_back({NaturalDrawOp::Kind::Text, x, base - f.base, 0, 0, s, f.id, color});
 }
-void addLine(Ctx& c, int x, int y, int x2, int y2) { c.out->push_back({NaturalDrawOp::Kind::Line, x, y, x2, y2, {}, 0}); }
-void parens(Ctx& c, int x, int base, int width, int asc, int desc, const Face& f) {
+void addLine(Ctx& c, int x, int y, int x2, int y2, std::uint8_t color = 0) { c.out->push_back({NaturalDrawOp::Kind::Line, x, y, x2, y2, {}, 0, color}); }
+bool colorParens(const Ctx& c) { return c.cursor && c.cursor->colorParens; }
+void parens(Ctx& c, int x, int base, int width, int asc, int desc, const Face& f, std::uint8_t color = 0) {
     // Text-height content uses the font's parenthesis glyphs; taller content gets drawn brackets.
-    if (asc <= f.asc() && desc <= f.desc()) { addText(c, x, base, "(", f); addText(c, x + width - f.adv, base, ")", f); return; }
+    if (asc <= f.asc() && desc <= f.desc()) { addText(c, x, base, "(", f, color); addText(c, x + width - f.adv, base, ")", f, color); return; }
     const int top = base - asc, bottom = base + desc, l = x + 2, r = x + width - 3;
-    addLine(c, l + 2, top, l, top + 2); addLine(c, l, top + 2, l, bottom - 2); addLine(c, l, bottom - 2, l + 2, bottom);
-    addLine(c, r - 2, top, r, top + 2); addLine(c, r, top + 2, r, bottom - 2); addLine(c, r, bottom - 2, r - 2, bottom);
+    addLine(c, l + 2, top, l, top + 2, color); addLine(c, l, top + 2, l, bottom - 2, color); addLine(c, l, bottom - 2, l + 2, bottom, color);
+    addLine(c, r - 2, top, r, top + 2, color); addLine(c, r, top + 2, r, bottom - 2, color); addLine(c, r, bottom - 2, r - 2, bottom, color);
+}
+// Colore di un token parentesi: una parentesi aperta prende il colore del
+// livello corrente e apre il successivo, una chiusa chiude un livello e ne
+// prende il colore, cosi' le parentesi corrispondenti hanno lo stesso colore.
+std::uint8_t parenToken(Ctx& c, const std::string& t) {
+    if (!colorParens(c)) return 0;
+    if (t == "(") return parenColorIndex(c.parenDepth++);
+    if (t == ")") { if (c.parenDepth > 0) --c.parenDepth; return parenColorIndex(c.parenDepth); }
+    return 0;
 }
 void emitCursor(Ctx& c, int x, int base, const Box& b) {
     const int top = base - b.asc, bottom = base + b.desc - 1;
@@ -186,26 +222,38 @@ void drawRow(Ctx& c, const NaturalNode& n, int x, int base, int level, bool isRo
     const Face& f = faceFor(level);
     const Box rowBox = measureRow(n, level, isRoot, depth);
     const bool cursorHere = c.cursor && c.cursor->row == &n;
+    const bool markHere = c.cursor && c.cursor->markRow == &n && c.cursor->markBegin < c.cursor->markEnd;
     if (n.children.empty()) {
-        if (!isRoot) c.out->push_back({NaturalDrawOp::Kind::Placeholder, x + 1, base - f.asc() + 2, x + f.adv - 2, base + f.desc() - 1, {}, f.id});
+        if (!isRoot) c.out->push_back({NaturalDrawOp::Kind::Placeholder, x + 1, base - f.asc() + 2, x + f.adv - 2, base + f.desc() - 1, {}, f.id, 0});
         if (cursorHere) emitCursor(c, x, base, rowBox);
         return;
     }
-    int px = x;
+    // Le parentesi lasciate aperte in un campo di un modello non cambiano i
+    // colori dopo il modello.
+    const int parenDepth = c.parenDepth;
+    int px = x, markX = x;
     for (std::size_t i = 0; i < n.children.size(); ++i) {
         if (cursorHere && c.cursor->index == i) emitCursor(c, px, base, rowBox);
+        if (markHere && c.cursor->markBegin == i) markX = px;
+        if (markHere && c.cursor->markEnd == i)
+            c.out->push_back({NaturalDrawOp::Kind::Highlight, markX, base - rowBox.asc, px - 1, base + rowBox.desc - 1, {}, 0,
+                              static_cast<std::uint8_t>(c.cursor->markIsError ? 1 : 0)});
         const auto& ch = n.children[i];
         if (!ch) continue;
         drawNode(c, *ch, px, base, level, false, depth + 1);
         px = satAdd(px, measureNode(*ch, level, false, depth + 1).w);
     }
+    if (markHere && c.cursor->markEnd >= n.children.size())
+        c.out->push_back({NaturalDrawOp::Kind::Highlight, markX, base - rowBox.asc, px - 1, base + rowBox.desc - 1, {}, 0,
+                          static_cast<std::uint8_t>(c.cursor->markIsError ? 1 : 0)});
     if (cursorHere && c.cursor->index >= n.children.size()) emitCursor(c, px, base, rowBox);
+    if (!isRoot) c.parenDepth = parenDepth;
 }
 
 void drawNode(Ctx& c, const NaturalNode& n, int x, int base, int level, bool isRoot, unsigned depth) {
     const Face& f = faceFor(level);
     if (depth > MaxDepth) return;
-    if (n.kind == Kind::Token) { addText(c, x, base, displayToken(n.text), f); return; }
+    if (n.kind == Kind::Token) { const std::uint8_t color = parenToken(c, n.text); addText(c, x, base, displayToken(n.text), f, color); return; }
     if (n.kind == Kind::Row) { drawRow(c, n, x, base, level, isRoot, depth); return; }
     if (!shapeOk(n)) return;
     switch (n.kind) {
@@ -243,11 +291,12 @@ void drawNode(Ctx& c, const NaturalNode& n, int x, int base, int level, bool isR
         return;
     }
     case Kind::Group: {
-        const Box cb = measureNode(*child(n, 0), level, false, depth + 1);
         const Box gb = measureNode(n, level, false, depth);
-        parens(c, x, base, gb.w, gb.asc, gb.desc, f);
+        const std::uint8_t color = colorParens(c) ? parenColorIndex(c.parenDepth) : 0;
+        parens(c, x, base, gb.w, gb.asc, gb.desc, f, color);
+        ++c.parenDepth;
         drawNode(c, *child(n, 0), x + f.adv, base, level, false, depth + 1);
-        (void)cb;
+        --c.parenDepth;
         return;
     }
     case Kind::Call: {
@@ -360,12 +409,23 @@ void drawNode(Ctx& c, const NaturalNode& n, int x, int base, int level, bool isR
         return;
     }
     case Kind::Matrix: {
+        // Parentesi quadre attorno a una griglia di celle (ogni cella centrata nella sua colonna).
         const Box mb = measureNode(n, level, false, depth);
-        const int top = base - mb.asc, bottom = base + mb.desc;
+        const MatrixGrid g = matrixGrid(n, level, depth);
+        const int top = base - mb.asc, bottom = base + mb.desc - 1;
         addLine(c, x + 1, top, x + 1, bottom); addLine(c, x + 1, top, x + 3, top); addLine(c, x + 1, bottom, x + 3, bottom);
         addLine(c, x + mb.w - 2, top, x + mb.w - 2, bottom); addLine(c, x + mb.w - 4, top, x + mb.w - 2, top); addLine(c, x + mb.w - 4, bottom, x + mb.w - 2, bottom);
-        int y = top;
-        for (const auto& r : n.children) { const Box q = measureNode(*r, level, false, depth + 1); drawNode(c, *r, x + 4, y + q.asc, level, false, depth + 1); y += q.asc + q.desc + 2; }
+        int y = top + 1 + (mb.asc + mb.desc - 2 - g.h) / 2;
+        for (std::size_t r = 0; r < g.rows; ++r) {
+            int cx = x + MatrixBracket;
+            for (std::size_t col = 0; col < g.cols; ++col) {
+                const NaturalNode& cell = *n.children[r * g.cols + col];
+                const Box cb = measureNode(cell, level, false, depth + 1);
+                drawNode(c, cell, cx + (g.width[col] - cb.w) / 2, y + g.asc[r], level, false, depth + 1);
+                cx += g.width[col] + MatrixColumnGap;
+            }
+            y += g.asc[r] + g.desc[r] + MatrixRowGap;
+        }
         return;
     }
     default: return;
@@ -392,6 +452,12 @@ void clipOps(Layout& r, int left, int top, int right, int bottom) {
             const auto* p = reinterpret_cast<const unsigned char*>(op.text.c_str());
             while (*p) { const unsigned char* start = p; (void)font::nextCodepoint(p); if (g >= skip && g < skip + take) sliced.append(reinterpret_cast<const char*>(start), static_cast<std::size_t>(p - start)); ++g; }
             op.text = std::move(sliced); op.x = startX;
+            kept.push_back(std::move(op));
+        } else if (op.kind == NaturalDrawOp::Kind::Highlight) {
+            // Ritagliata sull'area visibile (l'input puo' scorrere in orizzontale).
+            op.x = std::max(op.x, left); op.x2 = std::min(op.x2, right);
+            op.y = std::max(op.y, top); op.y2 = std::min(op.y2, bottom);
+            if (op.x > op.x2 || op.y > op.y2) { r.clipped = true; continue; }
             kept.push_back(std::move(op));
         } else if (op.kind == NaturalDrawOp::Kind::Cursor || op.kind == NaturalDrawOp::Kind::Placeholder) {
             if (op.x < left || op.x > right || op.y2 < top || op.y > bottom) { r.clipped = true; continue; }
@@ -443,6 +509,15 @@ std::string displayToken(const std::string& t) {
     if (low == "preans") return "PreAns";
     // Shared variables (VARS) and operator words in fx-CG50 spelling.
     static const struct { const char* name; const char* shown; } kNames[] = {
+        // Matrici, vettori e liste (grafia dei comandi OPTN della fx-CG50).
+        {"mat", "Mat "}, {"vct", "Vct "}, {"list", "List "}, {"list1", "List 1"}, {"list2", "List 2"}, {"list3", "List 3"},
+        {"list4", "List 4"}, {"list5", "List 5"}, {"list6", "List 6"}, {"det", "Det "}, {"trn", "Trn "}, {"identity", "Identity "},
+        {"dim", "Dim "}, {"augment", "Augment"}, {"fill", "Fill"}, {"ref", "Ref "}, {"rref", "Rref "},
+        {"mattolist", "Mat\xE2\x86\x92List"}, {"listtomat", "List\xE2\x86\x92Mat"}, {"dotp", "DotP"}, {"crossp", "CrossP"},
+        {"angle", "Angle"}, {"unitv", "UnitV"}, {"norm", "Norm"}, {"seq", "Seq"}, {"mean", "Mean"}, {"median", "Median"},
+        {"cuml", "Cuml "}, {"dlist", "\xCE\x94List "}, {"sorta", "SortA"}, {"sortd", "SortD"},
+        // Radici scritte come parola (modalita' Line): il simbolo, come sulla calcolatrice.
+        {"sqrt", "\xE2\x88\x9A"}, {"cbrt", "\xE2\x88\x9B"},
         {"xmin", "Xmin"}, {"xmax", "Xmax"}, {"xscl", "Xscl"}, {"ymin", "Ymin"}, {"ymax", "Ymax"}, {"yscl", "Yscl"},
         {"tmin", "Tmin"}, {"tmax", "Tmax"}, {"tptch", "Tptch"}, {"tblstart", "TblStart"}, {"tblend", "TblEnd"},
         {"tblpitch", "TblPitch"}, {"and", " And "}, {"or", " Or "}, {"xor", " Xor "}, {"not", "Not "}, {"rmdr", " Rmdr "},
@@ -479,21 +554,34 @@ Layout layout(const NaturalNode& n, int x, int baseline, int maxWidth, int maxHe
     return r;
 }
 
-void draw(gfx::Canvas& canvas, const Layout& l, std::uint16_t ink, std::uint16_t cursorColor, std::uint16_t placeholderColor) {
+void draw(gfx::Canvas& canvas, const Layout& l, const Palette& p) {
+    for (const auto& op : l.ops)
+        if (op.kind == NaturalDrawOp::Kind::Highlight)
+            canvas.rect(op.x, op.y, op.x2 - op.x + 1, op.y2 - op.y + 1, op.color ? p.error : p.selection, true);
+    auto ink = [&p](std::uint8_t color) { return color >= 1 && color <= 5 ? p.paren[color - 1] : p.ink; };
     for (const auto& op : l.ops) {
         switch (op.kind) {
         case NaturalDrawOp::Kind::Text:
-            font::draw(canvas, op.face ? font::Face::Small : font::Face::Medium, op.x, op.y, op.text.c_str(), ink);
+            font::draw(canvas, op.face ? font::Face::Small : font::Face::Medium, op.x, op.y, op.text.c_str(), ink(op.color));
             break;
-        case NaturalDrawOp::Kind::Line: canvas.line(op.x, op.y, op.x2, op.y2, ink); break;
+        case NaturalDrawOp::Kind::Line: canvas.line(op.x, op.y, op.x2, op.y2, ink(op.color)); break;
         case NaturalDrawOp::Kind::Placeholder:
-            canvas.dottedRect(op.x, op.y, op.x2 - op.x + 1, op.y2 - op.y + 1, placeholderColor);
+            canvas.dottedRect(op.x, op.y, op.x2 - op.x + 1, op.y2 - op.y + 1, p.placeholder);
             break;
         case NaturalDrawOp::Kind::Cursor:
-            canvas.vLine(op.x, op.y, op.y2 - op.y + 1, cursorColor);
-            canvas.vLine(op.x + 1, op.y, op.y2 - op.y + 1, cursorColor);
+            canvas.vLine(op.x, op.y, op.y2 - op.y + 1, p.cursor);
+            canvas.vLine(op.x + 1, op.y, op.y2 - op.y + 1, p.cursor);
             break;
+        case NaturalDrawOp::Kind::Highlight: break;
         }
     }
+}
+void draw(gfx::Canvas& canvas, const Layout& l, std::uint16_t ink, std::uint16_t cursorColor, std::uint16_t placeholderColor) {
+    Palette p;
+    p.ink = ink; p.cursor = cursorColor; p.placeholder = placeholderColor;
+    for (auto& c : p.paren) c = ink;
+    p.selection = gfx::rgb888To565(190, 215, 250);
+    p.error = gfx::rgb888To565(255, 205, 205);
+    draw(canvas, l, p);
 }
 } // namespace fx::math

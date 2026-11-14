@@ -6,8 +6,8 @@ namespace fx::app {
 using namespace ui::theme;
 
 namespace {
-const char* kItems[] = {"Storia Run-Matrix", "Variabili A-Z e Ans", "Liste statistiche", "Funzioni Graph", "Coefficienti Equation", "Conversazioni AI", "Funzioni 3D Graph"};
-constexpr int ItemCount = 7;
+const char* kItems[] = {"Storia Run-Matrix", "Variabili A-Z e Ans", "Liste statistiche", "Funzioni Graph", "Coefficienti Equation", "Conversazioni AI", "Funzioni 3D Graph", "Matrici e vettori"};
+constexpr int ItemCount = 8;
 }
 
 void MemoryApp::key(Context& ctx, const KeyEvent& ev) {
@@ -22,6 +22,7 @@ void MemoryApp::key(Context& ctx, const KeyEvent& ev) {
             case 4: ws.equation = EquationState{}; break;
             case 5: ws.chat.clear(); break;
             case 6: ws.graph3d = Graph3DState{}; break;
+            case 7: ws.matrices.clear(); break;
             default: break;
             }
             ctx.markDirty();
@@ -47,20 +48,23 @@ void MemoryApp::draw(Context& ctx, gfx::Canvas& c) {
     int vars = 0; for (char v = 'A'; v <= 'Z'; ++v) if (ws.memory.recall(v) != 0) ++vars;
     std::size_t listItems = 0; for (const auto& l : ws.lists) listItems += l.size();
     int fns = 0; for (const auto& f : ws.functions) if (!f.expr.empty()) ++fns;
-    char counts[ItemCount][32];
-    std::snprintf(counts[0], 32, "%u voci", static_cast<unsigned>(ws.history.size()));
-    std::snprintf(counts[1], 32, "%d non nulle", vars);
-    std::snprintf(counts[2], 32, "%u valori", static_cast<unsigned>(listItems));
-    std::snprintf(counts[3], 32, "%d definite", fns);
-    std::snprintf(counts[4], 32, "%d incognite", ws.equation.unknowns);
-    std::snprintf(counts[5], 32, "%u messaggi", static_cast<unsigned>(ws.chat.size()));
+    char counts[ItemCount][40];
+    std::snprintf(counts[0], 40, "%u voci", static_cast<unsigned>(ws.history.size()));
+    std::snprintf(counts[1], 40, "%d non nulle", vars);
+    std::snprintf(counts[2], 40, "%u valori", static_cast<unsigned>(listItems));
+    std::snprintf(counts[3], 40, "%d definite", fns);
+    std::snprintf(counts[4], 40, "%d incognite", ws.equation.unknowns);
+    std::snprintf(counts[5], 40, "%u messaggi", static_cast<unsigned>(ws.chat.size()));
     int fns3d = 0; for (const auto& z : ws.graph3d.model.z) if (!z.empty()) ++fns3d;
-    std::snprintf(counts[6], 32, "%d definite", fns3d);
+    std::snprintf(counts[6], 40, "%d definite", fns3d);
+    int defined = 0; for (const auto& m : ws.matrices.mat) defined += m.empty() ? 0 : 1;
+    for (const auto& v : ws.matrices.vct) defined += v.empty() ? 0 : 1;
+    std::snprintf(counts[7], 40, "%d, %u elementi", defined, static_cast<unsigned>(ws.matrices.elements()));
     const int top = ui::ContentTop + 4;
-    for (int i = 0; i < ItemCount; ++i) ui::listRow(c, top + i * 24, 22, kItems[i], counts[i], i == selected_);
+    for (int i = 0; i < ItemCount; ++i) ui::listRow(c, top + i * 22, 21, kItems[i], counts[i], i == selected_);
     const auto blob = serializeWorkspace(ws);
     const std::size_t cap = ctx.platform.storageCapacity();
-    const int y = top + ItemCount * 24 + 16;
+    const int y = top + ItemCount * 22 + 10;
     char used[64]; std::snprintf(used, sizeof(used), "Flash: %u / %u byte", static_cast<unsigned>(blob.size()), static_cast<unsigned>(cap));
     ui::text(c, 8, y, used, Ink, font::Face::Small);
     c.rect(8, y + 16, ui::ScreenW - 16, 10, Faint, false);

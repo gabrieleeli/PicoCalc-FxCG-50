@@ -11,6 +11,7 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/system_runtime.cpp
   ${FXAI_ROOT}/src/system_info.cpp
   ${FXAI_ROOT}/src/bt_support.cpp
+  ${FXAI_ROOT}/src/value.cpp
   ${FXAI_ROOT}/src/expression.cpp
   ${FXAI_ROOT}/src/exact.cpp
   ${FXAI_ROOT}/src/memory.cpp
@@ -55,6 +56,7 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/apps/launcher.cpp
   ${FXAI_ROOT}/src/apps/symbols_app.cpp
   ${FXAI_ROOT}/src/apps/run_matrix_app.cpp
+  ${FXAI_ROOT}/src/apps/matrix_editor.cpp
   ${FXAI_ROOT}/src/apps/widgets.cpp
   ${FXAI_ROOT}/src/apps/equation_app.cpp
   ${FXAI_ROOT}/src/apps/statistics_app.cpp

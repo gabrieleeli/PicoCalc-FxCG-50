@@ -68,14 +68,18 @@ restano intatti. Un ID non riconosciuto lascia la mappa della build.
 Due slot con CRC-32 e numero di sequenza: si scrive sempre lo slot più
 vecchio, quindi un'interruzione durante la scrittura lascia valido l'altro
 (test di interruzione in ogni punto in `storage_test`). Il record è alla
-**versione 5** (v1.9.0): aggiunge in coda l'archivio scelto per i file e lo
+**versione 6** (v1.10.0): aggiunge in coda la modalità Input/Output, le memorie
+di matrici e vettori e i risultati lista/matrice/vettore della cronologia
+(formato sotto). La versione 5 (v1.9.0) aggiunge l'archivio scelto per i file e lo
 stato del 3D Graph (Z1–Z3, selezione, finestra 3D, griglia, vista). La
 versione 3 (GRAPH v1.8.0) aggiunge le 20 funzioni di GRAPH con stile e Yt, il
 Setup della modalità, le 6 memorie V-Window, le 20 memorie grafiche, gli
 elementi SKETCH, l'immagine richiamata e il progetto aperto; la versione 4
 (TABLE v1.8.0) la variabile, il tipo e le righe della tabella (≤ 999). I record
-v1 (v1.6.0), v2 (v1.7.0), v3 e v4 (v1.8.0) sono letti: un record v4 generato
-dai sorgenti della v1.8.0 è nei test (`tests/fixtures/workspace_v1_8_0.inc`);
+v1 (v1.6.0), v2 (v1.7.0), v3 e v4 (v1.8.0) e v5 (v1.9.0) sono letti: un
+record v4 generato dai sorgenti della v1.8.0 e un record v5 generato dai
+sorgenti della v1.9.0 sono nei test (`tests/fixtures/workspace_v1_8_0.inc`,
+`tests/fixtures/workspace_v1_9_0.inc`);
 le 6 funzioni della v1.6.0 diventano Y1–Y6 e la griglia booleana diventa Grid
 On/Off; una V-Window che non supera i controlli viene corretta o sostituita da
 quella iniziale, senza scartare il resto dei dati.
@@ -85,7 +89,29 @@ quella iniziale, senza scartare il resto dei dati.
 | Capacità di un salvataggio | 59,75 KB | 511,75 KB |
 | Cronologia Run-Matrix | 40 righe | 200 righe |
 | Liste statistiche | 6 × 255 | 6 × 999 (fx-CG50) |
+| Matrici e vettori (Mat/Vct A–Z, MatAns, VctAns) | 1 200 elementi in tutto (≈ 9,4 KB reali, 18,8 KB complessi), 400 per matrice, lato ≤ 40 | 20 000 elementi (≈ 156 KB reali, 312 KB complessi), 10 000 per matrice, lato ≤ 999 |
 | Conversazione AI | 30 messaggi | 30 messaggi |
+
+### Blocco della versione 6 (v1.10.0)
+
+In coda al blocco della versione 5, in little endian:
+
+| Campo | Contenuto |
+|---|---|
+| `u8` | Input/Output: 0 Math, 1 Line |
+| 26 × valore | Mat A…Mat Z |
+| 26 × valore | Vct A…Vct Z |
+| 3 × valore | MatAns, VctAns, ListAns |
+| `u16` n | risultati lista/matrice/vettore della cronologia |
+| n × (`u16` indice, valore, `u8` indicatori, forme esatte) | indice della riga (crescente), valore (elementi omessi per i risultati oltre 6×6/20 elementi), indicatori 1 = forme esatte presenti, 2 = da input decimale; una forma esatta per elemento nello stesso formato dei campi esatti di A–Z |
+
+Un *valore* è `u8` tipo (`0xFF` = non definito, 1 lista, 2 matrice, 3 vettore),
+`u16` righe, `u16` colonne, `u8` indicatori (1 = parti immaginarie, 2 =
+elementi omessi), poi gli elementi `f64` per righe e, se presenti, le parti
+immaginarie. La lettura controlla tipo, forma, numeri finiti e i limiti della
+scheda (lato, elementi per matrice, elementi totali): un record non valido
+viene rifiutato per intero e il workspace resta quello precedente
+(`matrix_test`).
 
 I tratti PEN dello SKETCH hanno un limite complessivo di 1200 punti; con 20
 funzioni, 20 memorie grafiche piene e 64 elementi SKETCH lo stato GRAPH resta

@@ -25,6 +25,11 @@ public:
     bool saveNow();
     bool loadedFromFlash() const noexcept { return loaded_; }
     bool migrated() const noexcept { return migrated_; }      // workspace imported from the legacy store
+    // v1.10.0: il record salvato non si e' potuto caricare per mancanza di
+    // memoria (es. Pico Plus 2 W con la PSRAM disattivata e molte matrici):
+    // il firmware parte con un workspace vuoto e non salva, per non
+    // sovrascrivere i dati dell'utente.
+    bool storageLocked() const noexcept { return storageLocked_; }
     // Message shown in an error box once the main menu is up (boot reports:
     // previous crash, PSRAM disabled...).
     void notice(const std::string& message);
@@ -44,6 +49,7 @@ private:
     bool redraw_{true};
     bool loaded_{};
     bool migrated_{};
+    bool storageLocked_{};
     std::uint32_t lastInput_{};
     std::uint32_t saves_{};
     app::AppId lastApp_{app::AppId::MainMenu};

@@ -1,4 +1,4 @@
-// SYSTEM / SET UP: angle unit, display format, complex mode, exact results, Frac Result (d/c, ab/c),
+// SYSTEM / SET UP: Input/Output (Math, Line), angle unit, display format, complex mode, exact results, Frac Result (d/c, ab/c),
 // backlights, Wi-Fi and AI relay configuration, device information and reset.
 #include "apps.hpp"
 #include "board_config.hpp"
@@ -40,12 +40,13 @@ DisplayFormat displayFrom(int i) {
 FormField choice(const char* l, std::vector<std::string> c, int sel) { const std::string t = c[static_cast<std::size_t>(sel)]; return {l, t, FormField::Type::Choice, std::move(c), sel}; }
 FormField text(const char* l, const std::string& v, bool secret = false) { return {l, v, secret ? FormField::Type::Secret : FormField::Type::Text, {}, 0}; }
 FormField number(const char* l, double v) { return {l, formatReal(v), FormField::Type::Number, {}, 0}; }
-enum Field { FAngle, FDisplay, FComplex, FFrac, FMixed, FLcd, FKbd, FFiles, FSsid, FPass, FHost, FPort, FPath, FToken, FProvider, FModel, FTokens };
+enum Field { FInput, FAngle, FDisplay, FComplex, FFrac, FMixed, FLcd, FKbd, FFiles, FSsid, FPass, FHost, FPort, FPath, FToken, FProvider, FModel, FTokens };
 } // namespace
 
 void SystemApp::enter(Context& ctx) {
     const Settings& s = ctx.ws.settings;
     form_.fields = {
+        choice("Input/Output", {"Math", "Line"}, s.inputMode == Settings::InputMode::Line ? 1 : 0),
         choice("Angolo", {"Deg", "Rad", "Gra"}, s.angle == AngleMode::Degrees ? 0 : s.angle == AngleMode::Radians ? 1 : 2),
         choice("Display", displayChoices(), displayIndex(s.display)),
         choice("Complessi", {"Real", "a+bi", "r\xE2\x88\xA0\xCE\xB8"}, static_cast<int>(s.complex)),
@@ -70,6 +71,7 @@ void SystemApp::enter(Context& ctx) {
 void SystemApp::apply(Context& ctx) {
     Settings& s = ctx.ws.settings;
     const auto& f = form_.fields;
+    s.inputMode = f[FInput].choice == 1 ? Settings::InputMode::Line : Settings::InputMode::Math;
     s.angle = f[FAngle].choice == 0 ? AngleMode::Degrees : f[FAngle].choice == 1 ? AngleMode::Radians : AngleMode::Gradians;
     s.display = displayFrom(f[FDisplay].choice);
     s.complex = static_cast<ComplexMode>(f[FComplex].choice);

@@ -58,6 +58,56 @@ struct PopupMenu {
     void draw(gfx::Canvas& c) const;
 };
 
+// Editor MAT/VCT di Run-Matrix (fx-CG50 SHIFT 3 'MAT/VCT', manuale 2-42…2-48,
+// 2-59…2-60): elenco di Mat A-Z (o Vct A-Z) con le dimensioni, DIM, modifica
+// delle celle (EXE passa alla cella successiva), ROW-OP (SWAP, ×Rw, ×Rw+, Rw+),
+// ROW e COLUMN DELETE/INSERT/ADD, DELETE/DEL-ALL, M⇔V. I valori stanno nel
+// workspace (ws.matrices): sono quelli usati dai calcoli e vengono salvati con
+// il resto dei dati.
+class MatrixEditorView {
+public:
+    enum class Screen : std::uint8_t { List, Dim, Cells };
+    static constexpr int AnsRow = 26;                    // "Mat Ans" / "Vct Ans" dopo Z (sola lettura)
+    bool isOpen() const noexcept { return open_; }
+    void open(Context& ctx, bool vectors = false);
+    void close() noexcept { open_ = false; }
+    void key(Context& ctx, const KeyEvent& ev);
+    void draw(Context& ctx, gfx::Canvas& c);
+    Screen screen() const noexcept { return screen_; }
+    bool vectors() const noexcept { return vectors_; }
+    int selected() const noexcept { return selected_; }
+    const CellGrid& grid() const noexcept { return grid_; }
+private:
+    enum class Confirm : std::uint8_t { None, Delete, DeleteAll };
+    enum class Menu : std::uint8_t { None, RowOp, Row, Column };
+    CalcValue* current(Context& ctx) const;              // memoria della riga selezionata
+    std::string name(int row) const;                     // "Mat A", "Vct Ans"
+    void listKey(Context& ctx, const KeyEvent& ev);
+    void dimKey(Context& ctx, const KeyEvent& ev);
+    void cellsKey(Context& ctx, const KeyEvent& ev);
+    void openDim(Context& ctx);
+    void openCells(Context& ctx);
+    void store(Context& ctx, CalcValue value);           // assegnazione controllata della memoria selezionata
+    void menuChoice(Context& ctx, int choice);
+    void askNext(Context& ctx);                          // raccoglie i numeri di una ROW-OP
+    bool open_{false};
+    bool vectors_{false};
+    Screen screen_{Screen::List};
+    int selected_{0}, first_{0};
+    Confirm confirm_{Confirm::None};
+    // DIM: righe e colonne in digitazione
+    LineEditor dim_[2]{LineEditor{4}, LineEditor{4}};
+    int dimField_{0};
+    CellGrid grid_;
+    PopupMenu menu_;
+    Menu menuKind_{Menu::None};
+    // Parametri di ROW-OP: domande ancora da rispondere e valori gia' dati
+    int rowOp_{-1};
+    std::vector<double> args_;
+    LineEditor ask_{24};
+    bool asking_{false};
+};
+
 class RunMatrixApp final : public App {
 public:
     AppId id() const override { return AppId::RunMatrix; }
@@ -68,8 +118,12 @@ public:
     NaturalEditor& editor() noexcept { return editor_; }
     int browsing() const noexcept { return browse_; }      // selected history entry, -1 = input line
     int editing() const noexcept { return editIndex_; }    // history entry edited in place, -1 = none
-    enum class Menu : std::uint8_t { None, Math, OptnCategories, OptnItems, VarsCategories, VarsItems };
+    MatrixEditorView& matrixEditor() noexcept { return matrices_; }
+    enum class Menu : std::uint8_t { None, Math, MatVct, OptnCategories, OptnItems, VarsCategories, VarsItems, MatRows, MatCols };
 private:
+    void syncInputMode(Context& ctx);                    // Setup Input/Output -> modalita' dell'editor
+    bool clipKey(Context& ctx, const KeyEvent& ev);      // tasti durante una selezione CLIP
+    void markError(const ErrorLocation& where);           // cursore sulla causa di un errore
     void evaluate(Context& ctx);
     void insertCatalogItem(Context& ctx, const std::string& item);
     void beginEdit(Context& ctx, int index);
@@ -87,6 +141,8 @@ private:
     Menu menuKind_{Menu::None};
     int optnCategory_{0};
     int varsCategory_{0};
+    std::size_t matRows_{2};
+    MatrixEditorView matrices_;
 };
 
 class SymbolsApp final : public App {

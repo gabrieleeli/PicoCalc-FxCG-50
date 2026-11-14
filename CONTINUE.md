@@ -1,16 +1,18 @@
 # CONTINUE — punto di ripresa del progetto PicoCalc FX-CG50 AI
 
 Documento di checkpoint per riprendere lo sviluppo esattamente da qui.
-Ultimo aggiornamento: **v1.9.0 — consolidamento della v1.8.0 con il supporto
-del Pimoroni Pico Plus 2 W**, branch **`main`** (tag `v1.9.0` da creare: vedi
-il rapporto, §16). Rapporto
-completo: `docs/reports/CONSOLIDAMENTO_v1.9.0.md`.
+Ultimo aggiornamento: **v1.10.0 — matrici, vettori e liste in Run-Matrix,
+editor MAT/VCT, Math/Line, CLIP, parentesi colorate, cursore sugli errori**,
+branch **`main`**, tag `v1.10.0` (e `v1.9.0` sul commit `bb2bdee`) creati dal
+workflow `.github/workflows/release.yml`. Rapporti:
+`docs/reports/ANALISI_FONTI_v1.10.0.md`, `docs/reports/SVILUPPO_v1.10.0.md`;
+v1.9.0: `docs/reports/CONSOLIDAMENTO_v1.9.0.md`.
 
 ## 0. Branch
 
 | Branch | Contenuto | Regola |
 |---|---|---|
-| **`main`** | **v1.9.0**: v1.8.0 completa + Pimoroni Pico Plus 2 W (PSRAM, flash 16 MB, 3D Graph) | si continua qui |
+| **`main`** | **v1.10.0** (tag `v1.10.0`): v1.9.0 + matrici/vettori/liste, editor MAT/VCT, Math/Line, CLIP, parentesi colorate, cursore sugli errori | si continua qui |
 | `version/v1.5.4`, `version/v1.6.0`, `version/v1.7.0`, `version/v1.8.0` | snapshot storici, uno per versione | non modificare |
 
 I branch duplicati della 1.9.0 e i branch temporanei (`version/v1.9.0`,
@@ -21,8 +23,24 @@ I branch duplicati della 1.9.0 e i branch temporanei (`version/v1.9.0`,
 sessione ha rifiutato l'eliminazione dei branch remoti (HTTP 403), quindi va
 fatta dal proprietario (comandi nel rapporto, §16). Un solo branch per
 versione; mai force-push; nessuna release o tag nuovi senza richiesta.
+Il branch di lavoro della v1.10.0 (`claude/inspiring-maxwell-xm4clv`) ha
+commit intermedi; `main` riceve un solo commit con tutta la v1.10.0, quindi
+anche quel branch può essere eliminato dopo la pubblicazione.
 
 ## 1. Stato attuale
+
+**v1.10.0** (sopra la v1.9.0 descritta qui sotto): matrici, vettori e liste
+come valori del parser (`CalcValue`, `evaluateAny`, `CollEval`), editor
+MAT/VCT (SHIFT 3), modalità Math/Line (SET UP › Input/Output), CLIP (SHIFT 8,
+F1/F2, SHIFT 9), parentesi colorate, cursore ed evidenziazione sulla causa
+degli errori, record del workspace v6. Test host: 37 per profilo (8 587
+controlli sulla Plus, 8 581 sul Pico 2 W), anche con ASan/UBSan e TSan; firmware
+compilato per le due schede senza warning (immagine di 1 515 272 byte sulla
+Plus, 1 506 516 byte sul Pico 2 W; RAM statica 301 632 / 297 708 byte); gli
+stessi passi girano su GitHub Actions (`.github/workflows/release.yml`).
+**Nessuna prova su hardware**: `docs/HARDWARE_TEST_v1.10.0.md` (HW-90…HW-99).
+
+Stato della v1.9.0 (invariato dove non indicato):
 
 - **Firmware** (Pico SDK 2.2.0, `-O2`, nessun warning), una cartella e un UF2
   per scheda:
@@ -59,9 +77,9 @@ versione; mai force-push; nessuna release o tag nuovi senza richiesta.
 - Dual Screen (G+G, GtoT, T+G) e Graph to Table; comandi grafici di
   Run-Matrix/programmi; FORMAT durante lo SKETCH; suffissi angolari °/ʳ/ᵍ.
 - Liste: 999 elementi sulla Plus; sul Pico 2 W restano 255 (record da 64 KB).
-- Run-Matrix: Punto 3 (Natural V.P.A.M. ↔ lineare), matrici/liste nel parser,
-  editor MAT (l'API supporta matrici fino a 999×999 con la PSRAM), Base-N
-  intera, simboli ingegneristici.
+- Run-Matrix (dopo la v1.10.0): List 7–26 e nomi delle liste, CSV delle
+  matrici, schermate MatAns/ListAns oltre 6×6, celle complesse nell'editor
+  MAT/VCT, INS in Line, SHIFT+INS, Base-N intera, simboli ingegneristici.
 - 3D Graph: sfere, piani e rette parametriche della fx-CG50.
 - Modalità con solo modello dati: eActivity, Spreadsheet, Dyna Graph,
   Recursion, Conic Graphs, Program, Financial, Link, Geometry, Picture Plot;
@@ -69,9 +87,9 @@ versione; mai force-push; nessuna release o tag nuovi senza richiesta.
 
 ## 4. Prossimi passaggi esatti
 
-1. **Collaudo fisico sulla PicoCalc con il Pimoroni Pico Plus 2 W**: HW-01…HW-36
-   e HW-40…HW-82 (log USB dall'accensione, righe `[psram]`, `[flash]`, `[mem]`,
-   `[DIAG]`, `[fault]`, foto). Ogni KO va riprodotto con un test e corretto;
+1. **Collaudo fisico sulla PicoCalc con il Pimoroni Pico Plus 2 W**: HW-01…HW-36,
+   HW-40…HW-82 e HW-90…HW-99 (log USB dall'accensione, righe `[psram]`,
+   `[flash]`, `[mem]`, `[DIAG]`, `[fault]`, foto). Ogni KO va riprodotto con un test e corretto;
    solo le voci provate passano a TESTED ON HARDWARE (data, modulo, revisione
    della scheda).
 2. Se disponibile, le stesse prove sul Pico 2 W (HW-48, HW-64, HW-73).
@@ -119,8 +137,9 @@ scripts/make_release.sh
 ```
 
 ```bash
-# Simulatore (profilo Plus, pool PSRAM simulato): Run-Matrix, GRAPH/TABLE, 3D
+# Simulatore (profilo Plus, pool PSRAM simulato): Run-Matrix, MAT/VCT e novità 1.10.0, GRAPH/TABLE, 3D
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix.txt
+build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix_v110.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph3d.txt
 ```

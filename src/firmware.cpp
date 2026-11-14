@@ -39,14 +39,22 @@ Firmware::Firmware(app::Platform& platform, storage::FlashDevice& flash, storage
 Firmware::~Firmware() = default;
 
 void Firmware::boot() {
-    std::vector<std::uint8_t> blob;
-    if (store_.load(blob)) {
-        loaded_ = deserializeWorkspace(blob.data(), blob.size(), ws_);
-    } else if (legacy_) {
-        // No record yet: import the workspace of the older firmware (its store
-        // is only read; the next autosave writes the record to the new store).
-        storage::RecordStore old(*legacy_);
-        if (old.load(blob) && deserializeWorkspace(blob.data(), blob.size(), ws_)) loaded_ = migrated_ = true;
+    try {
+        std::vector<std::uint8_t> blob;
+        if (store_.load(blob)) {
+            loaded_ = deserializeWorkspace(blob.data(), blob.size(), ws_);
+        } else if (legacy_) {
+            // No record yet: import the workspace of the older firmware (its store
+            // is only read; the next autosave writes the record to the new store).
+            storage::RecordStore old(*legacy_);
+            if (old.load(blob) && deserializeWorkspace(blob.data(), blob.size(), ws_)) loaded_ = migrated_ = true;
+        }
+    } catch (const std::bad_alloc&) {
+        // Record piu' grande della memoria libera (deserializeWorkspace lascia
+        // ws_ intatto in caso di errore): si parte vuoti e i salvataggi sono
+        // sospesi, cosi' i dati in flash restano leggibili con piu' memoria.
+        loaded_ = migrated_ = false;
+        storageLocked_ = true;
     }
     seedRandom(platform_.millis() * 2654435761u + 1u);
     platform_.setBacklight(ws_.settings.lcdBacklight, ws_.settings.kbdBacklight);
@@ -55,6 +63,8 @@ void Firmware::boot() {
         manager_.context().markDirty();
         manager_.context().toast("Dati della v1.8.0 importati", 3000);
     }
+    if (storageLocked_)
+        manager_.showError("Memory ERROR: dati salvati troppo grandi per la memoria libera; salvataggio sospeso per non perderli");
     redraw_ = true;
 }
 void Firmware::notice(const std::string& message) { notice(message.c_str()); }
@@ -70,6 +80,7 @@ void Firmware::key(const KeyEvent& ev) {
     redraw_ = true;
 }
 bool Firmware::saveNow() {
+    if (storageLocked_) return false;
     const auto blob = serializeWorkspace(ws_);
     if (!store_.save(blob)) return false;
     manager_.context().clearDirty();
@@ -82,6 +93,7 @@ bool Firmware::step() {
     // Leaving an app or a quiet period after changes triggers an autosave.
     const bool appChanged = manager_.activeId() != lastApp_;
     lastApp_ = manager_.activeId();
+    if (storageLocked_ && ctx.dirty()) ctx.clearDirty();     // salvataggi sospesi (vedi boot())
     if (ctx.dirty() && (appChanged || platform_.millis() - lastInput_ > AutosaveDelayMs)) {
         // The autosave runs outside the AppManager: no exception may leave it
         // (an escaped std::bad_alloc would terminate the firmware).

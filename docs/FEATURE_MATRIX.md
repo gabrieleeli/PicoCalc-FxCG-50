@@ -1,8 +1,11 @@
-# Feature matrix — v1.9.0 (consolidamento v1.8.0 + Pimoroni Pico Plus 2 W)
+# Feature matrix — v1.10.0
 
-La v1.9.0 contiene tutte le funzioni della v1.8.0 (stessi sorgenti e stessi
-test) più il layer hardware e di memoria per il Pimoroni Pico Plus 2 W.
-Origine di ogni componente: [reports/CONSOLIDAMENTO_v1.9.0.md](reports/CONSOLIDAMENTO_v1.9.0.md).
+La v1.10.0 contiene tutte le funzioni della v1.9.0 (v1.8.0 completa + layer
+hardware e di memoria per il Pimoroni Pico Plus 2 W) più matrici, vettori e
+liste nel parser, l'editor MAT/VCT, la modalità Math/Line, la selezione CLIP,
+le parentesi colorate e il cursore sulla causa degli errori
+([reports/SVILUPPO_v1.10.0.md](reports/SVILUPPO_v1.10.0.md)). Origine dei
+componenti della v1.9.0: [reports/CONSOLIDAMENTO_v1.9.0.md](reports/CONSOLIDAMENTO_v1.9.0.md).
 
 Stati (in italiano tra parentesi):
 
@@ -81,9 +84,13 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Parole atomiche (sin, π, θ, Ans) | TESTED ON HOST |
 | Undo / redo, copia / incolla (Ctrl+Z/Y/C/V) | TESTED ON HOST |
 | Frazione mista `□ □/□`, radice con indice modificabile, periodo (linea sopra le cifre) | TESTED ON SIMULATOR |
-| Selezione parziale con il cursore | NOT STARTED (copia/incolla dell'intera espressione) |
+| Selezione parziale con il cursore (CLIP: SHIFT 8, COPY, CUT, SHIFT 9 PASTE; parentesi sempre bilanciate) | TESTED ON SIMULATOR (v1.10.0) |
 | Scorrimento orizzontale dell'input | TESTED ON HOST |
-| Matrici/vettori come modelli 2D modificabili | NOT STARTED (solo rendering del nodo Matrix) |
+| Matrici/vettori come modelli 2D modificabili (MATH › MAT/VCT, fino a 6×6) | TESTED ON SIMULATOR (v1.10.0) |
+| Modalità di input/output Math e Line (SET UP › Input/Output, persistente) | TESTED ON SIMULATOR (v1.10.0) |
+| Parentesi colorate per livello (blu, rosso, verde, magenta, nero) | TESTED ON SIMULATOR (v1.10.0; contrasto verificato sul PC, colori sul pannello reale non provati) |
+| Cursore ed evidenziazione sulla causa di un errore | TESTED ON SIMULATOR (v1.10.0) |
+| Sovrascrittura (INS) in modalità Line, SHIFT+INS (argomento di un modello) | NOT STARTED |
 
 ## Motore matematico
 
@@ -119,7 +126,10 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Σ, Π, SOLVE nel parser | TESTED ON HOST |
 | Derivate/integrali simbolici, limiti | NOT STARTED |
 | Matrici: somma, prodotto, det, inversa, trasposta, traccia, RREF, sistemi (API C++) | TESTED ON HOST |
-| Matrici come valori nel parser e editor MAT in Run-Matrix | NOT STARTED |
+| Matrici come valori nel parser: + − × ^, inversa, Det, Trn, Identity, Dim, Augment, Fill, Ref, Rref, Mat→List, List→Mat, Norm, elementi `Mat A[r,c]`, forme esatte, complessi | TESTED ON HOST (v1.10.0) |
+| Vettori come valori nel parser: DotP, CrossP, Angle, UnitV, Norm, `Vct A[n]` | TESTED ON HOST (v1.10.0) |
+| Liste come valori nel parser: aritmetica elemento per elemento, Sum, Prod, Min, Max, Mean, Median, Cuml, Percent, ΔList, SortA/D, Seq, Augment, `List 1[n]` | TESTED ON HOST (v1.10.0; List 1–6, non 7–26) |
+| Errori Dimension ERROR / Type ERROR con posizione | TESTED ON HOST (v1.10.0) |
 | Vettori: somma, prodotto scalare/vettoriale, norma, angolo (API C++) | TESTED ON HOST |
 | Conversioni metriche (10 grandezze, prefissi SI) | TESTED ON HOST |
 | Limiti di lunghezza/annidamento e budget di stack ("Stack ERROR", "Memory ERROR") | TESTED ON HOST (budget del firmware verificato solo con `-fstack-usage`) |
@@ -130,7 +140,8 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 |---|---|---|
 | Run-Matrix | TESTED ON SIMULATOR | forme esatte, S⇔D, frazioni miste, periodo, cronologia modificabile con ricalcolo, OPTN, VARS, Base-N, DMS (dettagli in RUN_MATRIX.md) |
 | Run-Matrix: cronologia modificabile sul posto con ricalcolo delle righe successive | TESTED ON SIMULATOR | |
-| Run-Matrix: matrici/vettori/liste (MAT/VCT/List) | NOT STARTED | API C++ esistenti |
+| Run-Matrix: matrici/vettori/liste (MAT/VCT/List) e memorie MatAns/VctAns/ListAns | TESTED ON SIMULATOR | v1.10.0, [RUN_MATRIX.md](RUN_MATRIX.md#matrici-vettori-e-liste-v1100) |
+| Run-Matrix: editor MAT/VCT (DIM, celle, ROW-OP, ROW, COLUMN, DELETE, DEL-ALL, M⇔V) | TESTED ON SIMULATOR | v1.10.0; CSV LOAD/SAVE non realizzato |
 | Statistics | TESTED ON HOST | liste, 1/2-Var, 9 regressioni, grafici, DIST, test Z/t, intervalli |
 | Regressioni sinusoidale e logistica | NOT STARTED | |
 | Test χ², F, 2-campioni, ANOVA nell'interfaccia | NOT STARTED | ANOVA e t a 2 campioni esistono come API C++ |
@@ -177,7 +188,9 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Progetti e immagini sulla flash interna (LittleFS), scelta in SYSTEM | TESTED ON HOST |
 | Coefficienti Equation | TESTED ON HOST |
 | Conversazioni AI (cancellabili da AI Chat e Memory) | TESTED ON HOST |
-| Programmi, file Python, documenti, matrici salvate | NOT STARTED |
+| Programmi, file Python, documenti | NOT STARTED |
+| Matrici e vettori salvati nel workspace (record v6) | TESTED ON HOST (v1.10.0) |
+| Matrici come file CSV (manuale 2-48) | NOT STARTED |
 
 ## Relay AI
 

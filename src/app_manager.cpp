@@ -35,6 +35,7 @@ ui::StatusInfo Context::status(const char* title) const {
     s.display = displayModeName(ws.settings.display);
     s.complex = complexName(ws.settings.complex);
     s.fraction = ws.settings.mixedFractions ? "ab/c" : "d/c";
+    s.input = ws.settings.inputMode == Settings::InputMode::Line ? "Line" : "Math";
     s.battery = platform.batteryPercent();
     s.charging = platform.charging();
     s.shift = shift_;

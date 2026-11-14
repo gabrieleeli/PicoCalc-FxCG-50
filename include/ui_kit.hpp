@@ -31,6 +31,16 @@ constexpr std::uint16_t Warn = rgb888To565(230, 120, 0);
 constexpr std::uint16_t Cursor = rgb888To565(0, 0, 0);
 constexpr std::uint16_t Placeholder = rgb888To565(120, 120, 120);
 constexpr std::uint16_t Shift = rgb888To565(230, 150, 0);
+// Parentesi dell'input per livello (fx-CG50: blu, rosso, verde, magenta, nero,
+// poi di nuovo dal blu). Piu' scure dei colori puri per restare leggibili su
+// ogni sfondo su cui si disegna l'input (bianco, l'azzurro di una riga della
+// cronologia in modifica e le evidenziazioni qui sotto): editor_v110_test
+// verifica un rapporto di contrasto di almeno 4,5:1.
+constexpr std::uint16_t Paren[5] = {
+    rgb888To565(0, 60, 200), rgb888To565(190, 0, 0), rgb888To565(0, 110, 30),
+    rgb888To565(160, 0, 160), rgb888To565(0, 0, 0)};
+constexpr std::uint16_t Highlight = rgb888To565(200, 222, 252);        // selezione CLIP
+constexpr std::uint16_t ErrorHighlight = rgb888To565(255, 214, 214);   // causa di un errore
 // Default graph colours (Y1..Y6), similar to the fx-CG50 defaults.
 constexpr std::uint16_t Graph[6] = {
     rgb888To565(0, 70, 230), rgb888To565(220, 30, 30), rgb888To565(0, 150, 60),
@@ -50,6 +60,7 @@ struct StatusInfo {
     const char* display{};
     const char* complex{};
     const char* fraction{};      // Frac Result: "d/c" or "ab/c"
+    const char* input{};         // Input/Output: "Math" o "Line"
     int battery{-1};
     bool charging{};
     bool shift{};
