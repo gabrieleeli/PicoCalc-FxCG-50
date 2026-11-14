@@ -1,8 +1,95 @@
 # Changelog
 
+## v1.10.0 — matrici, vettori e liste; editor MAT/VCT; Math/Line; CLIP; parentesi colorate; cursore sugli errori
+
+Base: `main` al commit `bb2bdee` (la v1.9.0; il tag `v1.9.0` mancante viene
+creato su quel commit dal workflow di release). Analisi delle fonti:
+[reports/ANALISI_FONTI_v1.10.0.md](reports/ANALISI_FONTI_v1.10.0.md); rapporto:
+[reports/SVILUPPO_v1.10.0.md](reports/SVILUPPO_v1.10.0.md).
+**Nessuna prova su hardware fisico**: procedura
+[HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md).
+
+### Matrici, vettori e liste nel parser
+- Valori di prima classe dello **stesso parser e dello stesso AST**:
+  `[[1,2][3,4]]`, `{1,2,3}`, `Mat A`–`Mat Z`, `Vct A`–`Vct Z`, `List 1`–`List 6`,
+  `Mat Ans`, `Vct Ans`, `List Ans`, elementi `Mat A[1,2]`, `List 1[3]`.
+  Nuovo tipo `CalcValue` (`include/value.hpp`) e nuova API `evaluateAny()` /
+  `evaluateExactAny()`; i valutatori scalari esistenti accettano le stesse
+  espressioni quando il risultato è un numero (`Det Mat A`, `DotP(…)`).
+- Operazioni del manuale fx-CG50 (2-49…2-63, 3-7…3-16): + − × tra matrici,
+  numero × matrice, potenze intere e inversa, `Det`, `Trn`, `Identity`, `Dim`,
+  `Augment`, `Fill`, `Ref`, `Rref`, `Mat→List`, `List→Mat`, `DotP`, `CrossP`,
+  `Angle`, `UnitV`, `Norm`; liste elemento per elemento con `Sum`, `Prod`, `Min`,
+  `Max`, `Mean`, `Median`, `Cuml`, `Percent`, `ΔList`, `SortA`, `SortD`, `Seq`.
+- Forme esatte negli elementi (`[[1,2][3,4]]^−1` = `[[−2,1][3/2,−1/2]]`), anche
+  con S⇔D; numeri complessi negli elementi nei modi a+bi e r∠θ.
+- Errori nello stile della fx-CG50: `Dimension ERROR` (`DimensionError`),
+  `Type ERROR` (`TypeError`), matrice singolare, limiti della scheda.
+- Memorizzazione: `→Mat A`, `→Vct A`, `→List 1`, `→Mat A[r,c]`,
+  `→List 1[n]`, `{m,n}→Dim Mat A`; risposte in `MatAns`, `VctAns`, `ListAns`
+  (Ans resta l'ultimo numero).
+- Limiti per scheda (`limits.hpp`): lato 40 / 999, 400 / 10 000 elementi per
+  matrice, 1 200 / 20 000 elementi in tutte le memorie (Pico 2 W / Pico Plus 2 W).
+
+### Editor MAT/VCT (Run-Matrix, SHIFT 3)
+- Elenco Mat A–Z / Vct A–Z (e Ans in sola lettura) con le dimensioni, DIM,
+  celle con EXE verso destra, ROW-OP (SWAP, ×Rw, ×Rw+, Rw+), ROW e COLUMN
+  (DELETE, INSERT, ADD), DELETE, DEL-ALL, M⇔V; valori nel workspace, quindi
+  conservati cambiando applicazione e dopo lo spegnimento (record v6).
+- MATH › MAT/VCT: modelli 2×2, 3×3, m×n fino a 6×6, 2×1, 3×1, 1×2, 1×3;
+  risultati disegnati a griglia fino a 6×6 (liste fino a 20 elementi).
+
+### Editor delle espressioni
+- **Modalità Math / Line** (SYSTEM › Input/Output, primo campo del SET UP,
+  salvato e indicato nella barra di stato): in Line l'input e i risultati
+  sono su una riga e i tasti dei modelli inseriscono testo lineare; il cambio
+  converte la riga in corso.
+- **Selezione parziale CLIP** (SHIFT 8, frecce, F1 COPY, F2 CUT, DEL; SHIFT 9
+  PASTE; Ctrl+C/X/V): limitata al campo del cursore o all'intero modello, con
+  le parentesi sempre bilanciate.
+- **Parentesi colorate** per livello (blu, rosso, verde, magenta, nero), con
+  contrasto verificato (≥ 4,5:1) su ogni sfondo dell'input; nere dopo
+  l'esecuzione.
+- **Cursore sulla causa di un errore**: il lexer e il parser conservano la
+  posizione di token e sotto-espressioni (`ast::Node::pos/len`,
+  `ErrorLocation`), il valutatore indica la sotto-espressione che non riesce
+  (`EvalInfo::error`), l'editor riporta la posizione nell'albero
+  (`ast::SerializeMap`, `NaturalEditor::markError`): il cursore va alla fine
+  della causa e la causa resta evidenziata.
+
+### Workspace
+- Record **versione 6**: modalità Input/Output, memorie Mat/Vct/MatAns/VctAns/
+  ListAns, risultati lista/matrice/vettore della cronologia (con le forme
+  esatte). I record delle versioni 1–5 (v1.6.0–v1.9.0) si leggono ancora:
+  verificato con un record generato dai sorgenti della v1.9.0
+  (`tests/fixtures/workspace_v1_9_0.inc`).
+- MEMORY: nuova voce "Matrici e vettori" (conteggio e cancellazione).
+
+### Correzioni
+- `List 1`…`List 6` scritti in Run-Matrix davano "non disponibile qui": ora
+  sono le liste di Statistics (in GRAPH restano un elemento per grafico).
+- `^` e la frazione dopo una lista o una matrice digitate (`{1,2}^2`) creavano
+  una base vuota: ora l'intero gruppo è l'operando.
+
+### Compilazione e pubblicazione
+- Nuovo workflow GitHub Actions `.github/workflows/release.yml`: test host di
+  entrambi i profili (anche ASan/UBSan e TSan), test del relay, firmware UF2
+  per Pimoroni Pico Plus 2 W e Raspberry Pi Pico 2 W, pacchetto di release;
+  con l'avvio manuale crea il tag e la GitHub Release con i file compilati
+  nella stessa esecuzione.
+
+### Test
+- Nuove suite `matrix_test` (parser, valutazione numerica ed esatta, errori e
+  posizioni, memorie, nucleo di Run-Matrix, record v6, retrocompatibilità) e
+  `editor_v110_test` (modelli MAT/VCT, Math/Line, CLIP, parentesi colorate e
+  contrasto, cursore sugli errori, 600 sequenze casuali di modifica, flussi
+  completi sul firmware con riavvio). Suite esistenti adattate solo dove la
+  v1.10.0 cambia volutamente il comportamento (versione del record, primo
+  campo del SET UP). Numeri in [TESTING.md](TESTING.md).
+
 ## v1.9.0 — consolidamento: v1.8.0 completa + Pimoroni Pico Plus 2 W
 
-Branch canonico: `main` (tag `v1.9.0` da creare su `main`). Il primo lavoro sulla 1.9.0 era stato
+Branch canonico: `main` (tag `v1.9.0` creato dal workflow di release della v1.10.0 sul commit `bb2bdee`). Il primo lavoro sulla 1.9.0 era stato
 sviluppato su `main`/`version/v1.5.4` e non conteneva le 24 commit della
 v1.6.0–v1.8.0; questa versione le riunisce: architettura e funzioni della
 v1.8.0 al completo, layer hardware e di memoria della prima 1.9.0 portato su

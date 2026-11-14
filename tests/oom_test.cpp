@@ -138,6 +138,32 @@ int main() {
         release();
         CHECK(failed ? ne.toExpression() == "12" : ne.toExpression() == "123");
     }
+    // ---- v1.10.0: un record che non entra nella memoria libera all'avvio (Pico
+    //      Plus 2 W con la PSRAM disattivata e molte matrici) non termina il
+    //      firmware e non viene sovrascritto da un workspace vuoto.
+    {
+        Workspace big;
+        big.memory.store('B', 9);
+        big.storeMatrix(0, CalcValue::matrix(limits::kMatrixMaxDim < 20 ? limits::kMatrixMaxDim : 20, 20));
+        const auto bytes = serializeWorkspace(big);
+        CHECK(storage::RecordStore(board::storageFlash()).save(bytes));
+        BoardPlatform platform;
+        Firmware fw(platform, board::storageFlash());
+        exhaust();
+        fw.boot();
+        release();
+        CHECK(fw.storageLocked() && !fw.loadedFromFlash());
+        CHECK(fw.apps().errorShown() && fw.apps().errorTitle() == "Memory ERROR");
+        fw.workspace().memory.store('C', 1);
+        fw.apps().context().markDirty();
+        board::host::advance(5000);
+        (void)fw.step();
+        CHECK(!fw.saveNow() && fw.saves() == 0);
+        std::vector<std::uint8_t> blob;
+        CHECK(storage::RecordStore(board::storageFlash()).load(blob) && blob == bytes);   // dati intatti
+        Workspace back;
+        CHECK(deserializeWorkspace(blob.data(), blob.size(), back) && back.memory.recall('B') == 9 && back.matrices.mat[0].size() == 400);
+    }
     CHECK(mem::stats(mem::Pool::SRAM).allocations == baseline);     // nothing leaked after all the failures
     CHECK(mem::checkIntegrity());
     CHECK(mem::outOfMemoryEvents() > 0);

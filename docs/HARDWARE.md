@@ -85,6 +85,40 @@ in [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md) e diagnostica SYSTEM → F
 - Le regioni non si sovrappongono mai all'immagine del firmware e vengono
   limitate alla capacità reale del chip (JEDEC ID letto all'avvio).
 
+## Differenze tra le schede che riguardano la v1.10.0
+
+Le novità della v1.10.0 (matrici, vettori e liste, editor MAT/VCT, Math/Line,
+CLIP, parentesi colorate, cursore sugli errori) sono **solo software**: nessun
+pin, driver o periferica nuovi, stessa mappa della flash e stessi script del
+linker (`memmap_picocalc.ld`) della v1.9.0. Verificati sugli header del Pico
+SDK 2.2.0 (`pico2_w.h`, `pimoroni_pico_plus2_w_rp2350.h`) e da `board_config.hpp`
+con `static_assert`:
+
+| Voce | Raspberry Pi Pico 2 W | Pimoroni Pico Plus 2 W |
+|---|---|---|
+| `PICO_BOARD` / `FXAI_BOARD` | `pico2_w` / `PICO2W` | `pimoroni_pico_plus2_w_rp2350` / `PICO_PLUS_2W` |
+| MCU, GPIO | RP2350A, 30 GPIO | RP2350B, 48 GPIO |
+| SRAM / PSRAM | 520 KB / — | 520 KB / 8 MB (CS GPIO47) |
+| Flash, partizione firmware | 4 MB, 2 MB | 16 MB, 4 MB |
+| SPI (LCD SPI1, microSD SPI0), I²C (tastiera I2C1), Wi-Fi (CYW43439 GP23/24/25/29) | identici | identici (Wi-Fi sul modulo RM2) |
+| Connettore Qw/ST (I²C) | — | presente, non usato dal firmware |
+
+La memoria è **diversa**, quindi lo sono i limiti delle matrici
+(`include/limits.hpp`) e lo spazio che occupano:
+
+| Matrici e vettori | Pico 2 W | Pico Plus 2 W |
+|---|---|---|
+| Lato massimo | 40 | 999 (come la fx-CG50) |
+| Elementi per matrice o vettore | 400 | 10 000 |
+| Elementi di tutte le memorie (Mat/Vct A–Z, MatAns, VctAns) | 1 200 | 20 000 |
+| Dove stanno in RAM | heap SRAM (≈ 190 KB liberi) | PSRAM (≥ 512 byte → pool PSRAM) |
+| Spazio nel record in flash | ≤ 9,4 KB (reali) / 18,8 KB (complessi) su 59,75 KB | ≤ 156 KB / 312 KB su 511,75 KB |
+| RAM di lavoro di un calcolo | 16 byte per elemento per matrice temporanea (es. inversa di 20×20: ≈ 19 KB) | idem (inversa di 100×100: ≈ 480 KB in PSRAM) |
+
+Immagine del firmware v1.10.0: ≈ +128 KB rispetto alla v1.9.0 su entrambe le
+schede (Pico 2 W ≈ 72 % della partizione da 2 MB); RAM statica +2 KB. Valori
+esatti in [BUILD_STATUS.md](BUILD_STATUS.md).
+
 ## Collaudo consigliato sul dispositivo
 
 1. Build con `-DFXAI_DISPLAY_CALIBRATION_SCREEN=ON`: barre R/G/B/W/Y/M/C, quadrato
@@ -98,7 +132,9 @@ in [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md) e diagnostica SYSTEM → F
    misurare il tempo di disegno; verificare che TRACE ed EXIT rispondano
    durante il disegno; controllare i colori di curve e riempimenti.
 7. PSRAM, flash, 3D e prestazioni della Plus: seguire
-   [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) (HW-40…HW-82).
+   [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) (HW-40…HW-82); novità
+   della v1.10.0 (MAT/VCT, parentesi colorate sul pannello, CLIP, cursore
+   sugli errori, Math/Line): [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md) (HW-90…HW-99).
 8. microSD e TABLE: seguire [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md)
    (diagnostica SYSTEM → DIAG con log `[DIAG]` sulla seriale USB). In sintesi:
    FILE > SAVE AS, estrarre e reinserire la scheda,

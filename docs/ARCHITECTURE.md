@@ -1,4 +1,4 @@
-# Architettura — v1.9.0
+# Architettura — v1.10.0
 
 Architettura di ogni modalità, servizi condivisi, dati scambiati e regole
 verificate dai test: [APPLICATIONS_ARCHITECTURE.md](APPLICATIONS_ARCHITECTURE.md).
@@ -70,7 +70,9 @@ memoria (A–Z, Ans/PreAns anche complessi, con la forma esatta), storia di
 Run-Matrix (con forma esatta e vista), funzioni Y1–Y20 e V-Window di Graph,
 stato di Graph (Setup, memorie V-Window e grafiche, SKETCH, progetto aperto),
 range, variabile, tipo e righe di Table, liste 1–6, stato di Equation,
-conversazione AI. I file
+conversazione AI e, dalla v1.10.0, le memorie di matrici e vettori
+(`CollectionMemory`: Mat A–Z, Vct A–Z, MatAns, VctAns, ListAns) e la modalità
+Input/Output. I file
 dell'utente (progetti GRAPH, immagini) sono sulla microSD
 ([STORAGE.md](STORAGE.md)).
 Le app comunicano tramite questo modello (es. Statistics copia una regressione in
@@ -78,20 +80,70 @@ Graph, Graph apre Table con G↔T, Table imposta la finestra di Graph con G-PLT)
 
 Il workspace implementa anche `NameResolver`: Run-Matrix legge in sola lettura
 le variabili di Graph e Table (`Xmin`, `TblStart`, …) senza accedere direttamente
-a quelle sezioni.
+a quelle sezioni. Dalla v1.10.0 implementa anche `CollectionResolver`: il
+valutatore legge `Mat A`, `Vct B`, `List 1` (le liste di Statistics) e le
+memorie delle risposte tramite questa interfaccia; le assegnazioni passano da
+metodi controllati (`storeMatrix`, `storeVector`, `storeList`,
+`storeCollectionAnswer`) che verificano tipo, forma e limiti della scheda. Così
+Run-Matrix non accede direttamente a `ws.lists` (lo verifica `architecture_test`).
 
-`serializeWorkspace()` produce un blob binario versionato (versione 5 dalla
-v1.9.0 con il 3D Graph e l'archivio dei file; le versioni 1–4 vengono ancora
-lette); `RecordStore` lo scrive in uno dei due
-slot flash con CRC-32 dell'intestazione e del contenuto.
+`serializeWorkspace()` produce un blob binario versionato (versione 6 dalla
+v1.10.0 con Input/Output, matrici, vettori e risultati collezione della
+cronologia; versione 5 dalla v1.9.0 con il 3D Graph e l'archivio dei file; le
+versioni 1–5 vengono ancora lette); `RecordStore` lo scrive in uno dei due
+slot flash con CRC-32 dell'intestazione e del contenuto. Formato in
+[STORAGE.md](STORAGE.md#workspace-in-flash).
 
 ## Motore matematico
 
 Una sola rappresentazione (`ast::Node`) è condivisa da editor, parser, valutatori
-(numerico ed esatto) e renderer. L'editor costruisce nodi Row/Token/Fraction/Radical/Power/Calculus/Call;
+(numerico ed esatto) e renderer. L'editor costruisce nodi Row/Token/Fraction/Radical/Power/Calculus/Call/Matrix;
 `ast::serialize` produce il testo lineare canonico, che il parser trasforma in nodi
-Binary/Unary/Call valutati da un unico valutatore templato su `double` (modo Real) e
+Binary/Unary/Call/Matrix/List valutati da un unico valutatore templato su `double` (modo Real) e
 `std::complex<double>` (modi a+bi e r∠θ). Vedi [MATH_ENGINE.md](MATH_ENGINE.md).
+
+### Matrici, vettori e liste (v1.10.0)
+
+```
+testo ──Lexer (token con posizione)──▶ Parser ──▶ ast::Node (pos, len, FlagCollection)
+                                                     │
+                 ┌───────────────────────────────────┴────────────────────────┐
+     nodo senza collezioni                                       nodo con collezioni
+     evalNode<double|complex>, exactNode                         CollEval<NumDomain|ExactDomain>
+     (valutatori scalari della v1.9.0)                           (+ − × ^ Det Trn DotP Sum Seq…)
+                 └───────────────◀── sotto-espressioni numeriche ──────────────┘
+                                                     │
+                       CalcValue (numero, lista, matrice, vettore) / ExactCollection
+```
+
+- **Un solo parser**: i letterali `[[…][…]]` e `{…}`, i riferimenti `Mat A`,
+  `Vct A`, `List n` e gli indici `[…]` sono produzioni della stessa grammatica;
+  ogni nodo ha l'intervallo di byte del testo (`pos`, `len`) e l'indicatore
+  `FlagCollection` quando il suo sotto-albero contiene collezioni.
+- **Un solo valutatore per tipo di elemento**: `CollEval` è un template sul
+  dominio degli elementi (`NumDomain`: reale o complesso secondo il Complex
+  Mode; `ExactDomain`: razionali, radicali, multipli di π). Le sotto-espressioni
+  numeriche passano ai valutatori scalari esistenti, quindi un numero ha
+  esattamente il comportamento di prima ovunque (GRAPH, TABLE, Equation…).
+- **Valore unificato**: `CalcValue` (`include/value.hpp`) è usato dal valutatore,
+  dalle memorie del workspace, dall'editor MAT/VCT e dalla visualizzazione; le
+  parti immaginarie esistono solo se servono (8 byte per elemento reale).
+- **Errori con posizione**: `SyntaxError`/`MathError` hanno `where`
+  (`ErrorLocation`); il parser indica il token, il valutatore la
+  sotto-espressione in corso (`EvalInfo::error`, registrata da una guardia RAII
+  solo mentre l'eccezione risale: nessun costo per GRAPH che campiona in un
+  ciclo). `ast::SerializeMap` riporta la posizione del testo nell'albero
+  dell'editor (`NaturalEditor::markError`).
+
+### Editor (v1.10.0)
+
+`NaturalEditor` ha due modalità (`setLinear`): Math (modelli 2D, importazione
+strutturale) e Line (solo token, testo lineare). La selezione CLIP è un
+intervallo della riga attiva (`Range`), estesa per bilanciare le parentesi;
+il renderer (`math::layout`) riceve in `CursorTarget` l'intervallo da
+evidenziare e la richiesta di colorare le parentesi per livello, e produce
+operazioni `Highlight` e testi con un indice di colore (`NaturalDrawOp::color`)
+che `math::draw` traduce con una `Palette`.
 
 ## Gestione errori
 

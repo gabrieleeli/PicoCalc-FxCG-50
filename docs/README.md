@@ -1,6 +1,6 @@
 # Documentazione
 
-## Documenti attuali (v1.9.0)
+## Documenti attuali (v1.10.0)
 
 | Documento | Contenuto |
 |---|---|
@@ -12,10 +12,11 @@
 | [PCGRAPH_FORMAT.md](PCGRAPH_FORMAT.md) | formati `.pcgraph`, `PCGMEM`, `.pcpict`, BMP; scrittura atomica e recupero |
 | [TABLE.md](TABLE.md) | TABLE: lista delle relazioni, variabile range/lista, tipi Y=/r=/Param, editing delle righe, LISTMEM, persistenza |
 | [PICO_PLUS_2W.md](PICO_PLUS_2W.md) | Pimoroni Pico Plus 2 W: schede supportate, mappa della memoria, driver PSRAM, pool e limiti, partizioni della flash, grafica, stack, build, diagnostica |
+| [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md) | collaudo delle novità della v1.10.0 sulla PicoCalc fisica (MAT/VCT, parentesi colorate, CLIP, cursore sugli errori, Math/Line, limiti delle matrici; HW-90…HW-99) |
 | [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) | collaudo della v1.9.0 sulla PicoCalc fisica (PSRAM, memoria, flash, 3D, guasti; HW-40…HW-82) |
 | [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md) | procedura di collaudo sulla PicoCalc fisica (GRAPH, microSD, TABLE; HW-01…HW-36, da ripetere con la v1.9.0) e dati da inviare |
 | [APPLICATIONS_ARCHITECTURE.md](APPLICATIONS_ARCHITECTURE.md) | registro delle modalità, servizi condivisi, dati scambiati, progetto delle modalità future, test di architettura |
-| [RUN_MATRIX.md](RUN_MATRIX.md) | Run-Matrix: tasti, cronologia, risultati esatti, S⇔D, frazioni miste, periodo, variabili |
+| [RUN_MATRIX.md](RUN_MATRIX.md) | Run-Matrix: tasti, cronologia, risultati esatti, S⇔D, frazioni miste, periodo, variabili, matrici/vettori/liste ed editor MAT/VCT, Math/Line, CLIP, parentesi colorate, cursore sugli errori |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | strati, ciclo principale, workspace, memoria, cartelle |
 | [HARDWARE.md](HARDWARE.md) | PicoCalc + Pico Plus 2 W / Pico 2 W: display, tastiera, microSD, flash, collaudo |
 | [GRAPHICS_ENGINE.md](GRAPHICS_ENGINE.md) | canvas, aggiornamento parziale, font, renderer matematico, UI kit |
@@ -26,12 +27,13 @@
 | [ROADMAP.md](ROADMAP.md) | cosa manca e priorità |
 | [CHANGELOG.md](CHANGELOG.md) | cronologia delle versioni |
 | [SYMBOL_CHEATSHEET.md](SYMBOL_CHEATSHEET.md) | simboli e notazione (contenuto dell'app Symbols) |
-| [reports/](reports/) | rapporti di sessione (v1.7.0, GRAPH v1.8.0, collaudo e TABLE v1.8.0) e del consolidamento della v1.9.0 ([CONSOLIDAMENTO_v1.9.0.md](reports/CONSOLIDAMENTO_v1.9.0.md)) |
+| [reports/](reports/) | rapporti di sessione (v1.7.0, GRAPH v1.8.0, collaudo e TABLE v1.8.0), del consolidamento della v1.9.0 ([CONSOLIDAMENTO_v1.9.0.md](reports/CONSOLIDAMENTO_v1.9.0.md)) e della v1.10.0 ([ANALISI_FONTI_v1.10.0.md](reports/ANALISI_FONTI_v1.10.0.md), [SVILUPPO_v1.10.0.md](reports/SVILUPPO_v1.10.0.md)) |
+| [releases/](releases/) | note delle GitHub Release (usate dal workflow di pubblicazione) |
 | [../CONTINUE.md](../CONTINUE.md) | stato e istruzioni per riprendere lo sviluppo |
 
 ## Versioni e branch
 
-Un solo branch per versione. `main` è la versione corrente (1.9.0); le versioni
+Un solo branch per versione. `main` è la versione corrente (1.10.0); le versioni
 precedenti hanno un branch storico `version/<n>` che non va modificato. Gli
 altri branch ancora presenti su GitHub (`version/v1.9.0`, `release/1.9.0`,
 `claude/*`, `ccr-*`) sono duplicati interamente contenuti in `main`, da
@@ -39,7 +41,8 @@ eliminare ([rapporto](reports/CONSOLIDAMENTO_v1.9.0.md#16-branch-e-tag)).
 
 | Branch / tag | Contenuto |
 |---|---|
-| **`main`** (tag `v1.9.0` da creare) | v1.9.0: v1.8.0 completa + Pimoroni Pico Plus 2 W (PSRAM, flash 16 MB, 3D Graph) |
+| **`main`** (tag `v1.10.0`) | v1.10.0: matrici, vettori e liste, editor MAT/VCT, Math/Line, CLIP, parentesi colorate, cursore sugli errori |
+| tag `v1.9.0` (commit `bb2bdee` di `main`) | v1.9.0: v1.8.0 completa + Pimoroni Pico Plus 2 W (PSRAM, flash 16 MB, 3D Graph) |
 | `version/v1.5.4` | codice originale caricato (non compilava per RP2350) |
 | `version/v1.6.0` | prima build RP2350, modalità complete della v1.6.0, relay AI |
 | `version/v1.7.0` | Sessione 1: audit, architettura delle applicazioni, Run-Matrix con risultati esatti |
