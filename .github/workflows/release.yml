@@ -1,0 +1,163 @@
+# Compilazione, test e pubblicazione del firmware PicoCalc FX-CG50 AI.
+#
+# A ogni push su main (e sui branch di lavoro claude/**): test host dei due
+# profili di scheda, test del relay AI, firmware UF2 per Pimoroni Pico Plus 2 W
+# e Raspberry Pi Pico 2 W, pacchetto di release come artefatto della run.
+#
+# Avvio manuale (Actions > "Build, test e release" > Run workflow, da main) con
+# "publish": oltre a quanto sopra crea il tag v<VERSION> sul commit compilato e
+# la GitHub Release con le note di docs/releases/v<VERSION>.md e i file UF2
+# prodotti dalla stessa run. Nessun tag viene mai spostato o sovrascritto.
+name: Build, test e release
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Crea il tag v<VERSION> e la GitHub Release (solo da main)"
+        type: boolean
+        default: false
+      tag_v190:
+        description: "Crea anche il tag v1.9.0 mancante sul commit bb2bdee"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' && github.ref != 'refs/heads/main' }}
+
+env:
+  PICO_SDK_TAG: "2.2.0"
+
+jobs:
+  build:
+    name: Test host e firmware
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib \
+            cmake ninja-build dosfstools mtools exfatprogs python3-venv
+
+      - name: Pico SDK (cache)
+        id: sdk
+        uses: actions/cache@v4
+        with:
+          path: ~/pico-sdk
+          key: pico-sdk-${{ env.PICO_SDK_TAG }}-v1
+
+      - name: Pico SDK (download)
+        if: steps.sdk.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch "$PICO_SDK_TAG" https://github.com/raspberrypi/pico-sdk.git ~/pico-sdk
+          git -C ~/pico-sdk submodule update --init --depth 1 lib/tinyusb lib/cyw43-driver lib/lwip lib/mbedtls
+
+      - name: Test host (Pico Plus 2 W e Pico 2 W)
+        run: tests/run_host_tests.sh
+
+      - name: Test host con AddressSanitizer/UBSan e ThreadSanitizer
+        run: tests/run_host_tests.sh --sanitize --tsan
+
+      - name: Test del relay AI
+        working-directory: relay
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet -r requirements.txt
+          .venv/bin/python -m unittest discover -s tests
+
+      - name: Firmware Pimoroni Pico Plus 2 W
+        run: PICO_SDK_PATH="$HOME/pico-sdk" scripts/build.sh --board pico_plus_2w
+
+      - name: Firmware Raspberry Pi Pico 2 W
+        run: PICO_SDK_PATH="$HOME/pico-sdk" scripts/build.sh --board pico2w
+
+      - name: Pacchetto di release
+        run: |
+          scripts/make_release.sh dist
+          (cd dist && sha256sum -c SHA256SUMS)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: picocalc-fxai-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    name: Tag e GitHub Release
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: picocalc-fxai-${{ github.sha }}
+          path: dist
+
+      - name: Tag e release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_V190: ${{ inputs.tag_v190 }}
+        run: |
+          set -euo pipefail
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          TAG="v${VERSION}"
+          NOTES="docs/releases/${TAG}.md"
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "ERRORE: la pubblicazione parte solo da main (ref: $GITHUB_REF)" >&2; exit 1
+          fi
+          [[ -f "$NOTES" ]] || { echo "ERRORE: mancano le note di rilascio $NOTES" >&2; exit 1; }
+          (cd dist && sha256sum -c SHA256SUMS)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Tag v1.9.0 mancante: mai creato perché l'ambiente di sviluppo rifiutava
+          # il push dei tag. Il commit deve essere un antenato di quello pubblicato.
+          V190_COMMIT="bb2bdeee8ed7eb1e418f97a52ce30e0189a9eb9b"
+          if [[ "$TAG_V190" == "true" ]]; then
+            if git ls-remote --exit-code --tags origin "refs/tags/v1.9.0" >/dev/null 2>&1; then
+              echo "Il tag v1.9.0 esiste già: lasciato com'è."
+            else
+              git merge-base --is-ancestor "$V190_COMMIT" "$GITHUB_SHA"
+              git tag -a v1.9.0 "$V190_COMMIT" -m "PicoCalc FX-CG50 AI 1.9.0"
+              git push origin "refs/tags/v1.9.0"
+            fi
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            EXISTING="$(git ls-remote --tags origin "refs/tags/${TAG}^{}" | cut -f1)"
+            [[ -n "$EXISTING" ]] || EXISTING="$(git ls-remote --tags origin "refs/tags/${TAG}" | cut -f1)"
+            if [[ "$EXISTING" != "$GITHUB_SHA" ]]; then
+              echo "ERRORE: il tag ${TAG} esiste già su un altro commit (${EXISTING}); non viene spostato." >&2; exit 1
+            fi
+            echo "Il tag ${TAG} esiste già su questo commit."
+          else
+            git tag -a "$TAG" "$GITHUB_SHA" -m "PicoCalc FxCG-50 ${TAG}"
+            git push origin "refs/tags/${TAG}"
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "ERRORE: la release ${TAG} esiste già." >&2; exit 1
+          fi
+          gh release create "$TAG" --verify-tag --latest \
+            --title "PicoCalc FxCG-50 ${TAG}" --notes-file "$NOTES" dist/*
+          gh release view "$TAG" --json url,tagName,isDraft,isPrerelease,assets \
+            --jq '{url, tagName, isDraft, isPrerelease, assets: [.assets[].name]}'
