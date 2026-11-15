@@ -79,7 +79,7 @@ public:
     const CellGrid& grid() const noexcept { return grid_; }
 private:
     enum class Confirm : std::uint8_t { None, Delete, DeleteAll };
-    enum class Menu : std::uint8_t { None, RowOp, Row, Column };
+    enum class Menu : std::uint8_t { None, RowOp, Row, Column, Csv };
     CalcValue* current(Context& ctx) const;              // memoria della riga selezionata
     std::string name(int row) const;                     // "Mat A", "Vct Ans"
     void listKey(Context& ctx, const KeyEvent& ev);
@@ -90,6 +90,12 @@ private:
     void store(Context& ctx, CalcValue value);           // assegnazione controllata della memoria selezionata
     void menuChoice(Context& ctx, int choice);
     void askNext(Context& ctx);                          // raccoglie i numeri di una ROW-OP
+    void writeCell(Context& ctx, int row, int col, const std::string& text);   // cella da un'espressione
+    std::string cellEditText(Context& ctx, int row, int col) const;          // testo iniziale della modifica
+    void csvMenu(Context& ctx, int choice);              // CSV: 0 LOAD, 1 SAVE·AS
+    void csvChosen(Context& ctx);
+    FileDialog dialog_;
+    bool csvSave_{false};
     bool open_{false};
     bool vectors_{false};
     Screen screen_{Screen::List};

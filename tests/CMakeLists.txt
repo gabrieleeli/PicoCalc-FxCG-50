@@ -45,7 +45,9 @@ set(FXAI_TESTS
   mem_pools_smoke psram_selftest_smoke limits_smoke internal_fs_test graphics_memory_test graph3d_test
   board_profile_test system_diag_test
   # v1.10.0: matrici/vettori/liste nel parser, editor (Math/Line, CLIP, parentesi, errori), editor MAT/VCT
-  matrix_test editor_v110_test)
+  matrix_test editor_v110_test
+  # v1.11.0: List 1-26 e CSV, calcolo (simboli ingegneristici, Simp, Base-N), Run-Matrix (Line, MatAns, comandi grafici)
+  lists_csv_test)
 foreach(t ${FXAI_TESTS})
   add_executable(${t} ${CMAKE_CURRENT_LIST_DIR}/${t}.cpp)
   target_link_libraries(${t} PRIVATE fxai_core fxai_host_board)

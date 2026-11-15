@@ -124,7 +124,7 @@ std::size_t indexValue(const ast::NodePtr& n, const EvalContext& ctx, const char
     return static_cast<std::size_t>(d);
 }
 // numero -> Mat A[r,c], Vct A[n], List 1[n]
-void storeElement(Workspace& ws, const StoreTarget& t, Complex value, const EvalContext& ctx) {
+void storeElement(Workspace& ws, const StoreTarget& t, Complex value, const EvalContext& ctx, const ExactSlot* exactForm) {
     using Memory = CollectionResolver::Memory;
     const std::string name = t.label.substr(0, t.label.find('['));
     if (t.memory == Memory::List) {
@@ -153,7 +153,9 @@ void storeElement(Workspace& ws, const StoreTarget& t, Complex value, const Eval
         if (i > m.size()) throw DimensionError("Dimension ERROR: indice " + std::to_string(i) + " fuori da " + name + " (" + dimensionText(m) + ")");
         pos = i - 1;
     }
-    m.set(pos, value);
+    // La forma esatta dell'elemento resta nella memoria (1/3 -> Mat A[1,1]).
+    if (exactForm && exactForm->valid && value.imag() == 0) m.setExact(pos, exactForm->value);
+    else m.set(pos, value);
     m.normalize();
 }
 // Gli errori dell'assegnazione si segnalano sulla freccia.
@@ -212,7 +214,7 @@ void scalarResult(Workspace& ws, const std::string& raw, const ast::Node& tree, 
             }
             break;
         case StoreTarget::Kind::Element:
-            storeElement(ws, target, out.value, ctx);
+            storeElement(ws, target, out.value, ctx, &slot);
             out.storedIn = target.label;
             break;
         case StoreTarget::Kind::Memory:
@@ -243,6 +245,8 @@ void collectionResult(Workspace& ws, const std::string& raw, const ast::Node& tr
         if (evaluateExactAny(tree, ctx, ex) && ex.type == value.type && ex.rows == value.rows && ex.cols == value.cols &&
             ex.elements.size() == value.size()) {
             for (std::size_t i = 0; i < value.size(); ++i) value.re[i] = ex.elements[i].toDouble();
+            // Le memorie (Mat Ans, -> Mat A) conservano le forme esatte (v1.11.0).
+            if (value.size() <= CalcValue::ExactElements) value.exact = ex.elements;
             result->exact = std::move(ex.elements);
             result->decimal = ex.decimal;
             out.exact = true;
@@ -281,6 +285,7 @@ void collectionResult(Workspace& ws, const std::string& raw, const ast::Node& tr
     entry.expression = raw;
     // La cronologia conserva cio' che mostra la vista naturale; i risultati piu'
     // grandi si leggono dalla memoria delle risposte (la riga indica dove sono).
+    value.exact.clear();                                   // nella cronologia le forme esatte sono in result->exact
     if (naturalSize(value)) result->value = std::move(value);
     else { result->value.type = value.type; result->value.rows = value.rows; result->value.cols = value.cols; result->exact.clear(); }
     entry.collection = std::move(result);

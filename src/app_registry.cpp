@@ -28,7 +28,7 @@ const char* const kGraph3DSrc[] = {"src/apps/graph3d_app.cpp", nullptr};
 const AppInfo kApps[AppCount] = {
     {AppId::RunMatrix, "Run-Matrix", "1", rgb888To565(232, 96, 30), AppStatus::Available,
      "Calcoli e risultati: input Math o Line, risultati esatti e decimali, matrici, vettori e liste con l'editor MAT/VCT, cronologia modificabile, variabili, Base-N, DMS",
-     nullptr, s::Expression | s::Exact | Ui | s::MathRender | s::MathCore | s::RunCore | s::Storage,
+     nullptr, s::Expression | s::Exact | Ui | s::MathRender | s::MathCore | s::RunCore | s::Storage | s::Files,
      d::Settings | d::Memory | d::History | d::Matrices, 0, kRunMatrixSrc},
     {AppId::Statistics, "Statistics", "2", rgb888To565(30, 160, 90), AppStatus::Available,
      "Liste 1-26 con sottonomi e file CSV, statistiche 1/2 variabili, regressioni, grafici statistici, distribuzioni, test e intervalli",

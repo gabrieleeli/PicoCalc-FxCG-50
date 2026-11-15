@@ -85,6 +85,7 @@ void Workspace::storeMatrix(std::size_t slot, CalcValue value) {
     checkBudget(matrices, matrices.mat[slot].size(), value.size());
     value.type = ValueType::Matrix;
     value.normalize();
+    if (!value.hasExact() || value.complex() || value.size() > CalcValue::ExactElements) value.exact.clear();
     matrices.mat[slot] = std::move(value);
 }
 void Workspace::storeVector(std::size_t slot, CalcValue value) {
@@ -95,6 +96,7 @@ void Workspace::storeVector(std::size_t slot, CalcValue value) {
     checkBudget(matrices, matrices.vct[slot].size(), value.size());
     value.type = ValueType::Vector;
     value.normalize();
+    if (!value.hasExact() || value.complex() || value.size() > CalcValue::ExactElements) value.exact.clear();
     matrices.vct[slot] = std::move(value);
 }
 void Workspace::storeList(std::size_t index, const CalcValue& value) {
@@ -143,13 +145,18 @@ void Workspace::setListName(std::size_t index, std::string name) {
 }
 void Workspace::storeCollectionAnswer(const CalcValue& value) {
     mem::PlacementScope heavy(mem::Policy::PREFER_PSRAM);
-    if (value.isList()) { matrices.listAns = value; matrices.listAns.normalize(); return; }
+    if (value.isList()) {
+        matrices.listAns = value; matrices.listAns.normalize();
+        if (!matrices.listAns.hasExact() || matrices.listAns.size() > CalcValue::ExactElements) matrices.listAns.exact.clear();
+        return;
+    }
     if (!value.isMatrixLike()) return;
     checkStorable(value, "MatAns");
     const bool vector = value.vectorShaped();
     checkBudget(matrices, matrices.matAns.size() + (vector ? matrices.vctAns.size() : 0), value.size() * (vector ? 2 : 1));
     CalcValue m = value;
     m.type = ValueType::Matrix; m.normalize();
+    if (!m.hasExact() || m.complex() || m.size() > CalcValue::ExactElements) m.exact.clear();
     if (vector) { CalcValue v = m; v.type = ValueType::Vector; matrices.vctAns = std::move(v); }
     matrices.matAns = std::move(m);
 }

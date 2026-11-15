@@ -1640,11 +1640,13 @@ struct ExactDomain {
     static double toReal(const Elem& a,const char*){Rational r;if(!a.rational(r))throw NoExactForm{};return r.toDouble();}
     static int compare(const Elem& a,const Elem& b){int c=0;if(!exactCompare(a,b,c))throw NoExactForm{};return c;}
     static bool negligible(const Elem& pivot,double){return pivot.isZero();}
-    // Un elemento memorizzato e' esatto quando e' intero (un double intero e'
-    // esattamente quell'intero); per gli altri non c'e' una forma esatta nota.
+    // Un elemento memorizzato e' esatto quando la memoria conserva la sua forma
+    // esatta (celle dell'editor MAT/VCT, risultati esatti memorizzati: v1.11.0)
+    // o quando e' intero (un double intero e' esattamente quell'intero).
     static void load(const CalcValue& src,Coll<Elem>& out,Env&){
         if(src.complex())throw NoExactForm{};
         out.rows=src.rows;out.cols=src.cols;
+        if(src.hasExact()){out.v=src.exact;return;}
         out.v.resize(src.size());
         for(std::size_t i=0;i<src.size();++i){
             const double d=src.re[i];

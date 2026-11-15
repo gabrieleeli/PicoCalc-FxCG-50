@@ -4,8 +4,10 @@
 // DEL-ALL, M⇔V. I valori sono quelli del workspace (ws.matrices): gli stessi
 // usati dai calcoli, salvati con il resto dei dati.
 #include "apps.hpp"
+#include "csv_io.hpp"
 #include "limits.hpp"
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 
@@ -42,16 +44,63 @@ CalcValue resized(const CalcValue& v, bool rows, std::size_t at, bool remove) {
             std::size_t sr = r, sc = c;
             if (rows) { if (remove) { if (r >= at) ++sr; } else { if (r == at) continue; if (r > at) --sr; } }
             else { if (remove) { if (c >= at) ++sc; } else { if (c == at) continue; if (c > at) --sc; } }
-            out.set(r * nc + c, v.at(sr, sc));
+            if (v.hasExact()) out.setExact(r * nc + c, v.exact[sr * v.cols + sc]);   // le forme esatte restano
+            else out.set(r * nc + c, v.at(sr, sc));
         }
     out.normalize();
     return out;
 }
+// Testo di una cella: forma esatta quando esiste (1/3, 2√3, π/2), altrimenti
+// il numero (complesso: a+bi anche nel modo Real) nel formato del display.
+std::string cellText(const CalcValue& m, std::size_t i, const Settings& s) {
+    if (m.hasExact()) {
+        const exact::Value& e = m.exact[i];
+        exact::Rational r;
+        if (!(e.rational(r) && r.isInteger()) && exact::fitsRelaxed(e)) return exact::toText(e, s.mixedFractions);
+    }
+    const Complex z = m.at(i);
+    const ComplexMode mode = z.imag() != 0 && s.complex == ComplexMode::Real ? ComplexMode::Rectangular : s.complex;
+    return formatValue(z, mode, s.display);
+}
 } // namespace
+
+// Valore di una cella digitata: un'espressione dello stesso parser (frazioni,
+// radici, π, Mat B[1,2]...) che deve dare un numero; nel modo Real un input con
+// i e' calcolato come complesso, come sulla fx-CG50. La forma esatta, quando
+// esiste, resta nella memoria (fino a CalcValue::ExactElements elementi).
+void MatrixEditorView::writeCell(Context& ctx, int r, int c, const std::string& text) {
+    if (selected_ == AnsRow) throw MathError(std::string("Math ERROR: ") + (vectors_ ? "Vct" : "Mat") + " Ans si legge soltanto");
+    CalcValue* m = current(ctx);
+    if (!m || r >= m->rows || c >= m->cols) return;
+    ctx.ws.apply();
+    const auto tree = parseExpression(text);
+    EvalContext ec = ctx.ws.evalContext();
+    if (ec.complexMode == ComplexMode::Real && (text.find('i') != std::string::npos || m->complex())) ec.complexMode = ComplexMode::Rectangular;
+    const CalcValue v = evaluateAny(*tree, ec);
+    if (!v.isScalar()) throw TypeError(std::string("Type ERROR: una cella contiene un numero, non una ") + valueTypeName(v.type));
+    const Complex z = v.scalar();
+    const std::size_t index = static_cast<std::size_t>(r) * m->cols + static_cast<std::size_t>(c);
+    exact::Value e;
+    if (z.imag() == 0 && evaluateExact(*tree, ec, e) && std::isfinite(e.toDouble())) m->setExact(index, e);
+    else m->set(index, z);
+    m->normalize();
+    ctx.markDirty();
+}
+std::string MatrixEditorView::cellEditText(Context& ctx, int r, int c) const {
+    const CalcValue* m = current(ctx);
+    if (!m || r >= m->rows || c >= m->cols) return {};
+    const std::size_t i = static_cast<std::size_t>(r) * m->cols + static_cast<std::size_t>(c);
+    if (m->hasExact()) return exact::toExpression(m->exact[i]);
+    const Complex z = m->at(i);
+    char buf[80];
+    if (z.imag() == 0) std::snprintf(buf, sizeof(buf), "%.15g", z.real());
+    else std::snprintf(buf, sizeof(buf), "%.15g%+.15gi", z.real(), z.imag());
+    return buf;
+}
 
 void MatrixEditorView::open(Context&, bool vectors) {
     open_ = true; vectors_ = vectors; screen_ = Screen::List; confirm_ = Confirm::None;
-    menu_.close(); menuKind_ = Menu::None; asking_ = false;
+    menu_.close(); menuKind_ = Menu::None; asking_ = false; dialog_.close();
 }
 std::string MatrixEditorView::name(int row) const {
     std::string s = vectors_ ? "Vct " : "Mat ";
@@ -68,6 +117,16 @@ void MatrixEditorView::store(Context& ctx, CalcValue value) {
 }
 
 void MatrixEditorView::key(Context& ctx, const KeyEvent& ev) {
+    if (dialog_.active()) {
+        if (dialog_.key(ev) == 1) csvChosen(ctx);
+        return;
+    }
+    if (screen_ == Screen::List && menu_.open) {
+        const int choice = menu_.key(ev);
+        if (choice == -2) menuKind_ = Menu::None;
+        if (choice >= 0) { menu_.close(); menuKind_ = Menu::None; csvMenu(ctx, choice); }
+        return;
+    }
     switch (screen_) {
     case Screen::List: listKey(ctx, ev); return;
     case Screen::Dim: dimKey(ctx, ev); return;
@@ -117,10 +176,51 @@ void MatrixEditorView::listKey(Context& ctx, const KeyEvent& ev) {
         if (selected_ == AnsRow) { ctx.toast(name(AnsRow) + " si legge soltanto"); return; }
         openDim(ctx);
         return;
+    case Key::F4:
+        // CSV (fx-CG50 2-48): carica o salva la memoria selezionata.
+        menu_.show("CSV", {"LOAD  carica in " + name(selected_), "SAVE\xC2\xB7" "AS  salva " + name(selected_)});
+        menuKind_ = Menu::Csv;
+        return;
     case Key::F6: vectors_ = !vectors_; return;
     case Key::Exit: case Key::AC: close(); return;
     default: return;
     }
+}
+
+// ---------------------------------------------------------------- CSV
+void MatrixEditorView::csvMenu(Context& ctx, int choice) {
+    files::FileSystem* fs = userFiles(ctx);
+    if (!fs) throw MathError("Storage ERROR: archivio file non disponibile in questa build");
+    csvSave_ = choice == 1;
+    if (csvSave_) {
+        if (current(ctx)->empty()) throw MathError("Dimension ERROR: " + name(selected_) + " non definita");
+        const std::string suggested = (vectors_ ? "VCT" : "MAT") + std::string(selected_ == AnsRow ? "ANS" : std::string(1, static_cast<char>('A' + selected_)));
+        dialog_.openName("CSV SAVE\xC2\xB7" "AS  " + name(selected_), suggested);
+        return;
+    }
+    if (selected_ == AnsRow) throw MathError("Math ERROR: " + name(AnsRow) + " si legge soltanto");
+    std::vector<std::string> names;
+    const files::Status st = csv::list(*fs, names);
+    if (st != files::Status::Ok) throw MathError(std::string("Storage ERROR: ") + files::statusMessage(st));
+    dialog_.openList("CSV LOAD  in " + name(selected_), std::move(names));
+}
+void MatrixEditorView::csvChosen(Context& ctx) {
+    files::FileSystem* fs = userFiles(ctx);
+    if (!fs) throw MathError("Storage ERROR: archivio file non disponibile in questa build");
+    const std::string file = dialog_.name();
+    if (csvSave_) {
+        const files::Status st = csv::save(*fs, file, csv::encodeMatrix(*current(ctx), csv::formatOf(ctx.ws)));
+        if (st != files::Status::Ok) throw MathError(std::string("Storage ERROR: ") + files::statusMessage(st));
+        ctx.toast(name(selected_) + " salvata in " + file + ".csv");
+        return;
+    }
+    std::vector<std::uint8_t> bytes;
+    const files::Status st = csv::load(*fs, file, bytes);
+    if (st != files::Status::Ok) throw MathError(std::string("Storage ERROR: ") + files::statusMessage(st));
+    const csv::Table t = csv::decode(bytes.data(), bytes.size(), csv::formatOf(ctx.ws), limits::kMatrixMaxDim, limits::kMatrixMaxDim);
+    csv::loadMatrix(ctx.ws, vectors_, static_cast<std::size_t>(selected_), t);
+    ctx.markDirty();
+    ctx.toast(name(selected_) + " " + dimensionText(*current(ctx)) + " da " + file + ".csv");
 }
 
 // ---------------------------------------------------------------- DIM
@@ -186,10 +286,12 @@ void MatrixEditorView::openCells(Context& ctx) {
     grid_.text = [cp, vectors, slot](int r, int c) {
         const CalcValue* m = memoryOf(cp->ws, vectors, slot);
         if (!m || r >= m->rows || c >= m->cols) return std::string();
-        const Complex z = m->at(static_cast<std::size_t>(r), static_cast<std::size_t>(c));
-        const ComplexMode mode = z.imag() != 0 && cp->ws.settings.complex == ComplexMode::Real ? ComplexMode::Rectangular : cp->ws.settings.complex;
-        return formatValue(z, mode, cp->ws.settings.display);
+        return cellText(*m, static_cast<std::size_t>(r) * m->cols + static_cast<std::size_t>(c), cp->ws.settings);
     };
+    // Celle con espressioni, forme esatte e complessi (v1.11.0).
+    grid_.setText = [this, cp](int r, int c, const std::string& text) { writeCell(*cp, r, c, text); };
+    grid_.editText = [this, cp](int r, int c) { return cellEditText(*cp, r, c); };
+    grid_.scrollMarks = true;
     auto write = [cp, vectors, slot](int r, int c, Complex z) {
         if (slot == AnsRow) throw MathError(std::string("Math ERROR: ") + (vectors ? "Vct" : "Mat") + " Ans si legge soltanto");
         CalcValue* m = memoryOf(cp->ws, vectors, slot);
@@ -314,8 +416,10 @@ void MatrixEditorView::draw(Context& ctx, gfx::Canvas& c) {
             ui::listRow(c, listTop + i * rowH, rowH - 1, label.c_str(), dims.c_str(), row == selected_);
         }
         ui::scrollBar(c, ui::ScreenW - 3, listTop, visible * rowH, AnsRow + 1, visible, first_);
-        const char* keys[6] = {"DELETE", "DEL-ALL", "DIM", nullptr, nullptr, "M\xE2\x87\x94V"};
+        const char* keys[6] = {"DELETE", "DEL-ALL", "DIM", "CSV", nullptr, "M\xE2\x87\x94V"};
         ui::softKeys(c, keys);
+        menu_.draw(c);
+        dialog_.draw(c);
         if (confirm_ == Confirm::Delete) ui::errorBox(c, "ELIMINARE?", (name(selected_) + "  EXE = conferma").c_str());
         if (confirm_ == Confirm::DeleteAll) ui::errorBox(c, "ELIMINARE TUTTO?", vectors_ ? "Vct A-Z e Vct Ans  EXE = conferma" : "Mat A-Z e Mat Ans  EXE = conferma");
         return;
@@ -343,7 +447,10 @@ void MatrixEditorView::draw(Context& ctx, gfx::Canvas& c) {
     const CalcValue* v = current(ctx);
     c.rect(0, top, ui::ScreenW, 18, SelectSoft, true);
     ui::text(c, 6, top + 1, (name(selected_) + "  " + (v ? dimensionText(*v) : std::string())).c_str(), Ink);
-    if (selected_ == AnsRow) ui::textRight(c, ui::ScreenW - 6, top + 3, "sola lettura", Muted, font::Face::Small);
+    // Cella corrente (riga, colonna) e, per Ans, la sola lettura.
+    char where[48];
+    std::snprintf(where, sizeof(where), "%sr%d c%d", selected_ == AnsRow ? "sola lettura  " : "", grid_.row + 1, grid_.col + 1);
+    ui::textRight(c, ui::ScreenW - 6, top + 3, where, Muted, font::Face::Small);
     grid_.draw(ctx, c, top + 20, bottom);
     const bool readOnly = selected_ == AnsRow;
     const char* keys[6] = {vectors_ || readOnly ? nullptr : "ROW-OP", readOnly ? nullptr : "ROW", readOnly ? nullptr : "COLUMN",
