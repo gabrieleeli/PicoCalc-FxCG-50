@@ -506,12 +506,15 @@ std::string displayToken(const std::string& t) {
     std::string low = t; for (char& ch : low) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
     for (std::size_t i = 0; i < sizeof(kGreekNames) / sizeof(kGreekNames[0]); ++i) if (low == kGreekNames[i]) return kGreekGlyphs[i];
     if (low == "ans") return "Ans";
+    // "list1".."list26" (List 1-26, v1.11.0)
+    if (low.size() >= 5 && low.size() <= 6 && low.compare(0, 4, "list") == 0 && low[4] != '0' &&
+        std::all_of(low.begin() + 4, low.end(), [](char ch) { return ch >= '0' && ch <= '9'; }))
+        return "List " + low.substr(4);
     if (low == "preans") return "PreAns";
     // Shared variables (VARS) and operator words in fx-CG50 spelling.
     static const struct { const char* name; const char* shown; } kNames[] = {
         // Matrici, vettori e liste (grafia dei comandi OPTN della fx-CG50).
-        {"mat", "Mat "}, {"vct", "Vct "}, {"list", "List "}, {"list1", "List 1"}, {"list2", "List 2"}, {"list3", "List 3"},
-        {"list4", "List 4"}, {"list5", "List 5"}, {"list6", "List 6"}, {"det", "Det "}, {"trn", "Trn "}, {"identity", "Identity "},
+        {"mat", "Mat "}, {"vct", "Vct "}, {"list", "List "}, {"det", "Det "}, {"trn", "Trn "}, {"identity", "Identity "},
         {"dim", "Dim "}, {"augment", "Augment"}, {"fill", "Fill"}, {"ref", "Ref "}, {"rref", "Rref "},
         {"mattolist", "Mat\xE2\x86\x92List"}, {"listtomat", "List\xE2\x86\x92Mat"}, {"dotp", "DotP"}, {"crossp", "CrossP"},
         {"angle", "Angle"}, {"unitv", "UnitV"}, {"norm", "Norm"}, {"seq", "Seq"}, {"mean", "Mean"}, {"median", "Median"},

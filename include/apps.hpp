@@ -181,12 +181,20 @@ public:
     void enter(Context& ctx) override;
     void key(Context& ctx, const KeyEvent& ev) override;
     void draw(Context& ctx, gfx::Canvas& c) override;
-    enum class Screen { Lists, Results, Graph, Form };
+    enum class Screen { Lists, Results, Graph, Form, Set };
     enum class GraphKind { Scatter, XYLine, Histogram, Box, Regression };
     Screen screen() const noexcept { return screen_; }
     const ResultList& results() const noexcept { return results_; }
+    const CellGrid& grid() const noexcept { return grid_; }
+    const FileDialog& fileDialog() const noexcept { return dialog_; }
 private:
     void setupGrid(Context& ctx);
+    void openSet(Context& ctx, bool csvFormat = false);  // SET XList/YList oppure formato CSV
+    void listOption(Context& ctx, int choice);           // OPTN dell'editor delle liste: CSV, DEL-ALL, SET
+    void fileChosen(Context& ctx);                       // LOAD / SAVE·AS del CSV dopo la scelta del nome
+    FileDialog dialog_;
+    bool csvSet_{false};
+    bool saving_{false};
     void runCalc(Context& ctx, int choice);
     void openDist(int choice);
     void openTest(int choice);

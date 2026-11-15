@@ -61,8 +61,12 @@ struct StoreTarget {
 };
 bool memoryName(const std::string& text, CollectionResolver::Memory& memory, int& index) {
     using Memory = CollectionResolver::Memory;
-    // Il parser legge List 1-6 come le variabili di lista condivise "list1".."list6".
-    if (text.size() == 5 && text.compare(0, 4, "list") == 0 && text[4] >= '1' && text[4] <= '6') { memory = Memory::List; index = text[4] - '1'; return true; }
+    // Il parser legge List 1-26 come le variabili di lista condivise "list1".."list26".
+    if (text.size() >= 5 && text.size() <= 6 && text.compare(0, 4, "list") == 0 && text[4] != '0' &&
+        std::all_of(text.begin() + 4, text.end(), [](char c) { return c >= '0' && c <= '9'; })) {
+        memory = Memory::List; index = std::atoi(text.c_str() + 4) - 1;
+        return index >= 0 && index < CollectionResolver::Slots;
+    }
     const std::size_t space = text.find(' ');
     if (space == std::string::npos || space + 1 >= text.size()) return false;
     const std::string word = text.substr(0, space), name = text.substr(space + 1);
@@ -130,7 +134,7 @@ void storeElement(Workspace& ws, const StoreTarget& t, Complex value, const Eval
         const std::size_t i = indexValue(t.row, ctx, "l'indice");
         // Come sulla fx-CG50 una lista cresce di una cella alla volta.
         if (i > list.size() + 1) throw DimensionError("Dimension ERROR: indice " + std::to_string(i) + " oltre la fine di " + name);
-        if (value.imag() != 0) throw MathError("Math ERROR: le liste 1-6 contengono solo numeri reali");
+        if (value.imag() != 0) throw MathError("Math ERROR: le liste contengono solo numeri reali");
         if (i == list.size() + 1) { list.re.push_back(value.real()); list.rows = static_cast<std::uint16_t>(list.re.size()); }
         else list.re[i - 1] = value.real();
         ws.storeList(static_cast<std::size_t>(t.index), list);

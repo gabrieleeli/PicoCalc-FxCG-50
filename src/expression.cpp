@@ -82,7 +82,9 @@ const ConstInfo kConstants[] = {
 constexpr const char* kSpecialNames[] = {"ans","preans","theta"};
 // Variables owned by other applications (VARS menu), resolved through EvalContext::names.
 constexpr const char* kSystemNames[] = {"xmin","xmax","xscl","ymin","ymax","yscl","tmin","tmax","tptch",
-    "tblstart","tblend","tblpitch","xdot","list1","list2","list3","list4","list5","list6",nullptr};
+    "tblstart","tblend","tblpitch","xdot","list1","list2","list3","list4","list5","list6","list7","list8","list9","list10",
+    "list11","list12","list13","list14","list15","list16","list17","list18","list19","list20","list21","list22","list23",
+    "list24","list25","list26",nullptr};
 // Infix operator words (fx-CG50 And/Or/Xor, Int÷ and Rmdr) and their internal op codes.
 struct OpWord { const char* name; char op; };
 constexpr OpWord kOperatorWords[] = {{"and",'&'},{"or",'|'},{"xor",'x'},{"rmdr",'r'},{"intdiv",'q'}};
@@ -103,12 +105,17 @@ bool isSystemName(const std::string& lowerName){
     for(const char* const* n=kSystemNames;*n;++n)if(lowerName==*n)return true;
     return false;
 }
-// "list1".."list6": le liste di Statistics. In GRAPH una lista in una funzione
-// indica uno dei suoi elementi (un grafico per elemento, risolto dal
-// NameResolver del motore dei grafici); altrove e' l'intera lista.
-bool isListName(const std::string& lowerName){
-    return lowerName.size()==5&&lowerName.compare(0,4,"list")==0&&lowerName[4]>='1'&&lowerName[4]<='6';
+// "list1".."list26": le liste del workspace (Statistics, List 1-26). In GRAPH
+// una lista in una funzione indica uno dei suoi elementi (un grafico per
+// elemento, risolto dal NameResolver del motore dei grafici); altrove e'
+// l'intera lista.
+int listNumber(const std::string& lowerName){
+    if(lowerName.size()<5||lowerName.size()>6||lowerName.compare(0,4,"list")!=0||lowerName[4]=='0')return 0;
+    int v=0;
+    for(std::size_t i=4;i<lowerName.size();++i){if(lowerName[i]<'0'||lowerName[i]>'9')return 0;v=v*10+(lowerName[i]-'0');}
+    return v>=1&&v<=CollectionResolver::Slots?v:0;
 }
+bool isListName(const std::string& lowerName){return listNumber(lowerName)!=0;}
 bool isConstantName(const std::string& lowerName){
     for(const auto& c:kConstants)if(lowerName==c.name)return true;
     for(const char* s:kSpecialNames)if(lowerName==s)return true;
@@ -461,9 +468,9 @@ private:
             if(digits)for(char c:k.text)digits=digits&&std::isdigit(static_cast<unsigned char>(c));
             const int index=digits?std::atoi(k.text.c_str()):0;
             if(index<1||index>CollectionResolver::Slots)throw errorAt("Syntax ERROR: dopo List serve un numero 1-26 o Ans",k);
-            // List 1-6 usano il token delle variabili di lista condivise ("list1"), gia'
-            // usato da GRAPH e dai nomi di VARS.
-            if(index<=6)name="list"+std::to_string(index);else name+=std::to_string(index);
+            // List 1-26 usano il token delle variabili di lista condivise ("list12"),
+            // lo stesso usato da GRAPH, TABLE e dai nomi di VARS.
+            name="list"+std::to_string(index);
             ++i_;
         }else{
             if(k.type!=TT::Ident||k.text.size()!=1||!std::isalpha(static_cast<unsigned char>(k.text[0])))
@@ -1800,8 +1807,8 @@ private:
             // il nome e' l'elemento del grafico in corso, un numero.
             double element=0;
             if(env.ctx.names&&env.ctx.names->resolve(t,element))return scalarOf(D::fromDouble(element));
-            index=t[4]-'1';
-            t=std::string("List ")+t[4];
+            index=listNumber(t)-1;
+            t="List "+t.substr(4);
         }else{
             const std::size_t space=t.find(' ');
             if(space==std::string::npos||space+1>=t.size())throw SyntaxError("Syntax ERROR: nome sconosciuto "+t);

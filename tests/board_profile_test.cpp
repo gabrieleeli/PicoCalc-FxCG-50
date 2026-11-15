@@ -119,11 +119,11 @@ int main() {
         Workspace ws;
         CHECK(deserializeWorkspace(kV180Record, sizeof kV180Record, ws));
         checkV180(ws);
-        // saved again in the current format (6 since v1.10.0) and read back with the new fields
+        // saved again in the current format (7 since v1.11.0) and read back with the new fields
         ws.settings.fileStore = Settings::FileStore::Internal;
         ws.graph3d.model.z[2] = "x*y"; ws.graph3d.model.selected[2] = true; ws.graph3d.yaw = 100;
         const auto blob = serializeWorkspace(ws);
-        CHECK(blob[4] == 6 && blob[5] == 0);
+        CHECK(blob[4] == 7 && blob[5] == 0);
         Workspace back;
         CHECK(deserializeWorkspace(blob.data(), blob.size(), back));
         CHECK(back.settings.fileStore == Settings::FileStore::Internal && back.graph3d.model.z[2] == "x*y" && back.graph3d.yaw == 100);

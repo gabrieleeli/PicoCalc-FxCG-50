@@ -281,7 +281,7 @@ void TableApp::openSet(Context& ctx) {
 void TableApp::openSetup(Context& ctx) {
     const TableRange& t = ctx.ws.table;
     std::vector<std::string> vars = {"Range"};
-    for (int i = 1; i <= 6; ++i) vars.push_back("List " + std::to_string(i));
+    for (std::size_t i = 1; i <= Workspace::ListCount; ++i) vars.push_back("List " + std::to_string(i));
     auto choice = [](const char* l, std::vector<std::string> c, int sel) {
         const std::string text = c[static_cast<std::size_t>(sel)];
         return FormField{l, text, FormField::Type::Choice, std::move(c), sel};
@@ -429,8 +429,9 @@ void TableApp::answer(Context& ctx) {
         return;
     }
     // LISTMEM (manual 5-35): the column under the cursor into List n.
-    if (v != std::floor(v) || v < 1 || v > static_cast<double>(ctx.ws.lists.size())) throw MathError("Argument ERROR: List da 1 a 6");
-    if (t.rows.size() > Workspace::MaxListLength) throw MathError("Dimension ERROR: una lista contiene al massimo 255 elementi");
+    if (v != std::floor(v) || v < 1 || v > static_cast<double>(ctx.ws.lists.size()))
+        throw MathError("Argument ERROR: List da 1 a " + std::to_string(ctx.ws.lists.size()));
+    ctx.ws.checkListLength(static_cast<std::size_t>(v) - 1, t.rows.size());   // lunghezza e budget della scheda
     std::vector<double> values;
     values.reserve(t.rows.size());
     for (int r = 0; r < static_cast<int>(t.rows.size()); ++r) {
@@ -438,7 +439,7 @@ void TableApp::answer(Context& ctx) {
         if (!cell(ctx, r, col_, x)) throw MathError("Math ERROR: valore non definito alla riga " + std::to_string(r + 1));
         values.push_back(x);
     }
-    ctx.ws.lists[static_cast<std::size_t>(v) - 1] = std::move(values);
+    ctx.ws.setList(static_cast<std::size_t>(v) - 1, std::move(values));
     ctx.markDirty();
     ctx.toast("Copiata in List " + std::to_string(static_cast<int>(v)));
 }

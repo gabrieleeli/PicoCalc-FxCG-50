@@ -371,6 +371,10 @@ int main() {
             // v6 appends the Input/Output mode, 55 empty Mat/Vct/answer memories
             // and the (empty) list of collection results of the history
             tail += 1 + 55 + 2;
+            // v7 appends Base-N/Simplify/CSV/Statistics settings (6 bytes), List 7-26
+            // (20 empty lists), 26 empty sub-names, 55 exact-form flags, no history
+            // extras and no command graphs
+            tail += 6 + 20 * 2 + 26 * 2 + 55 + 2 + 1;
             blob.resize(blob.size() - tail);
             blob.erase(at + 24, at + 24 + 6);                         // variable, list, type, generated, row count
             const std::uint16_t three = 3;

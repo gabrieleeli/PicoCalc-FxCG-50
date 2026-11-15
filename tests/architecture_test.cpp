@@ -158,8 +158,11 @@ int main() {
     }
 
     // ---------------------------------------------------------------- sources against the registry
-    std::map<std::string, std::string> wsName;
-    for (std::size_t i = 0; i < data::Count; ++i) wsName[dataSectionName(i)] = std::to_string(i);
+    // Ogni sezione ha il suo nome; i membri e i metodi delle liste (v1.11.0)
+    // appartengono alla sezione Lists.
+    for (std::size_t i = 0; i < data::Count; ++i) CHECK(dataSectionOfMember(dataSectionName(i)) == (1u << i));
+    CHECK(dataSectionOfMember("listNames") == data::Lists && dataSectionOfMember("setList") == data::Lists);
+    CHECK(dataSectionOfMember("nonexistent") == 0);
     for (std::size_t i = 0; i < AppCount; ++i) {
         const AppInfo& a = appInfoAt(i);
         if (!a.sources) continue;
@@ -176,8 +179,8 @@ int main() {
                 // diretto a ws.lists)
                 if (sec == "collection" || sec == "storeMatrix" || sec == "storeVector" || sec == "storeList" ||
                     sec == "storeCollectionAnswer" || sec == "snapshotCollections" || sec == "restoreCollections") continue;
-                const auto it = wsName.find(sec);
-                bool declared = it != wsName.end() && (a.data & (1u << std::stoi(it->second)));
+                const std::uint32_t section = dataSectionOfMember(sec.c_str());
+                bool declared = section != 0 && (a.data & section) == section;
                 if (sec == "resetAll") declared = a.data == (1u << data::Count) - 1;                       // touches every section
                 ::testutil::report(declared, "workspace section declared", *src, 0, std::string(a.name) + " -> ws." + sec);
             }

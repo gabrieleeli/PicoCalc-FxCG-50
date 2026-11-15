@@ -6,7 +6,7 @@ namespace fx::app {
 using namespace ui::theme;
 
 namespace {
-const char* kItems[] = {"Storia Run-Matrix", "Variabili A-Z e Ans", "Liste statistiche", "Funzioni Graph", "Coefficienti Equation", "Conversazioni AI", "Funzioni 3D Graph", "Matrici e vettori"};
+const char* kItems[] = {"Storia Run-Matrix", "Variabili A-Z e Ans", "Liste 1-26 e sottonomi", "Funzioni Graph", "Coefficienti Equation", "Conversazioni AI", "Funzioni 3D Graph", "Matrici e vettori"};
 constexpr int ItemCount = 8;
 }
 
@@ -17,7 +17,7 @@ void MemoryApp::key(Context& ctx, const KeyEvent& ev) {
             switch (confirm_) {
             case 0: ws.history.clear(); break;
             case 1: { const Settings s = ws.settings; ws.memory.clearAll(); ws.settings = s; break; }
-            case 2: for (auto& l : ws.lists) l.clear(); break;
+            case 2: for (auto& l : ws.lists) l.clear(); for (auto& n : ws.listNames) n.clear(); break;
             case 3: for (std::size_t i = 0; i < ws.functions.size(); ++i) ws.functions[i] = emptyGraphFunction(i); break;
             case 4: ws.equation = EquationState{}; break;
             case 5: ws.chat.clear(); break;
@@ -51,7 +51,7 @@ void MemoryApp::draw(Context& ctx, gfx::Canvas& c) {
     char counts[ItemCount][40];
     std::snprintf(counts[0], 40, "%u voci", static_cast<unsigned>(ws.history.size()));
     std::snprintf(counts[1], 40, "%d non nulle", vars);
-    std::snprintf(counts[2], 40, "%u valori", static_cast<unsigned>(listItems));
+    std::snprintf(counts[2], 40, "%u / %u valori", static_cast<unsigned>(listItems), static_cast<unsigned>(Workspace::MaxListElements));
     std::snprintf(counts[3], 40, "%d definite", fns);
     std::snprintf(counts[4], 40, "%d incognite", ws.equation.unknowns);
     std::snprintf(counts[5], 40, "%u messaggi", static_cast<unsigned>(ws.chat.size()));

@@ -60,7 +60,7 @@ constexpr std::uint32_t History   = 1u << 2;     // Run-Matrix history
 constexpr std::uint32_t Functions = 1u << 3;     // Y1..Y6 and their types
 constexpr std::uint32_t View      = 1u << 4;     // V-Window
 constexpr std::uint32_t Table     = 1u << 5;     // Table range
-constexpr std::uint32_t Lists     = 1u << 6;     // List 1..6
+constexpr std::uint32_t Lists     = 1u << 6;     // List 1..26 e i loro sottonomi
 constexpr std::uint32_t Equation  = 1u << 7;     // Equation coefficients and solver
 constexpr std::uint32_t Chat      = 1u << 8;     // AI conversation
 constexpr std::uint32_t Graph     = 1u << 9;     // GRAPH Setup, V-Window/graph memories, sketches, project
@@ -70,6 +70,12 @@ constexpr std::uint32_t Count     = 12;
 } // namespace data
 
 constexpr std::uint32_t linkTo(AppId id) noexcept { return 1u << static_cast<unsigned>(id); }
+
+// Sezione dei dati (bit di data::) a cui appartiene un membro o un metodo del
+// workspace usato dalle applicazioni ("lists", "listNames", "setList"...);
+// 0 per i nomi che non sono una sezione. Il test di architettura confronta
+// ogni accesso `ws.<nome>` dei sorgenti con le sezioni dichiarate.
+std::uint32_t dataSectionOfMember(const char* member) noexcept;
 
 struct AppInfo {
     AppId id;

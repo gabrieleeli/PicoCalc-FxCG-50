@@ -3,6 +3,7 @@
 // a workspace section or a link that is not declared here.
 #include "app_registry.hpp"
 #include "graphics_engine.hpp"
+#include <string_view>
 
 namespace fx::app {
 namespace {
@@ -30,8 +31,8 @@ const AppInfo kApps[AppCount] = {
      nullptr, s::Expression | s::Exact | Ui | s::MathRender | s::MathCore | s::RunCore | s::Storage,
      d::Settings | d::Memory | d::History | d::Matrices, 0, kRunMatrixSrc},
     {AppId::Statistics, "Statistics", "2", rgb888To565(30, 160, 90), AppStatus::Available,
-     "Liste, statistiche 1/2 variabili, regressioni, grafici statistici, distribuzioni, test e intervalli",
-     nullptr, s::Expression | Ui | s::Stats | s::Storage, d::Settings | d::Lists | d::Functions, 0, kStatisticsSrc},
+     "Liste 1-26 con sottonomi e file CSV, statistiche 1/2 variabili, regressioni, grafici statistici, distribuzioni, test e intervalli",
+     nullptr, s::Expression | Ui | s::Stats | s::Storage | s::Files, d::Settings | d::Lists | d::Functions, 0, kStatisticsSrc},
     {AppId::EActivity, "eActivity", "3", rgb888To565(220, 40, 140), AppStatus::Planned,
      "Documenti con righe di testo e righe di calcolo valutate dal nucleo di Run-Matrix",
      "Documenti misti testo/formule non ancora implementati.",
@@ -128,7 +129,7 @@ const char* const kHHelp[] = {"cheatsheet.hpp", nullptr};
 const char* const kHRunCore[] = {"run_matrix.hpp", nullptr};
 const char* const kHModels[] = {"app_models.hpp", nullptr};
 const char* const kHGraphCore[] = {"graph_model.hpp", "graph_engine.hpp", "graph_solve.hpp", "table_model.hpp", "limits.hpp", nullptr};
-const char* const kHFiles[] = {"file_store.hpp", "graph_file.hpp", "pict.hpp", nullptr};
+const char* const kHFiles[] = {"file_store.hpp", "graph_file.hpp", "pict.hpp", "csv_io.hpp", nullptr};
 const char* const kHDiag[] = {"diagnostics.hpp", nullptr};
 const char* const kHGraph3D[] = {"graph3d.hpp", "limits.hpp", nullptr};
 const char* const kHHardware[] = {"board_config.hpp", "mem_pools.hpp", "psram.hpp", "limits.hpp", "system_info.hpp", "system_runtime.hpp", nullptr};
@@ -142,7 +143,21 @@ const ServiceInfo kServices[service::Count] = {
     {s::Graph3D, "Graph3D", kHGraph3D}, {s::Hardware, "Hardware", kHHardware},
 };
 const char* const kDataNames[data::Count] = {"settings", "memory", "history", "functions", "view", "table", "lists", "equation", "chat", "graph", "graph3d", "matrices"};
+// Membri e metodi del workspace che non hanno il nome di una sezione (v1.11.0).
+struct MemberSection { const char* member; std::uint32_t section; };
+const MemberSection kMembers[] = {
+    {"listNames", d::Lists}, {"listName", d::Lists}, {"setListName", d::Lists}, {"setList", d::Lists},
+    {"checkListLength", d::Lists}, {"listFits", d::Lists}, {"listElements", d::Lists},
+};
 } // namespace
+
+std::uint32_t dataSectionOfMember(const char* member) noexcept {
+    if (!member) return 0;
+    const std::string_view m(member);
+    for (std::size_t i = 0; i < data::Count; ++i) if (m == kDataNames[i]) return 1u << i;
+    for (const auto& e : kMembers) if (m == e.member) return e.section;
+    return 0;
+}
 
 const AppInfo& appInfo(AppId id) noexcept {
     const auto i = static_cast<std::size_t>(id);

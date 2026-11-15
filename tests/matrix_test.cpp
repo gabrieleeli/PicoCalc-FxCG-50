@@ -62,7 +62,7 @@ int main() {
         CHECK(parseExpression("Mat A")->text == "Mat A" && parseExpression("MatA")->text == "Mat A");
         CHECK(parseExpression("Mat x")->text == "Mat X");                       // fx-CG50: Mat x = Mat X
         CHECK(parseExpression("Vct B")->text == "Vct B" && parseExpression("Mat Ans")->text == "Mat Ans");
-        CHECK(parseExpression("List 3")->text == "list3" && parseExpression("List12")->text == "List 12");
+        CHECK(parseExpression("List 3")->text == "list3" && parseExpression("List12")->text == "list12");
         CHECK(parseExpression("List Ans")->text == "List Ans");
         auto e = parseExpression("Mat A[1,2]");
         CHECK(e->kind == ast::Kind::Call && e->text == "elem" && e->children.size() == 3);
@@ -255,7 +255,7 @@ int main() {
         CHECK(w.matrices.vct[2].empty());
         runCalculation(w, "Vct B\xE2\x86\x92Mat D");
         CHECK(w.matrices.mat[3].type == ValueType::Matrix && w.matrices.mat[3].rows == 1);
-        // Liste: List 1-6 sono quelle di Statistics
+        // Liste: List 1-26 sono quelle di Statistics
         runCalculation(w, "{1,2,3}\xE2\x86\x92List 1");
         CHECK(w.lists[0] == std::vector<double>({1, 2, 3}));
         runCalculation(w, "List 1*2");
@@ -266,7 +266,8 @@ int main() {
         runCalculation(w, "7\xE2\x86\x92List 2[1]"); runCalculation(w, "8\xE2\x86\x92List 2[2]");
         CHECK(w.lists[1] == std::vector<double>({7, 8}));
         CHECK(entryError<DimensionError>(w, "9\xE2\x86\x92List 2[4]").known());   // una cella alla volta
-        CHECK(entryError<MathError>(w, "{1}\xE2\x86\x92List 7").known());          // List 7-26 non disponibili
+        runCalculation(w, "{1}\xE2\x86\x92List 7");                                   // v1.11.0: List 7-26 disponibili
+        CHECK(w.lists[6] == std::vector<double>({1}));
         // Elementi e dimensioni
         runCalculation(w, "5\xE2\x86\x92Mat A[1,2]");
         CHECK(w.matrices.mat[0].re[1] == 5);
@@ -341,7 +342,7 @@ int main() {
         runCalculation(w, "Identity(8)");
         runCalculation(w, "2+2");
         const auto bytes = serializeWorkspace(w);
-        CHECK(bytes[4] == 6 && bytes[5] == 0);
+        CHECK(bytes[4] == 7 && bytes[5] == 0);
         Workspace back;
         CHECK(deserializeWorkspace(bytes.data(), bytes.size(), back));
         CHECK(back.settings.inputMode == Settings::InputMode::Line);
@@ -378,7 +379,7 @@ int main() {
         CHECK_EQ_STR(resultText(w.history.back(), w.settings), "22.5");
         const auto bytes = serializeWorkspace(w);
         Workspace again;
-        CHECK(bytes[4] == 6 && deserializeWorkspace(bytes.data(), bytes.size(), again) && again.history.size() == 4);
+        CHECK(bytes[4] == 7 && deserializeWorkspace(bytes.data(), bytes.size(), again) && again.history.size() == 4);
         Workspace old;
         CHECK(deserializeWorkspace(kV180Record, sizeof kV180Record, old) && old.matrices.elements() == 0);   // v1.8.0, formato 4
     }

@@ -47,6 +47,8 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/workspace.cpp
   ${FXAI_ROOT}/src/storage.cpp
   ${FXAI_ROOT}/src/run_matrix.cpp
+  ${FXAI_ROOT}/src/csv_io.cpp
+  ${FXAI_ROOT}/src/graph_commands.cpp
   ${FXAI_ROOT}/src/solvers.cpp
   ${FXAI_ROOT}/src/statistics.cpp
   ${FXAI_ROOT}/src/app_registry.cpp
@@ -57,6 +59,7 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/apps/symbols_app.cpp
   ${FXAI_ROOT}/src/apps/run_matrix_app.cpp
   ${FXAI_ROOT}/src/apps/matrix_editor.cpp
+  ${FXAI_ROOT}/src/apps/answer_view.cpp
   ${FXAI_ROOT}/src/apps/widgets.cpp
   ${FXAI_ROOT}/src/apps/equation_app.cpp
   ${FXAI_ROOT}/src/apps/statistics_app.cpp

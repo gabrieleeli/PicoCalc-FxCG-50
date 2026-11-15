@@ -27,6 +27,13 @@ namespace fx::limits {
 // ---- Persistent limits (workspace record format v4, both boards) ---------------
 inline constexpr std::size_t kHistoryEntries = board::config::kIsPicoPlus2W ? 200 : 40;   // Run-Matrix history
 inline constexpr std::size_t kListMaxLength = board::config::kIsPicoPlus2W ? 999 : 255;   // statistics lists (fx-CG50: 999)
+// List 1-26 (v1.11.0, record v7): elementi di tutte le liste insieme. Sul Pico
+// 2 W resta l'occupazione massima della v1.10.0 (6 liste x 255 = 1530 elementi,
+// ~12 KB nel record da 59,75 KB); la Pico Plus 2 W tiene le liste nella PSRAM
+// e nel record da 512 KB (20 000 elementi, ~156 KB, come le matrici).
+inline constexpr std::size_t kListCount = 26;
+inline constexpr std::size_t kListStoreElements = board::config::kIsPicoPlus2W ? 20000 : 1530;
+inline constexpr std::size_t kListNameLength = 8;      // sottonome di una lista (fx-CG50: 8 caratteri)
 inline constexpr std::size_t kChatMessages = 30;   // AI conversation (the relay keeps the last 20 turns)
 // Matrici e vettori di Run-Matrix (Mat A-Z, Vct A-Z, MatAns, VctAns; record
 // v6). Le due schede non hanno la stessa memoria: il Pico 2 W li tiene nel suo

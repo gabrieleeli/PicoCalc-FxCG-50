@@ -40,6 +40,20 @@ struct Settings {
     // Line = input e risultati su una riga.
     enum class InputMode : std::uint8_t { Math = 0, Line = 1 };
     InputMode inputMode{InputMode::Math};
+    // ---- v1.11.0 (record v7)
+    // SET UP "Mode" della fx-CG50 in Run-Matrix: Comp (calcolo normale) o Base-N
+    // intera a 32 bit in complemento a due (Dec, Hex, Bin, Oct).
+    enum class BaseMode : std::uint8_t { Comp = 0, Dec = 1, Hex = 2, Bin = 3, Oct = 4 };
+    BaseMode baseMode{BaseMode::Comp};
+    // SET UP "Simplify": Auto riduce le frazioni, Manual lascia la frazione come
+    // e' stata scritta (la si riduce con ▶Simp).
+    bool simplifyManual{false};
+    // Formato dei file CSV (fx-CG50 CSV > SET): separatore ',' o ';', simbolo decimale '.' o ','.
+    char csvSeparator{','};
+    char csvDecimal{'.'};
+    // Liste usate da Statistics (SET: 1Var/2Var XList, YList), indici 0..25.
+    std::uint8_t statXList{0};
+    std::uint8_t statYList{1};
 };
 
 // Risultato di un calcolo che e' una lista, una matrice o un vettore. I
@@ -61,6 +75,12 @@ struct HistoryEntry {
     bool numerical{false};               // produced by a numerical method (integral, d/dx, SOLVE)
     bool flipMixed{false};               // this result shows the other fraction format (ab/c <-> d/c)
     std::shared_ptr<const CollectionResult> collection;   // risultato lista / matrice / vettore (value e' allora 0)
+    // ---- v1.11.0 (record v7)
+    std::uint8_t base{0};                // Settings::BaseMode del calcolo (0 = Comp): Base-N intero a 32 bit
+    // Frazione non ridotta da mostrare (Simplify Manual, ▶Simp): fracDen == 0 se assente.
+    std::int64_t fracNum{0}, fracDen{0};
+    std::uint32_t simpFactor{0};         // fattore usato da ▶Simp (mostrato "F=n"), 0 = nessuno
+    bool command{false};                 // comando grafico (Plot, F-Line, Graph Y=...): il risultato e' "Done"
 };
 
 // Mat A-Z, Vct A-Z e le memorie delle risposte MatAns, VctAns, ListAns (record
@@ -123,8 +143,9 @@ struct Workspace final : NameResolver, CollectionResolver {
     // lines and lists of 255 elements (v1.8.0), Pico Plus 2 W 200 lines and
     // lists of 999 elements (fx-CG50) in its 2 x 512 KB record store.
     static constexpr std::size_t MaxHistory = limits::kHistoryEntries;
-    static constexpr std::size_t ListCount = 6;
+    static constexpr std::size_t ListCount = limits::kListCount;          // List 1..26 (v1.11.0)
     static constexpr std::size_t MaxListLength = limits::kListMaxLength;
+    static constexpr std::size_t MaxListElements = limits::kListStoreElements;   // tutte le liste insieme
     static constexpr std::size_t MaxChatMessages = limits::kChatMessages;
 
     Settings settings;
@@ -135,6 +156,7 @@ struct Workspace final : NameResolver, CollectionResolver {
     GraphState graph;
     TableRange table;
     std::array<std::vector<double>, ListCount> lists{};
+    std::array<std::string, ListCount> listNames{};   // sottonomi delle liste ("QTY"), al piu' 8 caratteri
     EquationState equation;
     std::vector<ChatMessage> chat;
     Graph3DState graph3d;
@@ -156,7 +178,18 @@ struct Workspace final : NameResolver, CollectionResolver {
     // ("Memory ERROR") senza modificare nulla.
     void storeMatrix(std::size_t slot, CalcValue value);     // slot 0..25 = A..Z
     void storeVector(std::size_t slot, CalcValue value);
-    void storeList(std::size_t index, const CalcValue& value);   // indice 0..5 = List 1..6 (elementi reali)
+    void storeList(std::size_t index, const CalcValue& value);   // indice 0..25 = List 1..26 (elementi reali)
+    // Liste di Statistics, TABLE (LISTMEM) e CSV: sostituisce List index+1
+    // controllando lunghezza e budget della scheda (garanzia forte).
+    void setList(std::size_t index, std::vector<double> values);
+    // Elementi di tutte le liste; true se List index+1 puo' avere `length` elementi.
+    std::size_t listElements() const noexcept;
+    bool listFits(std::size_t index, std::size_t length) const noexcept;
+    // Lancia "Memory ERROR" / "Dimension ERROR" se List index+1 non puo' avere `length` elementi.
+    void checkListLength(std::size_t index, std::size_t length) const;
+    // Sottonome di List index+1 (fx-CG50: riga SUB dell'editor delle liste).
+    const std::string& listName(std::size_t index) const;
+    void setListName(std::size_t index, std::string name);    // al piu' 8 caratteri stampabili
     // Memorizza un risultato lista / matrice / vettore in ListAns, o in MatAns
     // (e anche in VctAns quando ha una riga o una colonna, come sulla fx-CG50).
     void storeCollectionAnswer(const CalcValue& value);
