@@ -130,6 +130,7 @@ int main() {
         CHECK(st && st->grid().row == app::CellGrid::SubRow);
         r.enter("QTY");
         CHECK(r.ws().listName(25) == "QTY");
+        CHECK(st && st->grid().row == 0);                                     // EXE scende alla prima cella
         // SET: XList = List 26
         r.ws().settings.statXList = 25;
         r.key(pckey::F2); r.key(pckey::Enter);                                  // CALC > 1-Var

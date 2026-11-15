@@ -166,8 +166,9 @@ public:
                 out.push_back({TT::Op,std::string("#")+engFactor(s_[p_+1]),'#',at(p_),2});p_+=2;continue;
             }
             if(std::isalpha(c)||c=='_'){
-                // Base-N esadecimale: una parola di sole cifre A-F e' un numero.
-                if(integer_&&base_==16&&hexWord()){out.push_back(integerNumber());continue;}
+                // Base-N esadecimale: le cifre A-F sono numeri anche attaccate agli
+                // operatori ("FFxor0F" = FF Xor 0F: l'editor non conserva gli spazi).
+                if(integer_&&base_==16){hexIdentifier(out);continue;}
                 identifier(out);continue;
             }
             if(c=='@'){reference(out);continue;}
@@ -191,11 +192,46 @@ private:
         if(std::isalpha(u))return std::tolower(u)-'a'+10;
         return 99;
     }
-    bool hexWord() const {
-        std::size_t q=p_;
-        while(q<s_.size()&&(std::isalnum(static_cast<unsigned char>(s_[q]))||s_[q]=='_'))++q;
-        for(std::size_t k=p_;k<q;++k)if(digitValue(s_[k])>=16)return false;
-        return q>p_;
+    // Parola riservata di almeno due lettere (operatore, funzione, costante) che inizia in raw[k]: lunghezza o 0.
+    static std::size_t wordAt(const std::string& raw,std::size_t k){
+        for(std::size_t len=raw.size()-k;len>=2;--len){
+            const std::string piece=lower(raw.substr(k,len));
+            if(isFunctionName(piece)||isConstantName(piece)||operatorWord(piece))return len;
+        }
+        return 0;
+    }
+    Tok hexValue(const std::string& digits,std::size_t pos){
+        std::uint64_t v=0;
+        for(char ch:digits){
+            v=v*16+static_cast<unsigned>(digitValue(ch));
+            if(v>0xFFFFFFFFull)throw MathError("Math ERROR: numero oltre i 32 bit",static_cast<int>(pos),static_cast<int>(digits.size()));
+        }
+        const long long signedValue=v>0x7FFFFFFFull?static_cast<long long>(v)-0x100000000ll:static_cast<long long>(v);
+        return Tok{TT::Num,std::to_string(signedValue),0,at(pos),at(digits.size())};
+    }
+    // Base-N esadecimale: una parola di lettere e cifre si divide in parole
+    // riservate (and, xnor, Not...), numeri di cifre 0-9 A-F e variabili G-Z.
+    void hexIdentifier(std::vector<Tok>& out){
+        const std::size_t b=p_;
+        while(p_<s_.size()&&(std::isalnum(static_cast<unsigned char>(s_[p_]))||s_[p_]=='_'))++p_;
+        const std::string raw=s_.substr(b,p_-b);
+        std::size_t k=0;
+        while(k<raw.size()){
+            if(const std::size_t len=wordAt(raw,k)){
+                const std::string word=lower(raw.substr(k,len));
+                if(const char op=operatorWord(word))out.push_back({TT::Op,{},op,at(b+k),at(len)});
+                else out.push_back({TT::Ident,word,0,at(b+k),at(len)});
+                k+=len;continue;
+            }
+            if(digitValue(raw[k])<16){
+                std::size_t e=k;
+                while(e<raw.size()&&digitValue(raw[e])<16&&(e==k||wordAt(raw,e)==0))++e;
+                out.push_back(hexValue(raw.substr(k,e-k),b+k));
+                k=e;continue;
+            }
+            if(!std::isalpha(static_cast<unsigned char>(raw[k])))throw SyntaxError("Syntax ERROR: nome non valido '"+raw+"'",static_cast<int>(b+k),1);
+            out.push_back({TT::Ident,raw.substr(k,1),0,at(b+k),1});++k;
+        }
     }
     // Base-N (fx-CG50 Mode Dec/Hex/Bin/Oct): numero intero a 32 bit nella base
     // corrente o con un prefisso 0d/0x/0b/0o; Hex, Bin e Oct sono in
@@ -215,8 +251,14 @@ private:
             if(ch=='.')throw SyntaxError("Syntax ERROR: in Base-N i numeri sono interi",static_cast<int>(p_),1);
             const int d=digitValue(ch);
             if(d>=static_cast<int>(base)){
-                if(std::isalpha(static_cast<unsigned char>(ch))&&base!=16)break;       // una variabile dopo il numero (2A)
+                if(std::isalpha(static_cast<unsigned char>(ch)))break;      // una variabile o una parola dopo il numero (2G, 1and0)
                 throw SyntaxError(std::string("Syntax ERROR: cifra '")+ch+"' non valida in base "+std::to_string(base),static_cast<int>(p_),1);
+            }
+            // In esadecimale una parola riservata dopo le cifre ("FFand") non e' parte del numero.
+            if(base==16&&std::isalpha(static_cast<unsigned char>(ch))){
+                std::size_t q=p_;
+                while(q<s_.size()&&std::isalnum(static_cast<unsigned char>(s_[q])))++q;
+                if(wordAt(s_.substr(p_,q-p_),0))break;
             }
             v=v*base+static_cast<unsigned>(d);
             if(v>0xFFFFFFFFull)throw MathError("Math ERROR: numero oltre i 32 bit",static_cast<int>(b),static_cast<int>(p_-b+1));

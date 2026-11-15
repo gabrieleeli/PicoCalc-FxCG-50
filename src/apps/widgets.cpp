@@ -123,7 +123,7 @@ bool CellGrid::key(Context& ctx, const KeyEvent& ev) {
         if (ev.is(Key::Exe) || ev.is(Key::Down)) {
             if (setSubHeader) setSubHeader(col, editor_.text());
             editing_ = false;
-            if (ev.is(Key::Down)) row = 0;
+            row = 0;                                  // come dopo una cella: si scende ai valori
             return true;
         }
         if (ev.is(Key::Exit)) { editing_ = false; return true; }

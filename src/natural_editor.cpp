@@ -433,7 +433,8 @@ void NaturalEditor::insert(char c) {
     // '[' ']' delimitano le matrici e i suffissi di GRAPH ",[a,b]" / ",[A=...]",
     // '{' '}' le liste, '@' inizia un riferimento a una funzione di GRAPH; il
     // parser li rifiuta dove non sono validi.
-    if (!(std::isalnum(static_cast<unsigned char>(c)) || std::strchr(".+-*/%!,()=<>~[]{}@", c) != nullptr))
+    // '"' delimita il testo del comando grafico Text (v1.11.0).
+    if (!(std::isalnum(static_cast<unsigned char>(c)) || std::strchr(".+-*/%!,()=<>~[]{}@\"", c) != nullptr))
         throw std::invalid_argument("Carattere non ammesso nell'espressione");
     pushUndo();
     argumentPending_ = false;

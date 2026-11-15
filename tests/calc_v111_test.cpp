@@ -182,6 +182,9 @@ int main() {
         CHECK(baseValue("1010 xor 0110", 2) == 12);
         CHECK(baseValue("1010 xnor 0110", 2) == -13);                  // ~(1100) a 32 bit
         CHECK(baseValue("not(0)", 16) == -1 && baseValue("not(FFFF)", 16) == -65536);
+        CHECK(baseValue("FFxor0F", 16) == 0xF0 && baseValue("AandF", 16) == 10 && baseValue("1and0", 2) == 0);   // senza spazi (editor)
+        CHECK(baseValue("BADxnor0", 16) == ~0xBAD);
+        CHECK(baseFails<MathError>("FFFFFFFFF", 16));
         CHECK(baseValue("neg(1)", 16) == -1 && baseValue("neg(FFFFFFFF)", 16) == 1);
         CHECK(baseFails<MathError>("neg(80000000)", 16));               // -(-2^31) oltre l'intervallo
         CHECK(baseFails<MathError>("sin(1)", 10));                     // funzioni scientifiche escluse
