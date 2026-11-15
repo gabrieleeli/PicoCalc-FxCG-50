@@ -40,13 +40,16 @@ Compact compact(const std::string& s) {
     c.origin.push_back(static_cast<int>(s.size()));
     return c;
 }
-bool match(const std::string& t, Cmd& cmd, std::size_t& length) {
+bool match(const Compact& c, Cmd& cmd, std::size_t& length) {
+    const std::string& t = c.text;
     for (const auto& k : kKeywords) {
         const std::size_t n = std::strlen(k.word);
         if (t.compare(0, n, k.word) != 0) continue;
-        // "Plot" non deve essere l'inizio di un'altra parola ("Plotx" e' un prodotto).
+        // "Plot" non deve essere l'inizio di un'altra parola ("Plotx" e' un prodotto),
+        // salvo uno spazio dopo il nome ("Plot A,B").
         const char last = k.word[n - 1];
-        if (std::isalpha(static_cast<unsigned char>(last)) && n < t.size() && std::isalpha(static_cast<unsigned char>(t[n]))) continue;
+        const bool spaced = n < t.size() && c.origin[n] > c.origin[n - 1] + 1;
+        if (std::isalpha(static_cast<unsigned char>(last)) && n < t.size() && std::isalpha(static_cast<unsigned char>(t[n])) && !spaced) continue;
         cmd = k.cmd; length = n;
         return true;
     }
@@ -303,14 +306,14 @@ bool isCommand(const std::string& text) {
     const Compact c = compact(text);
     Cmd cmd{};
     std::size_t length = 0;
-    return match(c.text, cmd, length);
+    return match(c, cmd, length);
 }
 
 void execute(Workspace& ws, const std::string& text) {
     const Compact c = compact(text);
     Cmd cmd{};
     std::size_t length = 0;
-    if (!match(c.text, cmd, length)) throw SyntaxError("Syntax ERROR: comando grafico sconosciuto", 0, static_cast<int>(text.size()));
+    if (!match(c, cmd, length)) throw SyntaxError("Syntax ERROR: comando grafico sconosciuto", 0, static_cast<int>(text.size()));
     Runner r{ws, c, cmd, length};
     r.run();
 }
