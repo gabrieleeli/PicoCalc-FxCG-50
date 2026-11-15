@@ -49,7 +49,10 @@ constexpr std::uint32_t Files      = 1u << 16;   // file_store/graph_file/pict.h
 constexpr std::uint32_t Diag       = 1u << 17;   // diagnostics.hpp  hardware self-tests (microSD, GRAPH timing, memory)
 constexpr std::uint32_t Graph3D    = 1u << 18;   // graph3d.hpp     3D surfaces z=f(x,y) (meshes and z-buffer in PSRAM)
 constexpr std::uint32_t Hardware   = 1u << 19;   // board_config/mem_pools/psram/limits/system_info.hpp  board and memory state
-constexpr std::uint32_t Count      = 20;
+// graph_commands.hpp: comandi grafici di Run-Matrix (Plot, F-Line, Graph Y=...)
+// eseguiti sui dati di GRAPH (V-Window, SKETCH) che GRAPH poi disegna (v1.11.0).
+constexpr std::uint32_t GraphCmd   = 1u << 20;
+constexpr std::uint32_t Count      = 21;
 } // namespace service
 
 // Sections of fx::Workspace, the only channel through which modes exchange data.

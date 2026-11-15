@@ -17,7 +17,18 @@ struct RunOutcome {
     bool exact{};               // the value has an exact form (fraction, surd, multiple of pi)
     ValueType type{ValueType::Scalar};   // List, Matrix o Vector per un risultato collezione
     std::string storedIn;       // "Mat A", "Vct B", "List 1", "Mat A[1,2]"... quando la freccia indica una memoria
+    bool graphics{false};       // comando grafico eseguito: va mostrata la schermata del grafico (GRAPH)
 };
+
+// Opzioni di evaluateEntry (v1.11.0): base della modalita' Base-N (-1: quella
+// del SET UP; per il ricalcolo, quella con cui la riga e' stata calcolata) e
+// numero di righe della cronologia che precedono la riga (per ▶Simp su Ans).
+struct EntryOptions {
+    int base{-1};
+    std::size_t previous{static_cast<std::size_t>(-1)};
+};
+// Base numerica di Settings::BaseMode: 0 (Comp), 10, 16, 2, 8.
+unsigned integerBaseOf(std::uint8_t baseMode) noexcept;
 
 // Valuta un'espressione lineare esattamente come la modalita' RUN-MATRIX in
 // `entry`: freccia di memorizzazione (U+2192 o "->"), coppie Pol/Rec,
@@ -29,7 +40,13 @@ struct RunOutcome {
 //   Dim Mat A  ({righe,colonne} crea una matrice di zeri)
 // Lancia errori Syntax/Math (la voce resta invariata); il loro membro `where`
 // e' l'intervallo di byte della causa in `expression`.
-RunOutcome evaluateEntry(Workspace& ws, const std::string& expression, HistoryEntry& entry);
+//
+// v1.11.0: modalita' Base-N intera (Settings::baseMode), "▶Simp" e "▶Simp n"
+// in coda (frazione ridotta per il piu' piccolo fattore primo comune o per n,
+// risultato con "F=n"), frazioni non ridotte con Simplify Manual, comandi
+// grafici (Plot, F-Line, Graph Y=..., vedi graph_commands.hpp: la riga mostra
+// "Done" e RunOutcome::graphics chiede la schermata del grafico).
+RunOutcome evaluateEntry(Workspace& ws, const std::string& expression, HistoryEntry& entry, const EntryOptions& options = {});
 // evaluateEntry() + append to the workspace history.
 RunOutcome runCalculation(Workspace& ws, const std::string& expression);
 
@@ -70,8 +87,15 @@ bool togglePeriodic(HistoryEntry& entry);
 
 // Testo lineare di un risultato nella vista corrente ("1/3", "2 1/3", "2√3/3",
 // "π/2", "0.3333333333", "0.1(6)", "0x1F", "30°15'0\"", "[[1,2][3,4]]",
-// "{1,2,3}"). E' quello che mostra la modalita' di output Line.
-std::string resultText(const HistoryEntry& entry, const Settings& settings);
+// "{1,2,3}", Base-N "FF", ▶Simp "5/20  F=3", comando "Done").
+// lineStyle: testo dell'output Line della fx-CG50, con le frazioni scritte
+// con ⌟ ("1⌟3", "2⌟1⌟3").
+std::string resultText(const HistoryEntry& entry, const Settings& settings, bool lineStyle = false);
+// Base-N: testo di un intero a 32 bit nella base 2, 8, 10 o 16 (complemento a
+// due per i negativi in 2, 8, 16: -1 -> "FFFFFFFF").
+std::string baseNText(double value, unsigned base);
+// Base mostrata per una riga calcolata in Base-N (0 se la riga non e' Base-N).
+unsigned displayedBase(const HistoryEntry& entry);
 // Vero quando il risultato e' una lista, una matrice o un vettore.
 inline bool isCollection(const HistoryEntry& entry) noexcept { return entry.collection != nullptr; }
 // Testo di un elemento di un risultato collezione nella vista corrente.

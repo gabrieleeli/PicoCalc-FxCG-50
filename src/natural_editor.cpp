@@ -175,6 +175,8 @@ void importInto(NaturalNode& target, const std::string& s, int depth, bool linea
     while (i < s.size()) {
         const unsigned char c = static_cast<unsigned char>(s[i]);
         if (std::isspace(c)) { ++i; continue; }
+        // Simbolo ingegneristico "#k" (v1.11.0): un token, mostrato "k" / "µ".
+        if (c == '#' && i + 1 < s.size() && std::strchr("kMGTmunpf", s[i + 1])) { target.children.push_back(token(s.substr(i, 2))); i += 2; continue; }
         // Mat / Vct / List (comandi OPTN) sono un token ciascuno, anche quando il
         // nome segue senza spazio ("MatA" = Mat A).
         if (c == 'M' || c == 'V' || c == 'L') {
@@ -434,6 +436,8 @@ void NaturalEditor::insert(char c) {
     if (!(std::isalnum(static_cast<unsigned char>(c)) || std::strchr(".+-*/%!,()=<>~[]{}@", c) != nullptr))
         throw std::invalid_argument("Carattere non ammesso nell'espressione");
     pushUndo();
+    argumentPending_ = false;
+    overwriteAtCursor();
     insertNode(token(std::string(1, c)));
     if (std::isalnum(static_cast<unsigned char>(c)) && !linear_) {
         auto& r = activeRow();
@@ -470,6 +474,7 @@ void NaturalEditor::insert(char c) {
 void NaturalEditor::insertLinear(const std::string& text, std::size_t cursorBack) {
     autoRootParenPending_ = false;
     pushUndo();
+    overwriteAtCursor();
     auto flat = row();
     importInto(*flat, text, 0, true);
     auto& r = activeRow();
@@ -490,13 +495,58 @@ void NaturalEditor::insertSymbol(const std::string& utf8) {
     if (utf8.empty()) return;
     pushUndo();
     autoRootParenPending_ = false;
+    argumentPending_ = false;
+    overwriteAtCursor();
     insertNode(token(utf8));
     checkLimits();
 }
+void NaturalEditor::overwriteAtCursor() {
+    if (!overwrite()) return;
+    auto& r = activeRow();
+    if (cursor_ < r.children.size()) r.children.erase(r.children.begin() + static_cast<std::ptrdiff_t>(cursor_));
+}
+// SHIFT+INS: valore a destra del cursore. Un numero o un nome, un gruppo tra
+// parentesi (con il nome della funzione che lo apre: sin(30)) o un modello.
+// Le parentesi esterne di un gruppo si tolgono: il modello le sostituisce.
+NaturalEditor::NodePtrAlias NaturalEditor::takeArgument() {
+    auto& r = activeRow();
+    if (cursor_ >= r.children.size()) return nullptr;
+    std::size_t end = cursor_;
+    auto opening = [](const NaturalNode& n) { return n.kind == Kind::Token && (n.text == "(" || n.text == "[" || n.text == "{"); };
+    auto closing = [](const NaturalNode& n) { return n.kind == Kind::Token && (n.text == ")" || n.text == "]" || n.text == "}"); };
+    bool group = false;
+    const NaturalNode& first = *r.children[cursor_];
+    if (opening(first) || (alnumToken(first) && alphaWord(first.text) && cursor_ + 1 < r.children.size() && opening(*r.children[cursor_ + 1]))) {
+        std::size_t k = opening(first) ? cursor_ : cursor_ + 1;
+        group = opening(first);
+        int depth = 0;
+        for (; k < r.children.size(); ++k) {
+            if (opening(*r.children[k])) ++depth;
+            else if (closing(*r.children[k]) && --depth == 0) break;
+        }
+        end = std::min(k + 1, r.children.size());          // la chiusa puo' mancare alla fine dell'input
+    } else if (first.kind == Kind::Token) {
+        if (!alnumToken(first)) return nullptr;
+        while (end < r.children.size() && alnumToken(*r.children[end])) ++end;
+    } else {
+        end = cursor_ + 1;                                   // un modello intero
+    }
+    auto arg = row();
+    std::size_t b = cursor_, e = end;
+    if (group && e - b >= 2 && closing(*r.children[e - 1])) { ++b; --e; }
+    else if (group && e - b >= 1) ++b;
+    arg->children.assign(r.children.begin() + static_cast<std::ptrdiff_t>(b), r.children.begin() + static_cast<std::ptrdiff_t>(e));
+    r.children.erase(r.children.begin() + static_cast<std::ptrdiff_t>(cursor_), r.children.begin() + static_cast<std::ptrdiff_t>(end));
+    return arg;
+}
 void NaturalEditor::insertBox(NodePtr box, std::size_t focusChild) {
     if (linear_) throw std::invalid_argument("Modello non disponibile in modalit\xC3\xA0 Line");
+    const bool argument = argumentPending_;
     pushUndo();
     autoRootParenPending_ = false;
+    argumentPending_ = false;
+    // SHIFT+INS: il valore a destra del cursore diventa l'argomento del modello.
+    if (argument) if (auto arg = takeArgument()) box->children[focusChild] = arg;
     auto& r = activeRow();
     r.children.insert(r.children.begin() + static_cast<std::ptrdiff_t>(cursor_), box);
     rowPath_.push_back(cursor_); rowPath_.push_back(focusChild);
@@ -505,7 +555,15 @@ void NaturalEditor::insertBox(NodePtr box, std::size_t focusChild) {
     checkLimits();
 }
 void NaturalEditor::insertFraction() {
-    if (linear_) { insertLinear("/"); return; }
+    // Line (fx-CG50): il tasto frazione scrive ⌟ ("2⌟3"); la divisione resta "/".
+    if (linear_) { insertLinear("\xE2\x8C\x9F"); return; }
+    if (argumentPending_) {
+        // SHIFT+INS: il valore a destra diventa il numeratore.
+        auto f = node(Kind::Fraction); f->children = {row(), row()};
+        insertBox(f, 0);
+        (void)moveDown();
+        return;
+    }
     pushUndo();
     auto f = node(Kind::Fraction); f->children = {row(), row()};
     auto& r = activeRow();
@@ -526,8 +584,8 @@ void NaturalEditor::insertFraction() {
     checkLimits();
 }
 void NaturalEditor::insertMixedFraction() {
-    // fx-CG50: le frazioni miste esistono solo nella modalita' di input/output Math.
-    if (linear_) throw std::invalid_argument("Frazione mista disponibile solo in modalit\xC3\xA0 Math");
+    // fx-CG50: in Line la frazione mista si scrive con due ⌟ (1⌟2⌟3).
+    if (linear_) { insertLinear("\xE2\x8C\x9F"); return; }
     auto m = node(Kind::Call, "mixed"); m->children = {row(), row(), row()};
     insertBox(m, 0);
 }
@@ -631,6 +689,7 @@ void NaturalEditor::insertMatrix(std::size_t rows, std::size_t cols) {
 }
 void NaturalEditor::setLinear(bool linear) {
     if (linear == linear_) return;
+    overwrite_ = false; argumentPending_ = false;
     std::string text;
     try { text = toExpression(); } catch (...) { text.clear(); }
     linear_ = linear;
@@ -659,6 +718,7 @@ bool NaturalEditor::leaveChild(bool right) {
 }
 bool NaturalEditor::moveLeft() {
     selecting_ = false;
+    argumentPending_ = false;
     autoRootParenPending_ = false;
     auto& r = activeRow();
     if (cursor_ > 0) {
@@ -682,6 +742,7 @@ bool NaturalEditor::moveLeft() {
 }
 bool NaturalEditor::moveRight() {
     selecting_ = false;
+    argumentPending_ = false;
     autoRootParenPending_ = false;
     auto& r = activeRow();
     if (cursor_ < r.children.size()) {
@@ -744,6 +805,7 @@ bool NaturalEditor::moveDown() {
 }
 bool NaturalEditor::backspace() {
     autoRootParenPending_ = false;
+    argumentPending_ = false;
     auto& r = activeRow();
     if (cursor_ == 0) {
         // At the start of an empty template: remove the whole template.
@@ -943,6 +1005,7 @@ bool NaturalEditor::markError(std::size_t position, std::size_t length) {
 std::vector<NaturalDrawOp> NaturalEditor::layout(int x, int baseline, int maxWidth) const {
     math::CursorTarget target{activeRowPtr(), cursor_};
     target.colorParens = true;
+    target.cursorStyle = overwrite() ? 1 : argumentPending_ ? 2 : 0;
     const Range mark = selecting_ ? selection() : errorMark_;
     if (!mark.empty()) { target.markRow = mark.row; target.markBegin = mark.begin; target.markEnd = mark.end; target.markIsError = !selecting_; }
     auto l = math::layout(*root_, x, baseline, maxWidth, 220, math::Align::Left, &target);

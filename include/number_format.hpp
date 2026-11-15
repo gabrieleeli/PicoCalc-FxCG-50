@@ -17,7 +17,10 @@ struct FormattedNumber {
     std::string mantissa;              // includes the sign, e.g. "-1.25"
     int exponent{0};
     bool scientific{false};
-    std::string text() const;          // linear form: "-1.25E+12"
+    // Eng (v1.11.0): simbolo ingegneristico al posto di ×10ⁿ per n da -15 a 12
+    // (f p n µ m, k M G T), come la modalita' Eng della fx-CG50: "1.024M".
+    std::string symbol;
+    std::string text() const;          // linear form: "-1.25E+12", "1.024M"
 };
 
 FormattedNumber formatNumber(double value, DisplayFormat format = {});

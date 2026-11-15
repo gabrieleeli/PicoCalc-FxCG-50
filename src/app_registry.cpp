@@ -13,7 +13,7 @@ namespace d = data;
 constexpr std::uint32_t AllData = (1u << data::Count) - 1;
 constexpr std::uint32_t Ui = s::Widgets | s::Editor | s::Format;
 
-const char* const kRunMatrixSrc[] = {"src/apps/run_matrix_app.cpp", "src/apps/matrix_editor.cpp", "src/run_matrix.cpp", nullptr};
+const char* const kRunMatrixSrc[] = {"src/apps/run_matrix_app.cpp", "src/apps/matrix_editor.cpp", "src/apps/answer_view.cpp", "src/run_matrix.cpp", nullptr};
 const char* const kStatisticsSrc[] = {"src/apps/statistics_app.cpp", nullptr};
 const char* const kGraphSrc[] = {"src/apps/graph_app.cpp", "src/apps/graph_plot.cpp", "src/apps/graph_files.cpp", nullptr};
 const char* const kTableSrc[] = {"src/apps/table_app.cpp", nullptr};
@@ -27,9 +27,10 @@ const char* const kGraph3DSrc[] = {"src/apps/graph3d_app.cpp", nullptr};
 
 const AppInfo kApps[AppCount] = {
     {AppId::RunMatrix, "Run-Matrix", "1", rgb888To565(232, 96, 30), AppStatus::Available,
-     "Calcoli e risultati: input Math o Line, risultati esatti e decimali, matrici, vettori e liste con l'editor MAT/VCT, cronologia modificabile, variabili, Base-N, DMS",
-     nullptr, s::Expression | s::Exact | Ui | s::MathRender | s::MathCore | s::RunCore | s::Storage | s::Files,
-     d::Settings | d::Memory | d::History | d::Matrices, 0, kRunMatrixSrc},
+     "Calcoli e risultati: input Math o Line, risultati esatti e decimali, matrici, vettori e liste con l'editor MAT/VCT e i CSV, schermate MatAns/ListAns, cronologia modificabile, variabili, Base-N intera, simboli ingegneristici, Simp, DMS, comandi grafici disegnati da Graph",
+     nullptr, s::Expression | s::Exact | Ui | s::MathRender | s::MathCore | s::RunCore | s::Storage | s::Files | s::GraphCmd,
+     // View e Graph: scritti solo dai comandi grafici tramite graph_commands.hpp (mai direttamente)
+     d::Settings | d::Memory | d::History | d::Matrices | d::View | d::Graph, linkTo(AppId::Graph), kRunMatrixSrc},
     {AppId::Statistics, "Statistics", "2", rgb888To565(30, 160, 90), AppStatus::Available,
      "Liste 1-26 con sottonomi e file CSV, statistiche 1/2 variabili, regressioni, grafici statistici, distribuzioni, test e intervalli",
      nullptr, s::Expression | Ui | s::Stats | s::Storage | s::Files, d::Settings | d::Lists | d::Functions, 0, kStatisticsSrc},
@@ -45,7 +46,7 @@ const AppInfo kApps[AppCount] = {
      "Grafici Y=, r=, parametrici, X=, disequazioni (Y1..Y20); trace, zoom, V-Window, sketch, G-Solve, modify, memorie, PICT, progetti .pcgraph su microSD",
      nullptr, s::Expression | Ui | s::MathRender | s::Storage | s::GraphCore | s::Files,
      d::Settings | d::Memory | d::Functions | d::View | d::Table | d::Lists | d::Graph,
-     linkTo(AppId::Table), kGraphSrc},
+     linkTo(AppId::Table) | linkTo(AppId::RunMatrix), kGraphSrc},
     {AppId::DynaGraph, "Dyna Graph", "6", rgb888To565(40, 110, 220), AppStatus::Planned,
      "Famiglie di grafici al variare di un coefficiente (Start/End/Pitch), sulla V-Window di Graph",
      "Grafici dinamici con parametro variabile non ancora implementati.",
@@ -132,6 +133,7 @@ const char* const kHGraphCore[] = {"graph_model.hpp", "graph_engine.hpp", "graph
 const char* const kHFiles[] = {"file_store.hpp", "graph_file.hpp", "pict.hpp", "csv_io.hpp", nullptr};
 const char* const kHDiag[] = {"diagnostics.hpp", nullptr};
 const char* const kHGraph3D[] = {"graph3d.hpp", "limits.hpp", nullptr};
+const char* const kHGraphCmd[] = {"graph_commands.hpp", nullptr};
 const char* const kHHardware[] = {"board_config.hpp", "mem_pools.hpp", "psram.hpp", "limits.hpp", "system_info.hpp", "system_runtime.hpp", nullptr};
 const ServiceInfo kServices[service::Count] = {
     {s::Expression, "Expression", kHExpression}, {s::Exact, "Exact", kHExact}, {s::Editor, "Editor", kHEditor},
@@ -140,7 +142,7 @@ const ServiceInfo kServices[service::Count] = {
     {s::Network, "Network", kHNetwork}, {s::Storage, "Storage", kHStorage}, {s::Units, "Units", kHUnits},
     {s::Help, "Help", kHHelp}, {s::RunCore, "RunCore", kHRunCore}, {s::Models, "Models", kHModels},
     {s::GraphCore, "GraphCore", kHGraphCore}, {s::Files, "Files", kHFiles}, {s::Diag, "Diag", kHDiag},
-    {s::Graph3D, "Graph3D", kHGraph3D}, {s::Hardware, "Hardware", kHHardware},
+    {s::Graph3D, "Graph3D", kHGraph3D}, {s::Hardware, "Hardware", kHHardware}, {s::GraphCmd, "GraphCmd", kHGraphCmd},
 };
 const char* const kDataNames[data::Count] = {"settings", "memory", "history", "functions", "view", "table", "lists", "equation", "chat", "graph", "graph3d", "matrices"};
 // Membri e metodi del workspace che non hanno il nome di una sezione (v1.11.0).

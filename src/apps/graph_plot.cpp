@@ -170,6 +170,11 @@ std::uint64_t GraphApp::sourceFingerprint(Context& ctx) const {
     mix(settings, 3);
     for (const auto& s : ctx.ws.graph.sketch) if (s.kind == SketchItem::Kind::Inverse) { mix(s.text.data(), s.text.size()); mix(&s.color, 1); }
     for (const auto& p : pasted_) mix(p.data(), p.size());
+    for (const auto& cg : ctx.ws.graph.commandGraphs) {
+        mix(cg.expr.data(), cg.expr.size()); mix(cg.expr2.data(), cg.expr2.size());
+        const std::uint8_t meta[3] = {static_cast<std::uint8_t>(cg.type), cg.color, static_cast<std::uint8_t>(cg.style)};
+        mix(meta, 3);
+    }
     return h;
 }
 
@@ -179,7 +184,7 @@ void GraphApp::ensureBuilt(Context& ctx) {
     if (built_ && builtView_ == ctx.ws.view) return;
     if (!built_) {
         ctx.ws.apply();
-        engine_.build({&ctx.ws.functions, &ctx.ws.memory, &ctx.ws, &ctx.ws.lists}, pasted_);
+        engine_.build({&ctx.ws.functions, &ctx.ws.memory, &ctx.ws, &ctx.ws.lists, &ctx.ws.graph.commandGraphs}, pasted_);
         sketchPlots_.clear();
         for (const auto& s : ctx.ws.graph.sketch) {
             if (s.kind != SketchItem::Kind::Inverse) continue;
@@ -745,6 +750,12 @@ void GraphApp::plotKey(Context& ctx, const KeyEvent& ev) {
     if (tableDraw(ctx) && mode_ == Mode::View && (ev.is(Key::Exit) || ev.is(Key::F6))) {
         ctx.ws.table.draw = TableRange::Draw::None;
         ctx.open(AppId::Table);
+        return;
+    }
+    // Grafico disegnato dai comandi di Run-Matrix: EXIT (o G<->T) torna ai calcoli, come sulla fx-CG50.
+    if (ctx.ws.graph.commandScreen && mode_ == Mode::View && !shadeIntegral_ && (ev.is(Key::Exit) || ev.is(Key::F6))) {
+        ctx.ws.graph.commandScreen = false;
+        ctx.open(AppId::RunMatrix);
         return;
     }
     switch (mode_) {

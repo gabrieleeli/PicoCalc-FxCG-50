@@ -114,6 +114,26 @@ private:
     bool asking_{false};
 };
 
+// Schermate MatAns / VctAns / ListAns della fx-CG50 (v1.11.0): un risultato
+// lista, matrice o vettore piu' grande della vista naturale (oltre 6x6 o 20
+// elementi) si legge qui, scorrendo righe e colonne; la cella corrente e' indicata.
+// I valori sono quelli delle memorie delle risposte (sola lettura).
+class AnswerView {
+public:
+    bool isOpen() const noexcept { return open_; }
+    void open(Context& ctx, ValueType type);
+    void close() noexcept { open_ = false; }
+    void key(Context& ctx, const KeyEvent& ev);
+    void draw(Context& ctx, gfx::Canvas& c);
+    ValueType type() const noexcept { return type_; }
+    const CellGrid& grid() const noexcept { return grid_; }
+private:
+    const CalcValue* value(Context& ctx) const;
+    bool open_{false};
+    ValueType type_{ValueType::Matrix};
+    CellGrid grid_;
+};
+
 class RunMatrixApp final : public App {
 public:
     AppId id() const override { return AppId::RunMatrix; }
@@ -125,6 +145,8 @@ public:
     int browsing() const noexcept { return browse_; }      // selected history entry, -1 = input line
     int editing() const noexcept { return editIndex_; }    // history entry edited in place, -1 = none
     MatrixEditorView& matrixEditor() noexcept { return matrices_; }
+    AnswerView& answerView() noexcept { return answers_; }
+    int resultScroll() const noexcept { return resultScroll_; }
     enum class Menu : std::uint8_t { None, Math, MatVct, OptnCategories, OptnItems, VarsCategories, VarsItems, MatRows, MatCols };
 private:
     void syncInputMode(Context& ctx);                    // Setup Input/Output -> modalita' dell'editor
@@ -149,6 +171,9 @@ private:
     int varsCategory_{0};
     std::size_t matRows_{2};
     MatrixEditorView matrices_;
+    AnswerView answers_;
+    int resultScroll_{0};          // scorrimento del risultato selezionato piu' largo della riga
+    int resultOverflow_{0};        // pixel nascosti di quel risultato (calcolati nel disegno)
 };
 
 class SymbolsApp final : public App {

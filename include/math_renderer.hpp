@@ -19,6 +19,10 @@ struct CursorTarget {
     std::size_t markBegin{}, markEnd{};
     bool markIsError{};
     bool colorParens{};
+    // Forma del cursore (v1.11.0): 0 inserimento (barra), 1 sovrascrittura
+    // della modalita' Line (sottolineatura del carattere), 2 argomento in
+    // attesa di SHIFT+INS (parentesi quadra aperta).
+    std::uint8_t cursorStyle{};
 };
 
 // Colori usati per disegnare un layout.

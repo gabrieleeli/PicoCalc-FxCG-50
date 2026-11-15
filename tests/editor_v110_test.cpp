@@ -96,14 +96,17 @@ int main() {
         e.setLinear(true);
         CHECK(e.linear());
         type(e, "1"); e.insertFraction(); type(e, "3");
-        CHECK_EQ_STR(e.toExpression(), "1/3");
+        CHECK_EQ_STR(e.toExpression(), "1\xE2\x8C\x9F" "3");                        // v1.11.0: il tasto frazione scrive ⌟
         CHECK(e.root().children.size() == 3);                                     // soltanto token
+        CHECK_NEAR(value(e), 1.0 / 3.0, 1e-15);
         e.clear(); e.insertRadical(); type(e, "16)"); e.insertPower(); type(e, "2");
         CHECK_EQ_STR(e.toExpression(), "\xE2\x88\x9A(16)^2");
         CHECK_NEAR(value(e), 16, 1e-12);
         e.clear(); e.insertMatrix(2, 2); type(e, "1");
         CHECK_EQ_STR(e.toExpression(), "[[1,][,]]");
-        CHECK_THROWS_AS(e.insertMixedFraction(), std::invalid_argument);       // solo in modalita' Math
+        e.clear(); type(e, "1"); e.insertMixedFraction(); type(e, "2"); e.insertMixedFraction(); type(e, "3");
+        CHECK_EQ_STR(e.toExpression(), "1\xE2\x8C\x9F" "2\xE2\x8C\x9F" "3");       // frazione mista in Line: 1⌟2⌟3
+        CHECK_NEAR(value(e), 1.0 + 2.0 / 3.0, 1e-15);
         e.clear(); type(e, "sqrt9");                                              // nessun modello automatico
         CHECK_EQ_STR(e.toExpression(), "sqrt9");
         // Importazione lineare: nessun modello
@@ -330,9 +333,10 @@ int main() {
         r.home(); r.type("1");
         rm = r.active<app::RunMatrixApp>();
         CHECK(rm->editor().linear());
-        r.type("1"); r.key(pckey::F1); r.type("4"); r.key(pckey::Enter);          // F1 in Line: "/"
-        CHECK_EQ_STR(ws.history.back().expression, "1/4");
+        r.type("1"); r.key(pckey::F1); r.type("4"); r.key(pckey::Enter);          // F1 in Line: "⌟" (v1.11.0)
+        CHECK_EQ_STR(ws.history.back().expression, "1\xE2\x8C\x9F" "4");
         CHECK_EQ_STR(resultText(ws.history.back(), ws.settings), "1/4");
+        CHECK_EQ_STR(resultText(ws.history.back(), ws.settings, true), "1\xE2\x8C\x9F" "4");
         r.home();
         r.settle();
     }

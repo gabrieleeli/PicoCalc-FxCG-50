@@ -99,6 +99,8 @@ struct GraphSource {
     const NameResolver* names{};               // Xmin, TblStart... (the workspace)
     static constexpr std::size_t ListCount = 26;   // List 1..26 (v1.11.0)
     const std::array<std::vector<double>, ListCount>* lists{};
+    // Grafici dei comandi di Run-Matrix (Graph Y=, r=, X=, Graph(X,Y)=), v1.11.0.
+    const std::vector<CommandGraph>* commands{};
 };
 
 class GraphEngine final : public FunctionResolver {

@@ -75,6 +75,7 @@ std::string sciMantissa(const std::string& digits,bool strip){
 } // namespace
 
 std::string FormattedNumber::text() const {
+    if(!symbol.empty())return mantissa+symbol;
     if(!scientific)return mantissa;
     char e[16];std::snprintf(e,sizeof(e),"E%c%02d",exponent<0?'-':'+',std::abs(exponent));
     return mantissa+e;
@@ -104,7 +105,14 @@ FormattedNumber formatNumber(double v,DisplayFormat f){
         const int intDigits=e-e3+1;            // 1..3
         std::string m=digits.substr(0,static_cast<std::size_t>(intDigits))+"."+digits.substr(static_cast<std::size_t>(intDigits));
         stripZeros(m);
-        out.mantissa=sign+m;out.exponent=e3;out.scientific=true;return out;
+        out.mantissa=sign+m;
+        // Simboli ingegneristici (fx-CG50 Eng): f p n µ m _ k M G T.
+        static const char* const symbols[]={"f","p","n","\xC2\xB5","m","","k","M","G","T"};
+        if(e3>=-15&&e3<=12){
+            out.symbol=symbols[(e3+15)/3];
+            return out;
+        }
+        out.exponent=e3;out.scientific=true;return out;
     }
     case DisplayMode::Fix:{
         if(std::abs(v)>=1e10){sigDigits(v,10,digits,e);out.mantissa=sign+sciMantissa(digits,true);out.exponent=e;out.scientific=true;return out;}

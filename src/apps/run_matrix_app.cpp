@@ -6,6 +6,7 @@
 // selezione CLIP (SHIFT 8 / SHIFT 9), parentesi colorate e cursore sulla
 // causa di un errore.
 #include "apps.hpp"
+#include "graph_commands.hpp"
 #include "math_renderer.hpp"
 #include "run_matrix.hpp"
 #include <algorithm>
@@ -22,7 +23,7 @@ const std::vector<CatalogCategory>& catalog() {
     static const std::vector<CatalogCategory> c = {
         {"CALC  d/dx \xE2\x88\xAB \xCE\xA3", {"\xE2\x88\xAB dx  (template)", "d/dx  (template)", "\xCE\xA3  (template)", "\xCE\xA0  (template)", "derivative2(", "solve(", "integral(", "sum(", "Int\xC3\xB7", "Rmdr"}},
         {"PROB  n! nCr Ran#", {"!", "nCr(", "nPr(", "rand()", "randint(", "rannorm(", "ranbin("}},
-        {"NUMERIC  Abs Int", {"abs(", "int(", "intg(", "frac(", "round(", "rndfix(", "gcd(", "lcm(", "mod(", "modexp("}},
+        {"NUMERIC  Abs Int Simp", {"abs(", "int(", "intg(", "frac(", "round(", "rndfix(", "gcd(", "lcm(", "mod(", "modexp(", "\xE2\x96\xB6Simp"}},
         {"ANGLE  \xC2\xB0 r g Pol", {"\xC2\xB0", "deg(", "rad(", "grad(", "dms(", "pol(", "rec("}},
         {"COMPLEX  i Arg", {"i", "abs(", "arg(", "conj(", "re(", "im("}},
         {"HYPERBL  sinh cosh", {"sinh(", "cosh(", "tanh(", "asinh(", "acosh(", "atanh("}},
@@ -34,11 +35,24 @@ const std::vector<CatalogCategory>& catalog() {
                                   "Mat\xE2\x86\x92List(", "List\xE2\x86\x92Mat(", "DotP(", "CrossP(", "Angle(", "UnitV(", "Norm(", "[", "]", "Mat Ans", "Vct Ans"}},
         {"LIST  List { } Sum Mean", {"List", "{", "}", "Seq(", "Sum(", "Prod(", "Min(", "Max(", "Mean(", "Median(", "Cuml(", "Percent(",
                                     "\xCE\x94List(", "SortA(", "SortD(", "Dim(", "Augment(", "List Ans"}},
+        // Simboli ingegneristici (fx-CG50 OPTN > ESYM): m µ n p f, k M G T.
+        {"ESYM  k M m \xC2\xB5", {"m  10^-3", "\xC2\xB5  10^-6", "n  10^-9", "p  10^-12", "f  10^-15", "k  10^3", "M  10^6", "G  10^9", "T  10^12"}},
+        // Comandi grafici (fx-CG50 SKETCH): disegnati nella schermata di GRAPH.
+        {"SKETCH  Cls Plot Line", {}},
         {"RISULTATO  S\xE2\x87\x94" "D ab/c", {"\xE2\x96\xB6S\xE2\x87\x94" "D", "\xE2\x96\xB6" "ab/c\xE2\x87\x94" "d/c", "\xE2\x96\xB6Periodo", "\xE2\x96\xB6" "Dec", "\xE2\x96\xB6Hex", "\xE2\x96\xB6" "Bin", "\xE2\x96\xB6Oct", "\xE2\x96\xB6" "DMS"}},
-        {"BASE-N  0x 0b 0o", {"0x", "0b", "0o"}},
+        {"BASE-N  d~o LOGIC", {"d  (decimale)", "h  (esadecimale)", "b  (binario)", "o  (ottale)", "and", "or", "xor", "xnor", "Not(", "Neg(",
+                              "\xE2\x96\xB6" "Dec", "\xE2\x96\xB6Hex", "\xE2\x96\xB6" "Bin", "\xE2\x96\xB6Oct"}},
     };
     return c;
 }
+std::vector<std::string> catalogItems(std::size_t category) {
+    std::vector<std::string> items;
+    const auto& c = catalog()[category];
+    if (c.items.empty()) { for (const char* const* n = graphcmd::menuNames(); *n; ++n) items.emplace_back(*n); return items; }
+    for (const char* it : c.items) items.emplace_back(it);
+    return items;
+}
+bool isSketchCategory(std::size_t category) { return catalog()[category].items.empty(); }
 // Menu MATH (ordine della fx-CG50: prima MAT/VCT, poi gli altri modelli).
 const std::vector<std::string>& mathTemplates() {
     static const std::vector<std::string> t = {
@@ -62,7 +76,8 @@ const CommandToken kCommandTokens[] = {
     {"Det(", "Det"}, {"Trn(", "Trn"}, {"Identity(", "Identity"}, {"Dim(", "Dim"}, {"Augment(", "Augment"}, {"Fill(", "Fill"},
     {"Ref(", "Ref"}, {"Rref(", "Rref"}, {"DotP(", "DotP"}, {"CrossP(", "CrossP"}, {"Angle(", "Angle"}, {"UnitV(", "UnitV"},
     {"Norm(", "Norm"}, {"Seq(", "Seq"}, {"Sum(", "Sum"}, {"Prod(", "Prod"}, {"Min(", "Min"}, {"Max(", "Max"}, {"Mean(", "Mean"},
-    {"Median(", "Median"}, {"Cuml(", "Cuml"}, {"Percent(", "Percent"}, {"SortA(", "SortA"}, {"SortD(", "SortD"}};
+    {"Median(", "Median"}, {"Cuml(", "Cuml"}, {"Percent(", "Percent"}, {"SortA(", "SortA"}, {"SortD(", "SortD"},
+    {"Not(", "not"}, {"Neg(", "neg"}};
 // Colori della riga di input: parentesi per livello, evidenziazioni.
 math::Palette inputPalette(std::uint16_t ink) {
     math::Palette p;
@@ -90,9 +105,11 @@ const char* const kNoExact = "Nessuna altra forma: valore approssimato o intero"
 void RunMatrixApp::enter(Context& ctx) {
     ctx.ws.apply(); browse_ = -1; menu_.close(); menuKind_ = Menu::None;
     matrices_.close();
+    answers_.close();
+    resultScroll_ = 0;
     syncInputMode(ctx);
 }
-void RunMatrixApp::leave(Context&) { if (editIndex_ >= 0) endEdit(true); editor_.cancelSelection(); }
+void RunMatrixApp::leave(Context&) { if (editIndex_ >= 0) endEdit(true); editor_.cancelSelection(); editor_.cancelArgument(); }
 void RunMatrixApp::syncInputMode(Context& ctx) {
     const bool line = ctx.ws.settings.inputMode == Settings::InputMode::Line;
     if (editor_.linear() != line) editor_.setLinear(line);
@@ -157,6 +174,30 @@ void RunMatrixApp::resultKey(Context& ctx, int kind) {
 
 void RunMatrixApp::insertCatalogItem(Context& ctx, const std::string& item) {
     if (item == "\xE2\x96\xB6" "Editor MAT/VCT") { matrices_.open(ctx); return; }
+    if (item == "\xE2\x96\xB6Simp") { editor_.insertSymbol(item); return; }       // comando in coda: 15/60▶Simp
+    // ESYM: il simbolo e' un token "#k" (µ = "#u").
+    if (optnCategory_ >= 0 && std::string(catalog()[static_cast<std::size_t>(optnCategory_)].name).rfind("ESYM", 0) == 0 && !item.empty()) {
+        const std::string sym = item.rfind("\xC2\xB5", 0) == 0 ? "u" : item.substr(0, 1);
+        editor_.insertSymbol("#" + sym);
+        return;
+    }
+    // BASE-N d~o: prefisso della base di un numero (0d, 0x, 0b, 0o; mostrati d, h, b, o).
+    if (item.size() > 3 && item[1] == ' ' && item[2] == ' ' && item[3] == '(' && std::string("dhbo").find(item[0]) != std::string::npos) {
+        static const char* const prefixes[] = {"0d", "0x", "0b", "0o"};
+        editor_.insertSymbol(prefixes[std::string("dhbo").find(item[0])]);
+        return;
+    }
+    if (item == "xnor") { editor_.insertSymbol(item); return; }
+    // SKETCH: il nome del comando come testo (Plot, F-Line, Graph Y=...).
+    if (optnCategory_ >= 0 && isSketchCategory(static_cast<std::size_t>(optnCategory_))) {
+        if (editor_.linear()) editor_.insertSymbol(item);
+        else {
+            // In Math il nome resta un solo token (la riga si legge come comando).
+            const std::string trimmed = item.back() == ' ' ? item.substr(0, item.size() - 1) : item;
+            editor_.insertSymbol(trimmed + (item.back() == ' ' ? " " : ""));
+        }
+        return;
+    }
     if (item == "Mat" || item == "Vct" || item == "List") { editor_.insertSymbol(item); return; }
     if (item == "Mat Ans" || item == "Vct Ans" || item == "List Ans") { editor_.insertSymbol(item.substr(0, item.find(' '))); editor_.insertText("Ans"); return; }
     if (item == "{" || item == "}" || item == "[" || item == "]") { editor_.insert(item[0]); return; }
@@ -213,8 +254,14 @@ void RunMatrixApp::evaluate(Context& ctx) {
     const RunOutcome out = runCalculation(ctx.ws, text);
     editor_.clear();
     scrollX_ = 0;
+    resultScroll_ = 0;
     ctx.markDirty();
     if (!out.storedIn.empty()) ctx.toast("Memorizzato in " + out.storedIn);
+    // Comando grafico (Plot, F-Line, Graph Y=...): GRAPH mostra il disegno, EXIT torna qui.
+    if (out.graphics) { ctx.open(AppId::Graph); return; }
+    // Risultato oltre la vista naturale (> 6x6, > 20 elementi): schermata MatAns / ListAns.
+    const HistoryEntry& last = ctx.ws.history.back();
+    if (last.collection && last.collection->value.empty()) answers_.open(ctx, last.collection->value.type);
     }
     catch (const SyntaxError& e) { markError(e.where); throw; }
     catch (const MathError& e) { markError(e.where); throw; }
@@ -286,9 +333,7 @@ void RunMatrixApp::menuChoice(Context& ctx, int choice) {
         break;
     case Menu::OptnCategories: {
         optnCategory_ = choice;
-        std::vector<std::string> items;
-        for (const char* s : catalog()[idx].items) items.emplace_back(s);
-        menu_.show(catalog()[idx].name, std::move(items));
+        menu_.show(catalog()[idx].name, catalogItems(idx));
         menuKind_ = Menu::OptnItems;
         break;
     }
@@ -346,10 +391,17 @@ bool RunMatrixApp::browseKey(Context& ctx, const KeyEvent& ev) {
         return true;
     }
     switch (ev.key) {
-    case Key::Up: if (browse_ > 0) --browse_; return true;
-    case Key::Down: if (browse_ + 1 < n) ++browse_; else browse_ = -1; return true;
+    case Key::Up: if (browse_ > 0) --browse_; resultScroll_ = 0; return true;
+    case Key::Down: if (browse_ + 1 < n) ++browse_; else browse_ = -1; resultScroll_ = 0; return true;
     case Key::Exe: case Key::F1: beginEdit(ctx, browse_); return true;          // edit in place and recalculate
-    case Key::F2: case Key::Left: case Key::Right:                             // reuse the expression in the input line
+    case Key::Left: case Key::Right:
+        // Risultato piu' largo della riga: le frecce lo scorrono (v1.11.0).
+        if (resultOverflow_ > 0) {
+            resultScroll_ = std::clamp(resultScroll_ + (ev.is(Key::Right) ? 48 : -48), 0, resultOverflow_);
+            return true;
+        }
+        [[fallthrough]];
+    case Key::F2:                                                              // reuse the expression in the input line
         editor_.setExpression(hist[static_cast<std::size_t>(browse_)].expression);
         browse_ = -1; return true;
     case Key::F3: {                                                            // reuse the result (exact when possible)
@@ -360,7 +412,12 @@ bool RunMatrixApp::browseKey(Context& ctx, const KeyEvent& ev) {
         editor_.paste(tmp.root());
         return true;
     }
-    case Key::F4: resultKey(ctx, 2); return true;
+    case Key::F4: {
+        // Un risultato lista / matrice oltre la vista naturale si legge in MatAns / ListAns.
+        const HistoryEntry& h = hist[static_cast<std::size_t>(browse_)];
+        if (h.collection) { answers_.open(ctx, h.collection->value.type); return true; }
+        resultKey(ctx, 2); return true;
+    }
     case Key::F5: resultKey(ctx, shift ? 1 : 0); return true;
     case Key::F6: case Key::Del: case Key::DelForward:
         hist.erase(hist.begin() + browse_); ctx.markDirty();
@@ -373,8 +430,9 @@ bool RunMatrixApp::browseKey(Context& ctx, const KeyEvent& ev) {
 
 void RunMatrixApp::key(Context& ctx, const KeyEvent& ev) {
     syncInputMode(ctx);
-    // --- editor MAT/VCT (SHIFT 3)
+    // --- editor MAT/VCT (SHIFT 3) e schermate MatAns / ListAns
     if (matrices_.isOpen()) { matrices_.key(ctx, ev); return; }
+    if (answers_.isOpen()) { answers_.key(ctx, ev); return; }
     // L'evidenziazione della causa di un errore dura fino al tasto successivo.
     editor_.clearErrorMark();
     // --- popup menus
@@ -421,7 +479,14 @@ void RunMatrixApp::key(Context& ctx, const KeyEvent& ev) {
         if (!editor_.empty()) editor_.clear();
         else { ctx.ws.history.clear(); ctx.markDirty(); }
         return;
-    case Key::Del: editor_.backspace(); return;
+    case Key::Del:
+        // INS (fx-CG50 SHIFT DEL): sovrascrittura in Line, argomento di un modello in Math.
+        if (shift) {
+            if (editor_.linear()) { editor_.setOverwrite(!editor_.overwrite()); ctx.toast(editor_.overwrite() ? "Sovrascrittura" : "Inserimento"); }
+            else { editor_.beginArgument(); ctx.toast("INS: il prossimo modello prende il valore a destra"); }
+            return;
+        }
+        editor_.backspace(); return;
     case Key::DelForward: editor_.eraseForward(); return;
     case Key::Left: editor_.moveLeft(); return;
     case Key::Right: editor_.moveRight(); return;
@@ -459,8 +524,14 @@ void RunMatrixApp::key(Context& ctx, const KeyEvent& ev) {
 void RunMatrixApp::draw(Context& ctx, gfx::Canvas& c) {
     syncInputMode(ctx);
     if (matrices_.isOpen()) { matrices_.draw(ctx, c); return; }
+    if (answers_.isOpen()) { answers_.draw(ctx, c); return; }
     ui::clear(c);
-    ctx.drawStatus(c, editor_.selecting() ? "RUN-MATRIX  CLIP" : editIndex_ >= 0 ? "RUN-MATRIX  modifica" : "RUN-MATRIX");
+    // Titolo: CLIP, modifica, Base-N (Dec/Hex/Bin/Oct) e INS come sulla barra della fx-CG50.
+    static const char* const kModes[] = {"", "  Dec", "  Hex", "  Bin", "  Oct"};
+    std::string title = editor_.selecting() ? "RUN-MATRIX  CLIP" : editIndex_ >= 0 ? "RUN-MATRIX  modifica" : "RUN-MATRIX";
+    title += kModes[std::min<std::size_t>(static_cast<std::size_t>(ctx.ws.settings.baseMode), 4)];
+    if (editor_.overwrite()) title += "  OVR";
+    ctx.drawStatus(c, title.c_str());
     const int top = ui::ContentTop + 2, bottom = ui::ContentBottom - 2, left = 4, width = ui::ScreenW - 8;
     const Settings& s = ctx.ws.settings;
     const bool lineMode = s.inputMode == Settings::InputMode::Line;
@@ -469,6 +540,7 @@ void RunMatrixApp::draw(Context& ctx, gfx::Canvas& c) {
     // Parentesi colorate per livello durante la digitazione; evidenziata la
     // selezione (CLIP) o la causa dell'ultimo errore.
     cursor.colorParens = browse_ < 0;
+    cursor.cursorStyle = editor_.overwrite() ? 1 : editor_.argumentPending() ? 2 : 0;
     const NaturalEditor::Range mark = editor_.selecting() ? editor_.selection() : editor_.errorMark();
     if (!mark.empty()) { cursor.markRow = mark.row; cursor.markBegin = mark.begin; cursor.markEnd = mark.end; cursor.markIsError = !editor_.selecting(); }
     const math::Size edSize = math::measure(editor_.root());
@@ -488,7 +560,7 @@ void RunMatrixApp::draw(Context& ctx, gfx::Canvas& c) {
             try { tmp.setExpression(hist[i].expression); } catch (...) { tmp.clear(); tmp.insertText("?"); }
             exprTrees[i] = tmp.copyTree();
         }
-        resultTrees[i] = lineMode ? textRow(resultText(hist[i], s)) : resultTree(hist[i], s);
+        resultTrees[i] = lineMode ? textRow(resultText(hist[i], s, true)) : resultTree(hist[i], s);
         blocks.push_back({live ? editorH : math::measure(*exprTrees[i]).height + 4, static_cast<int>(i), false, live});
         blocks.push_back({math::measure(*resultTrees[i]).height + 6, static_cast<int>(i), true, false});
     }
@@ -507,6 +579,7 @@ void RunMatrixApp::draw(Context& ctx, gfx::Canvas& c) {
     if (top + offset + focusY < top) offset = -focusY;
     if (top + offset + focusY + focusH > bottom) offset = (bottom - top) - (focusY + focusH);
     int y = top + offset;
+    resultOverflow_ = 0;
     for (const auto& b : blocks) {
         const bool sel = b.entry >= 0 && b.entry == browse_;
         if (b.live) {
@@ -534,8 +607,20 @@ void RunMatrixApp::draw(Context& ctx, gfx::Canvas& c) {
             if (sel && !b.result) c.rect(0, y, ui::ScreenW, b.h, Select, true);
             const HistoryEntry& h = hist[static_cast<std::size_t>(b.entry)];
             const bool failed = b.result && !h.error.empty() && h.error[0] != '=';
-            auto l = math::layout(tree, left, y + 2 + sz.baseline, width, b.h, b.result ? math::Align::Right : math::Align::Left);
+            // Risultato piu' largo della riga (v1.11.0): allineato a sinistra e scorrevole
+            // con ←/→ quando la riga e' selezionata; ◀ ▶ indicano le parti nascoste.
+            const bool wide = b.result && sz.width > width;
+            int shift = 0;
+            if (wide && sel) { resultOverflow_ = sz.width - width; resultScroll_ = std::min(resultScroll_, resultOverflow_); shift = resultScroll_; }
+            auto l = wide ? math::layout(tree, left - shift, y + 2 + sz.baseline, width + shift + sz.width, b.h, math::Align::Left)
+                          : math::layout(tree, left, y + 2 + sz.baseline, width, b.h, b.result ? math::Align::Right : math::Align::Left);
+            c.setClip({left, std::max(top, y), width, std::min(bottom, y + b.h) - std::max(top, y)});
             math::draw(c, l, sel && !b.result ? SelectInk : failed ? Error : Ink, Cursor, Placeholder);
+            c.setClip({0, top, ui::ScreenW, bottom - top});
+            if (wide) {
+                if (shift > 0) ui::text(c, 0, y + 2, "\xE2\x97\x80", Accent, font::Face::Small);
+                if (shift < sz.width - width) ui::text(c, ui::ScreenW - 6, y + 2, "\xE2\x96\xB6", Accent, font::Face::Small);
+            }
             if (b.result) c.hLine(left, y + b.h - 2, width, Grid);
             c.resetClip();
         }
@@ -549,7 +634,9 @@ void RunMatrixApp::draw(Context& ctx, gfx::Canvas& c) {
         const char* keys[6] = {"COPY", "CUT", nullptr, nullptr, nullptr, nullptr};
         ui::softKeys(c, keys);
     } else if (browse_ >= 0) {
-        const char* keys[6] = {"MODIF", "COPIA", "RIS", "PERIOD", shift ? "ab/c" : "S\xE2\x87\x94" "D", "ELIM"};
+        const HistoryEntry& h = hist[static_cast<std::size_t>(std::min(browse_, static_cast<int>(hist.size()) - 1))];
+        const char* f4 = h.collection ? (h.collection->value.isList() ? "ListAns" : h.collection->value.type == ValueType::Vector ? "VctAns" : "MatAns") : "PERIOD";
+        const char* keys[6] = {"MODIF", "COPIA", "RIS", f4, shift ? "ab/c" : "S\xE2\x87\x94" "D", "ELIM"};
         ui::softKeys(c, keys);
     } else {
         const char* normal[6] = {"a/b", "\xE2\x88\x9A\xE2\x96\xA1", "\xE2\x96\xA1^", "MATH", "S\xE2\x87\x94" "D", "Ans"};

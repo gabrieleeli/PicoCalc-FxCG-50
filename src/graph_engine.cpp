@@ -287,6 +287,23 @@ void GraphEngine::build(const GraphSource& source, const std::vector<std::string
             ++pastedCount;
         } catch (const std::bad_alloc&) { throw; } catch (const std::exception&) {}
     }
+    // 4) grafici dei comandi di Run-Matrix (fx-CG50: Graph Y= ... eseguito in Run-Matrix)
+    if (src_.commands) {
+        for (const CommandGraph& cg : *src_.commands) {
+            if (plots_.size() >= MaxPlots) break;
+            try {
+                Plot p = makePlot(cg.expr, cg.type, cg.color, cg.style);
+                if (cg.type == GraphType::Param) {
+                    if (cg.expr2.empty()) continue;
+                    p.body2 = parseExpression(cg.expr2);
+                }
+                p.pasted = true;
+                p.label = cg.type == GraphType::Polar ? "r" : cg.type == GraphType::Param ? "Xt" : cg.type == GraphType::X ? "X" : "Y";
+                p.detail = "Run-Matrix";
+                plots_.push_back(std::move(p));
+            } catch (const std::bad_alloc&) { throw; } catch (const std::exception&) {}
+        }
+    }
 }
 
 Plot GraphEngine::makePlot(const std::string& text, GraphType type, std::uint8_t color, LineStyle style) const {

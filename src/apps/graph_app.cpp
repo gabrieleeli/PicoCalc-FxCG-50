@@ -91,11 +91,13 @@ void GraphApp::enter(Context& ctx) {
     }
     mode_ = Mode::View; action_ = Action::None;
     // From the main menu GRAPH opens on the relation list (fx-CG50); TABLE's
-    // GPH-CON/GPH-PLT open the graph screen directly.
-    screen_ = tableDraw(ctx) ? Screen::Plot : Screen::List;
+    // GPH-CON/GPH-PLT and the graphic commands of Run-Matrix (v1.11.0) open
+    // the graph screen directly.
+    screen_ = tableDraw(ctx) || ctx.ws.graph.commandScreen ? Screen::Plot : Screen::List;
 }
 void GraphApp::leave(Context& ctx) {
     ctx.ws.table.draw = TableRange::Draw::None;
+    ctx.ws.graph.commandScreen = false;
     // Release the sampled curves while other modes run (heap for TLS, lists...).
     curves_.clear(); curves_.shrink_to_fit();
     shade_.clear(); built_ = false;
