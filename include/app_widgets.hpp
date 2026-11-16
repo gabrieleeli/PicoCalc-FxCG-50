@@ -66,14 +66,51 @@ public:
     std::function<std::string(int, int)> text;      // facoltativo: testo di una cella (valori complessi...)
     std::function<void(int, int, double)> set;
     std::function<void(int, int)> erase;
+    // v1.11.0, facoltativi:
+    //  * setText: la cella riceve il testo digitato (espressioni, forme esatte,
+    //    complessi) invece del numero valutato da evalNumber; editText da'
+    //    il testo iniziale quando si modifica una cella con EXE;
+    //  * subHeader / setSubHeader: riga SUB sotto le intestazioni (sottonomi
+    //    delle liste della fx-CG50), raggiunta con ↑ dalla prima riga (row == -1);
+    //  * scrollMarks: ◀ ▶ nell'intestazione quando ci sono colonne nascoste.
+    std::function<void(int, int, const std::string&)> setText;
+    std::function<std::string(int, int)> editText;
+    std::function<std::string(int)> subHeader;
+    std::function<void(int, const std::string&)> setSubHeader;
+    bool scrollMarks{false};
     int row{0}, col{0};
+    static constexpr int SubRow = -1;
     bool editing() const noexcept { return editing_; }
     bool key(Context& ctx, const KeyEvent& ev);
     void draw(Context& ctx, gfx::Canvas& c, int top, int bottom) const;
+    int firstColumn() const noexcept { return firstCol_; }
 private:
     bool editing_{false};
     LineEditor editor_;
     mutable int firstRow_{0}, firstCol_{0};
+};
+
+// Finestra per i file CSV (v1.11.0): elenco dei file da aprire (LOAD) o nome
+// da scrivere (SAVE·AS, 8 caratteri al massimo, come la fx-CG50).
+class FileDialog {
+public:
+    enum class Mode : std::uint8_t { None, Open, SaveAs };
+    void openList(std::string title, std::vector<std::string> names);
+    void openName(std::string title, const std::string& initial);
+    void close() noexcept { mode_ = Mode::None; }
+    bool active() const noexcept { return mode_ != Mode::None; }
+    Mode mode() const noexcept { return mode_; }
+    // 1: scelta fatta (name()), -1: annullato, 0: ancora aperto.
+    int key(const KeyEvent& ev);
+    const std::string& name() const noexcept { return chosen_; }
+    void draw(gfx::Canvas& c) const;
+private:
+    Mode mode_{Mode::None};
+    std::string title_, chosen_;
+    std::vector<std::string> names_;
+    int selected_{0};
+    mutable int first_{0};
+    LineEditor editor_{8};
 };
 
 } // namespace fx::app

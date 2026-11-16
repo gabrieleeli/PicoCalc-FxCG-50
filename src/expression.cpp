@@ -50,7 +50,7 @@ constexpr FnInfo kFunctions[] = {
     {"gcd",2,2,false},{"lcm",2,2,false},{"randint",2,2,false},{"rand",0,0,false},{"ran",0,0,false},
     {"dms",1,3,false},{"pol",2,2,false},{"rec",2,2,false},
     {"mixed",3,3,false},{"modexp",3,3,false},{"rndfix",2,2,false},{"rannorm",2,2,false},{"ranbin",2,2,false},
-    {"not",1,1,false},
+    {"not",1,1,false},{"neg",1,1,false},
     {"integral",3,3,true},{"integrate",3,3,true},{"derivative",2,2,true},{"diff",2,2,true},
     {"derivative2",2,2,true},{"sum",1,3,true},{"prod",1,3,true},{"solve",2,2,true},
     // Matrici, vettori e liste (fx-CG50 OPTN > MAT/VCT e OPTN > LIST).
@@ -82,10 +82,12 @@ const ConstInfo kConstants[] = {
 constexpr const char* kSpecialNames[] = {"ans","preans","theta"};
 // Variables owned by other applications (VARS menu), resolved through EvalContext::names.
 constexpr const char* kSystemNames[] = {"xmin","xmax","xscl","ymin","ymax","yscl","tmin","tmax","tptch",
-    "tblstart","tblend","tblpitch","xdot","list1","list2","list3","list4","list5","list6",nullptr};
+    "tblstart","tblend","tblpitch","xdot","list1","list2","list3","list4","list5","list6","list7","list8","list9","list10",
+    "list11","list12","list13","list14","list15","list16","list17","list18","list19","list20","list21","list22","list23",
+    "list24","list25","list26",nullptr};
 // Infix operator words (fx-CG50 And/Or/Xor, Int÷ and Rmdr) and their internal op codes.
 struct OpWord { const char* name; char op; };
-constexpr OpWord kOperatorWords[] = {{"and",'&'},{"or",'|'},{"xor",'x'},{"rmdr",'r'},{"intdiv",'q'}};
+constexpr OpWord kOperatorWords[] = {{"and",'&'},{"or",'|'},{"xor",'x'},{"xnor",'X'},{"rmdr",'r'},{"intdiv",'q'}};
 char operatorWord(const std::string& lowerName){for(const auto& w:kOperatorWords)if(lowerName==w.name)return w.op;return 0;}
 
 std::string lower(std::string s){for(char& c:s)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));return s;}
@@ -103,12 +105,17 @@ bool isSystemName(const std::string& lowerName){
     for(const char* const* n=kSystemNames;*n;++n)if(lowerName==*n)return true;
     return false;
 }
-// "list1".."list6": le liste di Statistics. In GRAPH una lista in una funzione
-// indica uno dei suoi elementi (un grafico per elemento, risolto dal
-// NameResolver del motore dei grafici); altrove e' l'intera lista.
-bool isListName(const std::string& lowerName){
-    return lowerName.size()==5&&lowerName.compare(0,4,"list")==0&&lowerName[4]>='1'&&lowerName[4]<='6';
+// "list1".."list26": le liste del workspace (Statistics, List 1-26). In GRAPH
+// una lista in una funzione indica uno dei suoi elementi (un grafico per
+// elemento, risolto dal NameResolver del motore dei grafici); altrove e'
+// l'intera lista.
+int listNumber(const std::string& lowerName){
+    if(lowerName.size()<5||lowerName.size()>6||lowerName.compare(0,4,"list")!=0||lowerName[4]=='0')return 0;
+    int v=0;
+    for(std::size_t i=4;i<lowerName.size();++i){if(lowerName[i]<'0'||lowerName[i]>'9')return 0;v=v*10+(lowerName[i]-'0');}
+    return v>=1&&v<=CollectionResolver::Slots?v:0;
 }
+bool isListName(const std::string& lowerName){return listNumber(lowerName)!=0;}
 bool isConstantName(const std::string& lowerName){
     for(const auto& c:kConstants)if(lowerName==c.name)return true;
     for(const char* s:kSpecialNames)if(lowerName==s)return true;
@@ -124,6 +131,15 @@ bool referenceName(const std::string& low){
     const int v=std::atoi(num.c_str());return v>=1&&v<=20;
 }
 
+// Simboli ingegneristici (fx-CG50 OPTN > ESYM): nel testo canonico "#k",
+// "#M", "#u" (micro, mostrato µ)... Moltiplicano il valore che precedono.
+struct EngSymbol { char symbol; const char* factor; };
+constexpr EngSymbol kEngSymbols[] = {{'k',"1e3"},{'M',"1e6"},{'G',"1e9"},{'T',"1e12"},{'m',"1e-3"},{'u',"1e-6"},{'n',"1e-9"},
+                                     {'p',"1e-12"},{'f',"1e-15"}};
+const char* engFactor(char c){for(const auto& e:kEngSymbols)if(e.symbol==c)return e.factor;return nullptr;}
+// Frazione lineare della modalita' Line: "2⌟3", "1⌟2⌟3" (U+231F).
+const char* const kFractionMark="\xE2\x8C\x9F";
+
 // ---------------------------------------------------------------- lexer
 // Ogni token conserva il suo intervallo di byte nel testo: il parser segnala un
 // errore di sintassi sul token che non puo' usare e registra l'intervallo di
@@ -133,7 +149,9 @@ struct Tok { TT type{TT::End}; std::string text; char op{}; std::uint16_t pos{},
 
 class Lexer {
 public:
-    explicit Lexer(const std::string& s):s_(s){
+    // base: base dei numeri senza prefisso (10, oppure 16/2/8 e 10 intero nella
+    // modalita' Base-N: allora integer e' vero, i numeri sono interi a 32 bit).
+    explicit Lexer(const std::string& s,unsigned base=10,bool integer=false):s_(s),base_(base),integer_(integer){
         if(s_.size()>60000)throw MathError("Memory ERROR: espressione troppo lunga");
     }
     std::vector<Tok> run(){
@@ -142,8 +160,17 @@ public:
             skipSpace();
             if(p_>=s_.size()){out.push_back({TT::End,{},0,at(p_),0});return out;}
             const unsigned char c=static_cast<unsigned char>(s_[p_]);
-            if(std::isdigit(c)||(c=='.'&&p_+1<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[p_+1])))){out.push_back(number());continue;}
-            if(std::isalpha(c)||c=='_'){identifier(out);continue;}
+            if(std::isdigit(c)||(c=='.'&&p_+1<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[p_+1])))){out.push_back(integer_?integerNumber():number());continue;}
+            if(c=='#'&&p_+1<s_.size()&&engFactor(s_[p_+1])){
+                if(integer_)throw SyntaxError("Syntax ERROR: simboli ingegneristici non disponibili in Base-N",static_cast<int>(p_),2);
+                out.push_back({TT::Op,std::string("#")+engFactor(s_[p_+1]),'#',at(p_),2});p_+=2;continue;
+            }
+            if(std::isalpha(c)||c=='_'){
+                // Base-N esadecimale: le cifre A-F sono numeri anche attaccate agli
+                // operatori ("FFxor0F" = FF Xor 0F: l'editor non conserva gli spazi).
+                if(integer_&&base_==16){hexIdentifier(out);continue;}
+                identifier(out);continue;
+            }
             if(c=='@'){reference(out);continue;}
             if(c>=0x80){utf8(out);continue;}
             if(c=='<'||c=='>'){
@@ -156,20 +183,119 @@ public:
     }
 private:
     const std::string& s_; std::size_t p_{};
+    unsigned base_{10};
+    bool integer_{false};
     static std::uint16_t at(std::size_t p){return static_cast<std::uint16_t>(p);}
+    static int digitValue(char ch){
+        const unsigned char u=static_cast<unsigned char>(ch);
+        if(std::isdigit(u))return ch-'0';
+        if(std::isalpha(u))return std::tolower(u)-'a'+10;
+        return 99;
+    }
+    // Parola riservata di almeno due lettere (operatore, funzione, costante) che inizia in raw[k]: lunghezza o 0.
+    static std::size_t wordAt(const std::string& raw,std::size_t k){
+        for(std::size_t len=raw.size()-k;len>=2;--len){
+            const std::string piece=lower(raw.substr(k,len));
+            if(isFunctionName(piece)||isConstantName(piece)||operatorWord(piece))return len;
+        }
+        return 0;
+    }
+    Tok hexValue(const std::string& digits,std::size_t pos){
+        std::uint64_t v=0;
+        for(char ch:digits){
+            v=v*16+static_cast<unsigned>(digitValue(ch));
+            if(v>0xFFFFFFFFull)throw MathError("Math ERROR: numero oltre i 32 bit",static_cast<int>(pos),static_cast<int>(digits.size()));
+        }
+        const long long signedValue=v>0x7FFFFFFFull?static_cast<long long>(v)-0x100000000ll:static_cast<long long>(v);
+        return Tok{TT::Num,std::to_string(signedValue),0,at(pos),at(digits.size())};
+    }
+    // Base-N esadecimale: una parola di lettere e cifre si divide in parole
+    // riservate (and, xnor, Not...), numeri di cifre 0-9 A-F e variabili G-Z.
+    void hexIdentifier(std::vector<Tok>& out){
+        const std::size_t b=p_;
+        while(p_<s_.size()&&(std::isalnum(static_cast<unsigned char>(s_[p_]))||s_[p_]=='_'))++p_;
+        const std::string raw=s_.substr(b,p_-b);
+        std::size_t k=0;
+        while(k<raw.size()){
+            if(const std::size_t len=wordAt(raw,k)){
+                const std::string word=lower(raw.substr(k,len));
+                if(const char op=operatorWord(word))out.push_back({TT::Op,{},op,at(b+k),at(len)});
+                else out.push_back({TT::Ident,word,0,at(b+k),at(len)});
+                k+=len;continue;
+            }
+            if(digitValue(raw[k])<16){
+                std::size_t e=k;
+                while(e<raw.size()&&digitValue(raw[e])<16&&(e==k||wordAt(raw,e)==0))++e;
+                out.push_back(hexValue(raw.substr(k,e-k),b+k));
+                k=e;continue;
+            }
+            if(!std::isalpha(static_cast<unsigned char>(raw[k])))throw SyntaxError("Syntax ERROR: nome non valido '"+raw+"'",static_cast<int>(b+k),1);
+            out.push_back({TT::Ident,raw.substr(k,1),0,at(b+k),1});++k;
+        }
+    }
+    // Base-N (fx-CG50 Mode Dec/Hex/Bin/Oct): numero intero a 32 bit nella base
+    // corrente o con un prefisso 0d/0x/0b/0o; Hex, Bin e Oct sono in
+    // complemento a due (FFFFFFFF = -1), Dec va da -2147483648 a 2147483647.
+    Tok integerNumber(){
+        const std::size_t b=p_;
+        unsigned base=base_;
+        if(s_[p_]=='0'&&p_+2<s_.size()){
+            const char k=static_cast<char>(std::tolower(static_cast<unsigned char>(s_[p_+1])));
+            const unsigned pb=k=='d'?10:k=='x'?16:k=='b'?2:k=='o'?8:0;
+            if(pb&&digitValue(s_[p_+2])<static_cast<int>(pb)){base=pb;p_+=2;}
+        }
+        const std::size_t start=p_;
+        std::uint64_t v=0;
+        while(p_<s_.size()&&(std::isalnum(static_cast<unsigned char>(s_[p_]))||s_[p_]=='.')){
+            const char ch=s_[p_];
+            if(ch=='.')throw SyntaxError("Syntax ERROR: in Base-N i numeri sono interi",static_cast<int>(p_),1);
+            const int d=digitValue(ch);
+            if(d>=static_cast<int>(base)){
+                if(std::isalpha(static_cast<unsigned char>(ch)))break;      // una variabile o una parola dopo il numero (2G, 1and0)
+                throw SyntaxError(std::string("Syntax ERROR: cifra '")+ch+"' non valida in base "+std::to_string(base),static_cast<int>(p_),1);
+            }
+            // In esadecimale una parola riservata dopo le cifre ("FFand") non e' parte del numero.
+            if(base==16&&std::isalpha(static_cast<unsigned char>(ch))){
+                std::size_t q=p_;
+                while(q<s_.size()&&std::isalnum(static_cast<unsigned char>(s_[q])))++q;
+                if(wordAt(s_.substr(p_,q-p_),0))break;
+            }
+            v=v*base+static_cast<unsigned>(d);
+            if(v>0xFFFFFFFFull)throw MathError("Math ERROR: numero oltre i 32 bit",static_cast<int>(b),static_cast<int>(p_-b+1));
+            ++p_;
+        }
+        if(p_==start)throw SyntaxError("Syntax ERROR: numero mancante dopo il prefisso",static_cast<int>(b),static_cast<int>(p_-b));
+        long long signedValue=static_cast<long long>(v);
+        if(base==10){if(v>0x7FFFFFFFull)throw MathError("Math ERROR: oltre 2147483647 in Base-N",static_cast<int>(b),static_cast<int>(p_-b));}
+        else if(v>0x7FFFFFFFull)signedValue=static_cast<long long>(v)-0x100000000ll;   // complemento a due
+        return Tok{TT::Num,std::to_string(signedValue),0,at(b),at(p_-b)};
+    }
     void skipSpace(){while(p_<s_.size()&&std::isspace(static_cast<unsigned char>(s_[p_])))++p_;}
     Tok number(){
         const std::size_t b=p_;
         auto tok=[&](std::string text){return Tok{TT::Num,std::move(text),0,at(b),at(p_-b)};};
-        if(s_[p_]=='0'&&p_+2<s_.size()&&(s_[p_+1]=='x'||s_[p_+1]=='X'||s_[p_+1]=='b'||s_[p_+1]=='B'||s_[p_+1]=='o'||s_[p_+1]=='O')){
+        if(s_[p_]=='0'&&p_+2<s_.size()&&(s_[p_+1]=='x'||s_[p_+1]=='X'||s_[p_+1]=='b'||s_[p_+1]=='B'||s_[p_+1]=='o'||s_[p_+1]=='O'||s_[p_+1]=='d'||s_[p_+1]=='D')){
             const char kind=static_cast<char>(std::tolower(static_cast<unsigned char>(s_[p_+1])));
-            const unsigned base=kind=='x'?16:kind=='b'?2:8;
+            const unsigned base=kind=='x'?16:kind=='b'?2:kind=='d'?10:8;
             std::size_t q=p_+2,start=q;
             auto digitOk=[&](char ch){const int d=std::isdigit(static_cast<unsigned char>(ch))?ch-'0':std::isalpha(static_cast<unsigned char>(ch))?std::tolower(static_cast<unsigned char>(ch))-'a'+10:99;return d<static_cast<int>(base);};
             while(q<s_.size()&&digitOk(s_[q]))++q;
             if(q>start){p_=q;const std::uint64_t v=fromBase(s_.substr(start,q-start),base);return tok(std::to_string(v));}
         }
         while(p_<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[p_])))++p_;
+        // Frazione lineare "2⌟3" / "1⌟2⌟3" (modalita' Line): un solo letterale.
+        if(s_.compare(p_,3,kFractionMark)==0){
+            int marks=0;
+            while(s_.compare(p_,3,kFractionMark)==0){
+                const std::size_t q=p_+3;std::size_t e=q;
+                while(e<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[e])))++e;
+                if(e==q)throw SyntaxError("Syntax ERROR: dopo \xE2\x8C\x9F serve un intero",static_cast<int>(p_),3);
+                if(++marks>2)throw SyntaxError("Syntax ERROR: troppi \xE2\x8C\x9F",static_cast<int>(p_),3);
+                p_=e;
+            }
+            if(p_<s_.size()&&(s_[p_]=='.'||s_[p_]=='_'))throw SyntaxError("Syntax ERROR: una frazione ha termini interi",static_cast<int>(p_),1);
+            return tok(s_.substr(b,p_-b));
+        }
         if(p_<s_.size()&&s_[p_]=='.'){++p_;while(p_<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[p_])))++p_;}
         // Repeating decimal: "0.1_6" = 0.1666... (written with an overline in the editor).
         if(p_<s_.size()&&s_[p_]=='_'){
@@ -337,7 +463,12 @@ private:
     ast::NodePtr expr(){
         const std::size_t s=i_;
         auto n=logicAnd();
-        for(;;){if(eat('|'))n=bin('|',n,logicAnd(),s);else if(eat('x'))n=bin('x',n,logicAnd(),s);else return n;}
+        for(;;){
+            if(eat('|'))n=bin('|',n,logicAnd(),s);
+            else if(eat('x'))n=bin('x',n,logicAnd(),s);
+            else if(eat('X'))n=bin('X',n,logicAnd(),s);      // Xnor (Base-N)
+            else return n;
+        }
     }
     ast::NodePtr logicAnd(){
         const std::size_t s=i_;
@@ -410,6 +541,13 @@ private:
         for(;;){
             if(eat('!')){auto c=ast::make(ast::Kind::Call,"factorial");c->children={n};c->flags=flagsOf(*c);n=span(c,s);}
             else if(eat('d')){auto c=ast::make(ast::Kind::Call,"fromdeg");c->children={n};c->flags=flagsOf(*c);n=span(c,s);}
+            else if(isOp('#')){
+                // Simbolo ingegneristico: 2k = 2×10³ (il fattore e' un token "#1e3").
+                const std::size_t fs=i_;
+                auto factor=ast::make(ast::Kind::Token,peek().text);
+                ++i_;
+                n=bin('*',n,span(factor,fs),s);
+            }
             else return n;
         }
     }
@@ -461,9 +599,9 @@ private:
             if(digits)for(char c:k.text)digits=digits&&std::isdigit(static_cast<unsigned char>(c));
             const int index=digits?std::atoi(k.text.c_str()):0;
             if(index<1||index>CollectionResolver::Slots)throw errorAt("Syntax ERROR: dopo List serve un numero 1-26 o Ans",k);
-            // List 1-6 usano il token delle variabili di lista condivise ("list1"), gia'
-            // usato da GRAPH e dai nomi di VARS.
-            if(index<=6)name="list"+std::to_string(index);else name+=std::to_string(index);
+            // List 1-26 usano il token delle variabili di lista condivise ("list12"),
+            // lo stesso usato da GRAPH, TABLE e dai nomi di VARS.
+            name="list"+std::to_string(index);
             ++i_;
         }else{
             if(k.type!=TT::Ident||k.text.size()!=1||!std::isalpha(static_cast<unsigned char>(k.text[0])))
@@ -603,6 +741,63 @@ double realPow(double a,double b){
 long long toIntArg(double v,const char* what){
     if(!isInteger(v)||std::abs(v)>9e15)throw MathError(std::string("Argument ERROR: ")+what+" richiede interi");
     return static_cast<long long>(v);
+}
+// ---- Base-N (fx-CG50 Mode Dec/Hex/Bin/Oct): interi a 32 bit in complemento a due.
+long long int32Arg(double v){
+    if(!isInteger(v)||v<-2147483648.0||v>2147483647.0)throw MathError("Math ERROR: in Base-N i valori sono interi a 32 bit");
+    return static_cast<long long>(v);
+}
+double int32Result(long long v){
+    if(v<-2147483648ll||v>2147483647ll)throw MathError("Math ERROR: risultato oltre i 32 bit (Base-N)");
+    return static_cast<double>(v);
+}
+double bitsValue(std::uint32_t u){return static_cast<double>(static_cast<std::int32_t>(u));}
+double baseNBinary(char op,double a,double b){
+    const long long x=int32Arg(a),y=int32Arg(b);
+    const auto ux=static_cast<std::uint32_t>(static_cast<std::int32_t>(x)),uy=static_cast<std::uint32_t>(static_cast<std::int32_t>(y));
+    switch(op){
+    case '+': return int32Result(x+y);
+    case '-': return int32Result(x-y);
+    case '*': return int32Result(x*y);
+    case '/': case 'q':
+        if(y==0)throw MathError("Math ERROR: divisione per zero");
+        return int32Result(x/y);                    // divisione intera: la parte frazionaria si scarta
+    case 'r': if(y==0)throw MathError("Math ERROR: divisione per zero");return int32Result(x%y);
+    case '&': return bitsValue(ux&uy);
+    case '|': return bitsValue(ux|uy);
+    case 'x': return bitsValue(ux^uy);
+    case 'X': return bitsValue(~(ux^uy));
+    case '=': case 'n': case '<': case '>': case 'l': case 'g':{
+        const bool v=op=='='?x==y:op=='n'?x!=y:op=='<'?x<y:op=='>'?x>y:op=='l'?x<=y:x>=y;
+        return v?1.0:0.0;
+    }
+    default: throw MathError("Math ERROR: operazione non disponibile in Base-N");
+    }
+}
+
+// "a⌟b" = a/b, "a⌟b⌟c" = a + b/c (frazione mista della modalita' Line).
+bool fractionLiteral(const std::string& t,exact::Rational& out){
+    long long part[3]={0,0,0};int count=0;
+    std::size_t i=0;
+    while(i<=t.size()&&count<3){
+        std::size_t e=i;long long v=0;
+        while(e<t.size()&&std::isdigit(static_cast<unsigned char>(t[e]))){
+            if(v>99999999999999ll)return false;
+            v=v*10+(t[e]-'0');++e;
+        }
+        if(e==i)return false;
+        part[count++]=v;
+        if(e>=t.size())break;
+        if(t.compare(e,3,kFractionMark)!=0)return false;
+        i=e+3;
+    }
+    if(count==2)return exact::Rational::make(part[0],part[1],out);
+    if(count==3){
+        exact::Rational f;
+        if(!exact::Rational::make(part[1],part[2],f))return false;
+        return exact::add(exact::Rational::integer(part[0]),f,out);
+    }
+    return false;
 }
 
 // Evaluation environment with a stack of calculus bindings that shadow the context.
@@ -827,6 +1022,7 @@ template<typename T> FXAI_NOINLINE T applyFunction(const std::string& f,const T*
             }
         }
         if(f=="exp")return std::exp(a);
+        if(f=="neg")return T(0)-a;
         if(f=="recip"){if(a==T(0))throw MathError("Math ERROR: divisione per zero");return T(1)/a;}
         if(f=="percent")return a/T(100);
         if(f=="fromdeg")return a*T(fromRadians(kPi/180.0));
@@ -988,6 +1184,16 @@ template<typename T> FXAI_NOINLINE T callReference(const ast::Node& n,Env& env){
     return evalNode<T>(*body,env);
 }
 template<typename T> FXAI_NOINLINE T callFunction(const ast::Node& n,Env& env){
+    if(env.ctx.integerBase){
+        // Base-N: solo Not (complemento a uno), Neg (complemento a due) e Abs.
+        const std::string& f=n.text;
+        if(n.children.size()!=1||!n.children[0]||(f!="not"&&f!="neg"&&f!="abs"))
+            throw MathError("Math ERROR: "+f+" non disponibile in Base-N");
+        const long long x=int32Arg(asReal<T>(evalNode<T>(*n.children[0],env),f.c_str()));
+        env.at=&n;
+        if(f=="not")return fromReal<T>(bitsValue(~static_cast<std::uint32_t>(static_cast<std::int32_t>(x))));
+        return fromReal<T>(int32Result(f=="neg"?-x:(x<0?-x:x)));
+    }
     if(!n.text.empty()&&n.text[0]=='@')return callReference<T>(n,env);
     if(isLazyFunction(n.text))return callCalculus<T>(n,env);
     const std::size_t count=n.children.size();
@@ -1004,6 +1210,13 @@ template<typename T> FXAI_NOINLINE T callFunction(const ast::Node& n,Env& env){
 template<typename T> FXAI_NOINLINE T evalToken(const ast::Node& n,Env& env){
         if(n.text.empty())throw SyntaxError("Syntax ERROR: token vuoto");
         const unsigned char c0=static_cast<unsigned char>(n.text[0]);
+        if(c0=='#'){char* e=nullptr;const double v=std::strtod(n.text.c_str()+1,&e);return fromReal<T>(v);}   // simbolo ingegneristico
+        if(c0=='-'&&n.text.size()>1&&std::isdigit(static_cast<unsigned char>(n.text[1])))return fromReal<T>(std::strtod(n.text.c_str(),nullptr));   // Base-N negativo
+        if(std::isdigit(c0)&&n.text.find(kFractionMark)!=std::string::npos){
+            exact::Rational r;
+            if(!fractionLiteral(n.text,r))throw MathError("Math ERROR: denominatore nullo o frazione troppo grande");
+            return fromReal<T>(r.toDouble());
+        }
         if(std::isdigit(c0)||c0=='.'){
             if(n.text.find('_')!=std::string::npos){
                 exact::Rational r;
@@ -1064,9 +1277,9 @@ template<typename T> FXAI_NOINLINE T applyBinary(char op,const T& a,const T& b){
             }
             r=fromReal<T>(v?1.0:0.0);break;
         }
-        case '&': case '|': case 'x':{
+        case '&': case '|': case 'x': case 'X':{
             const bool x=!(a==T(0)),y=!(b==T(0));
-            r=fromReal<T>((op=='&'?(x&&y):op=='|'?(x||y):(x!=y))?1.0:0.0);break;
+            r=fromReal<T>((op=='&'?(x&&y):op=='|'?(x||y):op=='x'?(x!=y):(x==y))?1.0:0.0);break;
         }
         case '^':
             if constexpr(std::is_same_v<T,double>)r=realPow(a,b);
@@ -1084,11 +1297,19 @@ template<typename T> FXAI_NOINLINE T applyBinary(char op,const T& a,const T& b){
         return r;
 }
 
+// Operazione binaria nel dominio del contesto: interi a 32 bit nella modalita'
+// Base-N, altrimenti le regole numeriche di sempre.
+template<typename T> T combine(const Env& env,char op,const T& a,const T& b){
+    if constexpr(std::is_same_v<T,double>){if(env.ctx.integerBase)return baseNBinary(op,a,b);}
+    else{if(env.ctx.integerBase)return Complex(baseNBinary(op,requireReal(a,"Base-N"),requireReal(b,"Base-N")),0.0);}
+    return applyBinary<T>(op,a,b);
+}
+
 // Left-associative chains (1+2+3+..., 2*x*y) form left-deep trees. They are
 // walked iteratively so that the recursion depth follows the nesting of the
 // input, not its length.
 bool isChainNode(const ast::Node& n) noexcept {
-    return n.kind==ast::Kind::Binary&&n.text.size()==1&&std::strchr("+-*/%qr=n<>lg&|x",n.text[0])!=nullptr&&n.children.size()==2&&n.children[0]&&n.children[1];
+    return n.kind==ast::Kind::Binary&&n.text.size()==1&&std::strchr("+-*/%qr=n<>lg&|xX",n.text[0])!=nullptr&&n.children.size()==2&&n.children[0]&&n.children[1];
 }
 template<typename T> FXAI_NOINLINE T evalChain(const ast::Node& top,Env& env){
     constexpr std::size_t kChunk=16;
@@ -1101,7 +1322,7 @@ template<typename T> FXAI_NOINLINE T evalChain(const ast::Node& top,Env& env){
         const ast::Node& b=*spine[--count];
         const T rhs=evalNode<T>(*b.children[1],env);
         env.at=&b;
-        acc=applyBinary<T>(b.text[0],acc,rhs);
+        acc=combine<T>(env,b.text[0],acc,rhs);
     }
     return acc;
 }
@@ -1127,10 +1348,16 @@ template<typename T> T evalNode(const ast::Node& node,Env& env){
         else return z;
     }
     switch(n.kind){
-    case Kind::Token: env.at=&n;return evalToken<T>(n,env);
+    case Kind::Token:{
+        env.at=&n;
+        const T v=evalToken<T>(n,env);
+        if(env.ctx.integerBase)(void)int32Arg(asReal<T>(v,"Base-N"));      // Base-N: solo interi a 32 bit
+        return v;
+    }
     case Kind::Unary:{
         const T a=evalNode<T>(*n.children.at(0),env);
         if(n.text!="-")return a;
+        if(env.ctx.integerBase){env.at=&n;return fromReal<T>(int32Result(-int32Arg(asReal<T>(a,"Base-N"))));}
         if constexpr(std::is_same_v<T,double>)return -a;
         else{
             // Negating 4+0i must give -4+0i (not -4-0i): a signed zero imaginary
@@ -1144,7 +1371,7 @@ template<typename T> T evalNode(const ast::Node& node,Env& env){
         const T a=evalNode<T>(*n.children.at(0),env);
         const T b=evalNode<T>(*n.children.at(1),env);
         env.at=&n;
-        return applyBinary<T>(n.text.empty()?'?':n.text[0],a,b);
+        return combine<T>(env,n.text.empty()?'?':n.text[0],a,b);
     }
     case Kind::Call:{T r=callFunction<T>(n,env);env.at=&n;checkFinite(r);return r;}
     default: break;
@@ -1290,6 +1517,7 @@ FXAI_NOINLINE bool exactBinary(char op,const Value& a,const Value& b,Value& out)
     case '&': out=exactInt(!a.isZero()&&!b.isZero());return true;
     case '|': out=exactInt(!a.isZero()||!b.isZero());return true;
     case 'x': out=exactInt(a.isZero()!=b.isZero());return true;
+    case 'X': out=exactInt(a.isZero()==b.isZero());return true;
     default: return false;
     }
 }
@@ -1355,6 +1583,7 @@ FXAI_NOINLINE bool exactApply(const std::string& f,const Value* a,std::size_t co
         if(f=="round"){Value h;if(!exactRoundDigits(x,0,h))return false;out=h;return true;}
         if(f=="sign"){out=exactInt(x.sign());return true;}
         if(f=="not"){out=exactInt(x.isZero()?1:0);return true;}
+        if(f=="neg")return exact::neg(x,out);
         if(f=="fact"||f=="factorial"){
             if(!exactInteger(x,i0)||i0<0||i0>20)return false;
             long long p=1;for(long long k=2;k<=i0;++k)p*=k;
@@ -1431,6 +1660,19 @@ bool exactNode(const ast::Node& n,Env& env,Value& out);
 FXAI_NOINLINE bool exactToken(const ast::Node& n,Env& env,Value& out){
     if(n.text.empty())return false;
     const unsigned char c0=static_cast<unsigned char>(n.text[0]);
+    if(env.ctx.integerBase)return false;                       // Base-N: valori interi, nessuna forma esatta
+    if(c0=='#'){
+        // Simbolo ingegneristico: valore esatto, mostrato come un decimale (come 2.5).
+        Rational r;
+        if(!exact::parseDecimal(n.text.substr(1),r))return false;
+        env.decimal=true;
+        out=Value::fromRational(r);return true;
+    }
+    if(std::isdigit(c0)&&n.text.find(kFractionMark)!=std::string::npos){
+        Rational r;
+        if(!fractionLiteral(n.text,r))return false;
+        out=Value::fromRational(r);return true;
+    }
     if(std::isdigit(c0)||c0=='.'){
         Rational r;
         if(!exact::parseDecimal(n.text,r))return false;
@@ -1580,8 +1822,8 @@ struct NumDomain {
         const Complex r=callFunction<Complex>(n,env);checkFinite(r);return r;
     }
     static Elem binary(char op,const Elem& a,const Elem& b,Env& env){
-        if(real(env))return Complex(applyBinary<double>(op,a.real(),b.real()),0.0);
-        return applyBinary<Complex>(op,a,b);
+        if(real(env))return Complex(combine<double>(env,op,a.real(),b.real()),0.0);
+        return combine<Complex>(env,op,a,b);
     }
     static Elem negate(const Elem& a,Env&){const double re=-a.real(),im=-a.imag();return Complex(re==0.0?0.0:re,im==0.0?0.0:im);}
     static Elem apply(const std::string& f,const Elem* args,std::size_t count,Env& env){
@@ -1633,11 +1875,13 @@ struct ExactDomain {
     static double toReal(const Elem& a,const char*){Rational r;if(!a.rational(r))throw NoExactForm{};return r.toDouble();}
     static int compare(const Elem& a,const Elem& b){int c=0;if(!exactCompare(a,b,c))throw NoExactForm{};return c;}
     static bool negligible(const Elem& pivot,double){return pivot.isZero();}
-    // Un elemento memorizzato e' esatto quando e' intero (un double intero e'
-    // esattamente quell'intero); per gli altri non c'e' una forma esatta nota.
+    // Un elemento memorizzato e' esatto quando la memoria conserva la sua forma
+    // esatta (celle dell'editor MAT/VCT, risultati esatti memorizzati: v1.11.0)
+    // o quando e' intero (un double intero e' esattamente quell'intero).
     static void load(const CalcValue& src,Coll<Elem>& out,Env&){
         if(src.complex())throw NoExactForm{};
         out.rows=src.rows;out.cols=src.cols;
+        if(src.hasExact()){out.v=src.exact;return;}
         out.v.resize(src.size());
         for(std::size_t i=0;i<src.size();++i){
             const double d=src.re[i];
@@ -1800,8 +2044,8 @@ private:
             // il nome e' l'elemento del grafico in corso, un numero.
             double element=0;
             if(env.ctx.names&&env.ctx.names->resolve(t,element))return scalarOf(D::fromDouble(element));
-            index=t[4]-'1';
-            t=std::string("List ")+t[4];
+            index=listNumber(t)-1;
+            t="List "+t.substr(4);
         }else{
             const std::size_t space=t.find(' ');
             if(space==std::string::npos||space+1>=t.size())throw SyntaxError("Syntax ERROR: nome sconosciuto "+t);
@@ -2305,6 +2549,11 @@ EvalContext& EvalContext::bind(const char* name,double value){
 ast::NodePtr parseExpression(const std::string& expression){
     return Parser(Lexer(expression).run()).run();
 }
+ast::NodePtr parseExpression(const std::string& expression,unsigned integerBase){
+    if(integerBase==0)return parseExpression(expression);
+    if(integerBase!=2&&integerBase!=8&&integerBase!=10&&integerBase!=16)throw std::invalid_argument("base non valida");
+    return Parser(Lexer(expression,integerBase,true).run()).run();
+}
 void setEvalStackBudget(std::size_t bytes) noexcept{gEvalStackBudget=bytes;}
 std::size_t evalStackBudget() noexcept{return gEvalStackBudget;}
 
@@ -2453,7 +2702,11 @@ std::string rewriteIdentifiers(const std::string& expression,const std::function
         case TT::Op:
             switch(t.op){
             case 'l':append("<=");break; case 'g':append(">=");break; case 'n':append("\xE2\x89\xA0");break;
-            case '&':append(" and ");break; case '|':append(" or ");break; case 'x':append(" xor ");break;
+            case '&':append(" and ");break; case '|':append(" or ");break; case 'x':append(" xor ");break; case 'X':append(" xnor ");break;
+            case '#':{
+                for(const auto& e:kEngSymbols)if(t.text.compare(1,std::string::npos,e.factor)==0){append(std::string("#")+e.symbol);break;}
+                break;
+            }
             case 'r':append(" Rmdr ");break; case 'q':append("Int\xC3\xB7");break; case 'd':append("\xC2\xB0");break;
             default:append(std::string(1,t.op));break;
             }

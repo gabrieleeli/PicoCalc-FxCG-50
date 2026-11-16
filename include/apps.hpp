@@ -79,7 +79,7 @@ public:
     const CellGrid& grid() const noexcept { return grid_; }
 private:
     enum class Confirm : std::uint8_t { None, Delete, DeleteAll };
-    enum class Menu : std::uint8_t { None, RowOp, Row, Column };
+    enum class Menu : std::uint8_t { None, RowOp, Row, Column, Csv };
     CalcValue* current(Context& ctx) const;              // memoria della riga selezionata
     std::string name(int row) const;                     // "Mat A", "Vct Ans"
     void listKey(Context& ctx, const KeyEvent& ev);
@@ -90,6 +90,12 @@ private:
     void store(Context& ctx, CalcValue value);           // assegnazione controllata della memoria selezionata
     void menuChoice(Context& ctx, int choice);
     void askNext(Context& ctx);                          // raccoglie i numeri di una ROW-OP
+    void writeCell(Context& ctx, int row, int col, const std::string& text);   // cella da un'espressione
+    std::string cellEditText(Context& ctx, int row, int col) const;          // testo iniziale della modifica
+    void csvMenu(Context& ctx, int choice);              // CSV: 0 LOAD, 1 SAVE·AS
+    void csvChosen(Context& ctx);
+    FileDialog dialog_;
+    bool csvSave_{false};
     bool open_{false};
     bool vectors_{false};
     Screen screen_{Screen::List};
@@ -108,6 +114,26 @@ private:
     bool asking_{false};
 };
 
+// Schermate MatAns / VctAns / ListAns della fx-CG50 (v1.11.0): un risultato
+// lista, matrice o vettore piu' grande della vista naturale (oltre 6x6 o 20
+// elementi) si legge qui, scorrendo righe e colonne; la cella corrente e' indicata.
+// I valori sono quelli delle memorie delle risposte (sola lettura).
+class AnswerView {
+public:
+    bool isOpen() const noexcept { return open_; }
+    void open(Context& ctx, ValueType type);
+    void close() noexcept { open_ = false; }
+    void key(Context& ctx, const KeyEvent& ev);
+    void draw(Context& ctx, gfx::Canvas& c);
+    ValueType type() const noexcept { return type_; }
+    const CellGrid& grid() const noexcept { return grid_; }
+private:
+    const CalcValue* value(Context& ctx) const;
+    bool open_{false};
+    ValueType type_{ValueType::Matrix};
+    CellGrid grid_;
+};
+
 class RunMatrixApp final : public App {
 public:
     AppId id() const override { return AppId::RunMatrix; }
@@ -119,6 +145,8 @@ public:
     int browsing() const noexcept { return browse_; }      // selected history entry, -1 = input line
     int editing() const noexcept { return editIndex_; }    // history entry edited in place, -1 = none
     MatrixEditorView& matrixEditor() noexcept { return matrices_; }
+    AnswerView& answerView() noexcept { return answers_; }
+    int resultScroll() const noexcept { return resultScroll_; }
     enum class Menu : std::uint8_t { None, Math, MatVct, OptnCategories, OptnItems, VarsCategories, VarsItems, MatRows, MatCols };
 private:
     void syncInputMode(Context& ctx);                    // Setup Input/Output -> modalita' dell'editor
@@ -143,6 +171,9 @@ private:
     int varsCategory_{0};
     std::size_t matRows_{2};
     MatrixEditorView matrices_;
+    AnswerView answers_;
+    int resultScroll_{0};          // scorrimento del risultato selezionato piu' largo della riga
+    int resultOverflow_{0};        // pixel nascosti di quel risultato (calcolati nel disegno)
 };
 
 class SymbolsApp final : public App {
@@ -181,12 +212,20 @@ public:
     void enter(Context& ctx) override;
     void key(Context& ctx, const KeyEvent& ev) override;
     void draw(Context& ctx, gfx::Canvas& c) override;
-    enum class Screen { Lists, Results, Graph, Form };
+    enum class Screen { Lists, Results, Graph, Form, Set };
     enum class GraphKind { Scatter, XYLine, Histogram, Box, Regression };
     Screen screen() const noexcept { return screen_; }
     const ResultList& results() const noexcept { return results_; }
+    const CellGrid& grid() const noexcept { return grid_; }
+    const FileDialog& fileDialog() const noexcept { return dialog_; }
 private:
     void setupGrid(Context& ctx);
+    void openSet(Context& ctx, bool csvFormat = false);  // SET XList/YList oppure formato CSV
+    void listOption(Context& ctx, int choice);           // OPTN dell'editor delle liste: CSV, DEL-ALL, SET
+    void fileChosen(Context& ctx);                       // LOAD / SAVE·AS del CSV dopo la scelta del nome
+    FileDialog dialog_;
+    bool csvSet_{false};
+    bool saving_{false};
     void runCalc(Context& ctx, int choice);
     void openDist(int choice);
     void openTest(int choice);

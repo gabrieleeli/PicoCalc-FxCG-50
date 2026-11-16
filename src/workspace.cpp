@@ -18,6 +18,7 @@ void Workspace::resetAll() {
     graph = GraphState{};
     table = TableRange{};
     for (auto& l : lists) l.clear();
+    for (auto& n : listNames) n.clear();
     equation = EquationState{};
     chat.clear();
     graph3d = Graph3DState{};
@@ -84,6 +85,7 @@ void Workspace::storeMatrix(std::size_t slot, CalcValue value) {
     checkBudget(matrices, matrices.mat[slot].size(), value.size());
     value.type = ValueType::Matrix;
     value.normalize();
+    if (!value.hasExact() || value.complex() || value.size() > CalcValue::ExactElements) value.exact.clear();
     matrices.mat[slot] = std::move(value);
 }
 void Workspace::storeVector(std::size_t slot, CalcValue value) {
@@ -94,27 +96,67 @@ void Workspace::storeVector(std::size_t slot, CalcValue value) {
     checkBudget(matrices, matrices.vct[slot].size(), value.size());
     value.type = ValueType::Vector;
     value.normalize();
+    if (!value.hasExact() || value.complex() || value.size() > CalcValue::ExactElements) value.exact.clear();
     matrices.vct[slot] = std::move(value);
 }
 void Workspace::storeList(std::size_t index, const CalcValue& value) {
     if (index >= lists.size()) throw MathError("Math ERROR: sono disponibili List 1-" + std::to_string(lists.size()));
     if (!value.isList() || value.empty()) throw TypeError(std::string("Type ERROR: in List si memorizza una lista, non una ") + valueTypeName(value.type));
-    if (value.size() > MaxListLength) throw DimensionError("Dimension ERROR: massimo " + std::to_string(MaxListLength) + " elementi in una lista");
     if (value.complex() && std::any_of(value.im.begin(), value.im.end(), [](double d) { return d != 0.0; }))
-        throw MathError("Math ERROR: le liste 1-6 contengono solo numeri reali");
+        throw MathError("Math ERROR: le liste contengono solo numeri reali");
+    checkListLength(index, value.size());
     mem::PlacementScope heavy(mem::Policy::PREFER_PSRAM);
     std::vector<double> fresh = value.re;       // strong guarantee on std::bad_alloc
     lists[index].swap(fresh);
 }
+void Workspace::setList(std::size_t index, std::vector<double> values) {
+    if (index >= lists.size()) throw MathError("Argument ERROR: List da 1 a " + std::to_string(lists.size()));
+    checkListLength(index, values.size());
+    for (double d : values) if (!std::isfinite(d)) throw MathError("Math ERROR: valore non finito in una lista");
+    lists[index].swap(values);
+}
+std::size_t Workspace::listElements() const noexcept {
+    std::size_t n = 0;
+    for (const auto& l : lists) n += l.size();
+    return n;
+}
+bool Workspace::listFits(std::size_t index, std::size_t length) const noexcept {
+    if (index >= lists.size() || length > MaxListLength) return false;
+    return listElements() - lists[index].size() + length <= MaxListElements;
+}
+void Workspace::checkListLength(std::size_t index, std::size_t length) const {
+    if (index >= lists.size()) throw MathError("Argument ERROR: List da 1 a " + std::to_string(lists.size()));
+    if (length > MaxListLength) throw DimensionError("Dimension ERROR: massimo " + std::to_string(MaxListLength) + " elementi in una lista");
+    const std::size_t used = listElements() - lists[index].size();
+    if (used + length > MaxListElements)
+        throw MathError("Memory ERROR: memoria delle liste piena (" + std::to_string(used + length) + " elementi, massimo " +
+                        std::to_string(MaxListElements) + ")");
+}
+const std::string& Workspace::listName(std::size_t index) const {
+    static const std::string none;
+    return index < listNames.size() ? listNames[index] : none;
+}
+void Workspace::setListName(std::size_t index, std::string name) {
+    if (index >= listNames.size()) throw MathError("Argument ERROR: List da 1 a " + std::to_string(listNames.size()));
+    if (name.size() > limits::kListNameLength) throw MathError("Argument ERROR: un sottonome ha al massimo " + std::to_string(limits::kListNameLength) + " caratteri");
+    for (char c : name) if (static_cast<unsigned char>(c) < 0x20 || static_cast<unsigned char>(c) > 0x7E || c == '"')
+        throw MathError("Argument ERROR: sottonome con caratteri non ammessi");
+    listNames[index] = std::move(name);
+}
 void Workspace::storeCollectionAnswer(const CalcValue& value) {
     mem::PlacementScope heavy(mem::Policy::PREFER_PSRAM);
-    if (value.isList()) { matrices.listAns = value; matrices.listAns.normalize(); return; }
+    if (value.isList()) {
+        matrices.listAns = value; matrices.listAns.normalize();
+        if (!matrices.listAns.hasExact() || matrices.listAns.size() > CalcValue::ExactElements) matrices.listAns.exact.clear();
+        return;
+    }
     if (!value.isMatrixLike()) return;
     checkStorable(value, "MatAns");
     const bool vector = value.vectorShaped();
     checkBudget(matrices, matrices.matAns.size() + (vector ? matrices.vctAns.size() : 0), value.size() * (vector ? 2 : 1));
     CalcValue m = value;
     m.type = ValueType::Matrix; m.normalize();
+    if (!m.hasExact() || m.complex() || m.size() > CalcValue::ExactElements) m.exact.clear();
     if (vector) { CalcValue v = m; v.type = ValueType::Vector; matrices.vctAns = std::move(v); }
     matrices.matAns = std::move(m);
 }
@@ -169,7 +211,14 @@ constexpr std::uint32_t Magic = 0x46584157;   // "WAXF"
 // di matrici e vettori (Mat A-Z, Vct A-Z, MatAns, VctAns, ListAns) e i
 // risultati lista / matrice / vettore della cronologia. I record delle
 // versioni 1-5 si caricano con i valori predefiniti: Math, nessuna matrice.
-constexpr std::uint16_t Version = 6;
+// Version 7 (v1.11.0) aggiunge in coda: modalita' Base-N, Simplify, formato
+// CSV e liste di Statistics; List 7-26 (List 1-6 restano dove erano) e i
+// sottonomi delle 26 liste; le forme esatte delle memorie di matrici e
+// vettori; base e frazione non ridotta (▶Simp) delle righe della cronologia;
+// i grafici dei comandi di Run-Matrix. I record delle versioni 1-6 si caricano
+// con i valori predefiniti di questi campi.
+constexpr std::uint16_t Version = 7;
+constexpr std::size_t LegacyLists = 6;     // liste del blocco delle versioni 1-6
 constexpr std::uint8_t NoValue = 0xFF;      // byte di tipo di una memoria non definita
 constexpr std::size_t LegacyFunctions = 6;
 
@@ -306,7 +355,7 @@ std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws) {
     w.u8(static_cast<std::uint8_t>(ws.table.variable)); w.u8(ws.table.list); w.u8(static_cast<std::uint8_t>(ws.table.funcType));
     w.u8(ws.table.generated ? 1 : 0);
     w.u16(static_cast<std::uint16_t>(ws.table.rows.size())); for (double d : ws.table.rows) w.f64(d);
-    for (const auto& l : ws.lists) { w.u16(static_cast<std::uint16_t>(l.size())); for (double d : l) w.f64(d); }
+    for (std::size_t li = 0; li < LegacyLists; ++li) { const auto& l = ws.lists[li]; w.u16(static_cast<std::uint16_t>(l.size())); for (double d : l) w.f64(d); }
     const EquationState& e = ws.equation;
     w.u8(e.unknowns); for (double d : e.simultaneous) w.f64(d);
     w.u8(e.degree); for (double d : e.polynomial) w.f64(d);
@@ -339,6 +388,37 @@ std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws) {
         const bool exact = !c->value.empty() && c->exact.size() == c->value.size();
         w.u8(static_cast<std::uint8_t>((exact ? 1 : 0) | (c->decimal ? 2 : 0)));
         if (exact) for (const exact::Value& e : c->exact) w.slot(ExactSlot{e, true, false});
+    }
+    // v7
+    const Settings& st = ws.settings;
+    w.u8(static_cast<std::uint8_t>(st.baseMode)); w.u8(st.simplifyManual ? 1 : 0);
+    w.u8(static_cast<std::uint8_t>(st.csvSeparator)); w.u8(static_cast<std::uint8_t>(st.csvDecimal));
+    w.u8(st.statXList); w.u8(st.statYList);
+    for (std::size_t li = LegacyLists; li < Workspace::ListCount; ++li) {
+        const auto& l = ws.lists[li]; w.u16(static_cast<std::uint16_t>(l.size())); for (double d : l) w.f64(d);
+    }
+    for (const auto& n : ws.listNames) w.str(n);
+    auto exactForms = [&](const CalcValue& v) {
+        const bool has = v.hasExact();
+        w.u8(has ? 1 : 0);
+        if (has) for (const exact::Value& e : v.exact) w.slot(ExactSlot{e, true, false});
+    };
+    for (const CalcValue& v : cm.mat) exactForms(v);
+    for (const CalcValue& v : cm.vct) exactForms(v);
+    exactForms(cm.matAns); exactForms(cm.vctAns); exactForms(cm.listAns);
+    std::uint16_t extras = 0;
+    auto extra = [](const HistoryEntry& h) { return h.base != 0 || h.fracDen != 0 || h.simpFactor != 0 || h.command; };
+    for (const auto& h : ws.history) if (extra(h)) ++extras;
+    w.u16(extras);
+    for (std::size_t i = 0; i < ws.history.size(); ++i) {
+        const HistoryEntry& h = ws.history[i];
+        if (!extra(h)) continue;
+        w.u16(static_cast<std::uint16_t>(i)); w.u8(h.base); w.i64(h.fracNum); w.i64(h.fracDen); w.u32(h.simpFactor);
+        w.u8(h.command ? 1 : 0);
+    }
+    w.u8(static_cast<std::uint8_t>(g.commandGraphs.size()));
+    for (const CommandGraph& cg : g.commandGraphs) {
+        w.u8(static_cast<std::uint8_t>(cg.type)); w.str(cg.expr); w.str(cg.expr2); w.u8(cg.color); w.u8(static_cast<std::uint8_t>(cg.style));
     }
     return std::move(w.out);
 }
@@ -455,7 +535,8 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
         ws.table.rows.resize(n);
         for (double& d : ws.table.rows) { d = r.f64(); if (!std::isfinite(d)) return false; }
     }
-    for (auto& l : ws.lists) {
+    for (std::size_t li = 0; li < LegacyLists; ++li) {
+        auto& l = ws.lists[li];
         const auto n = r.u16(); if (n > Workspace::MaxListLength) return false;
         l.resize(n); for (auto& d : l) d = r.f64();
     }
@@ -511,6 +592,68 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
             ws.history[index].collection = std::move(c);
         }
     }
+    if (version >= 7) {
+        const auto base = r.u8(), simplify = r.u8(), sep = r.u8(), dec = r.u8(), xl = r.u8(), yl = r.u8();
+        if (base > 4 || simplify > 1 || xl >= Workspace::ListCount || yl >= Workspace::ListCount) return false;
+        s.baseMode = static_cast<Settings::BaseMode>(base); s.simplifyManual = simplify != 0;
+        s.csvSeparator = static_cast<char>(sep); s.csvDecimal = static_cast<char>(dec);
+        if ((s.csvSeparator != ',' && s.csvSeparator != ';') || (s.csvDecimal != '.' && s.csvDecimal != ',') || s.csvSeparator == s.csvDecimal) return false;
+        s.statXList = xl; s.statYList = yl;
+        for (std::size_t li = LegacyLists; li < Workspace::ListCount && r.ok; ++li) {
+            auto& l = ws.lists[li];
+            const auto n = r.u16(); if (n > Workspace::MaxListLength) return false;
+            l.resize(n); for (auto& d : l) d = r.f64();
+        }
+        for (auto& n : ws.listNames) {
+            n = r.str();
+            if (n.size() > limits::kListNameLength) return false;
+            for (char ch : n) if (static_cast<unsigned char>(ch) < 0x20 || static_cast<unsigned char>(ch) > 0x7E || ch == '"') return false;
+        }
+        CollectionMemory& cm = ws.matrices;
+        auto exactForms = [&](CalcValue& v) {
+            const auto has = r.u8();
+            if (has > 1 || (has && (v.empty() || v.complex() || v.size() > CalcValue::ExactElements))) return false;
+            if (!has) return true;
+            v.exact.resize(v.size());
+            for (exact::Value& e : v.exact) {
+                const ExactSlot slot = r.slot();
+                if (!r.ok || !slot.valid) return false;
+                e = slot.value;
+            }
+            // Le forme esatte devono corrispondere ai valori memorizzati.
+            for (std::size_t k = 0; k < v.size(); ++k) {
+                const double d = v.exact[k].toDouble(), x = v.re[k];
+                if (!(std::abs(d - x) <= 1e-12 * std::max(1.0, std::abs(x)))) return false;
+            }
+            return true;
+        };
+        for (CalcValue& v : cm.mat) if (!exactForms(v)) return false;
+        for (CalcValue& v : cm.vct) if (!exactForms(v)) return false;
+        if (!exactForms(cm.matAns) || !exactForms(cm.vctAns) || !exactForms(cm.listAns)) return false;
+        const auto extras = r.u16(); if (extras > ws.history.size()) return false;
+        std::size_t next = 0;
+        for (std::uint16_t k = 0; k < extras && r.ok; ++k) {
+            const std::size_t index = r.u16();
+            if (index < next || index >= ws.history.size()) return false;
+            next = index + 1;
+            HistoryEntry& h = ws.history[index];
+            h.base = r.u8(); h.fracNum = r.i64(); h.fracDen = r.i64(); h.simpFactor = r.u32();
+            const auto flags = r.u8();
+            if (h.base > 4 || flags > 1 || h.fracDen < 0) return false;
+            h.command = (flags & 1) != 0;
+        }
+        const auto graphs = r.u8(); if (graphs > MaxCommandGraphs) return false;
+        for (std::uint8_t k = 0; k < graphs && r.ok; ++k) {
+            CommandGraph cg;
+            const auto type = r.u8(); cg.expr = r.str(); cg.expr2 = r.str(); cg.color = r.u8(); const auto style = r.u8();
+            if (type >= GraphTypeCount || cg.color >= GraphColorCount || style >= LineStyleCount) return false;
+            cg.type = static_cast<GraphType>(type); cg.style = static_cast<LineStyle>(style);
+            if (cg.type != GraphType::Y && cg.type != GraphType::Polar && cg.type != GraphType::X && cg.type != GraphType::Param) return false;
+            if (cg.expr.empty() || cg.expr.size() > MaxGraphExpression || cg.expr2.size() > MaxGraphExpression) return false;
+            ws.graph.commandGraphs.push_back(std::move(cg));
+        }
+    }
+    if (ws.listElements() > Workspace::MaxListElements) return false;
     if (!r.ok || r.i != r.n) return false;
     if (version < 3) {
         // Older forms accepted values the v1.8.0 checks reject: keep the record

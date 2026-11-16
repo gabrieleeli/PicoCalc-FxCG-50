@@ -59,9 +59,15 @@ void collectTokens(const ast::Node& n, std::string& letters, const char* variabl
     }
     for (const auto& c : n.children) if (c) collectTokens(*c, letters, variable);
 }
-void collectLists(const ast::Node& n, unsigned& mask) {
-    if (n.kind == ast::Kind::Token && n.text.size() == 5 && n.text.compare(0, 4, "list") == 0 && n.text[4] >= '1' && n.text[4] <= '6')
-        mask |= 1u << (n.text[4] - '1');
+// "list1".."list26" -> 1..26, altrimenti 0.
+int listIndexOf(const std::string& t) {
+    if (t.size() < 5 || t.size() > 6 || t.compare(0, 4, "list") != 0 || t[4] == '0') return 0;
+    int v = 0;
+    for (std::size_t i = 4; i < t.size(); ++i) { if (t[i] < '0' || t[i] > '9') return 0; v = v * 10 + (t[i] - '0'); }
+    return v >= 1 && v <= static_cast<int>(GraphSource::ListCount) ? v : 0;
+}
+void collectLists(const ast::Node& n, std::uint32_t& mask) {
+    if (n.kind == ast::Kind::Token) if (const int l = listIndexOf(n.text)) mask |= 1u << (l - 1);
     for (const auto& c : n.children) if (c) collectLists(*c, mask);
 }
 std::string typePrefix(GraphType t) {
@@ -153,9 +159,9 @@ public:
     const GraphSource* src{};
     mutable int index{-1};
     bool resolve(const std::string& n, double& out) const override {
-        if (n.size() == 5 && n.compare(0, 4, "list") == 0 && n[4] >= '1' && n[4] <= '6') {
+        if (const int number = listIndexOf(n)) {
             if (!src || !src->lists || index < 0) return false;
-            const auto& l = (*src->lists)[static_cast<std::size_t>(n[4] - '1')];
+            const auto& l = (*src->lists)[static_cast<std::size_t>(number - 1)];
             if (static_cast<std::size_t>(index) >= l.size()) return false;
             out = l[static_cast<std::size_t>(index)];
             return true;
@@ -223,7 +229,7 @@ void GraphEngine::build(const GraphSource& source, const std::vector<std::string
                 if (!(base.lo < base.hi)) throw MathError("Argument ERROR: intervallo [inizio,fine] con inizio<fine");
                 base.hasRange = true;
             }
-            unsigned lists = 0;
+            std::uint32_t lists = 0;
             collectLists(*c.body, lists);
             if (c.body2) collectLists(*c.body2, lists);
             if (lists && c.text.overwrite) throw MathError("Argument ERROR: Lista e [A=...] insieme");
@@ -244,7 +250,7 @@ void GraphEngine::build(const GraphSource& source, const std::vector<std::string
             }
             if (lists) {
                 std::size_t n = 0; bool first = true;
-                for (int l = 0; l < 6; ++l) {
+                for (int l = 0; l < static_cast<int>(GraphSource::ListCount); ++l) {
                     if (!(lists & (1u << l))) continue;
                     const std::size_t len = src_.lists ? (*src_.lists)[static_cast<std::size_t>(l)].size() : 0;
                     if (first) { n = len; first = false; }
@@ -280,6 +286,23 @@ void GraphEngine::build(const GraphSource& source, const std::vector<std::string
             plots_.push_back(std::move(p));
             ++pastedCount;
         } catch (const std::bad_alloc&) { throw; } catch (const std::exception&) {}
+    }
+    // 4) grafici dei comandi di Run-Matrix (fx-CG50: Graph Y= ... eseguito in Run-Matrix)
+    if (src_.commands) {
+        for (const CommandGraph& cg : *src_.commands) {
+            if (plots_.size() >= MaxPlots) break;
+            try {
+                Plot p = makePlot(cg.expr, cg.type, cg.color, cg.style);
+                if (cg.type == GraphType::Param) {
+                    if (cg.expr2.empty()) continue;
+                    p.body2 = parseExpression(cg.expr2);
+                }
+                p.pasted = true;
+                p.label = cg.type == GraphType::Polar ? "r" : cg.type == GraphType::Param ? "Xt" : cg.type == GraphType::X ? "X" : "Y";
+                p.detail = "Run-Matrix";
+                plots_.push_back(std::move(p));
+            } catch (const std::bad_alloc&) { throw; } catch (const std::exception&) {}
+        }
     }
 }
 

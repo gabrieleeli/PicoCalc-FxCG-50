@@ -35,7 +35,7 @@ F5 |x|), digitare per sostituirla. SETUP apre il Setup della modalità.
   Start+Step, … fino a End (tolleranza di arrotondamento: −0.3…0.3 passo 0.1
   dà esattamente 0 al centro).
 - **List 1…6**: i valori della lista diventano la variabile.
-- Setup di TABLE: Variable (Range, List 1–6), Derivative (On/Off), Angle
+- Setup di TABLE: Variable (Range, List 1–26 dalla v1.11.0), Derivative (On/Off), Angle
   (Deg/Rad/Gra). Derivative e Angle sono condivisi con GRAPH.
 
 Limiti: **999 righe** (Memory ERROR oltre); lista vuota → Dimension ERROR;
@@ -68,7 +68,7 @@ Tasti della tabella:
 | F4 EDIT / EXE | nuovo valore della variabile della riga (anche espressioni: `pi/4`); un valore non valido (1/0) dà errore e lascia il valore originale |
 | cifra, `-`, `.`, `(` | come EDIT, con il primo carattere digitato |
 | F5 GPH-CON / F6 GPH-PLT | GRAPH disegna i punti della tabella collegati / isolati (Y=: (x, y); r=: polare; Param: (Xt, Yt)); G⇔T o EXIT torna alla tabella |
-| OPTN → LISTMEM | copia la colonna del cursore (anche la variabile) in List 1–6; al massimo 255 valori (limite delle liste), una cella non definita dà errore |
+| OPTN → LISTMEM | copia la colonna del cursore (anche la variabile) in List 1–26 (v1.11.0); limiti della scheda (255 / 999 valori per lista, 1 530 / 20 000 in tutte le liste), una cella non definita dà errore |
 
 Le colonne delle funzioni non si modificano direttamente (manuale 5-34).
 

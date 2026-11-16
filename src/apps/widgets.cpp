@@ -1,6 +1,7 @@
 #include "app_widgets.hpp"
 #include "expression.hpp"
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 
@@ -117,11 +118,22 @@ void ResultList::draw(gfx::Canvas& c, int top, int bottom) const {
 
 // ------------------------------------------------------------------ CellGrid
 bool CellGrid::key(Context& ctx, const KeyEvent& ev) {
+    if (editing_ && row == SubRow) {
+        // Riga SUB: il testo e' il sottonome della colonna (nessuna valutazione).
+        if (ev.is(Key::Exe) || ev.is(Key::Down)) {
+            if (setSubHeader) setSubHeader(col, editor_.text());
+            editing_ = false;
+            row = 0;                                  // come dopo una cella: si scende ai valori
+            return true;
+        }
+        if (ev.is(Key::Exit)) { editing_ = false; return true; }
+        return editor_.key(ev);
+    }
     if (editing_) {
         if (ev.is(Key::Exe) || ev.is(Key::Down) || ev.is(Key::Right)) {
             if (editor_.empty()) { editing_ = false; return true; }
-            const double v = evalNumber(ctx, editor_.text());
-            set(row, col, v);
+            if (setText) setText(row, col, editor_.text());
+            else set(row, col, evalNumber(ctx, editor_.text()));
             editing_ = false;
             if (ev.is(Key::Right) || (rowMajor && ev.is(Key::Exe))) {
                 if (col + 1 < cols) ++col;
@@ -134,8 +146,26 @@ bool CellGrid::key(Context& ctx, const KeyEvent& ev) {
         return editor_.key(ev);
     }
     auto maxRow = [&]() { return columnLength ? std::min(columnLength(col), rows - 1 + (growRows ? 1 : 0)) : rows - 1 + (growRows ? 1 : 0); };
+    if (row == SubRow) {
+        switch (ev.key) {
+        case Key::Down: row = 0; return true;
+        case Key::Left: col = std::max(0, col - 1); return true;
+        case Key::Right: col = std::min(cols - 1, col + 1); return true;
+        case Key::Exe:
+            editor_.clear();
+            if (subHeader) editor_.set(subHeader(col));
+            editing_ = true; return true;
+        case Key::Char:
+            if (ev.ctrl) return false;
+            editor_.clear(); editor_.insert(std::string(1, ev.ch)); editing_ = true; return true;
+        case Key::Del: case Key::DelForward: if (setSubHeader) setSubHeader(col, std::string()); return true;
+        default: return false;
+        }
+    }
     switch (ev.key) {
-    case Key::Up: row = std::max(0, row - 1); return true;
+    case Key::Up:
+        if (row == 0 && (subHeader || setSubHeader)) { row = SubRow; return true; }
+        row = std::max(0, row - 1); return true;
     case Key::Down: row = std::min(row + 1, std::max(0, maxRow())); return true;
     case Key::Left: col = std::max(0, col - 1); row = std::min(row, std::max(0, maxRow())); return true;
     case Key::Right: col = std::min(cols - 1, col + 1); row = std::min(row, std::max(0, maxRow())); return true;
@@ -146,7 +176,8 @@ bool CellGrid::key(Context& ctx, const KeyEvent& ev) {
     case Key::Exe: {
         double v = 0;
         editor_.clear();
-        if (get(row, col, v)) editor_.set(formatReal(v, {DisplayMode::Norm2, 0}));
+        if (editText) editor_.set(editText(row, col));
+        else if (get(row, col, v)) editor_.set(formatReal(v, {DisplayMode::Norm2, 0}));
         editing_ = true; return true;
     }
     case Key::Char:
@@ -159,17 +190,31 @@ bool CellGrid::key(Context& ctx, const KeyEvent& ev) {
 void CellGrid::draw(Context& ctx, gfx::Canvas& c, int top, int bottom) const {
     const int labelW = growRows || rowLabels ? 26 : 0;
     const int colW = (ui::ScreenW - labelW - 4) / std::max(1, visibleCols);
-    const int headerH = 18, rowH = 18, editH = 22;
+    const int subH = subHeader ? 14 : 0;
+    const int headerH = 18 + subH, rowH = 18, editH = 22;
     const int visibleRows = std::max(1, (bottom - top - headerH - editH) / rowH);
     if (col < firstCol_) firstCol_ = col;
     if (col >= firstCol_ + visibleCols) firstCol_ = col - visibleCols + 1;
-    if (row < firstRow_) firstRow_ = row;
-    if (row >= firstRow_ + visibleRows) firstRow_ = row - visibleRows + 1;
+    const int focusRow = std::max(0, row);           // la riga SUB tiene la griglia in cima
+    if (focusRow < firstRow_) firstRow_ = focusRow;
+    if (focusRow >= firstRow_ + visibleRows) firstRow_ = focusRow - visibleRows + 1;
     c.rect(0, top, ui::ScreenW, headerH, StatusBg, true);
     for (int k = 0; k < visibleCols && firstCol_ + k < cols; ++k) {
         const int x = labelW + k * colW;
         ui::textCenter(c, x + colW / 2, top + 3, header ? header(firstCol_ + k).c_str() : "", Ink, font::Face::Small);
+        if (subHeader) {
+            const bool sel = row == SubRow && col == firstCol_ + k;
+            if (sel) c.rect(x + 1, top + 17, colW - 1, subH, editing_ ? SelectSoft : Select, true);
+            const std::string sub = sel && editing_ ? std::string() : subHeader(firstCol_ + k);
+            ui::textCenter(c, x + colW / 2, top + 18, sub.c_str(), sel && !editing_ ? SelectInk : Accent, font::Face::Small);
+        }
         c.vLine(x, top, headerH + (growRows ? visibleRows : std::min(visibleRows, rows)) * rowH, Faint);
+    }
+    if (subHeader && labelW) ui::textRight(c, labelW - 3, top + 18, "SUB", Muted, font::Face::Small);
+    if (scrollMarks) {
+        // Colonne nascoste a sinistra / a destra della griglia.
+        if (firstCol_ > 0) ui::text(c, 1, top + 3, "\xE2\x97\x80", Accent, font::Face::Small);
+        if (firstCol_ + visibleCols < cols) ui::textRight(c, ui::ScreenW - 1, top + 3, "\xE2\x96\xB6", Accent, font::Face::Small);
     }
     for (int r = 0; r < visibleRows; ++r) {
         const int rr = firstRow_ + r, y = top + headerH + r * rowH;
@@ -197,9 +242,63 @@ void CellGrid::draw(Context& ctx, gfx::Canvas& c, int top, int bottom) const {
     const int ey = bottom - editH + 3;
     c.hLine(0, bottom - editH, ui::ScreenW, Faint);
     if (editing_) editor_.draw(c, 6, ey, ui::ScreenW - 12, Ink);
+    else if (row == SubRow) ui::text(c, 6, ey, ("SUB: " + (subHeader ? subHeader(col) : std::string())).c_str(), Muted);
     else {
         double v = 0;
         if (row < rows && get && get(row, col, v)) ui::text(c, 6, ey, (text ? text(row, col) : formatReal(v, ctx.ws.settings.display)).c_str(), Muted);
     }
+}
+// ------------------------------------------------------------------ FileDialog
+void FileDialog::openList(std::string title, std::vector<std::string> names) {
+    mode_ = Mode::Open; title_ = std::move(title); names_ = std::move(names); selected_ = 0; first_ = 0; chosen_.clear();
+}
+void FileDialog::openName(std::string title, const std::string& initial) {
+    mode_ = Mode::SaveAs; title_ = std::move(title); editor_.set(initial); chosen_.clear();
+}
+int FileDialog::key(const KeyEvent& ev) {
+    if (mode_ == Mode::None) return -1;
+    if (ev.is(Key::Exit) || ev.is(Key::AC)) { mode_ = Mode::None; return -1; }
+    if (mode_ == Mode::Open) {
+        const int n = static_cast<int>(names_.size());
+        switch (ev.key) {
+        case Key::Up: if (n) selected_ = (selected_ + n - 1) % n; return 0;
+        case Key::Down: if (n) selected_ = (selected_ + 1) % n; return 0;
+        case Key::Exe: case Key::F1:
+            if (n == 0) { mode_ = Mode::None; return -1; }
+            chosen_ = names_[static_cast<std::size_t>(selected_)]; mode_ = Mode::None; return 1;
+        default: return 0;
+        }
+    }
+    if (ev.is(Key::Exe) || ev.is(Key::F1)) {
+        if (editor_.empty()) return 0;
+        chosen_ = editor_.text(); mode_ = Mode::None; return 1;
+    }
+    // Il nome: lettere, cifre, _ e - (fx-CG50: 8 caratteri).
+    if (ev.is(Key::Char) && !ev.ctrl && !(std::isalnum(static_cast<unsigned char>(ev.ch)) || ev.ch == '_' || ev.ch == '-')) return 0;
+    (void)editor_.key(ev);
+    return 0;
+}
+void FileDialog::draw(gfx::Canvas& c) const {
+    if (mode_ == Mode::None) return;
+    const gfx::Rect box{20, 70, ui::ScreenW - 40, mode_ == Mode::Open ? 176 : 70};
+    ui::panel(c, box, Bg, Ink);
+    ui::text(c, box.x + 8, box.y + 5, title_.c_str(), Accent, font::Face::Small);
+    if (mode_ == Mode::SaveAs) {
+        ui::text(c, box.x + 8, box.y + 26, "Nome:", Ink);
+        editor_.draw(c, box.x + 60, box.y + 26, box.w - 70, Ink, true);
+        ui::text(c, box.x + 8, box.y + 50, "EXE salva, EXIT annulla (max 8 caratteri)", Muted, font::Face::Small);
+        return;
+    }
+    if (names_.empty()) { ui::text(c, box.x + 8, box.y + 30, "Nessun file CSV nella cartella", Muted); return; }
+    const int rowH = 18, top = box.y + 22, visible = (box.h - 26) / rowH;
+    if (selected_ < first_) first_ = selected_;
+    if (selected_ >= first_ + visible) first_ = selected_ - visible + 1;
+    for (int i = 0; i < visible && first_ + i < static_cast<int>(names_.size()); ++i) {
+        const int idx = first_ + i, y = top + i * rowH;
+        const bool sel = idx == selected_;
+        if (sel) c.rect(box.x + 2, y, box.w - 4, rowH, Select, true);
+        ui::text(c, box.x + 10, y + 1, (names_[static_cast<std::size_t>(idx)] + ".csv").c_str(), sel ? SelectInk : Ink);
+    }
+    ui::scrollBar(c, box.x + box.w - 4, top, visible * rowH, static_cast<int>(names_.size()), visible, first_);
 }
 } // namespace fx::app

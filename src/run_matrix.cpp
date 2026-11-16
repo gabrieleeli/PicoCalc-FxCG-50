@@ -1,4 +1,5 @@
 #include "run_matrix.hpp"
+#include "graph_commands.hpp"
 #include "limits.hpp"
 #include "math_engine.hpp"
 #include <algorithm>
@@ -6,12 +7,24 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <numeric>
 
 namespace fx {
+unsigned integerBaseOf(std::uint8_t mode) noexcept {
+    switch (static_cast<Settings::BaseMode>(mode)) {
+    case Settings::BaseMode::Dec: return 10;
+    case Settings::BaseMode::Hex: return 16;
+    case Settings::BaseMode::Bin: return 2;
+    case Settings::BaseMode::Oct: return 8;
+    default: return 0;
+    }
+}
 namespace {
 const char* const kArrow = "\xE2\x86\x92";   // U+2192
+const char* const kSimp = "\xE2\x96\xB6Simp";  // ▶Simp (fx-CG50 OPTN, frazioni)
+const char* const kFractionMark = "\xE2\x8C\x9F";   // ⌟ della modalita' Line
 
 std::string trim(const std::string& s) {
     const auto a = s.find_first_not_of(" \t");
@@ -47,6 +60,65 @@ ast::NodePtr radical(std::int64_t radicand) {
 bool rationalOf(const HistoryEntry& e, exact::Rational& r) { return e.exact.valid && e.exact.value.rational(r); }
 bool isIntegerExact(const HistoryEntry& e) { exact::Rational r; return rationalOf(e, r) && r.isInteger(); }
 bool plainResult(const HistoryEntry& e) { return e.error.empty() && e.value.imag() == 0; }
+// ---------------------------------------------------------------- frazioni non ridotte (Simplify Manual, ▶Simp)
+const ast::Node* unwrapGroups(const ast::Node* n) {
+    while (n && n->kind == ast::Kind::Group && n->children.size() == 1 && n->children[0]) n = n->children[0].get();
+    return n;
+}
+bool integerToken(const ast::Node* n, std::int64_t& v) {
+    n = unwrapGroups(n);
+    if (!n || n->kind != ast::Kind::Token || n->text.empty() || n->text.size() > 15) return false;
+    for (char c : n->text) if (c < '0' || c > '9') return false;
+    v = std::strtoll(n->text.c_str(), nullptr, 10);
+    return true;
+}
+// La frazione come e' stata scritta: a/b, (a)/(b) del modello, a⌟b, a⌟b⌟c, con il segno.
+bool literalFraction(const ast::Node& tree, std::int64_t& num, std::int64_t& den) {
+    const ast::Node* n = unwrapGroups(&tree);
+    bool negative = false;
+    if (n->kind == ast::Kind::Unary && n->text == "-" && n->children.size() == 1 && n->children[0]) { negative = true; n = unwrapGroups(n->children[0].get()); }
+    if (n->kind == ast::Kind::Binary && n->text == "/" && n->children.size() == 2) {
+        if (!integerToken(n->children[0].get(), num) || !integerToken(n->children[1].get(), den) || den == 0) return false;
+    } else if (n->kind == ast::Kind::Token && n->text.find(kFractionMark) != std::string::npos) {
+        std::int64_t part[3] = {}; int count = 0;
+        std::size_t i = 0;
+        while (count < 3) {
+            std::size_t e = i;
+            while (e < n->text.size() && n->text[e] >= '0' && n->text[e] <= '9') ++e;
+            if (e == i || e - i > 12) return false;
+            part[count++] = std::strtoll(n->text.substr(i, e - i).c_str(), nullptr, 10);
+            if (e >= n->text.size()) break;
+            if (n->text.compare(e, 3, kFractionMark) != 0) return false;
+            i = e + 3;
+        }
+        if (count == 2) { num = part[0]; den = part[1]; }
+        else if (count == 3) { num = part[0] * part[2] + part[1]; den = part[2]; }
+        else return false;
+        if (den == 0) return false;
+    } else return false;
+    if (negative) num = -num;
+    if (den < 0) { num = -num; den = -den; }
+    return true;
+}
+// "▶Simp" o "▶Simp n" in coda all'espressione.
+struct SimpRequest { bool active{false}; std::int64_t factor{0}; };
+SimpRequest takeSimp(std::string& expr) {
+    SimpRequest r;
+    const std::size_t at = expr.rfind(kSimp);
+    if (at == std::string::npos) return r;
+    std::string rest = trim(expr.substr(at + std::strlen(kSimp)));
+    if (!rest.empty()) {
+        if (rest.size() > 9 || !std::all_of(rest.begin(), rest.end(), [](char c) { return c >= '0' && c <= '9'; }))
+            throw SyntaxError("Syntax ERROR: dopo \xE2\x96\xB6Simp serve un fattore intero", static_cast<int>(at), static_cast<int>(expr.size() - at));
+        r.factor = std::strtoll(rest.c_str(), nullptr, 10);
+    }
+    r.active = true;
+    expr = trim(expr.substr(0, at));
+    if (expr.empty()) expr = "Ans";                     // "▶Simp" da solo: l'ultimo risultato, come sulla calcolatrice
+    return r;
+}
+std::int64_t gcd64(std::int64_t a, std::int64_t b) { a = a < 0 ? -a : a; b = b < 0 ? -b : b; while (b) { const std::int64_t t = a % b; a = b; b = t; } return a; }
+
 // ---------------------------------------------------------------- destinazioni della memorizzazione
 // Cosa indica la freccia di memorizzazione: A, A~F, Mat A, Vct A, List 1, un
 // loro elemento, o "Dim Mat A" (una lista {righe, colonne} crea una matrice di zeri).
@@ -61,8 +133,12 @@ struct StoreTarget {
 };
 bool memoryName(const std::string& text, CollectionResolver::Memory& memory, int& index) {
     using Memory = CollectionResolver::Memory;
-    // Il parser legge List 1-6 come le variabili di lista condivise "list1".."list6".
-    if (text.size() == 5 && text.compare(0, 4, "list") == 0 && text[4] >= '1' && text[4] <= '6') { memory = Memory::List; index = text[4] - '1'; return true; }
+    // Il parser legge List 1-26 come le variabili di lista condivise "list1".."list26".
+    if (text.size() >= 5 && text.size() <= 6 && text.compare(0, 4, "list") == 0 && text[4] != '0' &&
+        std::all_of(text.begin() + 4, text.end(), [](char c) { return c >= '0' && c <= '9'; })) {
+        memory = Memory::List; index = std::atoi(text.c_str() + 4) - 1;
+        return index >= 0 && index < CollectionResolver::Slots;
+    }
     const std::size_t space = text.find(' ');
     if (space == std::string::npos || space + 1 >= text.size()) return false;
     const std::string word = text.substr(0, space), name = text.substr(space + 1);
@@ -120,7 +196,7 @@ std::size_t indexValue(const ast::NodePtr& n, const EvalContext& ctx, const char
     return static_cast<std::size_t>(d);
 }
 // numero -> Mat A[r,c], Vct A[n], List 1[n]
-void storeElement(Workspace& ws, const StoreTarget& t, Complex value, const EvalContext& ctx) {
+void storeElement(Workspace& ws, const StoreTarget& t, Complex value, const EvalContext& ctx, const ExactSlot* exactForm) {
     using Memory = CollectionResolver::Memory;
     const std::string name = t.label.substr(0, t.label.find('['));
     if (t.memory == Memory::List) {
@@ -130,7 +206,7 @@ void storeElement(Workspace& ws, const StoreTarget& t, Complex value, const Eval
         const std::size_t i = indexValue(t.row, ctx, "l'indice");
         // Come sulla fx-CG50 una lista cresce di una cella alla volta.
         if (i > list.size() + 1) throw DimensionError("Dimension ERROR: indice " + std::to_string(i) + " oltre la fine di " + name);
-        if (value.imag() != 0) throw MathError("Math ERROR: le liste 1-6 contengono solo numeri reali");
+        if (value.imag() != 0) throw MathError("Math ERROR: le liste contengono solo numeri reali");
         if (i == list.size() + 1) { list.re.push_back(value.real()); list.rows = static_cast<std::uint16_t>(list.re.size()); }
         else list.re[i - 1] = value.real();
         ws.storeList(static_cast<std::size_t>(t.index), list);
@@ -149,7 +225,9 @@ void storeElement(Workspace& ws, const StoreTarget& t, Complex value, const Eval
         if (i > m.size()) throw DimensionError("Dimension ERROR: indice " + std::to_string(i) + " fuori da " + name + " (" + dimensionText(m) + ")");
         pos = i - 1;
     }
-    m.set(pos, value);
+    // La forma esatta dell'elemento resta nella memoria (1/3 -> Mat A[1,1]).
+    if (exactForm && exactForm->valid && value.imag() == 0) m.setExact(pos, exactForm->value);
+    else m.set(pos, value);
     m.normalize();
 }
 // Gli errori dell'assegnazione si segnalano sulla freccia.
@@ -169,8 +247,18 @@ bool naturalSize(const CalcValue& v) {
 // Elementi per cui si tenta la valutazione esatta (che ripete il calcolo).
 constexpr std::size_t kExactElements = 64;
 
+// Riga che fornisce Ans alla riga `previous` (l'ultima senza errore e numerica).
+const HistoryEntry* answerEntry(const Workspace& ws, std::size_t previous) {
+    for (std::size_t k = std::min(previous, ws.history.size()); k-- > 0;) {
+        const HistoryEntry& h = ws.history[k];
+        if (h.command || h.collection || (!h.error.empty() && h.error[0] != '=')) continue;
+        return &h;
+    }
+    return nullptr;
+}
 void scalarResult(Workspace& ws, const std::string& raw, const ast::Node& tree, const EvalContext& ctx, const EvalInfo& info,
-                  const StoreTarget& target, Complex value, RunOutcome& out, HistoryEntry& entry) {
+                  const StoreTarget& target, Complex value, RunOutcome& out, HistoryEntry& entry,
+                  const SimpRequest& simp, const HistoryEntry* previous, std::uint8_t baseMode) {
     out.value = value;
     // Pol / Rec at the top level produce a pair, like the fx-CG50.
     if (tree.kind == ast::Kind::Call && (tree.text == "pol" || tree.text == "rec") && tree.children.size() == 2) {
@@ -208,7 +296,7 @@ void scalarResult(Workspace& ws, const std::string& raw, const ast::Node& tree, 
             }
             break;
         case StoreTarget::Kind::Element:
-            storeElement(ws, target, out.value, ctx);
+            storeElement(ws, target, out.value, ctx, &slot);
             out.storedIn = target.label;
             break;
         case StoreTarget::Kind::Memory:
@@ -217,6 +305,33 @@ void scalarResult(Workspace& ws, const std::string& raw, const ast::Node& tree, 
                             (target.memory == CollectionResolver::Memory::List ? "lista {1,2,3}" : "matrice [[1,2][3,4]]") + ", non un numero");
         }
     });
+    // Frazione non ridotta: ▶Simp (con o senza fattore) o Simplify Manual.
+    std::int64_t fracNum = 0, fracDen = 0;
+    std::uint32_t factor = 0;
+    exact::Rational r;
+    const bool rational = slot.valid && slot.value.rational(r) && !r.isInteger();
+    std::int64_t num = 0, den = 0;
+    const bool literal = literalFraction(tree, num, den);
+    if (simp.active) {
+        if (!rational) throw MathError("Math ERROR: \xE2\x96\xB6Simp richiede una frazione");
+        // Ans▶Simp riprende la frazione mostrata dalla riga precedente.
+        const ast::Node* t = unwrapGroups(&tree);
+        if (t->kind == ast::Kind::Token && (t->text == "Ans" || t->text == "ans") && previous && previous->fracDen != 0) { num = previous->fracNum; den = previous->fracDen; }
+        else if (!literal) { num = r.num; den = r.den; }
+        const std::int64_t g = gcd64(num, den);
+        std::int64_t f = 1;
+        if (simp.factor != 0) {
+            f = simp.factor;
+            if (f < 2 || num % f != 0 || den % f != 0)
+                throw MathError("Math ERROR: " + std::to_string(f) + " non divide numeratore e denominatore");
+        } else {
+            for (std::int64_t p = 2; p <= g / p; ++p) if (g % p == 0) { f = p; break; }
+            if (f == 1 && g > 1) f = g;                       // g primo
+        }
+        fracNum = num / f; fracDen = den / f; factor = static_cast<std::uint32_t>(f);
+    } else if (ws.settings.simplifyManual && literal && rational) {
+        fracNum = num; fracDen = den;                      // la frazione resta come e' stata scritta
+    }
     if (slot.valid) ws.memory.setAnswerExact(out.value.real(), slot.value, slot.decimal);
     else ws.memory.setAnswer(out.value.real(), out.value.imag());
     entry = HistoryEntry{};
@@ -224,6 +339,8 @@ void scalarResult(Workspace& ws, const std::string& raw, const ast::Node& tree, 
     entry.value = out.value;
     entry.exact = slot;
     entry.numerical = info.numerical;
+    entry.base = baseMode;
+    entry.fracNum = fracNum; entry.fracDen = fracDen; entry.simpFactor = factor;
     if (!out.pairText.empty()) entry.error = std::string("=") + out.pairText;   // '=' prefix: informative text, not an error
 }
 
@@ -239,6 +356,8 @@ void collectionResult(Workspace& ws, const std::string& raw, const ast::Node& tr
         if (evaluateExactAny(tree, ctx, ex) && ex.type == value.type && ex.rows == value.rows && ex.cols == value.cols &&
             ex.elements.size() == value.size()) {
             for (std::size_t i = 0; i < value.size(); ++i) value.re[i] = ex.elements[i].toDouble();
+            // Le memorie (Mat Ans, -> Mat A) conservano le forme esatte (v1.11.0).
+            if (value.size() <= CalcValue::ExactElements) value.exact = ex.elements;
             result->exact = std::move(ex.elements);
             result->decimal = ex.decimal;
             out.exact = true;
@@ -277,19 +396,32 @@ void collectionResult(Workspace& ws, const std::string& raw, const ast::Node& tr
     entry.expression = raw;
     // La cronologia conserva cio' che mostra la vista naturale; i risultati piu'
     // grandi si leggono dalla memoria delle risposte (la riga indica dove sono).
+    value.exact.clear();                                   // nella cronologia le forme esatte sono in result->exact
     if (naturalSize(value)) result->value = std::move(value);
     else { result->value.type = value.type; result->value.rows = value.rows; result->value.cols = value.cols; result->exact.clear(); }
     entry.collection = std::move(result);
 }
 } // namespace
 
-RunOutcome evaluateEntry(Workspace& ws, const std::string& raw, HistoryEntry& entry) {
+RunOutcome evaluateEntry(Workspace& ws, const std::string& raw, HistoryEntry& entry, const EntryOptions& options) {
     const std::size_t lead = raw.find_first_not_of(" \t");
     const int offset = lead == std::string::npos ? 0 : static_cast<int>(lead);
     std::string expr = trim(raw);
     RunOutcome out;
     EvalInfo info;
     try {
+        // Comando grafico (Plot, F-Line, Graph Y=...): lo esegue l'interprete dei
+        // comandi sui dati di GRAPH; la riga mostra "Done".
+        if (graphcmd::isCommand(expr)) {
+            ws.apply();
+            graphcmd::execute(ws, expr);
+            entry = HistoryEntry{};
+            entry.expression = raw;
+            entry.command = true;
+            out.graphics = true;
+            return out;
+        }
+        const SimpRequest simp = takeSimp(expr);
         StoreTarget target;
         std::size_t arrow = expr.rfind(kArrow);
         std::size_t arrowLen = 3;
@@ -303,12 +435,20 @@ RunOutcome evaluateEntry(Workspace& ws, const std::string& raw, HistoryEntry& en
             expr.erase(expr.find_last_not_of(" \t") + 1);       // le posizioni prima della freccia non cambiano
         }
         ws.apply();
-        const auto tree = parseExpression(expr);
+        // Base-N: interi a 32 bit nella base del SET UP (o di quando la riga e' stata calcolata).
+        const std::uint8_t baseMode = options.base >= 0 ? static_cast<std::uint8_t>(options.base) : static_cast<std::uint8_t>(ws.settings.baseMode);
+        const unsigned base = integerBaseOf(baseMode);
+        const auto tree = base ? parseExpression(expr, base) : parseExpression(expr);
         EvalContext ctx = ws.evalContext();
         ctx.info = &info;
+        if (base) { ctx.integerBase = static_cast<std::uint8_t>(base); ctx.complexMode = ComplexMode::Real; }
         CalcValue value = evaluateAny(*tree, ctx);
-        if (value.isScalar()) scalarResult(ws, raw, *tree, ctx, info, target, value.scalar(), out, entry);
-        else collectionResult(ws, raw, *tree, ctx, target, std::move(value), out, entry);
+        const HistoryEntry* previous = answerEntry(ws, options.previous);
+        if (value.isScalar()) scalarResult(ws, raw, *tree, ctx, info, target, value.scalar(), out, entry, simp, previous, base ? baseMode : 0);
+        else {
+            if (simp.active) throw MathError("Math ERROR: \xE2\x96\xB6Simp richiede una frazione");
+            collectionResult(ws, raw, *tree, ctx, target, std::move(value), out, entry);
+        }
     }
     catch (SyntaxError& e) { locate(e.where, info, offset); throw; }
     catch (MathError& e) { locate(e.where, info, offset); throw; }
@@ -334,7 +474,7 @@ std::size_t recalculateHistory(Workspace& ws, std::size_t from, ErrorLocation* f
         for (std::size_t k = count; k-- > 0;) {
             const HistoryEntry& h = hist[k];
             if (!h.error.empty() && h.error[0] != '=') continue;     // failed entries do not change Ans
-            if (h.collection) continue;
+            if (h.collection || h.command) continue;
             re = h.value.real(); im = h.value.imag(); slot = h.exact;
             return k;
         }
@@ -358,8 +498,14 @@ std::size_t recalculateHistory(Workspace& ws, std::size_t from, ErrorLocation* f
             if (i == from && firstError) *firstError = where;
             ++failures;
         };
+        // I comandi grafici delle righe successive non si rieseguono (disegnerebbero
+        // di nuovo gli stessi elementi); la riga modificata si esegue.
+        if (hist[i].command && i != from) continue;
         try {
-            (void)evaluateEntry(ws, hist[i].expression, fresh);
+            EntryOptions opt;
+            opt.base = i == from ? -1 : hist[i].base;          // la riga modificata usa la modalita' corrente
+            opt.previous = i;
+            (void)evaluateEntry(ws, hist[i].expression, fresh, opt);
             fresh.view = static_cast<std::uint8_t>(hist[i].view == ViewDecimal || hist[i].view == ViewExact ? hist[i].view : static_cast<std::uint8_t>(ViewAuto));
             fresh.flipMixed = hist[i].flipMixed;
         }
@@ -403,7 +549,7 @@ bool collectionExactView(const HistoryEntry& e, const Settings& s) {
     const CollectionResult& c = *e.collection;
     if (!e.error.empty() || c.value.empty() || c.exact.size() != c.value.size()) return false;
     if (e.view == ViewExact) return true;
-    return e.view == ViewAuto && s.fractionResults && !c.decimal;
+    return e.view == ViewAuto && s.fractionResults && !c.decimal && s.display.mode != DisplayMode::Eng;
 }
 // Forma esatta mostrata per l'elemento i (interi e forme oltre i limiti di
 // visualizzazione si mostrano come decimali, come i risultati numerici).
@@ -421,13 +567,18 @@ bool anyElementExact(const HistoryEntry& e, const Settings& s) {
 
 bool showsExact(const HistoryEntry& e, const Settings& s) {
     if (e.collection) return anyElementExact(e, s);
+    if (e.command || e.base != 0) return false;
     if (!plainResult(e) || !e.exact.valid || isIntegerExact(e)) return false;
+    // Frazione di ▶Simp o di Simplify Manual: mostrata finche' non si chiede il decimale.
+    if (e.fracDen != 0 && (e.view == ViewAuto || e.view == ViewExact)) return true;
     if (e.view == ViewExact) return exact::fitsRelaxed(e.exact.value);
-    if (e.view != ViewAuto || !s.fractionResults || e.exact.decimal) return false;
+    // Eng (v1.11.0): i risultati si mostrano in notazione ingegneristica (S⇔D: forma esatta).
+    if (e.view != ViewAuto || !s.fractionResults || e.exact.decimal || s.display.mode == DisplayMode::Eng) return false;
     return exact::fitsNatural(e.exact.value, s.mixedFractions != e.flipMixed);
 }
 bool showsMixed(const HistoryEntry& e, const Settings& s) {
     exact::Rational r;
+    if (e.fracDen != 0) return false;                     // la frazione non ridotta resta impropria
     return showsExact(e, s) && rationalOf(e, r) && (s.mixedFractions != e.flipMixed) && std::llabs(r.num) > r.den;
 }
 bool isApproximation(const HistoryEntry& e, const Settings& s) {
@@ -549,6 +700,7 @@ namespace {
 void appendNumber(ast::Node& row, double value, DisplayFormat format) {
     const FormattedNumber fnum = formatNumber(value, format);
     appendText(row, fnum.mantissa);
+    if (!fnum.symbol.empty()) appendText(row, fnum.symbol);
     if (fnum.scientific) {
         row.children.push_back(tok("*"));
         auto p = ast::make(ast::Kind::Power);
@@ -584,6 +736,43 @@ ast::NodePtr cellTree(const HistoryEntry& e, std::size_t i, const Settings& s) {
 }
 } // namespace
 
+std::string baseNText(double value, unsigned base) {
+    if (!std::isfinite(value) || value != std::floor(value) || value < -2147483648.0 || value > 2147483647.0) return "Math ERROR";
+    const auto v = static_cast<std::int32_t>(value);
+    if (base == 10) return std::to_string(v);
+    std::uint32_t u = static_cast<std::uint32_t>(v);
+    if (u == 0) return "0";
+    std::string digits;
+    while (u) { const unsigned d = u % base; digits.insert(digits.begin(), static_cast<char>(d < 10 ? '0' + d : 'A' + d - 10)); u /= base; }
+    return digits;
+}
+unsigned displayedBase(const HistoryEntry& e) {
+    if (e.base == 0) return 0;
+    switch (e.view) {
+    case ViewHex: return 16;
+    case ViewBin: return 2;
+    case ViewOct: return 8;
+    case ViewDecimal: return 10;
+    default: return integerBaseOf(e.base);
+    }
+}
+namespace {
+// Output Line della fx-CG50: frazioni con ⌟ ("1⌟3", "2⌟1⌟3"); le altre forme esatte come sempre.
+std::string exactLineText(const exact::Value& v, bool mixed) {
+    exact::Rational r;
+    if (!v.rational(r) || r.isInteger()) return exact::toText(v, mixed);
+    const std::int64_t n = std::llabs(r.num);
+    std::string out = r.num < 0 ? "-" : "";
+    if (mixed && n > r.den) return out + std::to_string(n / r.den) + kFractionMark + std::to_string(n % r.den) + kFractionMark + std::to_string(r.den);
+    return out + std::to_string(n) + kFractionMark + std::to_string(r.den);
+}
+std::string simpText(const HistoryEntry& e, bool lineStyle) {
+    std::string t = (e.fracNum < 0 ? "-" : "") + std::to_string(std::llabs(e.fracNum)) + (lineStyle ? kFractionMark : "/") + std::to_string(e.fracDen);
+    if (e.simpFactor) t += "  F=" + std::to_string(e.simpFactor);
+    return t;
+}
+} // namespace
+
 std::string elementText(const HistoryEntry& e, std::size_t i, const Settings& s) {
     if (!e.collection || i >= e.collection->value.size()) return {};
     if (const exact::Value* x = elementExact(e, i, s)) return exact::toText(*x, s.mixedFractions);
@@ -591,16 +780,37 @@ std::string elementText(const HistoryEntry& e, std::size_t i, const Settings& s)
     return formatValue(z, z.imag() != 0 && s.complex == ComplexMode::Real ? ComplexMode::Rectangular : s.complex, s.display);
 }
 
-std::string resultText(const HistoryEntry& e, const Settings& s) {
+std::string resultText(const HistoryEntry& e, const Settings& s, bool lineStyle) {
+    if (e.command && e.error.empty()) return "Done";
     if (!e.error.empty() && e.error[0] == '=') return e.error.substr(1);
     if (!e.error.empty()) return e.error;
-    if (e.collection) return collectionText(e, s);
+    if (e.collection) {
+        std::string t = collectionText(e, s);
+        if (lineStyle) {
+            // Le frazioni degli elementi in stile Line: 1/2 -> 1⌟2.
+            const CalcValue& v = e.collection->value;
+            if (!v.empty() && collectionExactView(e, s)) {
+                t = v.isList() ? "{" : "[";
+                for (std::size_t i = 0; i < v.size(); ++i) {
+                    if (v.isList()) { if (i) t += ","; }
+                    else t += i % v.cols == 0 ? "[" : ",";
+                    const exact::Value* x = elementExact(e, i, s);
+                    t += x ? exactLineText(*x, s.mixedFractions) : elementText(e, i, s);
+                    if (!v.isList() && i % v.cols == v.cols - 1u) t += "]";
+                }
+                t += v.isList() ? "}" : "]";
+            }
+        }
+        return t;
+    }
     if (e.value.imag() == 0) {
+        if (const unsigned base = displayedBase(e)) return baseNText(e.value.real(), base);
         if (e.view >= ViewHex && e.view <= ViewOct) return baseText(e);
         if (e.view == ViewDms) return dmsText(e, s);
         exact::Rational r;
         if (e.view == ViewPeriodic && rationalOf(e, r)) return periodicText(r);
-        if (showsExact(e, s)) return exact::toText(e.exact.value, showsMixed(e, s));
+        if (e.fracDen != 0 && showsExact(e, s)) return simpText(e, lineStyle);
+        if (showsExact(e, s)) return lineStyle ? exactLineText(e.exact.value, showsMixed(e, s)) : exact::toText(e.exact.value, showsMixed(e, s));
     }
     return formatValue(e.value, s.complex, s.display);
 }
@@ -624,6 +834,15 @@ ast::NodePtr resultTree(const HistoryEntry& e, const Settings& s) {
         auto m = ast::make(ast::Kind::Matrix, std::to_string(v.cols));
         for (std::size_t i = 0; i < v.size(); ++i) m->children.push_back(cellTree(e, i, s));
         root->children.push_back(m);
+        return root;
+    }
+    if (e.command && e.error.empty()) { appendText(*root, "Done"); return root; }
+    if (plainResult(e) && displayedBase(e)) { appendText(*root, resultText(e, s)); return root; }
+    if (plainResult(e) && e.fracDen != 0 && showsExact(e, s)) {
+        // Frazione non ridotta (▶Simp, Simplify Manual) con il fattore usato: F=3.
+        if (e.fracNum < 0) appendText(*root, "-");
+        root->children.push_back(fraction(rowOf(std::to_string(std::llabs(e.fracNum))), rowOf(std::to_string(e.fracDen))));
+        if (e.simpFactor) appendText(*root, "  F=" + std::to_string(e.simpFactor));
         return root;
     }
     if (plainResult(e)) {
@@ -676,6 +895,8 @@ std::string resultExpression(const HistoryEntry& e) {
         }
         return out + (v.isList() ? "}" : "]");
     }
+    // Un intero Base-N si riusa con il prefisso decimale (valido in ogni base).
+    if (e.base != 0 && plainResult(e)) { const long long v = static_cast<long long>(e.value.real()); return (v < 0 ? "-0d" : "0d") + std::to_string(std::llabs(v)); }
     if (e.exact.valid && plainResult(e)) return exact::toExpression(e.exact.value);
     if (e.value.imag() == 0) { std::snprintf(buf, sizeof(buf), "%.15g", e.value.real()); return buf; }
     std::snprintf(buf, sizeof(buf), "(%.15g%+.15gi)", e.value.real(), e.value.imag());

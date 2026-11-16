@@ -144,6 +144,18 @@ bool parseSketchKindName(const std::string& name, SketchItem::Kind& out) noexcep
 std::string validateSketch(const SketchItem& s);
 std::size_t sketchPenPoints(const std::vector<SketchItem>& items) noexcept;   // x,y pairs of all PEN strokes
 
+// Grafico disegnato da un comando di Run-Matrix ("Graph Y=x^2", "Graph r=",
+// "Graph X=", "Graph(X,Y)=(xt,yt)", v1.11.0): si sovrappone ai grafici della
+// lista delle relazioni senza occupare una funzione Y1..Y20, come sulla fx-CG50.
+// Cls li cancella insieme agli elementi SKETCH.
+struct CommandGraph {
+    GraphType type{GraphType::Y};        // Y, Polar, X o Param
+    std::string expr, expr2;             // expr2: Yt di Graph(X,Y)
+    std::uint8_t color{0};
+    LineStyle style{LineStyle::Normal};
+};
+constexpr std::size_t MaxCommandGraphs = 10;
+
 constexpr std::size_t VWindowMemories = 6;           // V-Win1..V-Win6
 constexpr std::size_t GraphMemories = 20;            // G-Mem1..G-Mem20
 constexpr std::size_t MaxGraphMemoryBytes = 24 * 1024;   // all graph memories together
@@ -159,6 +171,10 @@ struct GraphState {
     std::string overlay;                             // picture recalled behind the graphs ("" = none)
     std::string project;                             // name of the open .pcgraph project ("" = not saved yet)
     bool projectModified{};
+    std::vector<CommandGraph> commandGraphs;         // grafici dei comandi di Run-Matrix (record v7)
+    // Richiesta di Run-Matrix (non salvata): GRAPH apre subito la schermata del
+    // grafico e EXIT torna a Run-Matrix, come dopo un comando grafico della fx-CG50.
+    bool commandScreen{};
 };
 std::size_t graphMemoryBytes(const GraphState& g) noexcept;
 } // namespace fx

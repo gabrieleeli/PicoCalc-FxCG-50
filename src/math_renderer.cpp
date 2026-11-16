@@ -213,7 +213,7 @@ std::uint8_t parenToken(Ctx& c, const std::string& t) {
 }
 void emitCursor(Ctx& c, int x, int base, const Box& b) {
     const int top = base - b.asc, bottom = base + b.desc - 1;
-    c.out->push_back({NaturalDrawOp::Kind::Cursor, x, top, x, bottom, {}, 0});
+    c.out->push_back({NaturalDrawOp::Kind::Cursor, x, top, x, bottom, {}, c.cursor ? c.cursor->cursorStyle : std::uint8_t{0}});
     c.layout->hasCursor = true; c.layout->cursorX = x; c.layout->cursorTop = top; c.layout->cursorBottom = bottom;
 }
 void drawNode(Ctx& c, const NaturalNode& n, int x, int base, int level, bool isRoot, unsigned depth);
@@ -506,12 +506,15 @@ std::string displayToken(const std::string& t) {
     std::string low = t; for (char& ch : low) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
     for (std::size_t i = 0; i < sizeof(kGreekNames) / sizeof(kGreekNames[0]); ++i) if (low == kGreekNames[i]) return kGreekGlyphs[i];
     if (low == "ans") return "Ans";
+    // "list1".."list26" (List 1-26, v1.11.0)
+    if (low.size() >= 5 && low.size() <= 6 && low.compare(0, 4, "list") == 0 && low[4] != '0' &&
+        std::all_of(low.begin() + 4, low.end(), [](char ch) { return ch >= '0' && ch <= '9'; }))
+        return "List " + low.substr(4);
     if (low == "preans") return "PreAns";
     // Shared variables (VARS) and operator words in fx-CG50 spelling.
     static const struct { const char* name; const char* shown; } kNames[] = {
         // Matrici, vettori e liste (grafia dei comandi OPTN della fx-CG50).
-        {"mat", "Mat "}, {"vct", "Vct "}, {"list", "List "}, {"list1", "List 1"}, {"list2", "List 2"}, {"list3", "List 3"},
-        {"list4", "List 4"}, {"list5", "List 5"}, {"list6", "List 6"}, {"det", "Det "}, {"trn", "Trn "}, {"identity", "Identity "},
+        {"mat", "Mat "}, {"vct", "Vct "}, {"list", "List "}, {"det", "Det "}, {"trn", "Trn "}, {"identity", "Identity "},
         {"dim", "Dim "}, {"augment", "Augment"}, {"fill", "Fill"}, {"ref", "Ref "}, {"rref", "Rref "},
         {"mattolist", "Mat\xE2\x86\x92List"}, {"listtomat", "List\xE2\x86\x92Mat"}, {"dotp", "DotP"}, {"crossp", "CrossP"},
         {"angle", "Angle"}, {"unitv", "UnitV"}, {"norm", "Norm"}, {"seq", "Seq"}, {"mean", "Mean"}, {"median", "Median"},
@@ -521,8 +524,12 @@ std::string displayToken(const std::string& t) {
         {"xmin", "Xmin"}, {"xmax", "Xmax"}, {"xscl", "Xscl"}, {"ymin", "Ymin"}, {"ymax", "Ymax"}, {"yscl", "Yscl"},
         {"tmin", "Tmin"}, {"tmax", "Tmax"}, {"tptch", "Tptch"}, {"tblstart", "TblStart"}, {"tblend", "TblEnd"},
         {"tblpitch", "TblPitch"}, {"and", " And "}, {"or", " Or "}, {"xor", " Xor "}, {"not", "Not "}, {"rmdr", " Rmdr "},
-        {"modexp", "MOD_Exp"}, {"rndfix", "RndFix"}, {"rannorm", "RanNorm#"}, {"ranbin", "RanBin#"}, {"randint", "RanInt#"}};
+        {"modexp", "MOD_Exp"}, {"rndfix", "RndFix"}, {"rannorm", "RanNorm#"}, {"ranbin", "RanBin#"}, {"randint", "RanInt#"},
+        // v1.11.0: Base-N (Xnor, Neg) e prefissi della base di un numero
+        {"xnor", " Xnor "}, {"neg", "Neg "}, {"0d", "d"}, {"0x", "h"}, {"0b", "b"}, {"0o", "o"}};
     for (const auto& k : kNames) if (low == k.name) return k.shown;
+    // Simboli ingegneristici "#k" ... "#u" (µ): v1.11.0
+    if (t.size() == 2 && t[0] == '#') return t[1] == 'u' ? std::string("\xC2\xB5") : std::string(1, t[1]);
     if (t == "<=") return "\xE2\x89\xA4";
     if (t == ">=") return "\xE2\x89\xA5";
     if (t == "->") return "→";
@@ -569,8 +576,17 @@ void draw(gfx::Canvas& canvas, const Layout& l, const Palette& p) {
             canvas.dottedRect(op.x, op.y, op.x2 - op.x + 1, op.y2 - op.y + 1, p.placeholder);
             break;
         case NaturalDrawOp::Kind::Cursor:
+            if (op.color == 1) {                       // sovrascrittura: sottolinea il carattere
+                canvas.hLine(op.x, op.y2 - 1, 8, p.cursor);
+                canvas.hLine(op.x, op.y2, 8, p.cursor);
+                break;
+            }
             canvas.vLine(op.x, op.y, op.y2 - op.y + 1, p.cursor);
             canvas.vLine(op.x + 1, op.y, op.y2 - op.y + 1, p.cursor);
+            if (op.color == 2) {                       // argomento (SHIFT+INS): forma di [
+                canvas.hLine(op.x, op.y, 5, p.cursor);
+                canvas.hLine(op.x, op.y2, 5, p.cursor);
+            }
             break;
         case NaturalDrawOp::Kind::Highlight: break;
         }

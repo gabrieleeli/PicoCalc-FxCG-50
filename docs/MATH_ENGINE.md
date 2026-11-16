@@ -1,4 +1,4 @@
-# Motore matematico — v1.10.0
+# Motore matematico — v1.11.0
 
 Riferimenti storici: `archive/VPAM_SHARED_AST.md`, `archive/RUN_MATRIX_PHASE*.md` e
 `archive/math_engine_original.py` descrivono le versioni precedenti (vedi [README.md](README.md)).
@@ -18,10 +18,63 @@ CollEval<NumDomain|ExactDomain> nodi con liste, matrici, vettori (v1.10.0)
 evaluateAny → CalcValue        numero, lista, matrice o vettore
 ```
 
+Dalla v1.11.0 lo stesso lexer riconosce anche i simboli ingegneristici
+(`#k`…), le frazioni lineari `a⌟b` e, con `parseExpression(testo, base)`, i
+numeri della modalità Base-N; lo stesso valutatore applica la semantica
+intera a 32 bit quando `EvalContext::integerBase` è impostato.
+
 Esiste **un solo** parser e **un solo** valutatore numerico (templato sul tipo):
 Run-Matrix, Graph, Table, Equation, Statistics e i test usano lo stesso codice
 (`include/expression.hpp`). `CompiledExpression` analizza una volta e valuta molte
 volte (grafici, tabelle, solver).
+
+## Novità della v1.11.0
+
+### Simboli ingegneristici
+
+| Testo canonico | Mostrato | Fattore |
+|---|---|---|
+| `#k` `#M` `#G` `#T` | k M G T | 10³ 10⁶ 10⁹ 10¹² |
+| `#m` `#u` `#n` `#p` `#f` | m µ n p f | 10⁻³ 10⁻⁶ 10⁻⁹ 10⁻¹² 10⁻¹⁵ |
+
+Postfissi (priorità di `!` e `°`): `2#k` è il prodotto per il token `#1e3`.
+Il valore esatto è razionale ma il token marca l'input come decimale, così il
+risultato si mostra in decimale. `formatNumber` in Eng restituisce il simbolo
+in `FormattedNumber::symbol` per gli esponenti −15…12 (`1.024M`, `900m`,
+`4.7µ`); fuori resta ×10ⁿ.
+
+### Frazioni lineari ⌟
+
+`a⌟b` e `a⌟b⌟c` (U+231F) sono **un solo token numerico**, solo con interi:
+a/b e a + b/c (con il segno del modello misto: `-1⌟2⌟3` = −(1 + 2/3)).
+Esatte nel valutatore esatto. Errori: `⌟` senza intero dopo, più di due `⌟`,
+termini decimali (Syntax ERROR); denominatore nullo (Math ERROR).
+
+### Base-N intera
+
+`parseExpression(testo, base)` con base 2, 8, 10, 16 e `EvalContext::integerBase`:
+
+- numeri senza prefisso nella base data; prefissi `0d`, `0x`, `0b`, `0o` per
+  un singolo numero; in base 16 le cifre A–F anche dentro le parole
+  (`FFxor0F` = FF Xor 0F, `AandF`), variabili G–Z;
+- interi a 32 bit in complemento a due: in Hex/Bin/Oct `FFFFFFFF` = −1,
+  in Dec al massimo 2147483647; oltre → Math ERROR;
+- `combine()` sostituisce `applyBinary()` in tutti i punti del valutatore
+  (nodi, catene, elementi di `CollEval`): `+ − ×` con controllo di
+  traboccamento, `÷` e `Int÷` troncano verso zero, `Rmdr`, relazioni,
+  `And`/`Or`/`Xor`/`Xnor` bit a bit; segno meno con controllo; funzioni solo
+  `Not` (complemento a uno), `Neg` (complemento a due), `Abs`;
+- numeri con la virgola, simboli ingegneristici: Syntax ERROR; valori non
+  interi (costanti, variabili): Math ERROR; nessuna forma esatta.
+
+Nel calcolo normale `Xnor` è l'operatore logico (1 se i due valori sono
+entrambi nulli o entrambi non nulli) e `Neg(x)` è −x.
+
+### Forme esatte delle memorie
+
+`CalcValue::exact` conserva una forma esatta per elemento (memorie reali fino
+a `CalcValue::ExactElements` = 64): `ExactDomain::load` la usa al posto dei
+soli interi, quindi `Mat A×6` con `Mat A` = `[[1/3,1/2][2,1/5]]` è esatto.
 
 ## Valutazione esatta (v1.7.0)
 
@@ -100,7 +153,7 @@ per sostituire i coefficienti con i loro valori).
 | Casuali | rand() ran randint(a,b) |
 | Complessi | re im arg conj real imag, unità `i` |
 | Frazioni | `mixed(w,n,d)` (modello a b/c: −2 1/3 = −(2+1/3)), `frac(a,b)` |
-| Logica e confronti | `not`, operatori `and or xor`, `= ≠ < > <= >=` |
+| Logica e confronti | `not`, operatori `and or xor xnor`, `= ≠ < > <= >=` (bit a bit in Base-N; `neg(x)` = −x, complemento a due in Base-N) |
 | Interi e arrotondamenti (v1.7.0) | `modexp(n,p,m)` (MOD_Exp), `rndfix(x,n)` (RndFix), operatori `Int÷`, `Rmdr` |
 | Casuali (v1.7.0) | `rannorm(σ,μ)` (RanNorm#), `ranbin(n,p)` (RanBin#) |
 | Calcolo (valutazione pigra) | integral(f,a,b) derivative(f,x₀) derivative2(f,x₀) sum(f,a,b) prod(f,a,b) solve(f,x₀) |
@@ -147,12 +200,15 @@ atomo   := … | matrice | lista | memoria [ "[" espr ("," espr)? "]" ]
 matrice := "[" ( "[" espr ("," espr)* "]" )+ "]"      righe della stessa lunghezza
 lista   := "{" espr ("," espr)* "}"
 memoria := "Mat" (A–Z | Ans) | "Vct" (A–Z | Ans) | "List" (1–26 | Ans)
+postfisso := … | "#" (k | M | G | T | m | u | n | p | f)       (v1.11.0)
+numero  := … | intero "⌟" intero [ "⌟" intero ]                 (v1.11.0)
 ```
 
 - `Mat`, `Vct`, `List` sono riconosciuti solo con questa grafia (come li
   inserisce OPTN): `mat` digitato resta il prodotto m·a·t. Il nome può essere
-  attaccato (`MatA`, `List1`). `List 1`–`List 6` sono il token `list1`…`list6`
-  già usato da GRAPH (dove indica un elemento per grafico).
+  attaccato (`MatA`, `List1`). `List 1`–`List 26` sono il token
+  `list1`…`list26` usato anche da GRAPH (dove indica un elemento per grafico)
+  e da TABLE.
 - `[` dopo un riferimento è un indice (`Mat A[1,2]`), `[[` inizia una matrice
   (prodotto implicito).
 - Il parser marca con `ast::FlagCollection` ogni nodo il cui sotto-albero
@@ -249,6 +305,13 @@ sull'heap (PSRAM sulla Plus), mai sullo stack.
 | `graph_engine.hpp/.cpp`, `graph_solve.hpp/.cpp` | motore dei grafici e G-Solve sullo stesso valutatore ([GRAPH_ENGINE.md](GRAPH_ENGINE.md)) |
 
 ## Non ancora disponibile
+
+(Aggiornato alla v1.11.0.) Derivate e integrali simbolici e limiti non
+esistono sulla fx-CG50 (niente CAS): restano numerici come sulla
+calcolatrice. Mancano i simboli P/E e ►ENG, il riferimento alle liste per
+sottonome, le regressioni sinusoidale e logistica.
+
+### Prima della v1.11.0
 
 Liste 7–26 e nomi delle liste, derivate e integrali simbolici, limiti, operatori bit a bit Base-N (and/or/xor
 come operazioni sui bit nella modalità Base-N intera), simboli ingegneristici,

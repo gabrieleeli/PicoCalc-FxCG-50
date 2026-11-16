@@ -88,7 +88,7 @@ struct Plot {
     const char* variable{"x"};
     char bindName[2]{};                        // overwrite variable (lower case), "" = none
     double bindValue{};
-    int listIndex{-1};                         // List graph: element used for list1..list6
+    int listIndex{-1};                         // List graph: element used for list1..list26
     bool pasted{};
 };
 
@@ -97,7 +97,10 @@ struct GraphSource {
     const std::array<GraphFunction, MaxGraphFunctions>* functions{};
     const CalculatorMemory* memory{};
     const NameResolver* names{};               // Xmin, TblStart... (the workspace)
-    const std::array<std::vector<double>, 6>* lists{};
+    static constexpr std::size_t ListCount = 26;   // List 1..26 (v1.11.0)
+    const std::array<std::vector<double>, ListCount>* lists{};
+    // Grafici dei comandi di Run-Matrix (Graph Y=, r=, X=, Graph(X,Y)=), v1.11.0.
+    const std::vector<CommandGraph>* commands{};
 };
 
 class GraphEngine final : public FunctionResolver {

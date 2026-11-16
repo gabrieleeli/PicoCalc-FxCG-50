@@ -1,12 +1,12 @@
-# Memorizzazione: flash interna e microSD (v1.9.0)
+# Memorizzazione: flash interna e microSD (v1.9.0, v1.11.0)
 
 Il firmware usa tre memorie con ruoli diversi.
 
 | Memoria | Contenuto | Modulo |
 |---|---|---|
 | Flash interna, **record del workspace** (due slot A/B) | impostazioni, variabili, Ans, cronologia Run-Matrix, liste, funzioni e Setup di GRAPH, memorie V-Window e grafiche, SKETCH, TABLE, coefficienti, conversazioni AI, **3D Graph**, archivio scelto per i file | `storage.hpp/.cpp`, `workspace.cpp` |
-| Flash interna, **LittleFS** (v1.9.0) | file utente interni: progetti GRAPH `.pcgraph`, immagini `.pcpict`, `.bmp` | `flash_fs.hpp/.cpp`, `third_party/littlefs` |
-| microSD della PicoCalc | progetti GRAPH `.pcgraph`, immagini `.pcpict`, esportazioni `.bmp` | `file_store`, `fatfs_store`, `sd_card`, `sd_spi_pico.cpp` |
+| Flash interna, **LittleFS** (v1.9.0) | file utente interni: progetti GRAPH `.pcgraph`, immagini `.pcpict`, `.bmp`, file CSV di liste e matrici (v1.11.0) | `flash_fs.hpp/.cpp`, `third_party/littlefs` |
+| microSD della PicoCalc | progetti GRAPH `.pcgraph`, immagini `.pcpict`, esportazioni `.bmp`, file CSV (v1.11.0) | `file_store`, `fatfs_store`, `sd_card`, `sd_spi_pico.cpp`, `csv_io` |
 
 Il workspace in flash conserva lo stato di lavoro anche senza scheda. I file
 dell'utente vanno sulla microSD oppure, scegliendo SYSTEM → "Archivio file" =
@@ -68,18 +68,23 @@ restano intatti. Un ID non riconosciuto lascia la mappa della build.
 Due slot con CRC-32 e numero di sequenza: si scrive sempre lo slot più
 vecchio, quindi un'interruzione durante la scrittura lascia valido l'altro
 (test di interruzione in ogni punto in `storage_test`). Il record è alla
-**versione 6** (v1.10.0): aggiunge in coda la modalità Input/Output, le memorie
-di matrici e vettori e i risultati lista/matrice/vettore della cronologia
-(formato sotto). La versione 5 (v1.9.0) aggiunge l'archivio scelto per i file e lo
+**versione 7** (v1.11.0): aggiunge in coda Base-N, Simplify, formato CSV,
+liste di Statistics, List 7–26 e i sottonomi, le forme esatte delle memorie,
+base e frazione ▶Simp delle righe della cronologia e i grafici dei comandi
+(formato sotto). La **versione 6** (v1.10.0) aggiunge la modalità
+Input/Output, le memorie di matrici e vettori e i risultati
+lista/matrice/vettore della cronologia. La versione 5 (v1.9.0) aggiunge l'archivio scelto per i file e lo
 stato del 3D Graph (Z1–Z3, selezione, finestra 3D, griglia, vista). La
 versione 3 (GRAPH v1.8.0) aggiunge le 20 funzioni di GRAPH con stile e Yt, il
 Setup della modalità, le 6 memorie V-Window, le 20 memorie grafiche, gli
 elementi SKETCH, l'immagine richiamata e il progetto aperto; la versione 4
 (TABLE v1.8.0) la variabile, il tipo e le righe della tabella (≤ 999). I record
 v1 (v1.6.0), v2 (v1.7.0), v3 e v4 (v1.8.0) e v5 (v1.9.0) sono letti: un
-record v4 generato dai sorgenti della v1.8.0 e un record v5 generato dai
-sorgenti della v1.9.0 sono nei test (`tests/fixtures/workspace_v1_8_0.inc`,
-`tests/fixtures/workspace_v1_9_0.inc`);
+record v4 generato dai sorgenti della v1.8.0, un record v5 generato dai
+sorgenti della v1.9.0 e un record v6 generato dai sorgenti della v1.10.0
+sono nei test (`tests/fixtures/workspace_v1_8_0.inc`,
+`tests/fixtures/workspace_v1_9_0.inc`, `tests/fixtures/workspace_v1_10_0.inc`:
+la migrazione v6→v7 è provata da `lists_csv_test`);
 le 6 funzioni della v1.6.0 diventano Y1–Y6 e la griglia booleana diventa Grid
 On/Off; una V-Window che non supera i controlli viene corretta o sostituita da
 quella iniziale, senza scartare il resto dei dati.
@@ -88,7 +93,9 @@ quella iniziale, senza scartare il resto dei dati.
 |---|---|---|
 | Capacità di un salvataggio | 59,75 KB | 511,75 KB |
 | Cronologia Run-Matrix | 40 righe | 200 righe |
-| Liste statistiche | 6 × 255 | 6 × 999 (fx-CG50) |
+| Liste (List 1–26, v1.11.0) | 255 per lista, 1 530 in tutto (≈ 12 KB) | 999 per lista (fx-CG50), 20 000 in tutto (≈ 156 KB) |
+| Sottonomi delle liste | 26 × 8 caratteri | 26 × 8 caratteri |
+| Grafici dei comandi di Run-Matrix | 10 | 10 |
 | Matrici e vettori (Mat/Vct A–Z, MatAns, VctAns) | 1 200 elementi in tutto (≈ 9,4 KB reali, 18,8 KB complessi), 400 per matrice, lato ≤ 40 | 20 000 elementi (≈ 156 KB reali, 312 KB complessi), 10 000 per matrice, lato ≤ 999 |
 | Conversazione AI | 30 messaggi | 30 messaggi |
 
@@ -112,6 +119,44 @@ immaginarie. La lettura controlla tipo, forma, numeri finiti e i limiti della
 scheda (lato, elementi per matrice, elementi totali): un record non valido
 viene rifiutato per intero e il workspace resta quello precedente
 (`matrix_test`).
+
+### Blocco della versione 7 (v1.11.0)
+
+In coda al blocco della versione 6, in little endian. Le liste 1–6 restano
+nel blocco della versione 4 (stessa posizione di prima).
+
+| Campo | Contenuto |
+|---|---|
+| 6 × `u8` | Mode (0 Comp, 1 Dec, 2 Hex, 3 Bin, 4 Oct), Simplify (0 Auto, 1 Manual), separatore CSV (`,` `;`), simbolo decimale CSV (`.` `,`), XList e YList di Statistics (0–25) |
+| 20 × (`u16` n, n × `f64`) | List 7…List 26 |
+| 26 × stringa | sottonomi delle liste (≤ 8 caratteri ASCII stampabili, niente `"`) |
+| 55 × (`u8` presente, forme esatte) | forme esatte di Mat A–Z, Vct A–Z, MatAns, VctAns, ListAns: se presente, una forma per elemento (≤ 64 elementi, valore reale), nello stesso formato dei campi esatti di A–Z |
+| `u16` n, n × (`u16` indice, `u8` base, `i64` numeratore, `i64` denominatore, `u32` fattore, `u8` indicatori) | righe della cronologia con base Base-N, frazione non ridotta (▶Simp, Simplify Manual) o comando grafico (indicatore 1) |
+| `u8` n, n × (`u8` tipo, stringa, stringa, `u8` colore, `u8` stile) | grafici dei comandi (Y=, r=, X=, Param; al massimo 10) |
+
+La lettura controlla ogni campo (valori ammessi, separatore ≠ decimale,
+forme esatte coerenti con i valori memorizzati, budget di tutte le liste,
+indici crescenti): un record non valido viene rifiutato per intero.
+
+## File CSV (v1.11.0)
+
+`include/csv_io.hpp`: cartella `PICOCALC/CSV`, nomi di 1–8 caratteri
+`A-Z a-z 0-9 _ -` con estensione `.csv`, sulla memoria scelta in SYSTEM
+(microSD o flash interna, stessa interfaccia `files::FileSystem`).
+
+| Regola | Dettaglio |
+|---|---|
+| Separatore / decimale | `,` o `;` / `.` o `,` (impostazione globale; `,` + `,` rifiutato) |
+| Righe | CR, LF o CRLF; righe vuote finali ignorate; riga 1 con virgolette = intestazione ignorata; tabulatore non ammesso |
+| Valori | numeri reali (`1`, `-2.5`, `1e+20`, `2,5` con decimale `,`); campi vuoti ammessi in fondo a una colonna di lista |
+| Scrittura | `files::writeAtomic` (`.tmp`, CRC, `.bak`, rinomina); `csv::load` esegue prima `files::recover` sulla cartella |
+| Dimensione massima letta | (max(elementi delle liste, elementi di una matrice)) × 24 byte + 4 KB: ≈ 484 KB sulla Plus, ≈ 41 KB sul Pico 2 W |
+| Errori | `Storage ERROR` (scheda assente, file mancante, I/O), `Format ERROR` (testo non numerico, celle vuote nel mezzo, file vuoto o binario, tabulatore), `Dimension ERROR` (righe/colonne oltre i limiti), `Memory ERROR` (budget delle liste), `Complex Number In Data` (salvataggio di un elemento complesso) |
+
+`internal_fs_test` e `lists_csv_test` provano il salvataggio con
+interruzione di alimentazione in decine di punti sulla flash interna: dopo il
+riavvio il file è quello vecchio o quello nuovo, mai un misto, e non restano
+`.tmp`/`.bak`.
 
 I tratti PEN dello SKETCH hanno un limite complessivo di 1200 punti; con 20
 funzioni, 20 memorie grafiche piene e 64 elementi SKETCH lo stato GRAPH resta

@@ -158,8 +158,11 @@ int main() {
     }
 
     // ---------------------------------------------------------------- sources against the registry
-    std::map<std::string, std::string> wsName;
-    for (std::size_t i = 0; i < data::Count; ++i) wsName[dataSectionName(i)] = std::to_string(i);
+    // Ogni sezione ha il suo nome; i membri e i metodi delle liste (v1.11.0)
+    // appartengono alla sezione Lists.
+    for (std::size_t i = 0; i < data::Count; ++i) CHECK(dataSectionOfMember(dataSectionName(i)) == (1u << i));
+    CHECK(dataSectionOfMember("listNames") == data::Lists && dataSectionOfMember("setList") == data::Lists);
+    CHECK(dataSectionOfMember("nonexistent") == 0);
     for (std::size_t i = 0; i < AppCount; ++i) {
         const AppInfo& a = appInfoAt(i);
         if (!a.sources) continue;
@@ -176,8 +179,8 @@ int main() {
                 // diretto a ws.lists)
                 if (sec == "collection" || sec == "storeMatrix" || sec == "storeVector" || sec == "storeList" ||
                     sec == "storeCollectionAnswer" || sec == "snapshotCollections" || sec == "restoreCollections") continue;
-                const auto it = wsName.find(sec);
-                bool declared = it != wsName.end() && (a.data & (1u << std::stoi(it->second)));
+                const std::uint32_t section = dataSectionOfMember(sec.c_str());
+                bool declared = section != 0 && (a.data & section) == section;
                 if (sec == "resetAll") declared = a.data == (1u << data::Count) - 1;                       // touches every section
                 ::testutil::report(declared, "workspace section declared", *src, 0, std::string(a.name) + " -> ws." + sec);
             }
@@ -188,15 +191,27 @@ int main() {
             }
         }
     }
-    // Run-Matrix shows calculations and results only.
+    // Run-Matrix shows calculations and results only. I comandi grafici (v1.11.0)
+    // passano dall'interprete graph_commands (graphcmd::) e li disegna GRAPH:
+    // Run-Matrix non tocca direttamente i dati di GRAPH e non disegna.
     {
         const char* forbidden[] = {"GraphApp", "TableApp", "StatisticsApp", "ConversionApp", "EquationApp", "stats::", "sample2D",
                                    "sample3DSurface", "GraphFunction", "ViewWindow", "TableRange", "ws.view", "ws.table", "ws.lists",
-                                   "ws.functions", "ws.equation", "pointa::", "drawPlot", "canvas.line", "c.line("};
+                                   "ws.functions", "ws.equation", "ws.graph", "SketchItem", "CommandGraph", "graph::", "pointa::",
+                                   "drawPlot", "canvas.line", "c.line(", "c.circle(", "mathSegment"};
+        bool usesInterpreter = false, opensGraph = false;
         for (const char* const* src = appInfo(AppId::RunMatrix).sources; *src; ++src) {
             const std::string code = codeOnly(readFile(*src));
             for (const char* f : forbidden) ::testutil::report(code.find(f) == std::string::npos, "Run-Matrix separation", *src, 0, f);
+            usesInterpreter = usesInterpreter || code.find("graphcmd::execute") != std::string::npos;
+            opensGraph = opensGraph || code.find("open(AppId::Graph)") != std::string::npos;
         }
+        CHECK(usesInterpreter && opensGraph);
+        // L'interprete dei comandi e' un modulo del motore (nessuna dipendenza dall'interfaccia)
+        // e GRAPH disegna i suoi risultati.
+        const std::string graphCode = codeOnly(readFile("src/apps/graph_plot.cpp")) + codeOnly(readFile("src/apps/graph_app.cpp"));
+        CHECK(graphCode.find("commandGraphs") != std::string::npos && graphCode.find("commandScreen") != std::string::npos);
+        CHECK(codeOnly(readFile("src/graph_engine.cpp")).find("commands") != std::string::npos);
     }
     // Graphs of functions live in Graph: no other available mode draws function curves.
     for (std::size_t i = 0; i < AppCount; ++i) {
@@ -215,11 +230,11 @@ int main() {
         const char* engine[] = {"expression.hpp", "exact.hpp", "expression_ast.hpp", "memory.hpp", "math_engine.hpp", "number_format.hpp",
                                 "solvers.hpp", "statistics.hpp", "run_matrix.hpp", "workspace.hpp", "storage.hpp", "app_models.hpp",
                                 "graph_model.hpp", "graph_engine.hpp", "graph_solve.hpp", "file_store.hpp", "graph_file.hpp", "pict.hpp",
-                                "sd_card.hpp", "fatfs_store.hpp"};
+                                "sd_card.hpp", "fatfs_store.hpp", "value.hpp", "csv_io.hpp", "graph_commands.hpp"};
         const char* engineSrc[] = {"src/expression.cpp", "src/exact.cpp", "src/memory.cpp", "src/math_engine.cpp", "src/number_format.cpp",
                                    "src/solvers.cpp", "src/statistics.cpp", "src/run_matrix.cpp", "src/workspace.cpp", "src/storage.cpp", "src/app_models.cpp",
                                    "src/graph_model.cpp", "src/graph_engine.cpp", "src/graph_solve.cpp", "src/file_store.cpp", "src/graph_file.cpp", "src/pict.cpp",
-                                   "src/sd_card.cpp", "src/fatfs_store.cpp"};
+                                   "src/sd_card.cpp", "src/fatfs_store.cpp", "src/value.cpp", "src/csv_io.cpp", "src/graph_commands.cpp"};
         for (const char* h : engine)
             for (const auto& inc : includesOf(codeOnly(readFile(std::string("include/") + h))))
                 ::testutil::report(appLayer.count(inc) == 0, "engine header independent of the UI", h, 0, inc);

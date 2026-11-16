@@ -1,10 +1,50 @@
-# Build status — v1.10.0 (matrici, vettori e liste; editor MAT/VCT; Math/Line; CLIP)
+# Build status — v1.11.0 (completamento di Run-Matrix: List 1–26, CSV, MatAns, Line, Base-N, comandi grafici)
 
 Le note storiche delle versioni v0.3–v1.5.4 restano nella cronologia Git e in
-[CHANGELOG.md](CHANGELOG.md). Le sezioni dopo "v1.10.0" descrivono le build
+[CHANGELOG.md](CHANGELOG.md). Le sezioni dopo "v1.11.0" descrivono le build
 precedenti e restano valide come confronto.
 
-## v1.10.0 — `main`
+## v1.11.0 — `main`
+
+Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`),
+una cartella per scheda, nello stesso ambiente della v1.9.0/v1.10.0 (Pico SDK
+2.2.0, `gcc-arm-none-eabi` 13.2.1). **Nessuna prova su hardware.**
+
+| Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (3 190 784 byte) | `build/pico2w/picocalc_fxai_pico2w.uf2` (3 172 864 byte) |
+| `picotool info` | "PicoCalc FX-CG50 AI", versione `1.11.0 (pico_plus_2w)`, binary end `0x1018564C` | "PicoCalc FX-CG50 AI", versione `1.11.0 (pico2w)`, binary end `0x101833F8` |
+| Immagine flash | 1 594 956 byte (`__flash_binary_end` = `0x1018564C`) = 38 % della partizione firmware da 4 MB; +79 684 byte rispetto alla v1.10.0 | 1 586 168 byte (`0x101833F8`) = 76 % della partizione da 2 MB; +79 652 byte |
+| Resto della flash | invariato (diagnostica, LittleFS ≈ 11 MB anche per i CSV, BTstack, workspace 2 × 512 KB, ultimo settore libero) | invariato (LittleFS ≈ 1,9 MB, workspace 128 KB) |
+| RAM statica | 302 556 byte fino a `__end__` = `0x200495DC` (+924 byte: glifo ⌟, stato delle nuove schermate e del dialogo dei file) | 298 632 byte (`0x20048688`, +924 byte) |
+| Heap SRAM | 191 012 byte (`__end__` → `0x20078000`) | 194 936 byte |
+| PSRAM | 8 MB come pool TLSF separato (liste, matrici, CSV letti, forme esatte da 512 byte in su) | — |
+| Stack | core 0: 32 KB con guardia MSPLIM; core 1: 4 KB in SCRATCH_X (invariati) | uguale |
+| Frame di stack (`-fstack-usage`) | massimo `SystemApp::enter` 1 840 B (le quattro voci nuove del SET UP; non è sul percorso di una ricorsione), poi `diag::testMemory` 1 712 B; codice nuovo: `evaluateEntry` 760 B (era 656), `csv::decode` 424 B, `graphcmd::Runner::run` 328 B, `AnswerView::open` 328 B, `MatrixEditorView::writeCell` 296 B, `Lexer::hexIdentifier` 152 B; la ricorsione del valutatore resta sotto il budget di 16 KB esistente | uguale |
+| Warning | **nessuno** (0 righe `warning:` in tutta la build) | nessuno |
+| SHA-256 dell'UF2 locale | `5aff577afbae2ee20a644f319ab166606170322cc962523097b569687fc53018` | `b6e04305448a7720f6a7089e3b6a05ac88c2fe72f5e386c61d5e9a4cb085ccbe` |
+
+Gli UF2 allegati alla GitHub Release sono compilati dal workflow
+`.github/workflows/release.yml` sul commit pubblicato (Ubuntu 24.04, stesso
+SDK) e verificati con `sha256sum -c SHA256SUMS`; i loro hash sono in
+`SHA256SUMS` nella release e possono differire da quelli locali se la
+toolchain del runner non è identica byte per byte.
+
+### Test
+
+| Suite | Pico Plus 2 W | Pico 2 W |
+|---|---|---|
+| CTest (`tests/run_host_tests.sh`) | 40/40: 38 suite C++ con **9 757** controlli, `mem_pools_smoke` (≈ 333 000 verifiche) e `sd_interop_test` (41) | 40/40: **9 751** controlli + ≈ 334 000 + 41 |
+| AddressSanitizer + UBSan (`--sanitize`) | 40/40 | 40/40 |
+| ThreadSanitizer (`--tsan`, allocatore su due thread) | superato | superato |
+| Relay AI (Python, `unittest`) | 15/15 | — |
+| Simulatore | screenshot 52–61 nuovi; 06, 07, 18, 20–37, 40–45, 51 rigenerati; tutti compressi senza perdita | |
+
+Nuove suite: `lists_csv_test` (721 controlli), `calc_v111_test` (133) e
+`run_matrix_v111_test` (106); dettagli in [TESTING.md](TESTING.md). Il
+dispositivo non è stato usato.
+
+## v1.10.0 — tag `v1.10.0`
 
 Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`),
 una cartella per scheda, nello stesso ambiente della v1.9.0 (in fondo alla

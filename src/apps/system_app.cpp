@@ -1,4 +1,5 @@
 // SYSTEM / SET UP: Input/Output (Math, Line), angle unit, display format, complex mode, exact results, Frac Result (d/c, ab/c),
+// Mode (Comp, Base-N Dec/Hex/Bin/Oct), Simplify (Auto/Manual), CSV separator and decimal symbol,
 // backlights, Wi-Fi and AI relay configuration, device information and reset.
 #include "apps.hpp"
 #include "board_config.hpp"
@@ -40,7 +41,9 @@ DisplayFormat displayFrom(int i) {
 FormField choice(const char* l, std::vector<std::string> c, int sel) { const std::string t = c[static_cast<std::size_t>(sel)]; return {l, t, FormField::Type::Choice, std::move(c), sel}; }
 FormField text(const char* l, const std::string& v, bool secret = false) { return {l, v, secret ? FormField::Type::Secret : FormField::Type::Text, {}, 0}; }
 FormField number(const char* l, double v) { return {l, formatReal(v), FormField::Type::Number, {}, 0}; }
-enum Field { FInput, FAngle, FDisplay, FComplex, FFrac, FMixed, FLcd, FKbd, FFiles, FSsid, FPass, FHost, FPort, FPath, FToken, FProvider, FModel, FTokens };
+enum Field { FInput, FAngle, FDisplay, FComplex, FFrac, FMixed, FLcd, FKbd, FFiles, FSsid, FPass, FHost, FPort, FPath, FToken, FProvider, FModel, FTokens,
+             // v1.11.0: modalita' di calcolo (Comp / Base-N), Simplify, formato dei file CSV
+             FMode, FSimplify, FCsvSep, FCsvDec };
 } // namespace
 
 void SystemApp::enter(Context& ctx) {
@@ -64,6 +67,10 @@ void SystemApp::enter(Context& ctx) {
         choice("AI provider", {"Claude", "ChatGPT"}, s.aiProvider ? 1 : 0),
         text("AI modello", s.aiModel),
         number("AI max caratteri", s.aiMaxChars),
+        choice("Mode", {"Comp", "Dec", "Hex", "Bin", "Oct"}, static_cast<int>(s.baseMode)),
+        choice("Simplify", {"Auto", "Manual"}, s.simplifyManual ? 1 : 0),
+        choice("CSV Separator", {",", ";"}, s.csvSeparator == ';' ? 1 : 0),
+        choice("CSV Decimal", {".", ","}, s.csvDecimal == ',' ? 1 : 0),
     };
     form_.selected = 0; info_ = false; confirmReset_ = false;
 }
@@ -87,6 +94,11 @@ void SystemApp::apply(Context& ctx) {
     s.relayPort = static_cast<std::uint16_t>(port); s.relayPath = f[FPath].text.empty() ? "/v1/chat" : f[FPath].text;
     s.relayToken = f[FToken].text; s.aiProvider = static_cast<std::uint8_t>(f[FProvider].choice);
     s.aiModel = f[FModel].text; s.aiMaxChars = static_cast<std::uint16_t>(tokens);
+    s.baseMode = static_cast<Settings::BaseMode>(std::clamp(f[FMode].choice, 0, 4));
+    s.simplifyManual = f[FSimplify].choice == 1;
+    const char sep = f[FCsvSep].choice == 1 ? ';' : ',', dec = f[FCsvDec].choice == 1 ? ',' : '.';
+    if (sep == dec) throw MathError("Argument ERROR: CSV, separatore e simbolo decimale devono essere diversi");
+    s.csvSeparator = sep; s.csvDecimal = dec;
     ctx.ws.apply();
     ctx.platform.setBacklight(s.lcdBacklight, s.kbdBacklight);
     ctx.markDirty();

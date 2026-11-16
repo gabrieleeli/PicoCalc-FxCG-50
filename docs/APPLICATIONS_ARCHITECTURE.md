@@ -1,4 +1,4 @@
-# Architettura delle applicazioni — v1.10.0
+# Architettura delle applicazioni — v1.11.0
 
 Questo documento descrive **come sono costruite tutte le modalità** (quelle
 disponibili e quelle future), quali servizi condivisi usano, quali dati si
@@ -81,6 +81,7 @@ display) → `tick()` per lavoro periodico (rete) → `leave()`.
 | Units | `point_a.hpp` | Conversion |
 | Help | `cheatsheet.hpp` | Symbols |
 | RunCore | `run_matrix.hpp` | Run-Matrix; previsto per eActivity e Program (righe di calcolo) |
+| GraphCmd (v1.11.0) | `graph_commands.hpp` | Run-Matrix: comandi grafici (Plot, F-Line, Graph Y=…) che scrivono V-Window, SKETCH e grafici dei comandi; li disegna Graph |
 | Models | `app_models.hpp` | modelli dati delle modalità future |
 | GraphCore | `graph_model.hpp`, `graph_engine.hpp`, `graph_solve.hpp`, `table_model.hpp` | Graph, Table; previsto per Dyna Graph, Recursion, Conic Graphs (campionamento, viewport, G-Solve) — [GRAPH_ENGINE.md](GRAPH_ENGINE.md) |
 | Files | `file_store.hpp`, `graph_file.hpp`, `pict.hpp` | Graph (progetti `.pcgraph`, immagini `.pcpict`, BMP sulla microSD); previsto per Picture Plot, Program, eActivity — [STORAGE.md](STORAGE.md) |
@@ -97,14 +98,14 @@ nessuna allocazione dinamica nei percorsi ricorsivi; limiti espliciti
 
 | Sezione (`data::`) | Contenuto | Scritta da | Letta da |
 |---|---|---|---|
-| `Settings` | Input/Output (Math/Line, v1.10.0), angolo, display, complessi, forme esatte, Frac Result, rete | System | tutte |
+| `Settings` | Input/Output (Math/Line, v1.10.0), angolo, display, complessi, forme esatte, Frac Result, rete; Mode (Comp/Base-N), Simplify, formato CSV, XList/YList di Statistics (v1.11.0) | System, Statistics (SET, CSV SET) | tutte |
 | `Memory` | A–Z, Ans, PreAns con la forma esatta | Run-Matrix, Equation, Conversion, Graph | tutte le modalità di calcolo |
 | `History` | cronologia di Run-Matrix (con forma esatta e vista) | Run-Matrix | Memory |
 | `Functions` | Y1–Y20: tipo (12), espressione, Yt, selezione, colore, stile | Graph, Table, Statistics (copia della regressione) | Graph, Table |
-| `View` | V-Window (con T e Xdot) | Graph, Table (GPH-CON/PLT) | Graph, Table; Run-Matrix in sola lettura via `NameResolver` (VARS › V-WIN, `Xdot`) |
+| `View` | V-Window (con T e Xdot) | Graph, Table (GPH-CON/PLT); Run-Matrix solo con il comando `ViewWindow` tramite `graph_commands` (v1.11.0) | Graph, Table; Run-Matrix in sola lettura via `NameResolver` (VARS › V-WIN, `Xdot`) |
 | `Table` | Start/End/Step, variabile (range/lista), tipo, righe generate, richiesta GPH-CON/PLT | Table, Graph (progetto) | Table, Graph |
-| `Lists` | List 1–6 | Statistics, Table (LISTMEM) | Statistics, Graph e Table (grafici e tabelle da lista) |
-| `Graph` | Setup di Graph, memorie V-Window e grafiche, SKETCH, immagine richiamata, progetto aperto | Graph | Graph, Table (Setup Derivative) |
+| `Lists` | List 1–26 e i sottonomi (v1.11.0) | Statistics (anche CSV), Table (LISTMEM), Run-Matrix tramite `storeList` | Statistics, Graph e Table (grafici e tabelle da lista), Run-Matrix tramite `CollectionResolver` |
+| `Graph` | Setup di Graph, memorie V-Window e grafiche, SKETCH, immagine richiamata, progetto aperto, grafici dei comandi di Run-Matrix (v1.11.0) | Graph; Run-Matrix solo tramite `graph_commands` (comandi grafici) | Graph, Table (Setup Derivative) |
 | `Equation` | coefficienti, solver | Equation | Equation |
 | `Chat` | conversazione AI | AI Chat | AI Chat |
 | `Graph3D` | Z1–Z3, selezione, finestra x/y/z, griglia, vista (rotazione, zoom) | 3D Graph | 3D Graph, Memory |
@@ -116,14 +117,15 @@ modalità entrano in un'espressione **solo** tramite `NameResolver`
 Le funzioni di Graph entrano in un'altra funzione solo tramite
 `FunctionResolver` (riferimenti `Y1(x)` … delle funzioni composte).
 Matrici, vettori e liste entrano in un'espressione solo tramite
-`CollectionResolver` (`Workspace::collection`: `Mat A`, `Vct A`, `List 1`–`List 6`
+`CollectionResolver` (`Workspace::collection`: `Mat A`, `Vct A`, `List 1`–`List 26`
 e le memorie Ans) e si assegnano solo con i metodi controllati del workspace
 (`storeMatrix`, `storeVector`, `storeList`, `storeCollectionAnswer`): così
 Run-Matrix legge e scrive le liste di Statistics senza accedere a `ws.lists`.
 Non esistono sistemi di variabili separati per modalità.
 
-Persistenza: `serializeWorkspace()` (versione 6 dalla v1.10.0 con Input/Output,
-matrici e vettori; versione 5 dalla v1.9.0 con 3D Graph e archivio dei file;
+Persistenza: `serializeWorkspace()` (versione 7 dalla v1.11.0 con Base-N,
+Simplify, CSV, List 7–26, sottonomi, forme esatte delle memorie e grafici dei
+comandi; versione 6 dalla v1.10.0 con Input/Output, matrici e vettori; versione 5 dalla v1.9.0 con 3D Graph e archivio dei file;
 le versioni 1 della v1.6.0, 2 della v1.7.0, 3 e 4 della v1.8.0 e 5 della v1.9.0
 vengono ancora lette) → `RecordStore` con due slot e CRC-32. I file
 dell'utente (progetti GRAPH, immagini) sono sulla microSD o nella flash interna
@@ -133,7 +135,7 @@ dell'utente (progetti GRAPH, immagini) sono sulla microSD o nella flash interna
 
 | Modalità | Controller | Responsabilità | Servizi | Dati | Collegamenti |
 |---|---|---|---|---|---|
-| Run-Matrix | `RunMatrixApp` + `MatrixEditorView` (`matrix_editor.cpp`) + nucleo `run_matrix.cpp` | calcoli e risultati: input Math o Line, forme esatte, matrici/vettori/liste ed editor MAT/VCT, cronologia modificabile, variabili, Base-N, DMS, CLIP | Expression, Exact, Editor, MathRender, Format, MathCore, RunCore | Settings, Memory, History, Matrices | — |
+| Run-Matrix | `RunMatrixApp` + `MatrixEditorView` (`matrix_editor.cpp`) + `AnswerView` (`answer_view.cpp`, v1.11.0) + nucleo `run_matrix.cpp` | calcoli e risultati: input Math o Line (INS, ⌟), forme esatte, matrici/vettori/liste ed editor MAT/VCT con CSV, MatAns/ListAns, cronologia modificabile, variabili, Base-N intera, simboli ingegneristici, Simp, DMS, CLIP; comandi grafici eseguiti da `graph_commands` e disegnati da Graph | Expression, Exact, Editor, MathRender, Format, MathCore, RunCore, Storage, Files, GraphCmd | Settings, Memory, History, Matrices, View e Graph (solo tramite `graph_commands`) | Graph |
 | Statistics | `StatisticsApp` | liste, 1/2-Var, regressioni, grafici statistici, DIST, TEST, INTR | Expression, Stats, Widgets | Settings, Lists, Functions | — |
 | Graph | `GraphApp` (`graph_app.cpp`, `graph_plot.cpp`, `graph_files.cpp`) | grafici Y=, r=, parametrici, X=, disequazioni (Y1–Y20); TRACE, ZOOM, V-Window, SKETCH, G-SOLVE, Modify, memorie, PICT, progetti `.pcgraph` — [GRAPH_PARITY.md](GRAPH_PARITY.md) | Expression, Editor, Format, Widgets, MathRender, Storage, GraphCore, Files | Settings, Memory, Functions, View, Table, Lists, Graph | Table |
 | Table | `TableApp` + `table_model` | tabelle di Y=, r= e parametriche da range o lista, derivate, EDIT/ROW/DELETE, LISTMEM, GPH-CON/GPH-PLT — [TABLE.md](TABLE.md) | Expression, Editor, Format, Widgets, MathRender, Storage, GraphCore | Settings, Memory, Functions, View, Table, Lists, Graph | Graph |
@@ -246,7 +248,7 @@ I modelli **non** sono ancora nel record salvato: entreranno nel `Workspace`
 | Servizi | ogni `#include` dei sorgenti di una modalità appartiene ai servizi dichiarati |
 | Dati | ogni `ws.<sezione>` usato è dichiarato (`resetAll` richiede tutte le sezioni) |
 | Collegamenti | ogni `open(AppId::X)` è dichiarato |
-| Run-Matrix | nessun riferimento a grafici, statistiche, tabelle, conversioni; le liste solo tramite `CollectionResolver` (mai `ws.lists`) |
+| Run-Matrix | nessun riferimento a grafici, statistiche, tabelle, conversioni; le liste solo tramite `CollectionResolver` (mai `ws.lists`); i dati di GRAPH solo tramite `graphcmd::execute` (mai `ws.graph`, `ws.view`, `SketchItem`, `CommandGraph`, `graph::`) e nessuna primitiva di disegno; deve aprire GRAPH per mostrare i comandi (v1.11.0) |
 | Stratificazione | gli header e i sorgenti del motore non includono UI/app; nessun ciclo di include |
 | Modelli | validazioni e helper dei modelli delle modalità future |
 

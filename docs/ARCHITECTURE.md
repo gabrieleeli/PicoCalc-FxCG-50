@@ -1,4 +1,4 @@
-# Architettura — v1.10.0
+# Architettura — v1.11.0
 
 Architettura di ogni modalità, servizi condivisi, dati scambiati e regole
 verificate dai test: [APPLICATIONS_ARCHITECTURE.md](APPLICATIONS_ARCHITECTURE.md).
@@ -22,9 +22,10 @@ verificate dai test: [APPLICATIONS_ARCHITECTURE.md](APPLICATIONS_ARCHITECTURE.md
 │ font_renderer, graphics   │ numerico ed esatto), exact, run_matrix,  │
 │ (Canvas RGB565, TileDiff) │ number_format, solvers, statistics,      │
 │ graph3d (superfici 3D)    │ math_engine, point_a, app_models,        │
-│                           │ graph_engine, graph_solve (GraphCore)    │
+│                           │ graph_engine, graph_solve (GraphCore),   │
+│                           │ graph_commands (comandi grafici, v1.11)  │
 ├───────────────────────────┴──────────────────────────────────────────┤
-│ File (file_store, graph_file, pict) → FatFs → protocollo SD (SPI)    │
+│ File (file_store, graph_file, pict, csv_io) → FatFs → protocollo SD  │
 │                                     → LittleFS (flash_fs) → flash    │
 ├──────────────────────────────────────────────────────────────────────┤
 │ Firmware (firmware.cpp): boot, migrazione, decoder tasti,            │
@@ -69,7 +70,7 @@ loop:
 memoria (A–Z, Ans/PreAns anche complessi, con la forma esatta), storia di
 Run-Matrix (con forma esatta e vista), funzioni Y1–Y20 e V-Window di Graph,
 stato di Graph (Setup, memorie V-Window e grafiche, SKETCH, progetto aperto),
-range, variabile, tipo e righe di Table, liste 1–6, stato di Equation,
+range, variabile, tipo e righe di Table, liste 1–26 con i sottonomi (v1.11.0), stato di Equation,
 conversazione AI e, dalla v1.10.0, le memorie di matrici e vettori
 (`CollectionMemory`: Mat A–Z, Vct A–Z, MatAns, VctAns, ListAns) e la modalità
 Input/Output. I file
@@ -87,10 +88,12 @@ metodi controllati (`storeMatrix`, `storeVector`, `storeList`,
 `storeCollectionAnswer`) che verificano tipo, forma e limiti della scheda. Così
 Run-Matrix non accede direttamente a `ws.lists` (lo verifica `architecture_test`).
 
-`serializeWorkspace()` produce un blob binario versionato (versione 6 dalla
-v1.10.0 con Input/Output, matrici, vettori e risultati collezione della
-cronologia; versione 5 dalla v1.9.0 con il 3D Graph e l'archivio dei file; le
-versioni 1–5 vengono ancora lette); `RecordStore` lo scrive in uno dei due
+`serializeWorkspace()` produce un blob binario versionato (versione 7 dalla
+v1.11.0 con Base-N, Simplify, formato CSV, List 7–26 e sottonomi, forme
+esatte delle memorie, base e ▶Simp della cronologia, grafici dei comandi;
+versione 6 dalla v1.10.0 con Input/Output, matrici, vettori e risultati
+collezione della cronologia; versione 5 dalla v1.9.0 con il 3D Graph e
+l'archivio dei file; le versioni 1–6 vengono ancora lette); `RecordStore` lo scrive in uno dei due
 slot flash con CRC-32 dell'intestazione e del contenuto. Formato in
 [STORAGE.md](STORAGE.md#workspace-in-flash).
 
@@ -135,7 +138,52 @@ testo ──Lexer (token con posizione)──▶ Parser ──▶ ast::Node (pos
   ciclo). `ast::SerializeMap` riporta la posizione del testo nell'albero
   dell'editor (`NaturalEditor::markError`).
 
-### Editor (v1.10.0)
+### Novità del motore e dei dati (v1.11.0)
+
+```
+Run-Matrix (riga di input)
+   │ "Plot 1,2", "Graph Y=x^2"…           │ espressione (anche ▶Simp, Base-N)
+   ▼                                      ▼
+graph_commands (motore, senza UI)     run_matrix::evaluateEntry
+   │ argomenti → parseExpression          │ parseExpression(testo, base)
+   │            + evaluateReal            │ EvalContext::integerBase
+   ▼                                      ▼
+ws.view, ws.graph.sketch,             CalcValue / exact::Value
+ws.graph.commandGraphs                     │
+   │ (GraphState::commandScreen)           ▼
+   ▼                                   cronologia (base, frazione ▶Simp)
+GRAPH: GraphEngine::build(…, commands) → curve e SKETCH disegnati da GRAPH
+```
+
+- **Comandi grafici**: Run-Matrix non disegna. `graphcmd::execute` separa gli
+  argomenti, li valuta con l'unico parser/valutatore e scrive V-Window,
+  elementi SKETCH e grafici dei comandi nel workspace (tutto o niente);
+  Run-Matrix apre GRAPH (collegamento dichiarato), che li disegna con il suo
+  motore (`GraphSource::commands`) e il suo renderer e con EXIT torna a
+  Run-Matrix. `architecture_test` lo verifica (nessun `ws.graph`, `SketchItem`,
+  `graph::` o primitiva di disegno nei sorgenti di Run-Matrix).
+- **Base-N**: il lexer riceve la base (numeri senza prefisso, cifre A–F,
+  prefissi 0d/0x/0b/0o), il valutatore applica la semantica intera a 32 bit
+  quando `EvalContext::integerBase` è impostato (`combine()`: + − × ÷ interi,
+  bit a bit per And/Or/Xor/Xnor, Not/Neg); lo stesso albero e lo stesso
+  valutatore del calcolo normale.
+- **CSV**: `csv_io` (motore) codifica/decodifica e scrive con
+  `files::writeAtomic` su `files::FileSystem` (microSD o LittleFS);
+  `loadLists`/`loadMatrix` scrivono nel workspace con i controlli della scheda.
+- **Liste**: 26 liste nel workspace (`lists`, `listNames`), budget di tutte le
+  liste (`limits::kListStoreElements`), metodi `setList`, `checkListLength`,
+  `listName`, `setListName`; il registro associa membri e metodi alla
+  sezione dati *Lists* (`dataSectionOfMember`).
+- **Forme esatte delle memorie**: `CalcValue::exact` (fino a 64 elementi); il
+  dominio esatto di `CollEval` le usa al posto dei soli interi.
+
+### Editor (v1.10.0, v1.11.0)
+
+Dalla v1.11.0 l'editor ha anche la sovrascrittura in Line (`setOverwrite`),
+l'argomento di SHIFT+INS in Math (`beginArgument`: il prossimo modello prende
+il valore a destra) e scrive `⌟` con il tasto frazione in Line; il renderer
+disegna il cursore in tre forme (`CursorTarget::cursorStyle`).
+
 
 `NaturalEditor` ha due modalità (`setLinear`): Math (modelli 2D, importazione
 strutturale) e Line (solo token, testo lineare). La selezione CLIP è un
@@ -167,8 +215,9 @@ intercetta ogni eccezione residua (`oom_test`).
   punti delle curve di GRAPH, layer di GRAPH durante TRACE, immagini, mesh e
   z-buffer 3D, liste, cronologia, workspace serializzato. Regole e mappa:
   [PICO_PLUS_2W.md](PICO_PLUS_2W.md).
-- Limiti (`limits.hpp`): persistenti per scheda (Pico 2 W: storia 40, liste 255;
-  Pico Plus 2 W: storia 200, liste 999), RAM dai pool presenti (curve
+- Limiti (`limits.hpp`): persistenti per scheda (Pico 2 W: storia 40, liste
+  255 e 1 530 elementi in tutte le 26 liste; Pico Plus 2 W: storia 200, liste
+  999 e 20 000 elementi in tutto), RAM dai pool presenti (curve
   6000/24 000 o 40 000/400 000 punti, PICT 96 KB o 1 MB, 3D griglia 24 o 128),
   chat 30 messaggi, risposta HTTP 16 KB, tabella 999 righe.
 - Limiti contro l'esaurimento dello stack: espressioni di 320 token e 32 livelli

@@ -91,11 +91,13 @@ void GraphApp::enter(Context& ctx) {
     }
     mode_ = Mode::View; action_ = Action::None;
     // From the main menu GRAPH opens on the relation list (fx-CG50); TABLE's
-    // GPH-CON/GPH-PLT open the graph screen directly.
-    screen_ = tableDraw(ctx) ? Screen::Plot : Screen::List;
+    // GPH-CON/GPH-PLT and the graphic commands of Run-Matrix (v1.11.0) open
+    // the graph screen directly.
+    screen_ = tableDraw(ctx) || ctx.ws.graph.commandScreen ? Screen::Plot : Screen::List;
 }
 void GraphApp::leave(Context& ctx) {
     ctx.ws.table.draw = TableRange::Draw::None;
+    ctx.ws.graph.commandScreen = false;
     // Release the sampled curves while other modes run (heap for TLS, lists...).
     curves_.clear(); curves_.shrink_to_fit();
     shade_.clear(); built_ = false;
@@ -286,7 +288,7 @@ void GraphApp::editKey(Context& ctx, const KeyEvent& ev) {
         return;
     case Key::F5: editor_.insertAbs(); return;
     case Key::F6: case Key::Optn:
-        showMenu(Menu::EditMore, "INSERISCI", {"[ ]  intervallo ,[a,b]", "[A=]  sovrapposizione", "List 1-6", "\xCF\x80", "\xCE\xB8", "x\xC2\xB2", "log\xE2\x82\x90" "b", "e^\xE2\x96\xA1", "d/dx", "\xE2\x88\xAB" "dx", "\xE2\x89\xA5  \xE2\x89\xA4  =", "GRAPH: Y r Xt Yt X"});
+        showMenu(Menu::EditMore, "INSERISCI", {"[ ]  intervallo ,[a,b]", "[A=]  sovrapposizione", "List 1-26", "\xCF\x80", "\xCE\xB8", "x\xC2\xB2", "log\xE2\x82\x90" "b", "e^\xE2\x96\xA1", "d/dx", "\xE2\x88\xAB" "dx", "\xE2\x89\xA5  \xE2\x89\xA4  =", "GRAPH: Y r Xt Yt X"});
         return;
     case Key::Vars: showMenu(Menu::EditVars, "VARS GRAPH", {"Y  (Y=, Y>...)", "r  (polare)", "Xt (parametrica)", "Yt (parametrica)", "X  (X=, X>...)"}); return;
     default: return;
@@ -654,7 +656,12 @@ void GraphApp::menuChoice(Context& ctx, Menu menu, int c) {
         switch (c) {
         case 0: editor_.insertText(",["); editor_.insertText(","); editor_.insertText("]"); editor_.moveLeft(); editor_.moveLeft(); return;
         case 1: editor_.insertText(",[A="); editor_.insertText("]"); editor_.moveLeft(); return;
-        case 2: showMenu(Menu::EditList, "LIST", {"List 1", "List 2", "List 3", "List 4", "List 5", "List 6"}); return;
+        case 2: {
+            std::vector<std::string> names;
+            for (std::size_t i = 1; i <= Workspace::ListCount; ++i) names.push_back("List " + std::to_string(i));
+            showMenu(Menu::EditList, "LIST", std::move(names));
+            return;
+        }
         case 3: editor_.insertText("pi"); return;
         case 4: editor_.insertText("theta"); return;
         case 5: editor_.insertSquare(); return;

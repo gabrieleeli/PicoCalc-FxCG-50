@@ -42,6 +42,7 @@ ast::NodePtr cloneTree(const NaturalNode& node);
 //    una riga di token e il testo lineare si importa cosi' com'e'.
 class NaturalEditor {
 public:
+    using NodePtrAlias = std::shared_ptr<NaturalNode>;
     // Input limits (bounded recursion and memory on the RP2350): an edit that
     // would exceed them is undone and raises "Stack ERROR" / "Memory ERROR".
     static constexpr std::size_t MaxTemplateDepth = 12;   // nested template boxes
@@ -85,6 +86,18 @@ public:
     // Modalita' di input (Setup "Input/Output" della fx-CG50); il cambio converte l'input.
     void setLinear(bool linear);
     bool linear() const noexcept { return linear_; }
+
+    // ---- INS (fx-CG50 SHIFT DEL, v1.11.0)
+    // Modalita' Line: alterna inserimento e sovrascrittura (il carattere sotto il
+    // cursore viene sostituito). In Math non c'e' sovrascrittura.
+    void setOverwrite(bool on) noexcept { overwrite_ = on && linear_; }
+    bool overwrite() const noexcept { return overwrite_ && linear_; }
+    // Modalita' Math (SHIFT+INS): il prossimo modello (√, frazione, |x|, log…)
+    // prende come argomento il valore o l'espressione a destra del cursore:
+    // 1+(2+3)+4 con il cursore prima di "(" diventa 1+√(2+3)+4.
+    void beginArgument() noexcept { argumentPending_ = !linear_; }
+    bool argumentPending() const noexcept { return argumentPending_; }
+    void cancelArgument() noexcept { argumentPending_ = false; }
 
     // ---- CLIP: selezione di una parte dell'input (fx-CG50 SHIFT 8).
     // La selezione resta in una riga dell'albero, come il cursore della modalita'
@@ -140,6 +153,8 @@ private:
     bool autoRootParenPending_{};
     bool autoRootParenOpened_{};
     bool linear_{};
+    bool overwrite_{};
+    bool argumentPending_{};
     bool selecting_{};
     std::size_t anchor_{};          // altro estremo della selezione, nella riga attiva
     Range errorMark_;
@@ -153,6 +168,8 @@ private:
     void insertBox(ast::NodePtr box, std::size_t focusChild);
     void insertNode(ast::NodePtr node);
     void insertLinear(const std::string& text, std::size_t cursorBack = 0);   // modello in modalita' Line
+    void overwriteAtCursor();       // sovrascrittura in Line: toglie il token sotto il cursore
+    NodePtrAlias takeArgument();    // SHIFT+INS: il valore a destra del cursore (Row) o nullptr
     void mergeWord();
     void pushUndo();
     void checkLimits();   // rolls back the edit recorded by the last pushUndo() and throws

@@ -1,7 +1,9 @@
-// STATISTICS: list editor (List 1-6), 1-Var / 2-Var / regressions, statistical
-// graphs (scatter, xyLine, histogram, box plot, regression curve), DIST
-// calculators and Z/t tests and intervals.
+// STATISTICS: list editor (List 1-26 con i sottonomi della riga SUB e i file
+// CSV), 1-Var / 2-Var / regressions sulle liste scelte nel SET (XList, YList),
+// statistical graphs (scatter, xyLine, histogram, box plot, regression curve),
+// DIST calculators and Z/t tests and intervals.
 #include "apps.hpp"
+#include "csv_io.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -12,10 +14,27 @@ using namespace ui::theme;
 using stats::RegType;
 
 namespace {
-const std::vector<std::string> kGraphMenu = {"Scatter (List1, List2)", "xyLine (List1, List2)", "Histogram (List1)", "Box plot (List1)"};
-const std::vector<std::string> kCalcMenu = {"1-Var (List1)", "2-Var (List1, List2)", "Reg ax+b", "Reg Med-Med", "Reg X\xC2\xB2", "Reg X\xC2\xB3", "Reg X\xE2\x81\xB4", "Reg Log", "Reg Exp a\xC2\xB7" "e^bx", "Reg ab^x", "Reg Power"};
 const std::vector<std::string> kDistMenu = {"Normal PD", "Normal CD", "Inverse Normal", "Binomial PD", "Binomial CD", "Poisson PD", "Poisson CD", "Student-t CD", "\xCF\x87\xC2\xB2 CD", "F CD"};
-const std::vector<std::string> kTestMenu = {"1-Sample Z Test (List1)", "1-Sample t Test (List1)", "1-Sample Z Interval (List1)", "1-Sample t Interval (List1)"};
+std::string listLabel(std::size_t i) { return "List" + std::to_string(i + 1); }
+// Menu con le liste del SET (XList, YList) nei titoli, come la fx-CG50.
+std::vector<std::string> graphMenu(const Settings& s) {
+    const std::string x = listLabel(s.statXList), y = listLabel(s.statYList);
+    return {"Scatter (" + x + ", " + y + ")", "xyLine (" + x + ", " + y + ")", "Histogram (" + x + ")", "Box plot (" + x + ")"};
+}
+std::vector<std::string> calcMenu(const Settings& s) {
+    const std::string x = listLabel(s.statXList), y = listLabel(s.statYList);
+    return {"1-Var (" + x + ")", "2-Var (" + x + ", " + y + ")", "Reg ax+b", "Reg Med-Med", "Reg X\xC2\xB2", "Reg X\xC2\xB3", "Reg X\xE2\x81\xB4",
+            "Reg Log", "Reg Exp a\xC2\xB7" "e^bx", "Reg ab^x", "Reg Power", "SET  XList / YList"};
+}
+std::vector<std::string> testMenu(const Settings& s) {
+    const std::string x = " (" + listLabel(s.statXList) + ")";
+    return {"1-Sample Z Test" + x, "1-Sample t Test" + x, "1-Sample Z Interval" + x, "1-Sample t Interval" + x};
+}
+std::vector<std::string> listChoices() {
+    std::vector<std::string> v;
+    for (std::size_t i = 0; i < Workspace::ListCount; ++i) v.push_back("List " + std::to_string(i + 1));
+    return v;
+}
 FormField num(const char* label, const char* value) { return {label, value, FormField::Type::Number, {}, 0}; }
 FormField tail() { return {"\xCE\xBC", "\xE2\x89\xA0", FormField::Type::Choice, {"\xE2\x89\xA0", "<", ">"}, 0}; }
 } // namespace
@@ -24,17 +43,23 @@ void StatisticsApp::enter(Context& ctx) { setupGrid(ctx); screen_ = Screen::List
 
 void StatisticsApp::setupGrid(Context& ctx) {
     auto& lists = ctx.ws.lists;
+    Workspace* ws = &ctx.ws;
     grid_.cols = static_cast<int>(Workspace::ListCount);
     grid_.visibleCols = 3;
     grid_.growRows = true;
+    grid_.scrollMarks = true;
     std::size_t longest = 0; for (const auto& l : lists) longest = std::max(longest, l.size());
     grid_.rows = static_cast<int>(std::max<std::size_t>(1, longest));
     grid_.header = [](int c) { return "List " + std::to_string(c + 1); };
+    // Riga SUB: sottonomi delle liste (fx-CG50, fino a 8 caratteri).
+    grid_.subHeader = [ws](int c) { return ws->listName(static_cast<std::size_t>(c)); };
+    grid_.setSubHeader = [ws, &ctx](int c, const std::string& name) { ws->setListName(static_cast<std::size_t>(c), name); ctx.markDirty(); };
     grid_.columnLength = [&lists](int c) { return static_cast<int>(lists[static_cast<std::size_t>(c)].size()); };
     grid_.get = [&lists](int r, int c, double& v) { const auto& l = lists[static_cast<std::size_t>(c)]; if (static_cast<std::size_t>(r) >= l.size()) return false; v = l[static_cast<std::size_t>(r)]; return true; };
-    grid_.set = [&lists, &ctx](int r, int c, double v) {
+    grid_.set = [&lists, ws, &ctx](int r, int c, double v) {
         auto& l = lists[static_cast<std::size_t>(c)];
-        if (static_cast<std::size_t>(r) >= Workspace::MaxListLength) throw MathError("Dimension ERROR: massimo 255 elementi");
+        // Lunghezza della lista e budget di tutte le liste della scheda (limits.hpp).
+        if (static_cast<std::size_t>(r) >= l.size()) ws->checkListLength(static_cast<std::size_t>(c), static_cast<std::size_t>(r) + 1);
         if (static_cast<std::size_t>(r) >= l.size()) l.resize(static_cast<std::size_t>(r) + 1, 0.0);
         l[static_cast<std::size_t>(r)] = v; ctx.markDirty();
     };
@@ -45,13 +70,15 @@ void StatisticsApp::setupGrid(Context& ctx) {
 }
 
 void StatisticsApp::runCalc(Context& ctx, int choice) {
-    const auto& L = ctx.ws.lists;
+    const Settings& st = ctx.ws.settings;
+    const auto& X = ctx.ws.lists[st.statXList];
+    const auto& Y = ctx.ws.lists[st.statYList];
     const DisplayFormat f = ctx.ws.settings.display;
     auto F = [&](double v) { return formatReal(v, f); };
     results_.clear(); hasReg_ = false;
     if (choice == 0) {
-        const auto o = stats::oneVariable(L[0]);
-        results_.title = "1-Variable (List1)";
+        const auto o = stats::oneVariable(X);
+        results_.title = "1-Variable (" + listLabel(st.statXList) + ")";
         results_.add("x\xCC\x84", F(o.mean)); results_.add("\xCE\xA3x", F(o.sum)); results_.add("\xCE\xA3x\xC2\xB2", F(o.sumSq));
         results_.add("\xCF\x83x", F(o.popSd)); results_.add("sx", F(o.sampleSd)); results_.add("n", F(o.n));
         results_.add("minX", F(o.min)); results_.add("Q1", F(o.q1)); results_.add("Med", F(o.median)); results_.add("Q3", F(o.q3)); results_.add("maxX", F(o.max));
@@ -59,14 +86,14 @@ void StatisticsApp::runCalc(Context& ctx, int choice) {
         if (o.modes.size() > 4) modes += ", ...";
         results_.add("Mod", modes); results_.add("Mod:F", F(o.modeCount));
     } else if (choice == 1) {
-        const auto t = stats::twoVariable(L[0], L[1]);
-        results_.title = "2-Variable (List1, List2)";
+        const auto t = stats::twoVariable(X, Y);
+        results_.title = "2-Variable (" + listLabel(st.statXList) + ", " + listLabel(st.statYList) + ")";
         results_.add("x\xCC\x84", F(t.meanX)); results_.add("\xCE\xA3x", F(t.sumX)); results_.add("\xCE\xA3x\xC2\xB2", F(t.sumX2)); results_.add("\xCF\x83x", F(t.popSdX)); results_.add("sx", F(t.sampleSdX)); results_.add("n", F(t.n));
         results_.add("y\xCC\x84", F(t.meanY)); results_.add("\xCE\xA3y", F(t.sumY)); results_.add("\xCE\xA3y\xC2\xB2", F(t.sumY2)); results_.add("\xCF\x83y", F(t.popSdY)); results_.add("sy", F(t.sampleSdY));
         results_.add("\xCE\xA3xy", F(t.sumXY)); results_.add("minX", F(t.minX)); results_.add("maxX", F(t.maxX)); results_.add("minY", F(t.minY)); results_.add("maxY", F(t.maxY));
     } else {
         const auto type = static_cast<RegType>(choice - 2);
-        reg_ = stats::regress(type, L[0], L[1]);
+        reg_ = stats::regress(type, X, Y);
         hasReg_ = true;
         results_.title = std::string("Regressione ") + stats::regFormula(type);
         static const char* names[] = {"a", "b", "c", "d", "e"};
@@ -123,14 +150,16 @@ void StatisticsApp::computeForm(Context& ctx) {
     case 109: results_.add("p", F(stats::fCd(bound(n(0)), bound(n(1)), n(2), n(3)))); break;
     case 200: case 201: {
         const int t = form_.fields[0].choice == 0 ? 0 : form_.fields[0].choice == 1 ? -1 : 1;
-        const auto r = formKind_ == 200 ? stats::zTest1(ctx.ws.lists[0], n(1), n(2), t) : stats::tTest1(ctx.ws.lists[0], n(1), t);
+        const auto& X = ctx.ws.lists[ctx.ws.settings.statXList];
+        const auto r = formKind_ == 200 ? stats::zTest1(X, n(1), n(2), t) : stats::tTest1(X, n(1), t);
         results_.add(formKind_ == 200 ? "z" : "t", F(r.statistic)); results_.add("p", F(r.p));
         if (formKind_ == 201) results_.add("df", F(r.df));
         results_.add("x\xCC\x84", F(r.mean)); results_.add("sx", F(r.sd)); results_.add("n", F(r.n));
         break;
     }
     case 202: case 203: {
-        const auto iv = formKind_ == 202 ? stats::zInterval(ctx.ws.lists[0], n(1), n(0)) : stats::tInterval(ctx.ws.lists[0], n(0));
+        const auto& X = ctx.ws.lists[ctx.ws.settings.statXList];
+        const auto iv = formKind_ == 202 ? stats::zInterval(X, n(1), n(0)) : stats::tInterval(X, n(0));
         results_.add("Left", F(iv.lower)); results_.add("Right", F(iv.upper)); results_.add("x\xCC\x84", F(iv.mean)); results_.add("n", F(iv.n));
         break;
     }
@@ -139,16 +168,23 @@ void StatisticsApp::computeForm(Context& ctx) {
 }
 
 void StatisticsApp::key(Context& ctx, const KeyEvent& ev) {
+    if (dialog_.active()) {
+        if (dialog_.key(ev) == 1) fileChosen(ctx);
+        return;
+    }
     if (menu_.open) {
         const int choice = menu_.key(ev);
         if (choice < 0) return;
+        const Settings& st = ctx.ws.settings;
         if (menuKind_ == 1) {
             graph_ = static_cast<GraphKind>(choice);
-            if (ctx.ws.lists[0].empty()) throw MathError("Dimension ERROR: List1 vuota");
-            if ((graph_ == GraphKind::Scatter || graph_ == GraphKind::XYLine) && ctx.ws.lists[0].size() != ctx.ws.lists[1].size())
-                throw MathError("Dimension ERROR: List1 e List2 di lunghezza diversa");
+            if (ctx.ws.lists[st.statXList].empty()) throw MathError("Dimension ERROR: " + listLabel(st.statXList) + " vuota");
+            if ((graph_ == GraphKind::Scatter || graph_ == GraphKind::XYLine) && ctx.ws.lists[st.statXList].size() != ctx.ws.lists[st.statYList].size())
+                throw MathError("Dimension ERROR: " + listLabel(st.statXList) + " e " + listLabel(st.statYList) + " di lunghezza diversa");
             screen_ = Screen::Graph;
-        } else if (menuKind_ == 2) runCalc(ctx, choice);
+        } else if (menuKind_ == 2 && choice == 11) openSet(ctx);
+        else if (menuKind_ == 2) runCalc(ctx, choice);
+        else if (menuKind_ == 5) listOption(ctx, choice);
         else if (menuKind_ == 3) openDist(choice);
         else if (menuKind_ == 4) openTest(choice);
         return;
@@ -157,17 +193,23 @@ void StatisticsApp::key(Context& ctx, const KeyEvent& ev) {
     case Screen::Lists:
         if (grid_.editing()) { (void)grid_.key(ctx, ev); return; }
         switch (ev.key) {
-        case Key::F1: menu_.show("GRAPH", kGraphMenu); menuKind_ = 1; return;
-        case Key::F2: menu_.show("CALC", kCalcMenu); menuKind_ = 2; return;
-        case Key::F3: menu_.show("TEST / INTR", kTestMenu); menuKind_ = 4; return;
+        case Key::F1: menu_.show("GRAPH", graphMenu(ctx.ws.settings)); menuKind_ = 1; return;
+        case Key::F2: menu_.show("CALC", calcMenu(ctx.ws.settings)); menuKind_ = 2; return;
+        case Key::F3: menu_.show("TEST / INTR", testMenu(ctx.ws.settings)); menuKind_ = 4; return;
         case Key::F4: menu_.show("DIST", kDistMenu); menuKind_ = 3; return;
+        case Key::Optn:
+            menu_.show("LIST", {"CSV LOAD  (da List " + std::to_string(grid_.col + 1) + ")", "CSV SAVE\xC2\xB7" "AS", "CSV SET  formato",
+                                "DEL-ALL  tutte le liste", "SET  XList / YList"});
+            menuKind_ = 5;
+            return;
         case Key::F5: {   // sort ascending (SHIFT: descending)
+            if (grid_.row == CellGrid::SubRow) return;
             auto& l = ctx.ws.lists[static_cast<std::size_t>(grid_.col)];
             if (ctx.shift()) std::sort(l.begin(), l.end(), std::greater<>()); else std::sort(l.begin(), l.end());
             ctx.markDirty(); return;
         }
         case Key::F6: ctx.ws.lists[static_cast<std::size_t>(grid_.col)].clear(); grid_.row = 0; ctx.markDirty(); return;
-        case Key::Exit: ctx.home(); return;
+        case Key::Exit: if (grid_.row == CellGrid::SubRow) { grid_.row = 0; return; } ctx.home(); return;
         default: break;
         }
         (void)grid_.key(ctx, ev);
@@ -191,6 +233,25 @@ void StatisticsApp::key(Context& ctx, const KeyEvent& ev) {
     case Screen::Graph:
         if (ev.is(Key::Exit) || ev.is(Key::F6) || ev.is(Key::Exe)) screen_ = graph_ == GraphKind::Regression ? Screen::Results : Screen::Lists;
         return;
+    case Screen::Set:
+        if (form_.editing()) { (void)form_.key(ctx, ev); return; }
+        if (ev.is(Key::Exe) || ev.is(Key::Exit) || ev.is(Key::F1)) {
+            Settings& st = ctx.ws.settings;
+            if (csvSet_) {
+                const csv::Format f{form_.fields[0].choice == 1 ? ';' : ',', form_.fields[1].choice == 1 ? ',' : '.'};
+                const std::string bad = csv::validate(f);
+                if (!bad.empty()) throw MathError("Argument ERROR: " + bad);
+                st.csvSeparator = f.separator; st.csvDecimal = f.decimal;
+            } else {
+                st.statXList = static_cast<std::uint8_t>(form_.fields[0].choice);
+                st.statYList = static_cast<std::uint8_t>(form_.fields[1].choice);
+            }
+            ctx.markDirty();
+            screen_ = Screen::Lists;
+            return;
+        }
+        (void)form_.key(ctx, ev);
+        return;
     case Screen::Form:
         if (form_.editing()) { (void)form_.key(ctx, ev); return; }
         if (ev.is(Key::F1) || ev.is(Key::F6)) { computeForm(ctx); return; }
@@ -200,11 +261,73 @@ void StatisticsApp::key(Context& ctx, const KeyEvent& ev) {
     }
 }
 
+// ---------------------------------------------------------------- SET e file CSV
+void StatisticsApp::openSet(Context& ctx, bool csvFormat) {
+    const Settings& st = ctx.ws.settings;
+    csvSet_ = csvFormat;
+    if (csvFormat) {
+        form_.fields = {{"CSV Separator", st.csvSeparator == ';' ? ";" : ",", FormField::Type::Choice, {",", ";"}, st.csvSeparator == ';' ? 1 : 0},
+                        {"CSV Decimal", st.csvDecimal == ',' ? "," : ".", FormField::Type::Choice, {".", ","}, st.csvDecimal == ',' ? 1 : 0}};
+    } else {
+        const auto lists = listChoices();
+        form_.fields = {{"XList", lists[st.statXList], FormField::Type::Choice, lists, st.statXList},
+                        {"YList", lists[st.statYList], FormField::Type::Choice, lists, st.statYList}};
+    }
+    form_.selected = 0;
+    screen_ = Screen::Set;
+}
+void StatisticsApp::listOption(Context& ctx, int choice) {
+    switch (choice) {
+    case 0: case 1: {
+        files::FileSystem* fs = userFiles(ctx);
+        if (!fs) throw MathError("Storage ERROR: archivio file non disponibile in questa build");
+        saving_ = choice == 1;
+        if (saving_) { dialog_.openName("CSV SAVE\xC2\xB7" "AS  liste 1-26", ""); return; }
+        std::vector<std::string> names;
+        const files::Status st = csv::list(*fs, names);
+        if (st != files::Status::Ok) throw MathError(std::string("Storage ERROR: ") + files::statusMessage(st));
+        dialog_.openList("CSV LOAD  da List " + std::to_string(grid_.col + 1), std::move(names));
+        return;
+    }
+    case 2: openSet(ctx, true); return;
+    case 3:
+        for (auto& l : ctx.ws.lists) l.clear();
+        grid_.row = 0;
+        ctx.markDirty();
+        ctx.toast("Liste 1-26 cancellate");
+        return;
+    default: openSet(ctx); return;
+    }
+}
+void StatisticsApp::fileChosen(Context& ctx) {
+    files::FileSystem* fs = userFiles(ctx);
+    if (!fs) throw MathError("Storage ERROR: archivio file non disponibile in questa build");
+    const std::string name = dialog_.name();
+    // SAVE·AS se la finestra chiedeva un nome, altrimenti LOAD.
+    if (saving_) {
+        saving_ = false;
+        const files::Status st = csv::save(*fs, name, csv::encodeLists(ctx.ws));
+        if (st != files::Status::Ok) throw MathError(std::string("Storage ERROR: ") + files::statusMessage(st));
+        ctx.toast("Salvato " + name + ".csv");
+        return;
+    }
+    std::vector<std::uint8_t> bytes;
+    const files::Status st = csv::load(*fs, name, bytes);
+    if (st != files::Status::Ok) throw MathError(std::string("Storage ERROR: ") + files::statusMessage(st));
+    const std::size_t first = static_cast<std::size_t>(grid_.col);
+    const csv::Table t = csv::decode(bytes.data(), bytes.size(), csv::formatOf(ctx.ws), Workspace::MaxListLength, Workspace::ListCount - first);
+    const std::size_t n = csv::loadLists(ctx.ws, first, t);
+    ctx.markDirty();
+    setupGrid(ctx);
+    ctx.toast(std::to_string(n) + (n == 1 ? " lista caricata da " : " liste caricate da ") + name + ".csv");
+}
+
 void StatisticsApp::drawGraph(Context& ctx, gfx::Canvas& c) {
     const auto& L = ctx.ws.lists;
     const int left = 52, right = ui::ScreenW - 8, top = ui::ContentTop + 8, bottom = ui::ContentBottom - 26;
-    const std::vector<double>& xs = L[0];
-    std::vector<double> ys = (graph_ == GraphKind::Scatter || graph_ == GraphKind::XYLine || graph_ == GraphKind::Regression) ? L[1] : std::vector<double>{};
+    const std::vector<double>& xs = L[ctx.ws.settings.statXList];
+    std::vector<double> ys = (graph_ == GraphKind::Scatter || graph_ == GraphKind::XYLine || graph_ == GraphKind::Regression) ? L[ctx.ws.settings.statYList] : std::vector<double>{};
+    if (xs.empty()) return;
     double xmin = *std::min_element(xs.begin(), xs.end()), xmax = *std::max_element(xs.begin(), xs.end());
     if (xmin == xmax) { xmin -= 1; xmax += 1; }
     double ymin = 0, ymax = 1;
@@ -307,8 +430,17 @@ void StatisticsApp::draw(Context& ctx, gfx::Canvas& c) {
         ui::softKeys(c, k);
         break;
     }
+    case Screen::Set: {
+        c.rect(0, top, ui::ScreenW, 20, SelectSoft, true);
+        ui::text(c, 6, top + 2, "SET  liste di CALC, GRAPH e TEST", Ink);
+        form_.draw(c, top + 24, top + 24 + 2 * 20);
+        const char* k[6] = {"OK", nullptr, nullptr, nullptr, nullptr, nullptr};
+        ui::softKeys(c, k);
+        break;
+    }
     case Screen::Form: {
-        const std::vector<std::string>& names = formKind_ >= 200 ? kTestMenu : kDistMenu;
+        const std::vector<std::string> tests = testMenu(ctx.ws.settings);
+        const std::vector<std::string>& names = formKind_ >= 200 ? tests : kDistMenu;
         const int idx = formKind_ % 100;
         c.rect(0, top, ui::ScreenW, 20, SelectSoft, true);
         ui::textFit(c, 6, top + 2, names[static_cast<std::size_t>(idx)], ui::ScreenW - 12, Ink);
@@ -321,5 +453,6 @@ void StatisticsApp::draw(Context& ctx, gfx::Canvas& c) {
     }
     }
     menu_.draw(c);
+    dialog_.draw(c);
 }
 } // namespace fx::app

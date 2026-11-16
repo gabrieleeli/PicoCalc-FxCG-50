@@ -3,6 +3,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -247,9 +248,12 @@ std::string decode(const std::string& text, Project& out) {
             if (ok) { p.tableStart = t[0]; p.tableEnd = t[1]; p.tableStep = t[2]; }
         } else if (key == "tablevar") {
             if (value == "Range") p.tableFromList = false;
-            else if (value.size() == 5 && value.compare(0, 4, "List") == 0 && value[4] >= '1' && value[4] <= '6') {
+            else if (value.size() >= 5 && value.size() <= 6 && value.compare(0, 4, "List") == 0 && value[4] != '0' &&
+                     std::all_of(value.begin() + 4, value.end(), [](char c) { return c >= '0' && c <= '9'; }) &&
+                     std::atoi(value.c_str() + 4) >= 1 && std::atoi(value.c_str() + 4) <= 26) {
+                // List 1..26 (v1.11.0; le versioni precedenti scrivono List 1..6)
                 p.tableFromList = true;
-                p.tableList = static_cast<std::uint8_t>(value[4] - '1');
+                p.tableList = static_cast<std::uint8_t>(std::atoi(value.c_str() + 4) - 1);
             } else ok = false;
         } else if (key == "tablefunc") {
             ok = parseGraphTypeName(value, p.tableFunc) && (p.tableFunc == GraphType::Y || p.tableFunc == GraphType::Polar || p.tableFunc == GraphType::Param);

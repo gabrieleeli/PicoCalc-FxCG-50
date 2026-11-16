@@ -12,10 +12,35 @@ const char* valueTypeName(ValueType t) noexcept {
     return "?";
 }
 
+namespace {
+bool integralValue(double d) noexcept { return d > -9e15 && d < 9e15 && d == static_cast<double>(static_cast<long long>(d)); }
+} // namespace
 void CalcValue::set(std::size_t i, Complex z) {
     re[i] = z.real();
     if (z.imag() != 0.0 && im.empty()) im.assign(re.size(), 0.0);   // puo' lanciare std::bad_alloc
     if (!im.empty()) im[i] = z.imag();
+    if (!exact.empty()) {
+        if (z.imag() == 0.0 && integralValue(z.real()) && exact.size() == re.size())
+            exact[i] = exact::Value::fromInteger(static_cast<long long>(z.real()));
+        else { exact.clear(); exact.shrink_to_fit(); }
+    }
+}
+void CalcValue::setExact(std::size_t i, const exact::Value& v) {
+    re[i] = v.toDouble();
+    if (!im.empty()) im[i] = 0.0;
+    if (re.size() > ExactElements) { exact.clear(); return; }
+    if (exact.size() != re.size()) {
+        // Le forme degli altri elementi esistono solo se sono interi.
+        std::vector<exact::Value> forms(re.size());
+        for (std::size_t k = 0; k < re.size(); ++k) {
+            if (k == i) continue;
+            const double d = re[k];
+            if ((!im.empty() && im[k] != 0.0) || !integralValue(d)) { exact.clear(); return; }
+            forms[k] = exact::Value::fromInteger(static_cast<long long>(d));
+        }
+        exact = std::move(forms);
+    }
+    exact[i] = v;
 }
 void CalcValue::normalize() {
     if (im.empty()) return;

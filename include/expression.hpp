@@ -103,6 +103,11 @@ struct EvalContext {
     const FunctionResolver* functions{};
     const CollectionResolver* collections{};
     EvalInfo* info{};
+    // Modalita' Base-N intera della fx-CG50 (v1.11.0): 0 = calcolo normale,
+    // 2/8/10/16 = interi a 32 bit in complemento a due (+ − × ÷ interi, And,
+    // Or, Xor, Xnor bit a bit, Not, Neg; fuori intervallo: Math ERROR). Va
+    // usata con complexMode Real e con un albero di parseExpression(testo, base).
+    std::uint8_t integerBase{0};
     EvalContext& bind(const char* name, double value);
 };
 
@@ -123,6 +128,15 @@ constexpr int MaxExpressionNesting = 32;           // parentheses, signs, expone
 // contiene collezioni (ast::FlagCollection). Lancia SyntaxError con la
 // posizione del token che non si puo' usare, o MathError per i limiti sopra.
 ast::NodePtr parseExpression(const std::string& expression);
+// Base-N (v1.11.0): i numeri senza prefisso sono interi a 32 bit nella base
+// indicata (2, 8, 10, 16; in 16 una parola di sole cifre A-F e' un numero);
+// prefissi 0d, 0x, 0b, 0o per un singolo numero; Hex/Bin/Oct in complemento
+// a due (FFFFFFFF = -1). integerBase 0 equivale a parseExpression(testo).
+//
+// Sintassi aggiunta nella v1.11.0 anche nel calcolo normale: simboli
+// ingegneristici postfissi "#k" "#M" "#G" "#T" "#m" "#u" (µ) "#n" "#p" "#f"
+// (2#k = 2000), frazioni lineari "2⌟3" e "1⌟2⌟3", Xnor e Neg(.
+ast::NodePtr parseExpression(const std::string& expression, unsigned integerBase);
 
 // Stack bytes one evaluation may use before it stops with "Stack ERROR". This
 // is a safety net behind the parser limits; the firmware sets it at build time

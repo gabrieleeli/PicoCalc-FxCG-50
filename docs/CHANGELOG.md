@@ -1,5 +1,95 @@
 # Changelog
 
+## v1.11.0 — completamento di Run-Matrix: List 1–26, CSV, MatAns/ListAns, Line (INS, ⌟), simboli ingegneristici, Simp, Base-N, comandi grafici
+
+Base: tag `v1.10.0` (commit `dfdb08b`, uguale a `origin/main`). Analisi delle
+fonti: [reports/ANALISI_FONTI_v1.11.0.md](reports/ANALISI_FONTI_v1.11.0.md);
+rapporto: [reports/SVILUPPO_v1.11.0.md](reports/SVILUPPO_v1.11.0.md).
+**Nessuna prova su hardware fisico**: procedura
+[HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md).
+
+### Liste
+- **List 1–26** nei calcoli (`List 26[3]`, `→List 20`), in Statistics (editor
+  con 26 colonne, SET XList/YList per CALC, GRAPH e TEST) e in GRAPH/TABLE
+  (grafici da lista, variabile della tabella, LISTMEM, progetti `.pcgraph`).
+- **Sottonomi** delle liste (riga SUB dell'editor, 8 caratteri) salvati nel
+  workspace.
+- Budget di tutte le liste per scheda (`limits::kListStoreElements`): 1 530
+  elementi sul Pico 2 W (l'occupazione massima della v1.10.0), 20 000 sulla
+  Pico Plus 2 W; `Memory ERROR` oltre, senza modifiche.
+
+### File CSV
+- Nuovo modulo `csv_io` (motore, nessuna UI): CSV LOAD / SAVE·AS dall'editor
+  delle liste (OPTN) e dall'editor MAT/VCT (F4), sulla microSD e sulla flash
+  interna (LittleFS), cartella `PICOCALC/CSV`, scrittura atomica.
+- Separatore `,`/`;` e simbolo decimale `.`/`,` (SET UP e CSV SET);
+  intestazione con virgolette ignorata; CR/LF/CRLF; errori `Format ERROR`,
+  `Dimension ERROR`, `Memory ERROR`, `Storage ERROR`, `Complex Number In Data`.
+
+### Run-Matrix
+- **Schermate MatAns / VctAns / ListAns**: i risultati oltre 6×6 (o 20
+  elementi) si aprono in una griglia scorrevole con la cella corrente; F4
+  dalla cronologia.
+- **Editor MAT/VCT**: celle con espressioni, forme esatte (`1/3`, `2√3`, `π/4`)
+  e numeri complessi; colonne scorrevoli con ◀ ▶ e indicazione `r c`; F4 CSV.
+  Le memorie fino a 64 elementi conservano le forme esatte (`Mat A×6`
+  esatto).
+- **Modalità Line**: INS (SHIFT DEL) per la sovrascrittura (`OVR`), frazioni
+  `⌟` (`2⌟3`, `1⌟2⌟3`) in input e nei risultati, risultati più lunghi della
+  riga scorrevoli con ←/→.
+- **SHIFT+INS** in Math: il valore a destra del cursore diventa l'argomento
+  del modello successivo (`1+(2+3)+4` → `1+√(2+3)+4`).
+- **Simboli ingegneristici** (OPTN › ESYM: m µ n p f k M G T) e display **Eng**
+  con i simboli (`999k+25k` = `1.024M`).
+- **▶Simp** e **▶Simp n** con il fattore mostrato (`5/20  F=3`), impostazione
+  **Simplify** Auto/Manual.
+- **Base-N intera** (SET UP › Mode: Dec, Hex, Bin, Oct): interi a 32 bit in
+  complemento a due, And/Or/Xor/**Xnor** bit a bit, **Not**, **Neg**, prefissi
+  d h b o, ▶Dec/▶Hex/▶Bin/▶Oct; ogni riga ricorda la sua base.
+- **Comandi grafici** (OPTN › SKETCH): Cls, ViewWindow, Graph Y=/r=/X=/(X,Y)=,
+  Plot/PlotOn/PlotOff/PlotChg, Line, F-Line, Circle, Vertical, Horizontal,
+  Text, PxlOn/PxlOff/PxlChg, Tangent, Normal, Inverse; li esegue il nuovo
+  interprete `graph_commands` e li disegna GRAPH, che si apre sul grafico ed
+  EXIT torna a Run-Matrix.
+
+### Motore
+- Un solo lexer/parser/valutatore: nuovi token `#k`… (simboli ingegneristici,
+  postfissi), letterali `a⌟b`/`a⌟b⌟c`, operatore `Xnor`, funzione `Neg(`,
+  prefisso `0d`; `parseExpression(testo, base)` ed `EvalContext::integerBase`
+  per la modalità Base-N; `CalcValue::exact` per le forme esatte delle memorie.
+- `FormattedNumber::symbol`: Eng con i simboli f…T.
+- Glifo `⌟` (U+231F) disegnato dal progetto nei due font (`tools/gen_fonts.py`,
+  `MANUAL_GLYPHS`).
+
+### Workspace
+- Record **versione 7**: Base-N, Simplify, formato CSV, liste di Statistics,
+  List 7–26, sottonomi, forme esatte delle memorie, base e frazione ▶Simp
+  della cronologia, grafici dei comandi. I record v1–v6 si leggono ancora:
+  nuovo fixture generato con i sorgenti della v1.10.0
+  (`tests/fixtures/workspace_v1_10_0.inc`).
+
+### Architettura
+- Nuovo servizio `GraphCmd` (`graph_commands.hpp`) nel registro; Run-Matrix
+  collegato a GRAPH (e GRAPH a Run-Matrix); sezioni dati dei membri e dei
+  metodi delle liste (`dataSectionOfMember`). Il test di architettura è più
+  stretto: Run-Matrix non può usare `ws.graph`, `SketchItem`,
+  `CommandGraph`, `graph::` né primitive di disegno, deve passare da
+  `graphcmd::execute` e GRAPH deve disegnare i grafici dei comandi; i nuovi
+  moduli `value`, `csv_io` e `graph_commands` sono nel livello del motore.
+
+### Comportamenti cambiati volutamente
+- In Line il tasto frazione scrive `⌟` invece di `/` (come la fx-CG50).
+- Display Eng: simboli ingegneristici invece di ×10ⁿ tra f e T; in Eng i
+  risultati frazionari si mostrano in decimale (S⇔D per la forma esatta).
+- Nella riga SUB dell'editor delle liste EXE scende alla prima cella.
+
+### Test
+- Nuove suite `lists_csv_test`, `calc_v111_test`, `run_matrix_v111_test`;
+  suite esistenti adattate solo ai cambiamenti voluti (versione del record,
+  List 7–26 ora valide, F1 in Line, formato Eng). Screenshot 52–61 nuovi e
+  quelli di GRAPH, TABLE, 3D e Run-Matrix rigenerati, compressi senza
+  perdita. Numeri in [TESTING.md](TESTING.md).
+
 ## v1.10.0 — matrici, vettori e liste; editor MAT/VCT; Math/Line; CLIP; parentesi colorate; cursore sugli errori
 
 Base: `main` al commit `bb2bdee` (la v1.9.0; il tag `v1.9.0` mancante viene

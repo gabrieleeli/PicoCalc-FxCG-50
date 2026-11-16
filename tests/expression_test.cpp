@@ -162,8 +162,10 @@ int main() {
     CHECK_EQ_STR(formatReal(9.9995, {DisplayMode::Sci, 4}), "1.000E+01");
     CHECK_EQ_STR(formatReal(7.0, {DisplayMode::Fix, 0}), "7");
     CHECK_EQ_STR(formatReal(1234.5, {DisplayMode::Sci, 3}), "1.23E+03");
-    CHECK_EQ_STR(formatReal(12345.0, {DisplayMode::Eng, 0}), "12.345E+03");
-    CHECK_EQ_STR(formatReal(0.00012, {DisplayMode::Eng, 0}), "120E-06");
+    // v1.11.0: Eng mostra i simboli ingegneristici come la fx-CG50 (oltre f..T resta ×10ⁿ)
+    CHECK_EQ_STR(formatReal(12345.0, {DisplayMode::Eng, 0}), "12.345k");
+    CHECK_EQ_STR(formatReal(0.00012, {DisplayMode::Eng, 0}), "120\xC2\xB5");
+    CHECK_EQ_STR(formatReal(1.5e20, {DisplayMode::Eng, 0}), "150E+18");
     CHECK_EQ_STR(formatValue({3, 4}, ComplexMode::Rectangular), "3+4i");
     CHECK_EQ_STR(formatValue({0, -1}, ComplexMode::Rectangular), "-i");
     CHECK_EQ_STR(formatValue({2, 0}, ComplexMode::Rectangular), "2");
