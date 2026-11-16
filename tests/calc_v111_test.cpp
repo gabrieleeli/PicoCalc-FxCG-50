@@ -112,7 +112,7 @@ int main() {
         runCalculation(w, "Ans" + kSimp);
         CHECK_EQ_STR(last(w), "1/4  F=5");
         runCalculation(w, kSimp);                              // ▶Simp da solo: Ans
-        CHECK_EQ_STR(last(w), "1/4  F=1");                     // gia' irriducibile
+        CHECK_EQ_STR(last(w), "1/4");                          // gia' irriducibile: valore originale senza F= (v1.12.0)
         runCalculation(w, "15/60" + kSimp + "5");              // con fattore
         CHECK_EQ_STR(last(w), "3/12  F=5");
         runCalculation(w, "Ans" + kSimp + "3");
@@ -139,8 +139,8 @@ int main() {
         CHECK_EQ_STR(last(m), "15/60");
         runCalculation(m, "Ans" + kSimp);
         CHECK_EQ_STR(last(m), "5/20  F=3");
-        runCalculation(m, "1/6+1/6");                           // altre operazioni: ridotte
-        CHECK_EQ_STR(last(m), "1/3");
+        runCalculation(m, "1/6+1/6");                           // v1.12.0: m.c.m. dei denominatori, non ridotta
+        CHECK_EQ_STR(last(m), "2/6");
         m.settings.simplifyManual = false;
         runCalculation(m, "15/60");
         CHECK_EQ_STR(last(m), "1/4");
@@ -152,13 +152,13 @@ int main() {
         CHECK_EQ_STR(resultText(back.history[3], back.settings), "5/20  F=3");
         CHECK(editHistoryEntry(m, 0, "30/60") == 0);
         CHECK_EQ_STR(resultText(m.history[0], m.settings), "1/2");    // Manual tornato Auto: ridotto
-        CHECK_EQ_STR(resultText(m.history[3], m.settings), "1/4  F=1");   // Ans▶Simp ricalcolato
+        CHECK_EQ_STR(resultText(m.history[3], m.settings), "1/4");   // Ans▶Simp ricalcolato: irriducibile, senza F= (v1.12.0)
     }
     // ================================================================ Base-N: letterali e limiti
     {
         CHECK(baseValue("FF", 16) == 255 && baseValue("ff", 16) == 255 && baseValue("7FFFFFFF", 16) == 2147483647);
         CHECK(baseValue("FFFFFFFF", 16) == -1 && baseValue("80000000", 16) == -2147483648.0);
-        CHECK(baseValue("1010", 2) == 10 && baseValue("11111111111111111111111111111111", 2) == -1);
+        CHECK(baseValue("1010", 2) == 10 && baseValue("1111111111111111", 2) == -1);   // v1.12.0: Bin a 16 bit
         CHECK(baseValue("17", 8) == 15 && baseValue("37777777777", 8) == -1);
         CHECK(baseValue("2147483647", 10) == 2147483647 && baseValue("-2147483647-1", 10) == -2147483648.0);
         CHECK(baseFails<MathError>("2147483648", 10));                  // oltre il massimo decimale
@@ -180,7 +180,7 @@ int main() {
         CHECK(baseValue("1010 and 0110", 2) == 2);
         CHECK(baseValue("1010 or 0110", 2) == 14);
         CHECK(baseValue("1010 xor 0110", 2) == 12);
-        CHECK(baseValue("1010 xnor 0110", 2) == -13);                  // ~(1100) a 32 bit
+        CHECK(baseValue("1010 xnor 0110", 2) == -13);                  // ~(1100) a 16 bit
         CHECK(baseValue("not(0)", 16) == -1 && baseValue("not(FFFF)", 16) == -65536);
         CHECK(baseValue("FFxor0F", 16) == 0xF0 && baseValue("AandF", 16) == 10 && baseValue("1and0", 2) == 0);   // senza spazi (editor)
         CHECK(baseValue("BADxnor0", 16) == ~0xBAD);
@@ -191,7 +191,7 @@ int main() {
         CHECK(baseFails<SyntaxError>("2#k", 10));
         // Testo dei risultati
         CHECK_EQ_STR(baseNText(-1, 16), "FFFFFFFF");
-        CHECK_EQ_STR(baseNText(-1, 2), "11111111111111111111111111111111");
+        CHECK_EQ_STR(baseNText(-1, 2), "1111111111111111");
         CHECK_EQ_STR(baseNText(-1, 8), "37777777777");
         CHECK_EQ_STR(baseNText(-1, 10), "-1");
         CHECK_EQ_STR(baseNText(255, 16), "FF");
@@ -210,7 +210,7 @@ int main() {
         CHECK_EQ_STR(last(w), "FFFFFFFF");
         // ▶Dec ▶Bin ▶Oct ▶Hex: la stessa riga in un'altra base
         HistoryEntry& h = w.history.back();
-        h.view = ViewBin; CHECK_EQ_STR(last(w), "11111111111111111111111111111111");
+        h.view = ViewBin; CHECK_EQ_STR(last(w), "1111111111111111");
         h.view = ViewOct; CHECK_EQ_STR(last(w), "37777777777");
         h.view = ViewDecimal; CHECK_EQ_STR(last(w), "-1");
         h.view = ViewAuto;

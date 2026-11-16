@@ -69,7 +69,8 @@ constexpr std::uint32_t Chat      = 1u << 8;     // AI conversation
 constexpr std::uint32_t Graph     = 1u << 9;     // GRAPH Setup, V-Window/graph memories, sketches, project
 constexpr std::uint32_t Graph3D   = 1u << 10;    // 3D Graph functions, 3D V-Window and view
 constexpr std::uint32_t Matrices  = 1u << 11;    // Mat A-Z, Vct A-Z, MatAns, VctAns, ListAns
-constexpr std::uint32_t Count     = 12;
+constexpr std::uint32_t Strings   = 1u << 12;    // v1.12.0: Str 1-20, function memory f1-f20, variabili di Dyna/Recursion/TVM
+constexpr std::uint32_t Count     = 13;
 } // namespace data
 
 constexpr std::uint32_t linkTo(AppId id) noexcept { return 1u << static_cast<unsigned>(id); }

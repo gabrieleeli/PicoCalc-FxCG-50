@@ -171,7 +171,8 @@ struct Runner {
             w.xmin = v[0]; w.xmax = v[1]; w.xscl = v[2]; w.ymin = v[3]; w.ymax = v[4]; w.yscl = v[5];
             if (v.size() == 9) { w.tmin = v[6]; w.tmax = v[7]; w.tstep = v[8]; }
             const std::string bad = validateView(w);
-            if (!bad.empty()) throw MathError(bad, args[0].pos, args.back().pos + args.back().len - args[0].pos);
+            if (!bad.empty()) throw MathError("Range ERROR: " + bad.substr(bad.find(':') == std::string::npos ? 0 : bad.find(':') + 2), args[0].pos,
+                                              args.back().pos + args.back().len - args[0].pos);
             ws.view = w;
             break;
         }

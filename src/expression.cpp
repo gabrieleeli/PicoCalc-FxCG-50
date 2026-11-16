@@ -5,6 +5,7 @@
 // multiplication binds tighter than * and /, prefix functions without
 // parentheses take an implicit-product argument (sin 2x = sin(2x)).
 #include "expression.hpp"
+#include "calc_library.hpp"
 #include "limits.hpp"
 #include "math_engine.hpp"
 #include <algorithm>
@@ -47,26 +48,53 @@ constexpr FnInfo kFunctions[] = {
     {"re",1,1,false},{"im",1,1,false},{"arg",1,1,false},{"conj",1,1,false},{"real",1,1,false},
     {"imag",1,1,false},{"min",1,2,false},{"max",1,2,false},{"root",2,2,false},{"ncr",2,2,false},
     {"npr",2,2,false},{"atan2",2,2,false},{"hypot",2,2,false},{"pow",2,2,false},{"mod",2,2,false},
-    {"gcd",2,2,false},{"lcm",2,2,false},{"randint",2,2,false},{"rand",0,0,false},{"ran",0,0,false},
+    {"gcd",2,2,false},{"lcm",2,2,false},{"randint",2,3,false},{"rand",0,0,false},{"ran",0,1,false},
     {"dms",1,3,false},{"pol",2,2,false},{"rec",2,2,false},
-    {"mixed",3,3,false},{"modexp",3,3,false},{"rndfix",2,2,false},{"rannorm",2,2,false},{"ranbin",2,2,false},
+    {"mixed",3,3,false},{"modexp",3,3,false},{"rndfix",2,2,false},{"rannorm",2,3,false},{"ranbin",2,3,false},
     {"not",1,1,false},{"neg",1,1,false},
-    {"integral",3,3,true},{"integrate",3,3,true},{"derivative",2,2,true},{"diff",2,2,true},
-    {"derivative2",2,2,true},{"sum",1,3,true},{"prod",1,3,true},{"solve",2,2,true},
+    {"integral",3,4,true},{"integrate",3,4,true},{"derivative",2,2,true},{"diff",2,2,true},
+    {"derivative2",2,2,true},{"sum",1,5,true},{"prod",1,5,true},{"solve",2,4,true},
+    // v1.12.0 (calc_library.hpp): CALC, PROB, NUMERIC, STAT, TVM e servizi.
+    {"solve_n",1,4,true},{"f_min",3,4,true},{"f_max",3,4,true},
+    {"ran_list",1,1,false},{"ran_samp",2,3,false},{"prob_p",1,1,false},{"prob_q",1,1,false},{"prob_r",1,1,false},
+    {"prob_t",1,1,false},{"num_rnd",1,1,false},{"fromrad",1,1,false},{"fromgrad",1,1,false},
+    {"norm_pd",1,3,false},{"norm_cd",2,4,false},{"invnorm_cd",1,4,false},{"t_pd",2,2,false},{"t_cd",3,3,false},{"invt_cd",2,2,false},
+    {"chi_pd",2,2,false},{"chi_cd",3,3,false},{"invchi_cd",2,2,false},{"f_pd",3,3,false},{"f_cd",4,4,false},{"invf_cd",3,3,false},
+    {"binomial_pd",2,3,false},{"binomial_cd",2,3,false},{"invbinomial_cd",3,3,false},{"poisson_pd",2,2,false},
+    {"poisson_cd",2,2,false},{"invpoisson_cd",2,2,false},{"geo_pd",2,2,false},{"geo_cd",2,2,false},{"invgeo_cd",2,2,false},
+    {"hypergeo_pd",4,4,false},{"hypergeo_cd",4,4,false},{"invhypergeo_cd",4,4,false},
+    {"x_hat",1,1,false},{"y_hat",1,1,false},{"s_dev",1,2,false},{"stat_var",1,2,false},
+    {"smpl_si",3,3,false},{"smpl_sfv",3,3,false},{"cmpd_pv",6,6,false},{"cmpd_fv",6,6,false},{"cmpd_pmt",6,6,false},
+    {"cmpd_n",6,6,false},{"cmpd_i",6,6,false},{"cash_npv",2,2,false},{"cash_irr",1,1,false},{"cash_pbp",2,2,false},
+    {"cash_nfv",2,2,false},{"amt_bal",7,7,false},{"amt_int",7,7,false},{"amt_prn",7,7,false},{"amt_sint",7,7,false},
+    {"amt_sprn",7,7,false},{"cnvt_eff",2,2,false},{"cnvt_apr",2,2,false},{"fin_cost",2,2,false},{"fin_sell",2,2,false},
+    {"fin_margin",2,2,false},{"days_prd",6,6,false},{"pxl_test",2,2,false},{"convert",3,3,false},
     // Matrici, vettori e liste (fx-CG50 OPTN > MAT/VCT e OPTN > LIST).
     {"det",1,1,false},{"trn",1,1,false},{"identity",1,1,false},{"dim",1,1,false},{"augment",2,2,false},
     {"fill",2,2,false},{"ref",1,1,false},{"rref",1,1,false},{"mattolist",2,2,false},{"listtomat",1,26,false},
     {"dotp",2,2,false},{"crossp",2,2,false},{"angle",2,2,false},{"unitv",1,1,false},{"norm",1,1,false},
-    {"seq",5,5,true},{"mean",1,1,false},{"median",1,1,false},{"cuml",1,1,false},{"dlist",1,1,false},
+    {"seq",5,5,true},{"mean",1,2,false},{"median",1,2,false},{"cuml",1,1,false},{"dlist",1,1,false},
     {"sorta",1,1,false},{"sortd",1,1,false},
 };
 // Funzioni con argomenti o risultato lista, matrice o vettore: i loro nodi
 // li valuta il valutatore delle collezioni (vedi CollEval).
 bool isCollectionFunction(const std::string& f,std::size_t argCount){
     static const char* const names[]={"det","trn","identity","dim","augment","fill","ref","rref","mattolist","listtomat",
-        "dotp","crossp","angle","unitv","norm","seq","mean","median","cuml","dlist","sorta","sortd","elem"};
+        "dotp","crossp","angle","unitv","norm","seq","mean","median","cuml","dlist","sorta","sortd","elem",
+        // v1.12.0: risultati lista (List Ans) o argomenti lista
+        "solve_n","f_min","f_max","pol","rec","ran_list","ran_samp","s_dev","stat_var","cash_npv","cash_irr","cash_pbp",
+        "cash_nfv","invnorm_cd","x_hat"};
     for(const char* n:names)if(f==n)return true;
+    if(argCount==3&&(f=="randint"||f=="rannorm"||f=="ranbin"))return true;
+    if(argCount==2&&(f=="binomial_pd"||f=="binomial_cd"))return true;
     return argCount==1&&(f=="sum"||f=="prod"||f=="min"||f=="max");
+}
+// Function memory f1-f20 (OPTN › FUNCMEM): "f_1".."f_20".
+int functionMemoryIndex(const std::string& f){
+    if(f.size()<3||f.size()>4||f[0]!='f'||f[1]!='_')return 0;
+    int v=0;
+    for(std::size_t i=2;i<f.size();++i){if(f[i]<'0'||f[i]>'9')return 0;v=v*10+(f[i]-'0');}
+    return v>=1&&v<=20&&f[2]!='0'?v:0;
 }
 struct ConstInfo { const char* name; double value; };
 const ConstInfo kConstants[] = {
@@ -79,12 +107,19 @@ const ConstInfo kConstants[] = {
     {"standardgravity",9.80665},{"g0",9.80665},
 };
 // Names resolved at evaluation time (not constants): memory values and bindings.
-constexpr const char* kSpecialNames[] = {"ans","preans","theta"};
+constexpr const char* kSpecialNames[] = {"ans","preans","theta","r_var"};
 // Variables owned by other applications (VARS menu), resolved through EvalContext::names.
 constexpr const char* kSystemNames[] = {"xmin","xmax","xscl","ymin","ymax","yscl","tmin","tmax","tptch",
     "tblstart","tblend","tblpitch","xdot","list1","list2","list3","list4","list5","list6","list7","list8","list9","list10",
     "list11","list12","list13","list14","list15","list16","list17","list18","list19","list20","list21","list22","list23",
-    "list24","list25","list26",nullptr};
+    "list24","list25","list26",
+    // v1.12.0: VARS FACTOR, STAT, DYNA, RECURSION, TVM (letti dal workspace)
+    "xfct","yfct","stat_n","stat_meanx","stat_sumx","stat_sumx2","stat_popsdx","stat_sdx","stat_minx","stat_maxx",
+    "stat_meany","stat_sumy","stat_sumy2","stat_sumxy","stat_popsdy","stat_sdy","stat_miny","stat_maxy",
+    "reg_a","reg_b","reg_c","reg_d","reg_e","reg_r","reg_r2","reg_mse","stat_q1","stat_q3","stat_med","stat_mod",
+    "stat_hstart","stat_hpitch","reg_type","d_start","d_end","d_pitch","r_start","r_end","rec_a0","rec_a1","rec_a2",
+    "rec_b0","rec_b1","rec_b2","rec_c0","rec_c1","rec_c2","rec_anstart","rec_bnstart","rec_cnstart",
+    "tvm_n","tvm_i","tvm_pv","tvm_pmt","tvm_fv","tvm_py","tvm_cy",nullptr};
 // Infix operator words (fx-CG50 And/Or/Xor, Int÷ and Rmdr) and their internal op codes.
 struct OpWord { const char* name; char op; };
 constexpr OpWord kOperatorWords[] = {{"and",'&'},{"or",'|'},{"xor",'x'},{"xnor",'X'},{"rmdr",'r'},{"intdiv",'q'}};
@@ -100,7 +135,12 @@ const FnInfo* findFunction(const std::string& lowerName){
     for(const auto& f:kFunctions)if(lowerName==f.name)return &f;
     return nullptr;
 }
-bool isFunctionName(const std::string& lowerName){return findFunction(lowerName)||isRootN(lowerName);}
+bool isFunctionName(const std::string& lowerName){return findFunction(lowerName)||isRootN(lowerName)||functionMemoryIndex(lowerName)!=0;}
+// "v_a".."v_z": la variabile A-Z scritta esplicitamente (Base-N Hex, dove A-F sono cifre).
+char explicitVariable(const std::string& lowerName){
+    return lowerName.size()==3&&lowerName[0]=='v'&&lowerName[1]=='_'&&lowerName[2]>='a'&&lowerName[2]<='z'?
+           static_cast<char>(lowerName[2]-'a'+'A'):0;
+}
 bool isSystemName(const std::string& lowerName){
     for(const char* const* n=kSystemNames;*n;++n)if(lowerName==*n)return true;
     return false;
@@ -117,6 +157,7 @@ int listNumber(const std::string& lowerName){
 }
 bool isListName(const std::string& lowerName){return listNumber(lowerName)!=0;}
 bool isConstantName(const std::string& lowerName){
+    if(explicitVariable(lowerName))return true;
     for(const auto& c:kConstants)if(lowerName==c.name)return true;
     for(const char* s:kSpecialNames)if(lowerName==s)return true;
     return isSystemName(lowerName);
@@ -134,8 +175,8 @@ bool referenceName(const std::string& low){
 // Simboli ingegneristici (fx-CG50 OPTN > ESYM): nel testo canonico "#k",
 // "#M", "#u" (micro, mostrato µ)... Moltiplicano il valore che precedono.
 struct EngSymbol { char symbol; const char* factor; };
-constexpr EngSymbol kEngSymbols[] = {{'k',"1e3"},{'M',"1e6"},{'G',"1e9"},{'T',"1e12"},{'m',"1e-3"},{'u',"1e-6"},{'n',"1e-9"},
-                                     {'p',"1e-12"},{'f',"1e-15"}};
+constexpr EngSymbol kEngSymbols[] = {{'k',"1e3"},{'M',"1e6"},{'G',"1e9"},{'T',"1e12"},{'P',"1e15"},{'E',"1e18"},
+                                     {'m',"1e-3"},{'u',"1e-6"},{'n',"1e-9"},{'p',"1e-12"},{'f',"1e-15"}};
 const char* engFactor(char c){for(const auto& e:kEngSymbols)if(e.symbol==c)return e.factor;return nullptr;}
 // Frazione lineare della modalita' Line: "2⌟3", "1⌟2⌟3" (U+231F).
 const char* const kFractionMark="\xE2\x8C\x9F";
@@ -144,7 +185,7 @@ const char* const kFractionMark="\xE2\x8C\x9F";
 // Ogni token conserva il suo intervallo di byte nel testo: il parser segnala un
 // errore di sintassi sul token che non puo' usare e registra l'intervallo di
 // ogni sotto-espressione nel suo nodo (vedi ast::Node::pos/len).
-enum class TT { Num, Ident, Op, Ref, End };
+enum class TT { Num, Ident, Op, Ref, Str, End };
 struct Tok { TT type{TT::End}; std::string text; char op{}; std::uint16_t pos{}, len{}; };
 
 class Lexer {
@@ -172,6 +213,22 @@ public:
                 identifier(out);continue;
             }
             if(c=='@'){reference(out);continue;}
+            // Stringa "..." (v1.12.0): List "QTY", InvNormCD("L",...), "ABC"->Str 1.
+            if(c=='"'){
+                const std::size_t e=s_.find('"',p_+1);
+                const std::size_t end=e==std::string::npos?s_.size():e;
+                if(end-p_-1>255)throw SyntaxError("Syntax ERROR: stringa troppo lunga",static_cast<int>(p_),static_cast<int>(end-p_));
+                out.push_back({TT::Str,s_.substr(p_+1,end-p_-1),0,at(p_),at(end-p_+(e==std::string::npos?0:1))});
+                p_=end+(e==std::string::npos?0:1);
+                continue;
+            }
+            // Unita' di CONVERT dopo un valore: 10[cm] (non l'indice di Mat A[...] ne' una riga di matrice).
+            if(c=='['&&unitAllowed(out)){
+                const std::size_t e=s_.find(']',p_+1);
+                if(e!=std::string::npos&&calclib::findUnit(s_.substr(p_+1,e-p_-1))){
+                    out.push_back({TT::Op,s_.substr(p_+1,e-p_-1),'U',at(p_),at(e-p_+1)});p_=e+1;continue;
+                }
+            }
             if(c>=0x80){utf8(out);continue;}
             if(c=='<'||c=='>'){
                 const bool eq=p_+1<s_.size()&&s_[p_+1]=='=';
@@ -186,6 +243,15 @@ private:
     unsigned base_{10};
     bool integer_{false};
     static std::uint16_t at(std::size_t p){return static_cast<std::uint16_t>(p);}
+    // "[" dopo un valore (numero, nome, parentesi chiusa) e' un'unita'; dopo
+    // Mat A / Vct A / List n e' l'indice di un elemento.
+    static bool unitAllowed(const std::vector<Tok>& out){
+        if(out.empty())return false;
+        const Tok& last=out.back();
+        if(last.type==TT::Op)return last.op==')'||last.op=='}'||last.op=='R'||last.op=='G';
+        if(last.type!=TT::Num&&last.type!=TT::Ident)return false;
+        return !(out.size()>=2&&out[out.size()-2].type==TT::Ref);
+    }
     static int digitValue(char ch){
         const unsigned char u=static_cast<unsigned char>(ch);
         if(std::isdigit(u))return ch-'0';
@@ -267,6 +333,11 @@ private:
         if(p_==start)throw SyntaxError("Syntax ERROR: numero mancante dopo il prefisso",static_cast<int>(b),static_cast<int>(p_-b));
         long long signedValue=static_cast<long long>(v);
         if(base==10){if(v>0x7FFFFFFFull)throw MathError("Math ERROR: oltre 2147483647 in Base-N",static_cast<int>(b),static_cast<int>(p_-b));}
+        else if(base==2){
+            // Bin: 16 bit in complemento a due (1111111111111111 = -1).
+            if(v>0xFFFFull)throw MathError("Math ERROR: un numero binario ha al massimo 16 cifre",static_cast<int>(b),static_cast<int>(p_-b));
+            if(v>0x7FFFull)signedValue=static_cast<long long>(v)-0x10000ll;
+        }
         else if(v>0x7FFFFFFFull)signedValue=static_cast<long long>(v)-0x100000000ll;   // complemento a due
         return Tok{TT::Num,std::to_string(signedValue),0,at(b),at(p_-b)};
     }
@@ -385,7 +456,18 @@ private:
             {"\xE2\x88\x9A",TT::Ident,0,"sqrt"},{"\xE2\x88\x9B",TT::Ident,0,"cbrt"},{"\xE2\x8B\x85",TT::Op,'*',nullptr},
             {"\xC2\xB7",TT::Op,'*',nullptr},{"\xE2\x89\xA0",TT::Op,'n',nullptr},{"\xE2\x89\xA4",TT::Op,'l',nullptr},
             {"\xE2\x89\xA5",TT::Op,'g',nullptr},
+            // v1.12.0: forma polare, suffissi angolari r e g, minuti e secondi (DMS)
+            {"\xE2\x88\xA0",TT::Op,'A',nullptr},{"\xCA\xB3",TT::Op,'R',nullptr},{"\xE1\xB5\x8D",TT::Op,'G',nullptr},
+            {"\xE2\x80\xB2",TT::Op,'\'',nullptr},{"\xE2\x80\xB3",TT::Op,'"',nullptr},
         };
+        // ▶[unita']: destinazione di una conversione metrica (10[cm]▶[in]).
+        if(s_.compare(p_,4,"\xE2\x96\xB6[")==0){
+            const std::size_t e=s_.find(']',p_+4);
+            if(e!=std::string::npos&&calclib::findUnit(s_.substr(p_+4,e-p_-4))){
+                out.push_back({TT::Op,s_.substr(p_+4,e-p_-4),'V',at(p_),at(e-p_+1)});p_=e+1;return;
+            }
+            throw SyntaxError("Syntax ERROR: unita' sconosciuta dopo \xE2\x96\xB6",static_cast<int>(p_),static_cast<int>(e==std::string::npos?3:e-p_+1));
+        }
         for(const auto& m:maps){const std::size_t n=std::strlen(m.seq);
             if(s_.compare(p_,n,m.seq)==0){out.push_back({m.type,m.name?m.name:"",m.op,at(p_),at(n)});p_+=n;return;}}
         const unsigned char c=static_cast<unsigned char>(s_[p_]);
@@ -487,8 +569,15 @@ private:
     }
     ast::NodePtr addSub(){
         const std::size_t s=i_;
+        auto n=polar();
+        for(;;){if(eat('+'))n=bin('+',n,polar(),s);else if(eat('-'))n=bin('-',n,polar(),s);else return n;}
+    }
+    // r∠θ (v1.12.0): forma polare di un complesso, sotto × e ÷ e sopra + e −.
+    ast::NodePtr polar(){
+        const std::size_t s=i_;
         auto n=mulDiv();
-        for(;;){if(eat('+'))n=bin('+',n,mulDiv(),s);else if(eat('-'))n=bin('-',n,mulDiv(),s);else return n;}
+        while(eat('A'))n=bin('A',n,mulDiv(),s);
+        return n;
     }
     ast::NodePtr mulDiv(){
         const std::size_t s=i_;
@@ -540,7 +629,33 @@ private:
         auto n=atom();
         for(;;){
             if(eat('!')){auto c=ast::make(ast::Kind::Call,"factorial");c->children={n};c->flags=flagsOf(*c);n=span(c,s);}
-            else if(eat('d')){auto c=ast::make(ast::Kind::Call,"fromdeg");c->children={n};c->flags=flagsOf(*c);n=span(c,s);}
+            else if(eat('d')){
+                // 2°20′30″: gradi, minuti, secondi (sessagesimale, nessuna conversione d'angolo).
+                if(peek().type==TT::Num&&t_[i_+1].type==TT::Op&&t_[i_+1].op=='\''){
+                    auto c=ast::make(ast::Kind::Call,"dms");
+                    auto minutes=span(ast::make(ast::Kind::Token,peek().text),i_);++i_;++i_;
+                    c->children={n,minutes};
+                    if(peek().type==TT::Num&&t_[i_+1].type==TT::Op&&t_[i_+1].op=='"'){
+                        c->children.push_back(span(ast::make(ast::Kind::Token,peek().text),i_));i_+=2;
+                    }
+                    c->flags=flagsOf(*c);n=span(c,s);
+                }else{auto c=ast::make(ast::Kind::Call,"fromdeg");c->children={n};c->flags=flagsOf(*c);n=span(c,s);}
+            }
+            else if(isOp('R')||isOp('G')){
+                // 30ʳ, 50ᵍ: angolo in radianti / gradi centesimali convertito nell'unita' corrente.
+                auto c=ast::make(ast::Kind::Call,peek().op=='R'?"fromrad":"fromgrad");++i_;
+                c->children={n};c->flags=flagsOf(*c);n=span(c,s);
+            }
+            else if(isOp('U')){
+                // 10[cm]▶[in]: conversione metrica (OPTN › CONVERT).
+                const Tok from=peek();++i_;
+                if(!isOp('V'))throw error("Syntax ERROR: dopo ["+from.text+"] serve \xE2\x96\xB6[unita']");
+                const Tok to=peek();++i_;
+                auto c=ast::make(ast::Kind::Call,"convert");
+                c->children={n,ast::make(ast::Kind::Token,"["+from.text+"]"),ast::make(ast::Kind::Token,"["+to.text+"]")};
+                c->children[1]->pos=from.pos;c->children[1]->len=from.len;c->children[2]->pos=to.pos;c->children[2]->len=to.len;
+                c->flags=flagsOf(*c);n=span(c,s);
+            }
             else if(isOp('#')){
                 // Simbolo ingegneristico: 2k = 2×10³ (il fattore e' un token "#1e3").
                 const std::size_t fs=i_;
@@ -594,6 +709,12 @@ private:
         const Tok& k=peek();
         std::string name=word.text=="mat"?"Mat ":word.text=="vct"?"Vct ":"List ";
         if(k.type==TT::Ident&&k.text=="ans"){name+="Ans";++i_;}
+        else if(word.text=="list"&&k.type==TT::Str){
+            // List "QTY": la lista con quel sottonome (v1.12.0).
+            if(k.text.empty()||k.text.size()>limits::kListNameLength)throw errorAt("Syntax ERROR: un sottonome ha da 1 a 8 caratteri",k);
+            name="List \""+k.text+"\"";
+            ++i_;
+        }
         else if(word.text=="list"){
             bool digits=k.type==TT::Num&&!k.text.empty()&&k.text.size()<=2;
             if(digits)for(char c:k.text)digits=digits&&std::isdigit(static_cast<unsigned char>(c));
@@ -627,6 +748,7 @@ private:
         const std::size_t s=i_;
         const Tok k=peek();
         if(k.type==TT::Num){++i_;return span(ast::make(ast::Kind::Token,k.text),s);}
+        if(k.type==TT::Str){++i_;return span(ast::make(ast::Kind::Token,"\""+k.text+"\""),s);}
         if(k.type==TT::Op&&k.op=='('){
             ++i_;
             if(isOp(')'))throw error("Syntax ERROR: parentesi vuote");
@@ -654,14 +776,16 @@ private:
             if(isFunctionName(k.text)){
                 auto call=ast::make(ast::Kind::Call,k.text);
                 const FnInfo* info=findFunction(k.text);
-                const unsigned minArgs=info?info->minArgs:1,maxArgs=info?info->maxArgs:1;
+                const bool fnMemory=functionMemoryIndex(k.text)!=0;
+                const unsigned minArgs=info?info->minArgs:fnMemory?0:1,maxArgs=info?info->maxArgs:1;
                 if(eat('(')){
                     if(!isOp(')')){
                         do{call->children.push_back(expr());}while(eat(','));
                     }
                     if(!eat(')')&&peek().type!=TT::End)throw error("Syntax ERROR: manca ) in "+k.text);
                 }else{
-                    if(minArgs==0){/* rand */}
+                    // Ran# n (sequenze 1-10, 0 le reinizializza): il numero che segue.
+                    if(minArgs==0){if(k.text=="ran"&&peek().type==TT::Num){call->children.push_back(span(ast::make(ast::Kind::Token,peek().text),i_));++i_;}}
                     else if(minArgs>1)throw errorAt("Syntax ERROR: "+k.text+" richiede parentesi",k);
                     else call->children.push_back(implicitProduct(true));
                 }
@@ -743,30 +867,39 @@ long long toIntArg(double v,const char* what){
     return static_cast<long long>(v);
 }
 // ---- Base-N (fx-CG50 Mode Dec/Hex/Bin/Oct): interi a 32 bit in complemento a due.
-long long int32Arg(double v){
-    if(!isInteger(v)||v<-2147483648.0||v>2147483647.0)throw MathError("Math ERROR: in Base-N i valori sono interi a 32 bit");
+// Bin usa 16 bit (0…0111111111111111, negativi 1000000000000000…1111111111111111),
+// Dec, Oct e Hex 32 bit (manuale 2-39).
+unsigned baseBits(unsigned base){return base==2?16:32;}
+long long int32Arg(double v,unsigned bits=32){
+    const double lo=-std::ldexp(1.0,static_cast<int>(bits)-1),hi=std::ldexp(1.0,static_cast<int>(bits)-1)-1;
+    if(!isInteger(v)||v<lo||v>hi)throw MathError(bits==16?"Math ERROR: in Bin i valori sono interi a 16 bit":"Math ERROR: in Base-N i valori sono interi a 32 bit");
     return static_cast<long long>(v);
 }
-double int32Result(long long v){
-    if(v<-2147483648ll||v>2147483647ll)throw MathError("Math ERROR: risultato oltre i 32 bit (Base-N)");
+double int32Result(long long v,unsigned bits=32){
+    const long long lo=-(1ll<<(bits-1)),hi=(1ll<<(bits-1))-1;
+    if(v<lo||v>hi)throw MathError(bits==16?"Math ERROR: risultato oltre i 16 bit (Bin)":"Math ERROR: risultato oltre i 32 bit (Base-N)");
     return static_cast<double>(v);
 }
-double bitsValue(std::uint32_t u){return static_cast<double>(static_cast<std::int32_t>(u));}
-double baseNBinary(char op,double a,double b){
-    const long long x=int32Arg(a),y=int32Arg(b);
+double bitsValue(std::uint32_t u,unsigned bits=32){
+    if(bits==16)return static_cast<double>(static_cast<std::int16_t>(static_cast<std::uint16_t>(u&0xFFFFu)));
+    return static_cast<double>(static_cast<std::int32_t>(u));
+}
+double baseNBinary(char op,double a,double b,unsigned base=10){
+    const unsigned bits=baseBits(base);
+    const long long x=int32Arg(a,bits),y=int32Arg(b,bits);
     const auto ux=static_cast<std::uint32_t>(static_cast<std::int32_t>(x)),uy=static_cast<std::uint32_t>(static_cast<std::int32_t>(y));
     switch(op){
-    case '+': return int32Result(x+y);
-    case '-': return int32Result(x-y);
-    case '*': return int32Result(x*y);
+    case '+': return int32Result(x+y,bits);
+    case '-': return int32Result(x-y,bits);
+    case '*': return int32Result(x*y,bits);
     case '/': case 'q':
         if(y==0)throw MathError("Math ERROR: divisione per zero");
-        return int32Result(x/y);                    // divisione intera: la parte frazionaria si scarta
-    case 'r': if(y==0)throw MathError("Math ERROR: divisione per zero");return int32Result(x%y);
-    case '&': return bitsValue(ux&uy);
-    case '|': return bitsValue(ux|uy);
-    case 'x': return bitsValue(ux^uy);
-    case 'X': return bitsValue(~(ux^uy));
+        return int32Result(x/y,bits);                    // divisione intera: la parte frazionaria si scarta
+    case 'r': if(y==0)throw MathError("Math ERROR: divisione per zero");return int32Result(x%y,bits);
+    case '&': return bitsValue(ux&uy,bits);
+    case '|': return bitsValue(ux|uy,bits);
+    case 'x': return bitsValue(ux^uy,bits);
+    case 'X': return bitsValue(~(ux^uy),bits);
     case '=': case 'n': case '<': case '>': case 'l': case 'g':{
         const bool v=op=='='?x==y:op=='n'?x!=y:op=='<'?x<y:op=='>'?x>y:op=='l'?x<=y:x>=y;
         return v?1.0:0.0;
@@ -870,8 +1003,45 @@ template<typename T> double asReal(const T& v,const char* what){
 }
 template<typename T> T fromReal(double v){if constexpr(std::is_same_v<T,double>)return v;else return Complex(v,0.0);}
 template<typename T> void checkFinite(const T& v){
-    if constexpr(std::is_same_v<T,double>){if(!std::isfinite(v))throw MathError("Math ERROR: risultato non finito");}
-    else{if(!std::isfinite(v.real())||!std::isfinite(v.imag()))throw MathError("Math ERROR: risultato non finito");}
+    // fx-CG50: un valore con |x| >= 10^100 e' un Math ERROR (overflow), come uno non finito.
+    if constexpr(std::is_same_v<T,double>){if(!(std::abs(v)<MaxMagnitude))throw MathError("Math ERROR: risultato oltre 10^100");}
+    else{if(!(std::abs(v.real())<MaxMagnitude)||!(std::abs(v.imag())<MaxMagnitude))throw MathError("Math ERROR: risultato oltre 10^100");}
+}
+// Nomi delle variabili legate dalle funzioni di calcolo (Σ con la variabile, SolveN, FMin...).
+const char* letterName(char c){
+    static const char names[26][2]={{'a',0},{'b',0},{'c',0},{'d',0},{'e',0},{'f',0},{'g',0},{'h',0},{'i',0},{'j',0},{'k',0},{'l',0},{'m',0},
+        {'n',0},{'o',0},{'p',0},{'q',0},{'r',0},{'s',0},{'t',0},{'u',0},{'v',0},{'w',0},{'x',0},{'y',0},{'z',0}};
+    const int i=std::tolower(static_cast<unsigned char>(c))-'a';
+    return i>=0&&i<26?names[i]:"x";
+}
+// Il nodo e' una sola lettera (la variabile di Σ, SolveN, Seq): la lettera minuscola, 0 altrimenti.
+char variableNode(const ast::Node* v){
+    while(v&&v->kind==ast::Kind::Group&&v->children.size()==1&&v->children[0])v=v->children[0].get();
+    if(!v||v->kind!=ast::Kind::Token)return 0;
+    if(v->text.size()==1&&std::isalpha(static_cast<unsigned char>(v->text[0])))return static_cast<char>(std::tolower(static_cast<unsigned char>(v->text[0])));
+    if(const char e=explicitVariable(v->text))return static_cast<char>(std::tolower(static_cast<unsigned char>(e)));
+    return 0;
+}
+// Rnd (OPTN › NUMERIC): il valore arrotondato alle cifre della visualizzazione
+// (Fix n decimali, Sci n cifre significative, Norm 10 cifre significative).
+double roundToDisplay(double v,std::uint8_t mode,std::uint8_t digits){
+    if(v==0||!std::isfinite(v))return v;
+    if(mode==2){const double p=std::pow(10.0,digits);return std::round(v*p)/p;}
+    const int sig=mode==3?(digits==0?10:digits):10;
+    const int e=static_cast<int>(std::floor(std::log10(std::abs(v))));
+    const double scale=std::pow(10.0,sig-1-e);
+    return std::round(v*scale)/scale;
+}
+// Sequenze di Ran# n (n = 1..10): generatori indipendenti con semi fissi; Ran# 0 le riavvia.
+std::uint32_t g_seqState[10]={};
+bool g_seqStarted[10]={};
+double sequenceRandom(int n){
+    if(n==0){for(int k=0;k<10;++k)g_seqStarted[k]=false;return 0;}
+    if(n<1||n>10)throw MathError("Argument ERROR: Ran# n con n da 0 a 10");
+    std::uint32_t& x=g_seqState[n-1];
+    if(!g_seqStarted[n-1]){x=0x2545F491u*static_cast<std::uint32_t>(n)+0x9E3779B9u;g_seqStarted[n-1]=true;}
+    x^=x<<13;x^=x>>17;x^=x<<5;
+    return static_cast<double>(x>>8)/16777216.0;
 }
 
 // Adaptive Gauss-Kronrod G7/K15 quadrature.
@@ -927,32 +1097,77 @@ template<typename T> FXAI_NOINLINE T callCalculus(const ast::Node& n,Env& env){
         struct DepthGuard{Env& e;~DepthGuard(){--e.depth;}} guard{env};
         const ast::Node& body=*n.children.at(0);
         if(env.ctx.info&&f!="sum"&&f!="prod")env.ctx.info->numerical=true;
-        LocalBind bind(env,"x",0.0);
-        auto fx=[&](double v)->double{bind.set(v);const T r=evalNode<T>(body,env);env.at=&n;return asReal<T>(r,"funzione integranda");};
-        if(f=="integral"||f=="integrate"){const double a=rarg(1),b=rarg(2);return R(integrateFn(fx,a,b,1e-10));}
+        // Σ(f,k,a,b[,n]) e Π: la variabile e' il secondo argomento (manuale 2-34);
+        // con tre argomenti (forma storica del progetto) la variabile e' x.
+        const bool sumLike=f=="sum"||f=="prod";
+        const char var=sumLike&&n.children.size()>=4?variableNode(n.children[1].get()):'x';
+        if(!var)throw SyntaxError("Syntax ERROR: il secondo argomento di \xCE\xA3 e' la variabile");
+        const std::size_t first=sumLike&&n.children.size()>=4?2:1;
+        LocalBind bind(env,letterName(var),0.0);
+        // Solve(a=b, ...): si cerca lo zero di a-b.
+        const ast::Node* lhs=&body;const ast::Node* rhs=nullptr;
+        if(f=="solve"){
+            const ast::Node* b=&body;
+            while(b->kind==ast::Kind::Group&&b->children.size()==1&&b->children[0])b=b->children[0].get();
+            if(b->kind==ast::Kind::Binary&&b->text=="="&&b->children.size()==2&&b->children[0]&&b->children[1]){lhs=b->children[0].get();rhs=b->children[1].get();}
+        }
+        auto fx=[&](double v)->double{
+            bind.set(v);
+            double r=asReal<T>(evalNode<T>(*lhs,env),"funzione integranda");
+            if(rhs)r-=asReal<T>(evalNode<T>(*rhs,env),"funzione");
+            env.at=&n;return r;
+        };
+        if(f=="integral"||f=="integrate"){
+            const double a=rarg(1),b=rarg(2);
+            double tol=1e-10;
+            if(n.children.size()==4){tol=rarg(3);if(!(tol>0)||tol>=1)throw MathError("Argument ERROR: tolleranza di \xE2\x88\xAB tra 0 e 1");}
+            return R(integrateFn(fx,a,b,tol));
+        }
         if(f=="derivative"||f=="diff"){return R(ridders(fx,rarg(1)));}
         if(f=="derivative2"){const double x0=rarg(1);auto d1=[&](double v){return ridders(fx,v);};return R(ridders(d1,x0));}
         if(f=="solve"){
+            // Solve(f, stima[, inferiore, superiore]): Newton dalla stima, la soluzione deve stare nei limiti.
             double x=rarg(1);
+            double lo=-std::numeric_limits<double>::infinity(),hi=std::numeric_limits<double>::infinity();
+            if(n.children.size()==3)throw SyntaxError("Argument ERROR: Solve(f,stima,inferiore,superiore)");
+            if(n.children.size()==4){lo=rarg(2);hi=rarg(3);if(!(lo<hi))throw MathError("Argument ERROR: inferiore < superiore");if(x<lo||x>hi)x=0.5*(lo+hi);}
+            auto inside=[&](double v){return v>=lo&&v<=hi;};
             for(int it=0;it<100;++it){
-                const double y=fx(x);if(!std::isfinite(y))throw MathError("Math ERROR: SOLVE fuori dominio");
-                if(std::abs(y)<1e-13)return R(x);
+                const double y=fx(x);if(!std::isfinite(y))throw MathError("Math ERROR: Solve fuori dominio");
+                if(std::abs(y)<1e-13&&inside(x))return R(x);
                 const double d=ridders(fx,x);
-                if(d==0||!std::isfinite(d))throw MathError("Math ERROR: SOLVE derivata nulla");
+                if(d==0||!std::isfinite(d))break;
                 double nx=x-y/d;
-                if(!std::isfinite(nx))throw MathError("Math ERROR: SOLVE non convergente");
-                if(std::abs(nx-x)<=1e-12*std::max(1.0,std::abs(x))){x=nx;if(std::abs(fx(x))<1e-9*std::max(1.0,std::abs(y)+1))return R(x);break;}
+                if(!std::isfinite(nx))break;
+                if(!inside(nx))nx=nx<lo?0.5*(x+lo):0.5*(x+hi);
+                if(std::abs(nx-x)<=1e-12*std::max(1.0,std::abs(x))){x=nx;if(std::abs(fx(x))<1e-9*std::max(1.0,std::abs(y)+1)&&inside(x))return R(x);break;}
                 x=nx;
             }
-            throw MathError("Math ERROR: SOLVE non convergente");
+            // Con i limiti: ricerca di un cambio di segno nell'intervallo.
+            if(std::isfinite(lo)&&std::isfinite(hi)){
+                double a=lo,fa=fx(a);
+                for(int k=1;k<=400;++k){
+                    const double b=lo+(hi-lo)*k/400.0,fb=fx(b);
+                    if(fa==0)return R(a);
+                    if(std::isfinite(fa)&&std::isfinite(fb)&&(fa<0)!=(fb<0)){
+                        double l=a,h=b,fl=fa;
+                        for(int j=0;j<200&&h-l>1e-15*std::max(1.0,std::abs(l));++j){const double m=0.5*(l+h),fm=fx(m);if((fm<0)==(fl<0)){l=m;fl=fm;}else h=m;}
+                        return R(0.5*(l+h));
+                    }
+                    a=b;fa=fb;
+                }
+            }
+            throw MathError("Iteration ERROR: Solve non trova una soluzione");
         }
-        // sum / prod over integer range, x bound to the index.
-        const double a=rarg(1),b=rarg(2);
-        if(!isInteger(a)||!isInteger(b))throw MathError("Argument ERROR: limiti di Σ/Π interi");
-        if(std::abs(b-a)>100000)throw MathError("Argument ERROR: massimo 100001 termini");
+        // sum / prod over integer range, the variable bound to the index.
+        const double a=rarg(first),b=rarg(first+1);
+        double step=1;
+        if(sumLike&&n.children.size()==5){step=rarg(4);if(!isInteger(step)||step<1)throw MathError("Argument ERROR: il passo di \xCE\xA3 e' un intero positivo");}
+        if(!isInteger(a)||!isInteger(b))throw MathError("Argument ERROR: limiti di \xCE\xA3/\xCE\xA0 interi");
+        if(std::abs(b-a)/step>100000)throw MathError("Argument ERROR: massimo 100001 termini");
         T acc=R(f=="sum"?0.0:1.0);
-        const long long lo=static_cast<long long>(a),hi=static_cast<long long>(b);
-        if(lo<=hi){for(long long k=lo;k<=hi;++k){bind.set(static_cast<double>(k));const T v=evalNode<T>(body,env);if(f=="sum")acc+=v;else acc*=v;}}
+        const long long lo=static_cast<long long>(a),hi=static_cast<long long>(b),st=static_cast<long long>(step);
+        if(lo<=hi){for(long long k=lo;k<=hi;k+=st){bind.set(static_cast<double>(k));const T v=evalNode<T>(body,env);if(f=="sum")acc+=v;else acc*=v;checkFinite(acc);}}
         env.at=&n;
         return acc;
     }
@@ -962,12 +1177,73 @@ template<typename T> FXAI_NOINLINE T callCalculus(const ast::Node& n,Env& env){
 // Non-recursive part of a function call: the arguments are already evaluated,
 // so the large frame of this function is never live across the recursion.
 template<typename T> FXAI_NOINLINE T applyFunction(const std::string& f,const T* args,std::size_t count){
+    if(count>MaxCallArguments)throw SyntaxError("Argument ERROR: "+f+" numero di argomenti errato");
     auto arg=[&](std::size_t i)->T{if(i>=count)throw SyntaxError("Argument ERROR: "+f+" numero di argomenti errato");return args[i];};
     auto rarg=[&](std::size_t i)->double{return asReal<T>(arg(i),f.c_str());};
     auto R=[](double v){return fromReal<T>(v);};
 
     // ---- zero-argument
+    if(f=="ran"&&count==1){const double n=rarg(0);if(!isInteger(n))throw MathError("Argument ERROR: Ran# n con n intero");return R(sequenceRandom(static_cast<int>(n)));}
     if(f=="rand"||f=="ran")return R(static_cast<double>(nextRandom()>>8)/16777216.0);
+
+    // ---- v1.12.0: funzioni di calc_library (argomenti reali)
+    {
+        using namespace calclib;
+        if(count>=2&&count<=MaxCallArguments){
+            double v[MaxCallArguments]={};
+            bool lib=true;
+            if(f=="norm_cd"){for(std::size_t k=0;k<count;++k)v[k]=rarg(k);return R(normCD(v[0],v[1],count>2?v[2]:1.0,count>3?v[3]:0.0));}
+            if(f=="t_pd"){return R(tPD(rarg(0),rarg(1)));}
+            if(f=="t_cd"){return R(tCD(rarg(0),rarg(1),rarg(2)));}
+            if(f=="invt_cd"){return R(invTCD(rarg(0),rarg(1)));}
+            if(f=="chi_pd"){return R(chiPD(rarg(0),rarg(1)));}
+            if(f=="chi_cd"){return R(chiCD(rarg(0),rarg(1),rarg(2)));}
+            if(f=="invchi_cd"){return R(invChiCD(rarg(0),rarg(1)));}
+            if(f=="f_pd"){return R(fPD(rarg(0),rarg(1),rarg(2)));}
+            if(f=="f_cd"){return R(fCD(rarg(0),rarg(1),rarg(2),rarg(3)));}
+            if(f=="invf_cd"){return R(invFCD(rarg(0),rarg(1),rarg(2)));}
+            if(f=="binomial_pd"&&count==3){return R(binomialPD(rarg(0),rarg(1),rarg(2)));}
+            if(f=="binomial_cd"&&count==3){return R(binomialCD(rarg(0),rarg(1),rarg(2)));}
+            if(f=="invbinomial_cd"){return R(invBinomialCD(rarg(0),rarg(1),rarg(2)));}
+            if(f=="poisson_pd"){return R(poissonPD(rarg(0),rarg(1)));}
+            if(f=="poisson_cd"){return R(poissonCD(rarg(0),rarg(1)));}
+            if(f=="invpoisson_cd"){return R(invPoissonCD(rarg(0),rarg(1)));}
+            if(f=="geo_pd"){return R(geoPD(rarg(0),rarg(1)));}
+            if(f=="geo_cd"){return R(geoCD(rarg(0),rarg(1)));}
+            if(f=="invgeo_cd"){return R(invGeoCD(rarg(0),rarg(1)));}
+            if(f=="hypergeo_pd"){return R(hypergeoPD(rarg(0),rarg(1),rarg(2),rarg(3)));}
+            if(f=="hypergeo_cd"){return R(hypergeoCD(rarg(0),rarg(1),rarg(2),rarg(3)));}
+            if(f=="invhypergeo_cd"){return R(invHypergeoCD(rarg(0),rarg(1),rarg(2),rarg(3)));}
+            if(f=="smpl_si"){return R(smplSI(rarg(0),rarg(1),rarg(2)));}
+            if(f=="smpl_sfv"){return R(smplSFV(rarg(0),rarg(1),rarg(2)));}
+            if(f.compare(0,5,"cmpd_")==0||f.compare(0,4,"amt_")==0||f=="days_prd"){for(std::size_t k=0;k<count;++k)v[k]=rarg(k);}
+            else lib=false;
+            if(lib){
+                if(f=="cmpd_pv")return R(cmpdPV(v[0],v[1],v[2],v[3],v[4],v[5]));
+                if(f=="cmpd_fv")return R(cmpdFV(v[0],v[1],v[2],v[3],v[4],v[5]));
+                if(f=="cmpd_pmt")return R(cmpdPMT(v[0],v[1],v[2],v[3],v[4],v[5]));
+                if(f=="cmpd_n")return R(cmpdN(v[0],v[1],v[2],v[3],v[4],v[5]));
+                if(f=="cmpd_i")return R(cmpdI(v[0],v[1],v[2],v[3],v[4],v[5]));
+                if(f=="days_prd")return R(daysPrd(v[0],v[1],v[2],v[3],v[4],v[5]));
+                const int kind=f=="amt_bal"?0:f=="amt_int"?1:f=="amt_prn"?2:f=="amt_sint"?3:4;
+                return R(amortization(kind,v[0],v[1],v[2],v[3],v[4],v[5],v[6]));
+            }
+            if(f=="cnvt_eff")return R(cnvtEFF(rarg(0),rarg(1)));
+            if(f=="cnvt_apr")return R(cnvtAPR(rarg(0),rarg(1)));
+            if(f=="fin_cost")return R(cost(rarg(0),rarg(1)));
+            if(f=="fin_sell")return R(sell(rarg(0),rarg(1)));
+            if(f=="fin_margin")return R(margin(rarg(0),rarg(1)));
+            if(f=="norm_pd")return R(normPD(rarg(0),rarg(1),count>2?rarg(2):0.0));
+        }
+        if(count==1){
+            if(f=="norm_pd")return R(normPD(rarg(0),1.0,0.0));
+            if(f=="prob_p")return R(probP(rarg(0)));
+            if(f=="prob_q")return R(probQ(rarg(0)));
+            if(f=="prob_r")return R(probR(rarg(0)));
+            if(f=="fromrad")return arg(0)*T(fromRadians(1.0));
+            if(f=="fromgrad")return arg(0)*T(fromRadians(kPi/200.0));
+        }
+    }
 
     // ---- complex-specific
     if(f=="re"||f=="real"){if constexpr(std::is_same_v<T,double>)return arg(0);else return R(arg(0).real());}
@@ -1137,7 +1413,12 @@ template<typename T> FXAI_NOINLINE T applyFunction(const std::string& f,const T*
 }
 
 bool isLazyFunction(const std::string& f){
-    return f=="integral"||f=="integrate"||f=="derivative"||f=="diff"||f=="derivative2"||f=="sum"||f=="prod"||f=="solve";
+    return f=="integral"||f=="integrate"||f=="derivative"||f=="diff"||f=="derivative2"||f=="sum"||f=="prod"||f=="solve"||
+           f=="solve_n"||f=="f_min"||f=="f_max";
+}
+// Funzioni senza forma esatta (numeri casuali, metodi numerici, distribuzioni, finanza...).
+bool isRandomFunction(const std::string& f){
+    return f=="rand"||f=="ran"||f=="randint"||f=="rannorm"||f=="ranbin"||f=="ran_list"||f=="ran_samp";
 }
 // "Y1" as written by the user (for messages).
 std::string referenceLabel(const std::string& text){
@@ -1183,22 +1464,101 @@ template<typename T> FXAI_NOINLINE T callReference(const ast::Node& n,Env& env){
     LocalBind b3(env,names[2],values[2]);
     return evalNode<T>(*body,env);
 }
+// Valore di una variabile di sistema (VARS) letta dal chiamante.
+double systemValue(const Env& env,const char* name){
+    double v=0;
+    if(env.ctx.names&&env.ctx.names->resolve(name,v))return v;
+    throw MathError(std::string("Math ERROR: ")+name+" non disponibile qui");
+}
+template<typename T> FXAI_NOINLINE T contextFunction(const ast::Node& n,Env& env){
+    const std::string& f=n.text;
+    if(n.children.size()!=(f=="pxl_test"?2u:1u)||!n.children[0])throw SyntaxError("Argument ERROR: "+f+" numero di argomenti errato");
+    const double a=asReal<T>(evalNode<T>(*n.children[0],env),f.c_str());
+    double b=0;
+    if(f=="pxl_test"){if(!n.children[1])throw SyntaxError("Syntax ERROR: argomento mancante");b=asReal<T>(evalNode<T>(*n.children[1],env),f.c_str());}
+    env.at=&n;
+    if(f=="num_rnd")return fromReal<T>(roundToDisplay(a,env.ctx.displayMode,env.ctx.displayDigits));
+    if(f=="prob_t"){
+        // t(x) = (x - x̄) / σx dei dati di Statistics (variabile normalizzata).
+        const double mean=systemValue(env,"stat_meanx"),sd=systemValue(env,"stat_popsdx");
+        if(sd==0)throw MathError("Math ERROR: \xCF\x83x = 0");
+        return fromReal<T>((a-mean)/sd);
+    }
+    if(f=="y_hat"){
+        // ŷ = valore stimato dalla regressione dell'ultimo calcolo di Statistics.
+        const int type=static_cast<int>(systemValue(env,"reg_type"));
+        const double ca=systemValue(env,"reg_a"),cb=systemValue(env,"reg_b");
+        double v=0;
+        switch(type){
+        case 0: case 1: v=ca*a+cb;break;                                   // ax+b, Med-Med
+        case 2: v=(ca*a+cb)*a+systemValue(env,"reg_c");break;              // ax²+bx+c
+        case 3: v=((ca*a+cb)*a+systemValue(env,"reg_c"))*a+systemValue(env,"reg_d");break;
+        case 4: v=(((ca*a+cb)*a+systemValue(env,"reg_c"))*a+systemValue(env,"reg_d"))*a+systemValue(env,"reg_e");break;
+        case 5: if(a<=0)throw MathError("Math ERROR: x<=0 per la regressione logaritmica");v=ca+cb*std::log(a);break;
+        case 6: v=ca*std::exp(cb*a);break;
+        case 7: v=ca*std::pow(cb,a);break;
+        case 8: v=ca*std::pow(a,cb);break;
+        default: throw MathError("Math ERROR: nessuna regressione calcolata in Statistics");
+        }
+        return fromReal<T>(v);
+    }
+    // PxlTest(riga, colonna)
+    if(a!=std::floor(a)||b!=std::floor(b)||a<1||a>282||b<1||b>320)throw MathError("Argument ERROR: PxlTest( riga 1-282, colonna 1-320");
+    if(!env.ctx.services)return fromReal<T>(0.0);
+    return fromReal<T>(env.ctx.services->pixelTest(static_cast<int>(a),static_cast<int>(b))?1.0:0.0);
+}
+// f1..f20 (OPTN › FUNCMEM): l'espressione memorizzata calcolata con il valore
+// corrente di X, o con l'argomento: f1(3).
+template<typename T> FXAI_NOINLINE T callFunctionMemory(const ast::Node& n,Env& env,int index){
+    const std::string text=env.ctx.services?env.ctx.services->functionMemory(index):std::string();
+    if(text.empty())throw MathError("Math ERROR: f"+std::to_string(index)+" non definita");
+    if(env.refDepth>=MaxFunctionReferenceDepth)throw MathError("Stack ERROR: troppe function memory annidate");
+    double x=0;
+    const bool hasArg=!n.children.empty()&&n.children[0];
+    if(hasArg)x=asReal<T>(evalNode<T>(*n.children[0],env),"argomento");
+    const ast::NodePtr body=parseExpression(text);
+    ++env.refDepth;
+    struct DepthGuard{Env& e;~DepthGuard(){--e.refDepth;}} guard{env};
+    const ErrorNodeGuard errorNode(env,n);
+    if(!hasArg)return evalNode<T>(*body,env);
+    LocalBind bind(env,"x",x);
+    return evalNode<T>(*body,env);
+}
+// valore[da]▶[a]: conversione metrica.
+template<typename T> FXAI_NOINLINE double convertNode(const ast::Node& n,Env& env){
+    if(n.children.size()!=3||!n.children[0]||!n.children[1]||!n.children[2])throw SyntaxError("Syntax ERROR: conversione non valida");
+    auto unit=[](const ast::Node& u){
+        const std::string& t=u.text;
+        const calclib::UnitInfo* info=t.size()>2?calclib::findUnit(t.substr(1,t.size()-2)):nullptr;
+        if(!info)throw SyntaxError("Syntax ERROR: unita' sconosciuta "+t,u.pos,u.len);
+        return info;
+    };
+    const double v=asReal<T>(evalNode<T>(*n.children[0],env),"conversione");
+    env.at=&n;
+    return calclib::convertUnit(v,*unit(*n.children[1]),*unit(*n.children[2]));
+}
 template<typename T> FXAI_NOINLINE T callFunction(const ast::Node& n,Env& env){
     if(env.ctx.integerBase){
         // Base-N: solo Not (complemento a uno), Neg (complemento a due) e Abs.
         const std::string& f=n.text;
         if(n.children.size()!=1||!n.children[0]||(f!="not"&&f!="neg"&&f!="abs"))
             throw MathError("Math ERROR: "+f+" non disponibile in Base-N");
-        const long long x=int32Arg(asReal<T>(evalNode<T>(*n.children[0],env),f.c_str()));
+        const unsigned bits=baseBits(env.ctx.integerBase);
+        const long long x=int32Arg(asReal<T>(evalNode<T>(*n.children[0],env),f.c_str()),bits);
         env.at=&n;
-        if(f=="not")return fromReal<T>(bitsValue(~static_cast<std::uint32_t>(static_cast<std::int32_t>(x))));
-        return fromReal<T>(int32Result(f=="neg"?-x:(x<0?-x:x)));
+        if(f=="not")return fromReal<T>(bitsValue(~static_cast<std::uint32_t>(static_cast<std::int32_t>(x)),bits));
+        return fromReal<T>(int32Result(f=="neg"?-x:(x<0?-x:x),bits));
     }
     if(!n.text.empty()&&n.text[0]=='@')return callReference<T>(n,env);
     if(isLazyFunction(n.text))return callCalculus<T>(n,env);
+    if(const int fm=functionMemoryIndex(n.text))return callFunctionMemory<T>(n,env,fm);
+    if(n.text=="convert")return fromReal<T>(convertNode<T>(n,env));
     const std::size_t count=n.children.size();
-    if(count>3)throw SyntaxError("Argument ERROR: "+n.text+" numero di argomenti errato");
-    T args[3]{};
+    if(count>MaxCallArguments)throw SyntaxError("Argument ERROR: "+n.text+" numero di argomenti errato");
+    // Funzioni che leggono il contesto: Rnd (SET UP Display), t( (dati di
+    // Statistics), PxlTest( (schermata del grafico), ŷ( (regressione).
+    if(n.text=="num_rnd"||n.text=="prob_t"||n.text=="pxl_test"||n.text=="y_hat")return contextFunction<T>(n,env);
+    T args[MaxCallArguments]{};
     for(std::size_t i=0;i<count;++i){
         if(!n.children[i])throw SyntaxError("Syntax ERROR: argomento mancante");
         args[i]=evalNode<T>(*n.children[i],env);
@@ -1210,6 +1570,7 @@ template<typename T> FXAI_NOINLINE T callFunction(const ast::Node& n,Env& env){
 template<typename T> FXAI_NOINLINE T evalToken(const ast::Node& n,Env& env){
         if(n.text.empty())throw SyntaxError("Syntax ERROR: token vuoto");
         const unsigned char c0=static_cast<unsigned char>(n.text[0]);
+        if(c0=='"')throw SyntaxError("Syntax ERROR: una stringa non e' un numero",n.pos,n.len);
         if(c0=='#'){char* e=nullptr;const double v=std::strtod(n.text.c_str()+1,&e);return fromReal<T>(v);}   // simbolo ingegneristico
         if(c0=='-'&&n.text.size()>1&&std::isdigit(static_cast<unsigned char>(n.text[1])))return fromReal<T>(std::strtod(n.text.c_str(),nullptr));   // Base-N negativo
         if(std::isdigit(c0)&&n.text.find(kFractionMark)!=std::string::npos){
@@ -1243,7 +1604,15 @@ template<typename T> FXAI_NOINLINE T evalToken(const ast::Node& n,Env& env){
             if(mem)return fromReal<T>(mem->recall(static_cast<char>(c0)));
             throw MathError(std::string("Math ERROR: variabile ")+static_cast<char>(std::toupper(c0))+" non definita");
         }
-        if(low=="theta")throw MathError("Math ERROR: theta non definito");
+        if(const char v=explicitVariable(low)){
+            if(mem)return fromReal<T>(mem->recall(v));
+            throw MathError(std::string("Math ERROR: variabile ")+v+" non definita");
+        }
+        // r e θ: le due variabili oltre A-Z (fuori da GRAPH, dove θ e' la variabile delle polari).
+        if(low=="theta"||low=="r_var"){
+            if(mem)return fromReal<T>(mem->recall(low=="theta"?CalculatorMemory::ThetaSlot:CalculatorMemory::RSlot));
+            throw MathError(std::string("Math ERROR: ")+(low=="theta"?"\xCE\xB8":"r")+" non definita");
+        }
         if(isSystemName(low)){
             double v=0;
             if(env.ctx.names&&env.ctx.names->resolve(low,v))return fromReal<T>(v);
@@ -1281,6 +1650,18 @@ template<typename T> FXAI_NOINLINE T applyBinary(char op,const T& a,const T& b){
             const bool x=!(a==T(0)),y=!(b==T(0));
             r=fromReal<T>((op=='&'?(x&&y):op=='|'?(x||y):op=='x'?(x!=y):(x==y))?1.0:0.0);break;
         }
+        case 'A':{
+            // r∠θ: modulo e argomento nell'unita' d'angolo corrente.
+            const double radius=asReal<T>(a,"\xE2\x88\xA0"),angle=asReal<T>(b,"\xE2\x88\xA0");
+            const double rad=toRadians(angle);
+            double sn=0,cs=0;
+            if(!exactAngle(angle,sn,cs)){sn=snapTrig(std::sin(rad));cs=snapTrig(std::cos(rad));}
+            if constexpr(std::is_same_v<T,double>){
+                if(sn!=0&&radius!=0)throw NonRealError("Non-Real ERROR: r\xE2\x88\xA0\xCE\xB8 e' un numero complesso");
+                r=radius*cs;
+            }else r=Complex(radius*cs,radius*sn);
+            break;
+        }
         case '^':
             if constexpr(std::is_same_v<T,double>)r=realPow(a,b);
             else{
@@ -1300,8 +1681,8 @@ template<typename T> FXAI_NOINLINE T applyBinary(char op,const T& a,const T& b){
 // Operazione binaria nel dominio del contesto: interi a 32 bit nella modalita'
 // Base-N, altrimenti le regole numeriche di sempre.
 template<typename T> T combine(const Env& env,char op,const T& a,const T& b){
-    if constexpr(std::is_same_v<T,double>){if(env.ctx.integerBase)return baseNBinary(op,a,b);}
-    else{if(env.ctx.integerBase)return Complex(baseNBinary(op,requireReal(a,"Base-N"),requireReal(b,"Base-N")),0.0);}
+    if constexpr(std::is_same_v<T,double>){if(env.ctx.integerBase)return baseNBinary(op,a,b,env.ctx.integerBase);}
+    else{if(env.ctx.integerBase)return Complex(baseNBinary(op,requireReal(a,"Base-N"),requireReal(b,"Base-N"),env.ctx.integerBase),0.0);}
     return applyBinary<T>(op,a,b);
 }
 
@@ -1309,7 +1690,7 @@ template<typename T> T combine(const Env& env,char op,const T& a,const T& b){
 // walked iteratively so that the recursion depth follows the nesting of the
 // input, not its length.
 bool isChainNode(const ast::Node& n) noexcept {
-    return n.kind==ast::Kind::Binary&&n.text.size()==1&&std::strchr("+-*/%qr=n<>lg&|xX",n.text[0])!=nullptr&&n.children.size()==2&&n.children[0]&&n.children[1];
+    return n.kind==ast::Kind::Binary&&n.text.size()==1&&std::strchr("+-*/%qr=n<>lg&|xXA",n.text[0])!=nullptr&&n.children.size()==2&&n.children[0]&&n.children[1];
 }
 template<typename T> FXAI_NOINLINE T evalChain(const ast::Node& top,Env& env){
     constexpr std::size_t kChunk=16;
@@ -1351,13 +1732,14 @@ template<typename T> T evalNode(const ast::Node& node,Env& env){
     case Kind::Token:{
         env.at=&n;
         const T v=evalToken<T>(n,env);
-        if(env.ctx.integerBase)(void)int32Arg(asReal<T>(v,"Base-N"));      // Base-N: solo interi a 32 bit
+        checkFinite(v);
+        if(env.ctx.integerBase)(void)int32Arg(asReal<T>(v,"Base-N"),baseBits(env.ctx.integerBase));      // Base-N: interi a 32 (Bin 16) bit
         return v;
     }
     case Kind::Unary:{
         const T a=evalNode<T>(*n.children.at(0),env);
         if(n.text!="-")return a;
-        if(env.ctx.integerBase){env.at=&n;return fromReal<T>(int32Result(-int32Arg(asReal<T>(a,"Base-N"))));}
+        if(env.ctx.integerBase){const unsigned bits=baseBits(env.ctx.integerBase);env.at=&n;return fromReal<T>(int32Result(-int32Arg(asReal<T>(a,"Base-N"),bits),bits));}
         if constexpr(std::is_same_v<T,double>)return -a;
         else{
             // Negating 4+0i must give -4+0i (not -4-0i): a signed zero imaginary
@@ -1660,6 +2042,7 @@ bool exactNode(const ast::Node& n,Env& env,Value& out);
 FXAI_NOINLINE bool exactToken(const ast::Node& n,Env& env,Value& out){
     if(n.text.empty())return false;
     const unsigned char c0=static_cast<unsigned char>(n.text[0]);
+    if(c0=='"')return false;
     if(env.ctx.integerBase)return false;                       // Base-N: valori interi, nessuna forma esatta
     if(c0=='#'){
         // Simbolo ingegneristico: valore esatto, mostrato come un decimale (come 2.5).
@@ -1697,21 +2080,35 @@ FXAI_NOINLINE bool exactToken(const ast::Node& n,Env& env,Value& out){
         if(!mem||!mem->exactRecall(static_cast<char>(c0),out,decimal))return false;
         env.decimal=env.decimal||decimal;return true;
     }
+    char slot=explicitVariable(low);
+    if(low=="theta")slot=CalculatorMemory::ThetaSlot;
+    if(low=="r_var")slot=CalculatorMemory::RSlot;
+    if(slot){
+        if(!mem||!mem->exactRecall(slot,out,decimal))return false;
+        env.decimal=env.decimal||decimal;return true;
+    }
     return false;
 }
 // Σ / Π over integer ranges with an exact body (at most 10000 terms).
 FXAI_NOINLINE bool exactSum(const ast::Node& n,Env& env,Value& out){
-    if(n.children.size()!=3||!n.children[0]||!n.children[1]||!n.children[2])return false;
+    const std::size_t count=n.children.size();
+    if(count<3||count>5)return false;
+    for(const auto& c:n.children)if(!c)return false;
+    // Σ(f,k,a,b[,n]) o la forma storica Σ(f,a,b) con la variabile x.
+    const char var=count>=4?variableNode(n.children[1].get()):'x';
+    if(!var)return false;
+    const std::size_t first=count>=4?2:1;
     Value lo,hi;
-    long long a=0,b=0;
-    if(!exactNode(*n.children[1],env,lo)||!exactNode(*n.children[2],env,hi)||!exactInteger(lo,a)||!exactInteger(hi,b))return false;
-    if(b-a>10000)return false;
+    long long a=0,b=0,step=1;
+    if(!exactNode(*n.children[first],env,lo)||!exactNode(*n.children[first+1],env,hi)||!exactInteger(lo,a)||!exactInteger(hi,b))return false;
+    if(count==5){Value st;if(!exactNode(*n.children[4],env,st)||!exactInteger(st,step)||step<1)return false;}
+    if((b-a)/step>10000)return false;
     if(++env.depth>4){--env.depth;return false;}
     struct DepthGuard{Env& e;~DepthGuard(){--e.depth;}} guard{env};
     const bool sum=n.text=="sum";
     Value acc=exactInt(sum?0:1);
-    LocalBind bind(env,"x",0.0);
-    for(long long k=a;k<=b;++k){
+    LocalBind bind(env,letterName(var),0.0);
+    for(long long k=a;k<=b;k+=step){
         bind.set(static_cast<double>(k));
         Value term;
         if(!exactNode(*n.children[0],env,term))return false;
@@ -1724,7 +2121,7 @@ FXAI_NOINLINE bool exactCall(const ast::Node& n,Env& env,Value& out){
     if(f=="sum"||f=="prod")return exactSum(n,env,out);
     if(!f.empty()&&f[0]=='@')return false;   // graph function references are evaluated numerically
     // Numerical calculus and random numbers have no exact value here.
-    if(isLazyFunction(f)||f=="rand"||f=="ran"||f=="randint"||f=="rannorm"||f=="ranbin")return false;
+    if(isLazyFunction(f)||isRandomFunction(f)||functionMemoryIndex(f)||f=="convert"||f=="num_rnd"||f=="prob_t"||f=="pxl_test"||f=="y_hat")return false;
     const std::size_t count=n.children.size();
     if(count>3)return false;
     Value args[3];
@@ -1732,8 +2129,9 @@ FXAI_NOINLINE bool exactCall(const ast::Node& n,Env& env,Value& out){
         if(!n.children[i]||!exactNode(*n.children[i],env,args[i]))return false;
     }
     if(!exactApply(f,args,count,out))return false;
-    // Rounding to decimal places gives a decimal result (fx-CG50 RndFix).
-    if(f=="rndfix"||(f=="round"&&count==2))env.decimal=true;
+    // Rounding to decimal places gives a decimal result (fx-CG50 RndFix); un
+    // valore sessagesimale (2°20′30″) si mostra in decimale come sulla calcolatrice.
+    if(f=="rndfix"||(f=="round"&&count==2)||f=="dms")env.decimal=true;
     return true;
 }
 FXAI_NOINLINE bool exactChain(const ast::Node& top,Env& env,Value& out){
@@ -1845,7 +2243,8 @@ struct NumDomain {
     }
     static bool negligible(const Elem& pivot,double scale){return std::abs(pivot)<=1e-12*scale;}
     static void load(const CalcValue& src,Coll<Elem>& out,Env& env){
-        if(real(env)&&src.complex())throw NonRealError("Non-Real ERROR: elementi complessi (serve il modo complesso)");
+        // Appendice α: "Complex Number In List / In Matrix" (elementi complessi nel modo Real).
+        if(real(env)&&src.complex())throw NonRealError(src.isList()?"Complex Number In List: serve il modo complesso":"Complex Number In Matrix: serve il modo complesso");
         out.rows=src.rows;out.cols=src.cols;
         out.v.resize(src.size());
         for(std::size_t i=0;i<src.size();++i)out.v[i]=src.at(i);
@@ -1967,7 +2366,7 @@ private:
         if(c.list())return "lista di "+std::to_string(c.v.size());
         return std::to_string(c.rows)+"x"+std::to_string(c.cols);
     }
-    [[noreturn]] static void typeError(const std::string& what){throw TypeError("Type ERROR: "+what);}
+    [[noreturn]] static void typeError(const std::string& what){throw TypeError("Argument ERROR: "+what);}
     E op(char o,const E& a,const E& b){return D::binary(o,a,b,env);}
     E fn(const char* name,const E& a){return D::apply(name,&a,1,env);}
     static double maxMagnitude(const C& c){double m=0;for(const E& e:c.v)m=std::max(m,D::magnitude(e));return m;}
@@ -2046,6 +2445,12 @@ private:
             if(env.ctx.names&&env.ctx.names->resolve(t,element))return scalarOf(D::fromDouble(element));
             index=listNumber(t)-1;
             t="List "+t.substr(4);
+        }else if(t.compare(0,6,"List \"")==0){
+            // List "QTY": la lista con quel sottonome (v1.12.0).
+            const std::string sub=t.substr(6,t.size()>7?t.size()-7:0);
+            if(!env.ctx.collections)throw MathError("Math ERROR: "+t+" non disponibile qui");
+            index=env.ctx.collections->listByName(sub);
+            if(index<0)throw DimensionError("Dimension ERROR: nessuna lista con il nome \""+sub+"\"");
         }else{
             const std::size_t space=t.find(' ');
             if(space==std::string::npos||space+1>=t.size())throw SyntaxError("Syntax ERROR: nome sconosciuto "+t);
@@ -2296,7 +2701,7 @@ private:
     // Frac, Intg e le parti complesse agli elementi di una matrice).
     C mapCall(const std::string& f,const std::vector<C>& args){
         const std::size_t count=args.size();
-        if(count>3)throw SyntaxError("Argument ERROR: "+f+" numero di argomenti errato");
+        if(count>MaxCallArguments)throw SyntaxError("Argument ERROR: "+f+" numero di argomenti errato");
         const C* shape=nullptr;
         bool anyList=false,anyMatrix=false;
         for(const C& a:args){
@@ -2306,13 +2711,13 @@ private:
                 throw DimensionError("Dimension ERROR: lunghezze diverse ("+std::to_string(shape->v.size())+" e "+std::to_string(a.v.size())+")");
             if(!shape)shape=&a;
         }
-        E in[3]={};
+        E in[MaxCallArguments]={};
         if(!shape){
             for(std::size_t i=0;i<count;++i)in[i]=args[i].s;
             return scalarOf(D::apply(f,in,count,env));
         }
         if(anyMatrix){
-            static const char* const allowed[]={"abs","int","frac","intg","re","im","real","imag","conj"};
+            static const char* const allowed[]={"abs","int","frac","intg","re","im","real","imag","conj","arg","num_rnd"};
             bool ok=count==1&&!anyList;
             if(ok){ok=false;for(const char* a:allowed)ok=ok||f==a;}
             if(!ok)typeError(f+" non si applica a matrici e vettori");
@@ -2346,11 +2751,314 @@ private:
             throw DimensionError("Dimension ERROR: ["+std::to_string(r)+","+std::to_string(c)+"] fuori dalla matrice "+dims(target));
         return scalarOf(target.v[static_cast<std::size_t>(r-1)*target.cols+static_cast<std::size_t>(c-1)]);
     }
+    // ---- v1.12.0: funzioni con risultato lista o argomenti lista
+    double realOf(const C& c,const char* what){return D::toReal(scalarArg(c,what),what);}
+    C listFromDoubles(const std::vector<double>& v){
+        C out=listOf(v.size());
+        for(std::size_t i=0;i<v.size();++i)out.v[i]=D::fromDouble(v[i]);
+        return out;
+    }
+    std::vector<double> doublesOf(const C& l,const char* what){
+        std::vector<double> v;
+        v.reserve(listArg(l,what).v.size());
+        for(const E& e:l.v)v.push_back(D::toReal(e,what));
+        return v;
+    }
+    // Pesi (frequenze) di Mean/Median/S-Dev/Var: interi o reali >= 0, stessa lunghezza.
+    std::vector<double> weightsOf(const std::vector<C>& a,std::size_t n,const char* what){
+        if(a.size()<2)return std::vector<double>(n,1.0);
+        std::vector<double> w=doublesOf(a[1],what);
+        if(w.size()!=n)throw DimensionError(std::string("Dimension ERROR: ")+what+" richiede liste della stessa lunghezza");
+        for(double x:w)if(x<0)throw MathError(std::string("Argument ERROR: frequenze negative in ")+what);
+        return w;
+    }
+    bool libraryCall(const ast::Node& n,const std::vector<C>& a,C& out){
+        const std::string& f=n.text;
+        const std::size_t count=a.size();
+        const bool random=isRandomFunction(f)&&(count==3||f=="ran_list"||f=="ran_samp");
+        const bool numeric=random||f=="pol"||f=="rec"||f.compare(0,5,"cash_")==0||f=="invnorm_cd"||f=="x_hat"||f=="s_dev"||f=="stat_var"||
+                           ((f=="binomial_pd"||f=="binomial_cd")&&count==2);
+        if(!numeric&&!((f=="mean"||f=="median")&&count==2))return false;
+        if constexpr(std::is_same_v<D,ExactDomain>){if(numeric)throw NoExactForm{};}
+        if(f=="pol"||f=="rec"){
+            // Pol(x,y) = {r, θ}, Rec(r,θ) = {x, y} in List Ans (manuale 2-20).
+            const double x=realOf(a[0],f.c_str()),y=realOf(a[1],f.c_str());
+            const auto p=f=="pol"?rectToPolar(x,y):polarToRect(x,y);
+            out=listFromDoubles({p.first,p.second});
+            return true;
+        }
+        if(f=="ran_list"){
+            const long long k=integerArg(a[0],"RanList#");
+            if(k<1||static_cast<std::size_t>(k)>limits::kListMaxLength)throw MathError("Argument ERROR: RanList#(n) con n da 1 a "+std::to_string(limits::kListMaxLength));
+            std::vector<double> v(static_cast<std::size_t>(k));
+            for(double& d:v)d=static_cast<double>(nextRandom()>>8)/16777216.0;
+            out=listFromDoubles(v);
+            return true;
+        }
+        if(f=="ran_samp"){
+            // RanSamp#(lista, n[, m]): m=0 senza ripetizione (predefinito), m=1 con ripetizione.
+            const std::vector<double> src=doublesOf(a[0],"RanSamp#");
+            const long long k=integerArg(a[1],"RanSamp#");
+            const long long m=count==3?integerArg(a[2],"RanSamp#"):0;
+            if(m!=0&&m!=1)throw MathError("Argument ERROR: RanSamp# m = 0 o 1");
+            if(k<1||(m==0&&static_cast<std::size_t>(k)>src.size())||static_cast<std::size_t>(k)>limits::kListMaxLength)
+                throw MathError("Argument ERROR: RanSamp# n oltre la lista");
+            std::vector<double> pool=src,v;
+            for(long long i=0;i<k;++i){
+                const std::size_t j=nextRandom()%pool.size();
+                v.push_back(pool[j]);
+                if(m==0)pool.erase(pool.begin()+static_cast<std::ptrdiff_t>(j));
+            }
+            out=listFromDoubles(v);
+            return true;
+        }
+        if(random){
+            // RanInt#(a,b,n), RanNorm#(σ,μ,n), RanBin#(n,p,m): una lista di n numeri.
+            const long long k=integerArg(a[2],f.c_str());
+            if(k<1||static_cast<std::size_t>(k)>limits::kListMaxLength)throw MathError("Argument ERROR: numero di elementi da 1 a "+std::to_string(limits::kListMaxLength));
+            const double p0=realOf(a[0],f.c_str()),p1=realOf(a[1],f.c_str());
+            const double args2[2]={p0,p1};
+            std::vector<double> v(static_cast<std::size_t>(k));
+            for(double& d:v)d=applyFunction<double>(f,args2,2);
+            out=listFromDoubles(v);
+            return true;
+        }
+        if(f.compare(0,5,"cash_")==0){
+            const bool rated=f!="cash_irr";
+            const double rate=rated?realOf(a[0],f.c_str()):0;
+            const std::vector<double> cash=doublesOf(a[rated?1:0],f.c_str());
+            const double r=f=="cash_npv"?calclib::cashNPV(rate,cash):f=="cash_nfv"?calclib::cashNFV(rate,cash):
+                           f=="cash_pbp"?calclib::cashPBP(rate,cash):calclib::cashIRR(cash);
+            out=scalarOf(D::fromDouble(r));
+            return true;
+        }
+        if(f=="invnorm_cd"){
+            // InvNormCD(["L"|"R"|"C",] area[, σ, μ]): "C" da' i due estremi simmetrici.
+            const ast::Node* first=n.children[0].get();
+            while(first->kind==ast::Kind::Group&&first->children.size()==1&&first->children[0])first=first->children[0].get();
+            int tail=-1;
+            std::size_t k=0;
+            if(first->kind==ast::Kind::Token&&!first->text.empty()&&first->text[0]=='"'){
+                const std::string t=first->text;
+                tail=t=="\"L\""?-1:t=="\"R\""?1:t=="\"C\""?0:2;
+                if(tail==2)throw MathError("Argument ERROR: InvNormCD coda \"L\", \"R\" o \"C\"",first->pos,first->len);
+                k=1;
+            }
+            if(count<k+1||count>k+3)throw SyntaxError("Argument ERROR: InvNormCD([coda,]area[,\xCF\x83,\xCE\xBC])");
+            const double area=realOf(a[k],"InvNormCD"),sigma=count>k+1?realOf(a[k+1],"InvNormCD"):1.0,mu=count>k+2?realOf(a[k+2],"InvNormCD"):0.0;
+            if(tail==0){double lo=0,hi=0;calclib::invNormCentral(area,sigma,mu,lo,hi);out=listFromDoubles({lo,hi});}
+            else out=scalarOf(D::fromDouble(calclib::invNormCD(tail,area,sigma,mu)));
+            return true;
+        }
+        if(f=="binomial_pd"||f=="binomial_cd"){
+            // BinomialPD(n,p) / BinomialCD(n,p): la lista delle probabilita' per x = 0..n.
+            const double trials=realOf(a[0],f.c_str()),p=realOf(a[1],f.c_str());
+            if(!isInteger(trials)||trials<0||trials+1>static_cast<double>(limits::kListMaxLength))throw MathError("Argument ERROR: n intero da 0 a "+std::to_string(limits::kListMaxLength-1));
+            std::vector<double> v(static_cast<std::size_t>(trials)+1);
+            for(std::size_t x=0;x<v.size();++x)v[x]=f=="binomial_pd"?calclib::binomialPD(static_cast<double>(x),trials,p):calclib::binomialCD(static_cast<double>(x),trials,p);
+            out=listFromDoubles(v);
+            return true;
+        }
+        if(f=="x_hat"){
+            // x̂(y): stima di x dalla regressione dell'ultimo calcolo (Quad: due valori).
+            const double y=realOf(a[0],"x\xCC\x82");
+            const int type=static_cast<int>(systemValue(env,"reg_type"));
+            const double ca=systemValue(env,"reg_a"),cb=systemValue(env,"reg_b");
+            switch(type){
+            case 0: case 1: if(ca==0)throw MathError("Math ERROR: a = 0");out=scalarOf(D::fromDouble((y-cb)/ca));return true;
+            case 2:{
+                const double cc=systemValue(env,"reg_c")-y,d=cb*cb-4*ca*cc;
+                if(ca==0||d<0)throw MathError("Math ERROR: x\xCC\x82 non esiste");
+                const double r1=(-cb-std::sqrt(d))/(2*ca),r2=(-cb+std::sqrt(d))/(2*ca);
+                out=listFromDoubles({std::min(r1,r2),std::max(r1,r2)});return true;
+            }
+            case 5: if(cb==0)throw MathError("Math ERROR: b = 0");out=scalarOf(D::fromDouble(std::exp((y-ca)/cb)));return true;
+            case 6: if(ca==0||cb==0||y/ca<=0)throw MathError("Math ERROR: x\xCC\x82 non esiste");out=scalarOf(D::fromDouble(std::log(y/ca)/cb));return true;
+            case 7: if(ca==0||cb<=0||cb==1||y/ca<=0)throw MathError("Math ERROR: x\xCC\x82 non esiste");out=scalarOf(D::fromDouble(std::log(y/ca)/std::log(cb)));return true;
+            case 8: if(ca==0||cb==0||y/ca<=0)throw MathError("Math ERROR: x\xCC\x82 non esiste");out=scalarOf(D::fromDouble(std::pow(y/ca,1/cb)));return true;
+            default: throw MathError("Math ERROR: x\xCC\x82 non disponibile per questa regressione");
+            }
+        }
+        // Mean, Median, S-Dev, Var con le frequenze facoltative (manuale 3-10).
+        const char* label=f=="mean"?"Mean":f=="median"?"Median":f=="s_dev"?"S-Dev":"Var";
+        if constexpr(std::is_same_v<D,ExactDomain>){
+            if(f=="mean"){
+                const C& l=listArg(a[0],label);
+                const C& w=listArg(a[1],label);
+                if(w.v.size()!=l.v.size())throw DimensionError("Dimension ERROR: Mean richiede liste della stessa lunghezza");
+                E num=D::fromInt(0),den=D::fromInt(0);
+                for(std::size_t i=0;i<l.v.size();++i){num=op('+',num,op('*',l.v[i],w.v[i]));den=op('+',den,w.v[i]);}
+                if(D::isZero(den))throw MathError("Math ERROR: frequenze tutte nulle");
+                out=scalarOf(op('/',num,den));
+                return true;
+            }
+            throw NoExactForm{};
+        }else{
+            const std::vector<double> x=doublesOf(a[0],label);
+            const std::vector<double> w=weightsOf(a,x.size(),label);
+            double total=0;for(double v:w)total+=v;
+            if(total<=0)throw MathError("Math ERROR: frequenze tutte nulle");
+            if(f=="median"){
+                std::vector<std::size_t> idx(x.size());
+                for(std::size_t i=0;i<idx.size();++i)idx[i]=i;
+                std::sort(idx.begin(),idx.end(),[&](std::size_t p,std::size_t q){return x[p]<x[q];});
+                // Mediana pesata: il valore a meta' della frequenza cumulata (media dei due centrali se cade tra due).
+                double cum=0;
+                for(std::size_t k=0;k<idx.size();++k){
+                    cum+=w[idx[k]];
+                    if(cum>total/2){out=scalarOf(D::fromDouble(x[idx[k]]));return true;}
+                    if(cum==total/2){
+                        std::size_t j=k+1;while(j<idx.size()&&w[idx[j]]==0)++j;
+                        out=scalarOf(D::fromDouble(j<idx.size()?(x[idx[k]]+x[idx[j]])/2:x[idx[k]]));return true;
+                    }
+                }
+                out=scalarOf(D::fromDouble(x[idx.back()]));return true;
+            }
+            double mean=0;for(std::size_t i=0;i<x.size();++i)mean+=x[i]*w[i];mean/=total;
+            if(f=="mean"){out=scalarOf(D::fromDouble(mean));return true;}
+            double ss=0;for(std::size_t i=0;i<x.size();++i)ss+=w[i]*(x[i]-mean)*(x[i]-mean);
+            if(total<=1)throw MathError("Math ERROR: servono almeno due dati");
+            const double var=ss/(total-1);
+            out=scalarOf(D::fromDouble(f=="s_dev"?std::sqrt(var):var));
+            return true;
+        }
+    }
+    // Valore di f nel punto v (Solve, SolveN, FMin): f o a-b per un'equazione a=b.
+    struct Objective {
+        const ast::Node* lhs{};const ast::Node* rhs{};
+        explicit Objective(const ast::Node& body){
+            const ast::Node* b=&body;
+            while(b->kind==ast::Kind::Group&&b->children.size()==1&&b->children[0])b=b->children[0].get();
+            lhs=b;
+            if(b->kind==ast::Kind::Binary&&b->text=="="&&b->children.size()==2&&b->children[0]&&b->children[1]){lhs=b->children[0].get();rhs=b->children[1].get();}
+        }
+    };
+    double objectiveAt(const Objective& o,LocalBind& bind,double v){
+        bind.set(v);
+        try{
+            double r=evalNode<double>(*o.lhs,env);
+            if(o.rhs)r-=evalNode<double>(*o.rhs,env);
+            return r;
+        }catch(const MathError&){return std::numeric_limits<double>::quiet_NaN();}
+    }
+    // SolveN(f[=g][,x][,inferiore,superiore]): fino a 10 soluzioni in una lista (manuale 2-33).
+    C solveN(const ast::Node& n){
+        const std::size_t count=n.children.size();
+        char var='x';
+        std::size_t k=1;
+        if(count==2||count==4){var=variableNode(n.children[1].get());if(!var){env.at=n.children[1].get();throw SyntaxError("Syntax ERROR: SolveN(f,x,inferiore,superiore)");}k=2;}
+        if(count-k!=0&&count-k!=2)throw SyntaxError("Argument ERROR: SolveN(f[,x][,inferiore,superiore])");
+        double lo=-1e10,hi=1e10;
+        bool bounded=false;
+        if(count-k==2){lo=realOf(eval(*n.children[k]),"SolveN");hi=realOf(eval(*n.children[k+1]),"SolveN");bounded=true;if(!(lo<hi))throw MathError("Argument ERROR: inferiore < superiore");}
+        if(++env.depth>4){--env.depth;throw MathError("Stack ERROR: calcoli annidati troppo profondi");}
+        struct DepthGuard{Env& e;~DepthGuard(){--e.depth;}} guard{env};
+        if(env.ctx.info)env.ctx.info->numerical=true;
+        const Objective obj(*n.children[0]);
+        LocalBind bind(env,letterName(var),0.0);
+        // Griglia: lineare nei limiti dati, in asinh altrimenti (copre molti ordini di grandezza).
+        constexpr int N=2400;
+        const double u0=bounded?lo:std::asinh(lo),u1=bounded?hi:std::asinh(hi);
+        auto xAt=[&](int i){const double u=u0+(u1-u0)*i/N;return bounded?u:std::sinh(u);};
+        std::vector<double> roots;
+        auto add=[&](double r){
+            for(double q:roots)if(std::abs(q-r)<=1e-9*std::max(1.0,std::abs(r)))return;
+            roots.push_back(r);
+        };
+        double xp=xAt(0),fp=objectiveAt(obj,bind,xp);
+        if(fp==0)add(xp);
+        double xpp=xp,fpp=fp;
+        for(int i=1;i<=N&&roots.size()<10;++i){
+            const double xc=xAt(i),fc=objectiveAt(obj,bind,xc);
+            if(std::isfinite(fc)&&fc==0)add(xc);
+            else if(std::isfinite(fp)&&std::isfinite(fc)&&(fp<0)!=(fc<0)&&fp!=0){
+                double l=xp,h=xc,fl=fp;
+                for(int j=0;j<200&&h-l>1e-15*std::max(1.0,std::abs(l));++j){const double m=0.5*(l+h),fm=objectiveAt(obj,bind,m);if(!std::isfinite(fm))break;if((fm<0)==(fl<0)){l=m;fl=fm;}else h=m;}
+                const double r=0.5*(l+h),fr=objectiveAt(obj,bind,r);
+                // Un polo (1/x) cambia segno senza zero: si scarta.
+                if(std::isfinite(fr)&&std::abs(fr)<1e-6*std::max(1.0,std::abs(fp)+std::abs(fc)))add(r);
+            }else if(std::isfinite(fpp)&&std::isfinite(fp)&&std::isfinite(fc)&&std::abs(fp)<std::abs(fpp)&&std::abs(fp)<std::abs(fc)&&(fp<0)==(fc<0)&&(fp<0)==(fpp<0)){
+                // Minimo locale di |f| senza cambio di segno (radice doppia): sezione aurea su |f|.
+                double l=xpp,h=xc;
+                const double g=0.6180339887498949;
+                double c=h-g*(h-l),d=l+g*(h-l);
+                for(int j=0;j<200&&h-l>1e-14*std::max(1.0,std::abs(l));++j){
+                    if(std::abs(objectiveAt(obj,bind,c))<std::abs(objectiveAt(obj,bind,d)))h=d;else l=c;
+                    c=h-g*(h-l);d=l+g*(h-l);
+                }
+                const double r=0.5*(l+h),fr=objectiveAt(obj,bind,r);
+                if(std::isfinite(fr)&&std::abs(fr)<1e-10*std::max(1.0,std::abs(fpp)))add(r);
+            }
+            xpp=xp;fpp=fp;xp=xc;fp=fc;
+        }
+        env.at=&n;
+        if(roots.empty())throw MathError("Can't Solve!: nessuna soluzione nell'intervallo");
+        std::sort(roots.begin(),roots.end());
+        for(double& r:roots)if(std::abs(r)<1e-13)r=0;
+        return listFromDoubles(roots);
+    }
+    // FMin(f,a,b[,n]) / FMax: {x, f(x)} del minimo / massimo in [a,b] (manuale 2-35).
+    C extremum(const ast::Node& n,bool maximum){
+        const std::size_t count=n.children.size();
+        const double a=realOf(eval(*n.children[1]),maximum?"FMax":"FMin"),b=realOf(eval(*n.children[2]),maximum?"FMax":"FMin");
+        if(count==4){const long long p=integerArg(eval(*n.children[3]),"la precisione");if(p<1||p>9)throw MathError("Argument ERROR: precisione da 1 a 9");}
+        if(!(a<b))throw MathError("Argument ERROR: inizio < fine");
+        if(++env.depth>4){--env.depth;throw MathError("Stack ERROR: calcoli annidati troppo profondi");}
+        struct DepthGuard{Env& e;~DepthGuard(){--e.depth;}} guard{env};
+        if(env.ctx.info)env.ctx.info->numerical=true;
+        const Objective obj(*n.children[0]);
+        LocalBind bind(env,"x",0.0);
+        const double sign=maximum?-1:1;
+        auto g=[&](double v){const double y=objectiveAt(obj,bind,v);return std::isfinite(y)?sign*y:std::numeric_limits<double>::infinity();};
+        constexpr int N=400;
+        int best=0;double bestValue=g(a);
+        for(int i=1;i<=N;++i){const double y=g(a+(b-a)*i/N);if(y<bestValue){bestValue=y;best=i;}}
+        if(!std::isfinite(bestValue))throw MathError("Math ERROR: funzione non definita nell'intervallo");
+        double l=a+(b-a)*std::max(0,best-1)/N,h=a+(b-a)*std::min(N,best+1)/N;
+        const double gr=0.6180339887498949;
+        double c=h-gr*(h-l),d=l+gr*(h-l);
+        for(int j=0;j<300&&h-l>1e-13*std::max(1.0,std::abs(l));++j){
+            if(g(c)<g(d))h=d;else l=c;
+            c=h-gr*(h-l);d=l+gr*(h-l);
+        }
+        double x=0.5*(l+h);
+        // Il minimo di valori quasi uguali e' preciso solo a ~1e-8: si raffina
+        // cercando lo zero della derivata (Ridders) dentro l'intervallo trovato.
+        {
+            const double span=(b-a)/N;
+            const double lo=std::max(a,x-2*span),hi=std::min(b,x+2*span);
+            auto d1=[&](double v){return ridders(g,v);};
+            try{
+                double dl=d1(lo),dh=d1(hi),ll=lo,hh=hi;
+                if(std::isfinite(dl)&&std::isfinite(dh)&&dl<0&&dh>0){
+                    for(int j=0;j<100&&hh-ll>1e-15*std::max(1.0,std::abs(ll));++j){
+                        const double m=0.5*(ll+hh),dm=d1(m);
+                        if(!std::isfinite(dm))break;
+                        if(dm<0)ll=m;else hh=m;
+                    }
+                    const double cand=0.5*(ll+hh);
+                    if(g(cand)<=g(x)+1e-12*std::max(1.0,std::abs(g(x))))x=cand;
+                }
+            }catch(const MathError&){}
+        }
+        if(g(a)<=g(x))x=a;
+        if(g(b)<g(x))x=b;
+        // Arrotondamento a 10 cifre decimali quando non peggiora il valore (2 invece di 2.0000000001).
+        const double scale=1e10;
+        if(std::abs(x)<1e5){const double rx=std::round(x*scale)/scale;if(g(rx)<=g(x)+1e-15*std::max(1.0,std::abs(g(x))))x=rx;}
+        const double y=sign*g(x);
+        env.at=&n;
+        return listFromDoubles({x==0?0.0:x,y==0?0.0:y});
+    }
     C call(const ast::Node& n){
         const std::string& f=n.text;
         const std::size_t count=n.children.size();
         for(const auto& c:n.children)if(!c)throw SyntaxError("Syntax ERROR: argomento mancante");
         if(f=="seq"){if(count!=5)throw SyntaxError("Argument ERROR: Seq(espressione,variabile,inizio,fine,incremento)");return sequence(n);}
+        if(f=="solve_n"||f=="f_min"||f=="f_max"){
+            if constexpr(std::is_same_v<D,ExactDomain>)throw NoExactForm{};
+            else return f=="solve_n"?solveN(n):extremum(n,f=="f_max");
+        }
         // I riferimenti alle funzioni di GRAPH e le funzioni di calcolo mantengono
         // la loro valutazione (pigra); una collezione puo' stare nei loro argomenti.
         if((!f.empty()&&f[0]=='@')||(isLazyFunction(f)&&count!=1)){
@@ -2360,9 +3068,14 @@ private:
         }
         std::vector<C> a;
         a.reserve(count);
-        for(const auto& c:n.children)a.push_back(eval(*c));
+        for(const auto& c:n.children){
+            // Una stringa ("L" di InvNormCD) la legge la funzione dal nodo.
+            if(c->kind==ast::Kind::Token&&!c->text.empty()&&c->text[0]=='"'){a.push_back(scalarOf(D::fromInt(0)));continue;}
+            a.push_back(eval(*c));
+        }
         env.at=&n;
         if(f=="elem")return elementOf(a);
+        if(C r;libraryCall(n,a,r))return r;
         // ---- matrici
         if(f=="det")return scalarOf(determinant(matrixArg(a[0],"Det")));
         if(f=="trn")return transpose(matrixArg(a[0],"Trn"));
@@ -2502,7 +3215,7 @@ Complex evalCollectionScalar(const ast::Node& n,Env& env){
     const Coll<Complex> c=evaluator.eval(n);
     if(!c.scalar()){
         env.at=&n;
-        throw TypeError(std::string("Type ERROR: qui serve un numero, il risultato e' una ")+valueTypeName(c.type));
+        throw TypeError(std::string("Argument ERROR: qui serve un numero, il risultato e' una ")+valueTypeName(c.type));
     }
     return c.s;
 }
@@ -2539,6 +3252,95 @@ bool containsEditorNodes(const ast::Node& n){
     return false;
 }
 } // namespace
+
+// ---------------------------------------------------------------- Simplify Manual
+namespace {
+bool unreduced(const ast::Node& node,std::int64_t& num,std::int64_t& den,int depth){
+    if(depth>MaxExpressionNesting)return false;
+    const ast::Node* n=&node;
+    while(n->kind==ast::Kind::Group&&n->children.size()==1&&n->children[0])n=n->children[0].get();
+    auto normalize=[&](){if(den<0){num=-num;den=-den;}return den!=0;};
+    switch(n->kind){
+    case ast::Kind::Token:{
+        const std::string& t=n->text;
+        if(t.empty()||t.size()>40)return false;
+        if(t.find(kFractionMark)!=std::string::npos){
+            std::int64_t part[3]={};int count=0;std::size_t i=0;
+            while(count<3){
+                std::size_t e=i;
+                while(e<t.size()&&t[e]>='0'&&t[e]<='9')++e;
+                if(e==i||e-i>12)return false;
+                part[count++]=std::strtoll(t.substr(i,e-i).c_str(),nullptr,10);
+                if(e>=t.size())break;
+                if(t.compare(e,3,kFractionMark)!=0)return false;
+                i=e+3;
+            }
+            if(count==2){num=part[0];den=part[1];}
+            else if(count==3){if(__builtin_mul_overflow(part[0],part[2],&num)||__builtin_add_overflow(num,part[1],&num))return false;den=part[2];}
+            else return false;
+            return den!=0;
+        }
+        if(t.size()>15)return false;
+        for(char c:t)if(c<'0'||c>'9')return false;
+        num=std::strtoll(t.c_str(),nullptr,10);den=1;return true;
+    }
+    case ast::Kind::Unary:
+        if(n->children.size()!=1||!n->children[0]||!unreduced(*n->children[0],num,den,depth+1))return false;
+        if(n->text=="-")num=-num;
+        return n->text=="-"||n->text=="+";
+    case ast::Kind::Call:
+        if(n->text=="mixed"&&n->children.size()==3){
+            std::int64_t w=0,wd=0,a=0,ad=0,b=0,bd=0;
+            if(!unreduced(*n->children[0],w,wd,depth+1)||!unreduced(*n->children[1],a,ad,depth+1)||!unreduced(*n->children[2],b,bd,depth+1))return false;
+            if(wd!=1||ad!=1||bd!=1||b==0)return false;
+            const bool negative=w<0;
+            std::int64_t aw=negative?-w:w;
+            if(__builtin_mul_overflow(aw,b,&num)||__builtin_add_overflow(num,a,&num))return false;
+            if(negative)num=-num;
+            den=b;return normalize();
+        }
+        return false;
+    case ast::Kind::Binary:{
+        if(n->children.size()!=2||!n->children[0]||!n->children[1]||n->text.size()!=1)return false;
+        std::int64_t an=0,ad=0,bn=0,bd=0;
+        const char op=n->text[0];
+        if(!unreduced(*n->children[0],an,ad,depth+1))return false;
+        if(op=='^'){
+            if(!unreduced(*n->children[1],bn,bd,depth+1)||bd!=1||bn<-30||bn>30)return false;
+            std::int64_t pn=1,pd=1;
+            for(std::int64_t k=0;k<(bn<0?-bn:bn);++k)if(__builtin_mul_overflow(pn,an,&pn)||__builtin_mul_overflow(pd,ad,&pd))return false;
+            if(bn<0){num=pd;den=pn;}else{num=pn;den=pd;}
+            return normalize();
+        }
+        if(!unreduced(*n->children[1],bn,bd,depth+1))return false;
+        switch(op){
+        case '+': case '-':{
+            // Somma e differenza sul minimo comune multiplo dei denominatori (nessuna riduzione).
+            std::int64_t g=std::gcd(ad,bd),l=0,x=0,y=0;
+            if(__builtin_mul_overflow(ad/g,bd,&l)||__builtin_mul_overflow(an,l/ad,&x)||__builtin_mul_overflow(bn,l/bd,&y))return false;
+            if(op=='+'?__builtin_add_overflow(x,y,&num):__builtin_sub_overflow(x,y,&num))return false;
+            den=l;return true;
+        }
+        case '*':
+            if(__builtin_mul_overflow(an,bn,&num)||__builtin_mul_overflow(ad,bd,&den))return false;
+            return normalize();
+        case '/':
+            if(bn==0)return false;
+            if(__builtin_mul_overflow(an,bd,&num)||__builtin_mul_overflow(ad,bn,&den))return false;
+            return normalize();
+        default: return false;
+        }
+    }
+    default: return false;
+    }
+}
+} // namespace
+bool evaluateUnreducedFraction(const ast::Node& parsed,std::int64_t& numerator,std::int64_t& denominator){
+    std::int64_t n=0,d=1;
+    if(!unreduced(parsed,n,d,0)||d==0)return false;
+    numerator=n;denominator=d;
+    return true;
+}
 
 EvalContext& EvalContext::bind(const char* name,double value){
     for(std::uint8_t i=0;i<bindingCount;++i)if(std::strcmp(bindings[i].name,name)==0){bindings[i].value=value;return *this;}
@@ -2697,6 +3499,7 @@ std::string rewriteIdentifiers(const std::string& expression,const std::function
         switch(t.type){
         case TT::End: break;
         case TT::Num: append(t.text); break;
+        case TT::Str: append("\""+t.text+"\""); break;
         case TT::Ref: append(t.text=="mat"?"Mat":t.text=="vct"?"Vct":"List"); break;
         case TT::Ident:{const std::string r=map(t.text);append(r.empty()?t.text:r);break;}
         case TT::Op:
@@ -2708,6 +3511,8 @@ std::string rewriteIdentifiers(const std::string& expression,const std::function
                 break;
             }
             case 'r':append(" Rmdr ");break; case 'q':append("Int\xC3\xB7");break; case 'd':append("\xC2\xB0");break;
+            case 'U':out+="["+t.text+"]";break; case 'V':out+="\xE2\x96\xB6["+t.text+"]";break; case 'A':append("\xE2\x88\xA0");break;
+            case 'R':out+="\xCA\xB3";break; case 'G':out+="\xE1\xB5\x8D";break; case '\'':out+="\xE2\x80\xB2";break; case '"':out+="\xE2\x80\xB3";break;
             default:append(std::string(1,t.op));break;
             }
             break;

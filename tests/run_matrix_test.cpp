@@ -168,7 +168,7 @@ int main() {
         CHECK_EQ_STR(calc(ws, "not(A=3)"), "0");
         CHECK_EQ_STR(calc(ws, "2\xE2\x89\xA0" "3"), "1");
         CHECK_EQ_STR(calc(ws, "rndfix(200/7,3)*14"), "399.994");           // manual 2-2
-        CHECK_EQ_STR(calc(ws, "pol(3,4)"), "r=5  \xCE\xB8=0.927295218");
+        CHECK_EQ_STR(calc(ws, "pol(3,4)"), "{5,0.927295218}");      // v1.12.0: {r,θ} in List Ans (manuale 2-20)
         ws.settings.complex = ComplexMode::Rectangular;
         CHECK_EQ_STR(calc(ws, "sqrt(-4)"), "2i");
         CHECK(!ws.history.back().exact.valid);

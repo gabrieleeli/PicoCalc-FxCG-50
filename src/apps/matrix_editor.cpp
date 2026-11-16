@@ -77,7 +77,7 @@ void MatrixEditorView::writeCell(Context& ctx, int r, int c, const std::string& 
     EvalContext ec = ctx.ws.evalContext();
     if (ec.complexMode == ComplexMode::Real && (text.find('i') != std::string::npos || m->complex())) ec.complexMode = ComplexMode::Rectangular;
     const CalcValue v = evaluateAny(*tree, ec);
-    if (!v.isScalar()) throw TypeError(std::string("Type ERROR: una cella contiene un numero, non una ") + valueTypeName(v.type));
+    if (!v.isScalar()) throw TypeError(std::string("Argument ERROR: una cella contiene un numero, non una ") + valueTypeName(v.type));
     const Complex z = v.scalar();
     const std::size_t index = static_cast<std::size_t>(r) * m->cols + static_cast<std::size_t>(c);
     exact::Value e;

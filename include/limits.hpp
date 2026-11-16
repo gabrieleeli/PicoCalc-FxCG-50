@@ -34,6 +34,13 @@ inline constexpr std::size_t kListMaxLength = board::config::kIsPicoPlus2W ? 999
 inline constexpr std::size_t kListCount = 26;
 inline constexpr std::size_t kListStoreElements = board::config::kIsPicoPlus2W ? 20000 : 1530;
 inline constexpr std::size_t kListNameLength = 8;      // sottonome di una lista (fx-CG50: 8 caratteri)
+// v1.12.0 (record v8): List File 1-6 della fx-CG50. Il budget kListStoreElements
+// vale per le liste di tutti i file insieme (stessa RAM e stesso record).
+inline constexpr std::size_t kListFiles = 6;
+inline constexpr std::size_t kFunctionMemories = 20;   // f1-f20 (OPTN › FUNCMEM)
+inline constexpr std::size_t kStrings = 20;            // Str 1-20 (VARS › Str)
+inline constexpr std::size_t kStringLength = 255;      // caratteri di una stringa (fx-CG50: 255)
+inline constexpr std::size_t kFunctionMemoryLength = 255;
 inline constexpr std::size_t kChatMessages = 30;   // AI conversation (the relay keeps the last 20 turns)
 // Matrici e vettori di Run-Matrix (Mat A-Z, Vct A-Z, MatAns, VctAns; record
 // v6). Le due schede non hanno la stessa memoria: il Pico 2 W li tiene nel suo

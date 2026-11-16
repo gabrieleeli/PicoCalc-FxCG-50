@@ -82,7 +82,11 @@ void AppManager::showError(const char* what) {
     if (!what) what = "";
     const char* colon = std::strchr(what, ':');
     const char* error = std::strstr(what, "ERROR");
-    if (colon && error && error < colon) {
+    // Titoli della calcolatrice senza la parola ERROR (Appendice α, v1.12.0).
+    bool casioTitle = false;
+    for (const char* t : {"Can't Solve!", "Complex Number In List", "Complex Number In Matrix", "Complex Number In Data", "No Variable"})
+        if (colon && std::strncmp(what, t, std::strlen(t)) == 0 && what + std::strlen(t) == colon) casioTitle = true;
+    if (colon && ((error && error < colon) || casioTitle)) {
         assignReserved(errorTitle_, what, static_cast<std::size_t>(colon - what));
         const char* d = colon + 1;
         while (*d == ' ') ++d;

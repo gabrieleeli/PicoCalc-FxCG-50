@@ -85,6 +85,21 @@ public:
     static constexpr int Slots = 26;             // A..Z, List 1..26 (indice 0..25)
     // Copia il valore memorizzato; false quando la memoria non e' definita ("None").
     virtual bool collection(Memory memory, int index, CalcValue& out) const = 0;
+    // v1.12.0: indice 0..25 della lista con il sottonome indicato (List "QTY"),
+    // -1 se nessuna lista ha quel nome.
+    virtual int listByName(const std::string& subName) const { (void)subName; return -1; }
+};
+
+// v1.12.0: servizi che il valutatore chiede al chiamante per alcune funzioni
+// di Run-Matrix: PxlTest( (stato di un pixel della schermata del grafico) e
+// la function memory f1-f20 (testo dell'espressione memorizzata).
+class ServiceResolver {
+public:
+    virtual ~ServiceResolver() = default;
+    // 1 se il pixel (riga 1..282, colonna 1..320) della schermata del grafico e' acceso.
+    virtual int pixelTest(int row, int column) const { (void)row; (void)column; return 0; }
+    // Testo della function memory n (1..20), vuoto se non definita.
+    virtual std::string functionMemory(int n) const { (void)n; return {}; }
 };
 
 // Facts about one evaluation that the caller may want to show.
@@ -108,12 +123,21 @@ struct EvalContext {
     // Or, Xor, Xnor bit a bit, Not, Neg; fuori intervallo: Math ERROR). Va
     // usata con complexMode Real e con un albero di parseExpression(testo, base).
     std::uint8_t integerBase{0};
+    // v1.12.0: SET UP Display per Rnd (0 Norm1, 1 Norm2, 2 Fix, 3 Sci, 4 Eng; cifre di Fix/Sci).
+    std::uint8_t displayMode{0};
+    std::uint8_t displayDigits{0};
+    const ServiceResolver* services{};
     EvalContext& bind(const char* name, double value);
 };
 
 // Shared variable names resolved through EvalContext::names
 // ("xmin", "xmax", "xdot", ..., "tblstart", "list1".."list6"); nullptr-terminated.
 const char* const* systemVariableNames() noexcept;
+
+// Overflow della fx-CG50: un risultato con |x| >= 10^100 e' un Math ERROR (manuale 2-4).
+constexpr double MaxMagnitude = 1e100;
+// Argomenti al massimo di una funzione (Amt_BAL( ne ha 7).
+constexpr std::size_t MaxCallArguments = 8;
 
 // Limits that keep parsing and evaluation within the 32 KB stack of the RP2350.
 // Longer input raises "Memory ERROR", deeper nesting "Stack ERROR".
@@ -137,6 +161,28 @@ ast::NodePtr parseExpression(const std::string& expression);
 // ingegneristici postfissi "#k" "#M" "#G" "#T" "#m" "#u" (µ) "#n" "#p" "#f"
 // (2#k = 2000), frazioni lineari "2⌟3" e "1⌟2⌟3", Xnor e Neg(.
 ast::NodePtr parseExpression(const std::string& expression, unsigned integerBase);
+//
+// Sintassi aggiunta nella v1.12.0 (stesso lexer, stesso parser):
+//   "testo"              stringa (List "QTY", InvNormCD("L",...), Str)
+//   List "QTY"           lista per sottonome
+//   10[cm]▶[in]          conversione metrica (OPTN › CONVERT)
+//   2∠30                 complesso in forma polare
+//   30ʳ  50ᵍ             angolo in radianti / gradi centesimali
+//   2°20′30″             gradi, minuti, secondi
+//   #P #E                simboli ingegneristici 10^15 e 10^18
+//   v_a ... v_z          variabile A-Z scritta esplicitamente (Base-N Hex)
+//   r_var  theta         le variabili r e θ
+//   Ran# 3               sequenza n di Ran#
+// e le funzioni della libreria (calc_library.hpp): solve_n, f_min, f_max,
+// ran_list, ran_samp, prob_p..prob_t, num_rnd, distribuzioni, x_hat, y_hat,
+// s_dev, stat_var, funzioni TVM, pxl_test, f_1..f_20 (function memory).
+
+// Valore di una frazione come e' stata scritta con Simplify Manual (v1.12.0):
+// le operazioni tra interi e frazioni non riducono il risultato (somma e
+// differenza sul minimo comune multiplo dei denominatori, prodotto e
+// quoziente sui prodotti, potenze intere termine per termine). False quando
+// l'espressione contiene altro (decimali, funzioni, variabili...).
+bool evaluateUnreducedFraction(const ast::Node& parsed, std::int64_t& numerator, std::int64_t& denominator);
 
 // Stack bytes one evaluation may use before it stops with "Stack ERROR". This
 // is a safety net behind the parser limits; the firmware sets it at build time
