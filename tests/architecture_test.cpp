@@ -213,6 +213,45 @@ int main() {
         CHECK(graphCode.find("commandGraphs") != std::string::npos && graphCode.find("commandScreen") != std::string::npos);
         CHECK(codeOnly(readFile("src/graph_engine.cpp")).find("commands") != std::string::npos);
     }
+    // EQUATION (v1.12.0): un solo parser e un solo valutatore. I coefficienti e le
+    // equazioni passano dal motore di Run-Matrix (parseExpression, evaluateAny,
+    // evaluateExact) attraverso equation.hpp; nessuna lettura propria dei numeri,
+    // nessun percorso numerico separato (la griglia CellGrid e i vecchi solutori in double).
+    {
+        const char* noParsing[] = {"strtod", "atof", "stod(", "stof(", "sscanf", "istringstream", "evalNumber("};
+        const char* legacy[] = {"CellGrid", "solveLinearSystem", "polynomialRoots", "solveEquation(", "Form "};
+        const char* required[] = {"eq::evaluateNumber", "eq::solveSimultaneous", "eq::solvePolynomial", "eq::solveFor",
+                                  "eq::numberTree", "eq::solverVariables", "MathField"};
+        std::string appCode;
+        for (const char* const* src = appInfo(AppId::Equation).sources; *src; ++src) {
+            const std::string code = codeOnly(readFile(*src));
+            for (const char* f : noParsing) ::testutil::report(code.find(f) == std::string::npos, "Equation: no separate number parsing", *src, 0, f);
+            if (std::string(*src).find("/apps/") != std::string::npos) {
+                appCode += code;
+                for (const char* f : legacy) ::testutil::report(code.find(f) == std::string::npos, "Equation: no legacy numeric path", *src, 0, f);
+            }
+        }
+        for (const char* r : required) ::testutil::report(appCode.find(r) != std::string::npos, "Equation uses the equation engine", "src/apps/equation_app.cpp", 0, r);
+        const std::string engine = codeOnly(readFile("src/equation.cpp"));
+        for (const char* r : {"parseExpression(", "evaluateAny(", "evaluateExact(", "evaluateReal("})
+            ::testutil::report(engine.find(r) != std::string::npos, "equation engine evaluates with the shared evaluator", "src/equation.cpp", 0, r);
+        // Run-Matrix legge le matrici di EQUATION solo come CollectionResolver (VARS › EQUATION),
+        // senza il motore di EQUATION ne' i dati di ws.equation.
+        std::string runCode;
+        for (const char* const* src = appInfo(AppId::RunMatrix).sources; *src; ++src) runCode += codeOnly(readFile(*src));
+        CHECK(runCode.find("equationMatrixName") != std::string::npos && runCode.find("Memory::Equation") != std::string::npos);
+        CHECK(runCode.find("eq::") == std::string::npos && runCode.find("equation.hpp") == std::string::npos);
+        const std::string wsCode = codeOnly(readFile("src/workspace.cpp"));
+        CHECK(wsCode.find("Memory::Equation") != std::string::npos && wsCode.find("eq::toMatrix") != std::string::npos);
+        // I nomi SimRes... sono token dello stesso lexer.
+        CHECK(codeOnly(readFile("src/expression.cpp")).find("equationMatrixName") != std::string::npos);
+        // Nessun'altra modalita' disponibile usa il motore di EQUATION.
+        for (std::size_t i = 0; i < AppCount; ++i) {
+            const AppInfo& a = appInfoAt(i);
+            if (!a.sources || a.id == AppId::Equation) continue;
+            ::testutil::report((a.services & service::EquationCore) == 0, "only Equation declares EquationCore", a.name, 0, a.name);
+        }
+    }
     // Graphs of functions live in Graph: no other available mode draws function curves.
     for (std::size_t i = 0; i < AppCount; ++i) {
         const AppInfo& a = appInfoAt(i);
@@ -230,11 +269,12 @@ int main() {
         const char* engine[] = {"expression.hpp", "exact.hpp", "expression_ast.hpp", "memory.hpp", "math_engine.hpp", "number_format.hpp",
                                 "solvers.hpp", "statistics.hpp", "run_matrix.hpp", "workspace.hpp", "storage.hpp", "app_models.hpp",
                                 "graph_model.hpp", "graph_engine.hpp", "graph_solve.hpp", "file_store.hpp", "graph_file.hpp", "pict.hpp",
-                                "sd_card.hpp", "fatfs_store.hpp", "value.hpp", "csv_io.hpp", "graph_commands.hpp"};
+                                "sd_card.hpp", "fatfs_store.hpp", "value.hpp", "csv_io.hpp", "graph_commands.hpp", "equation.hpp"};
         const char* engineSrc[] = {"src/expression.cpp", "src/exact.cpp", "src/memory.cpp", "src/math_engine.cpp", "src/number_format.cpp",
                                    "src/solvers.cpp", "src/statistics.cpp", "src/run_matrix.cpp", "src/workspace.cpp", "src/storage.cpp", "src/app_models.cpp",
                                    "src/graph_model.cpp", "src/graph_engine.cpp", "src/graph_solve.cpp", "src/file_store.cpp", "src/graph_file.cpp", "src/pict.cpp",
-                                   "src/sd_card.cpp", "src/fatfs_store.cpp", "src/value.cpp", "src/csv_io.cpp", "src/graph_commands.cpp"};
+                                   "src/sd_card.cpp", "src/fatfs_store.cpp", "src/value.cpp", "src/csv_io.cpp", "src/graph_commands.cpp",
+                                   "src/equation.cpp"};
         for (const char* h : engine)
             for (const auto& inc : includesOf(codeOnly(readFile(std::string("include/") + h))))
                 ::testutil::report(appLayer.count(inc) == 0, "engine header independent of the UI", h, 0, inc);

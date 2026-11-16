@@ -85,6 +85,16 @@ in [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md) e diagnostica SYSTEM → F
 - Le regioni non si sovrappongono mai all'immagine del firmware e vengono
   limitate alla capacità reale del chip (JEDEC ID letto all'avvio).
 
+## Differenze tra le schede che riguardano la v1.12.0
+
+EQUATION (v1.12.0) ha gli stessi limiti sulle due schede, come la fx-CG50: 6
+incognite, grado 6, equazione del Solver di 255 caratteri, al più 4 000
+valutazioni per un SOLVE (`limits.hpp`). I coefficienti con la forma esatta
+(≈ 7,6 KB) stanno sull'heap (PSRAM sulla Plus); il blocco v8 del record
+occupa da ≈ 1,2 a ≈ 4 KB (59,75 KB disponibili sul Pico 2 W, 511,75 KB sulla
+Plus). Nessun pin, driver, partizione o script del linker cambiato. Collaudo:
+[HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md) (HW-120…HW-134).
+
 ## Differenze tra le schede che riguardano la v1.11.0
 
 Anche le novità della v1.11.0 (List 1–26, CSV, MatAns/ListAns, celle esatte,

@@ -375,7 +375,17 @@ int main() {
             // (20 empty lists), 26 empty sub-names, 55 exact-form flags, no history
             // extras and no command graphs
             tail += 6 + 20 * 2 + 26 * 2 + 55 + 2 + 1;
+            // v8 moves the EQUATION data to the end: 56 zero coefficients of 21 bytes,
+            // empty equation, Lower/Upper, variable, inequality, two empty results
+            tail += 1 + 42 * 21 + 1 + 7 * 21 + 2 + 16 + 1 + 2 + 7 * 21 + 2 + 2;
             blob.resize(blob.size() - tail);
+            // ... and the version 1-7 EQUATION block (doubles) goes back before the chat count
+            std::vector<std::uint8_t> legacy;
+            legacy.push_back(2); legacy.insert(legacy.end(), 42 * 8, 0);
+            legacy.push_back(2); legacy.insert(legacy.end(), 7 * 8, 0);
+            legacy.insert(legacy.end(), {0, 0}); legacy.insert(legacy.end(), 8, 0);
+            legacy.push_back(2); legacy.push_back(0); legacy.insert(legacy.end(), 7 * 8, 0);
+            blob.insert(blob.end() - 2, legacy.begin(), legacy.end());
             blob.erase(at + 24, at + 24 + 6);                         // variable, list, type, generated, row count
             const std::uint16_t three = 3;
             std::memcpy(blob.data() + 4, &three, 2);

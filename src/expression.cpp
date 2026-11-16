@@ -336,6 +336,16 @@ private:
         // che segue puo' essere attaccato alla parola ("MatA", "List1", "MatAns").
         // Le lettere minuscole digitate mantengono il loro significato (m*a*t resta
         // un prodotto).
+        // SimRes, SimCoef, PlyRes, PlyCoef (VARS › EQUATION, v1.12.0): un nome
+        // ciascuno, con queste maiuscole; il resto della parola segue come sempre.
+        for(int k=0;k<4;++k){
+            const char* word=equationMatrixName(k);
+            const std::size_t n=std::strlen(word);
+            if(raw.compare(0,n,word)!=0)continue;
+            out.push_back({TT::Ident,word,0,at(b),at(n)});
+            if(raw.size()>n)splitIdentifier(raw.substr(n),b+n,out);
+            return;
+        }
         if(!isFunctionName(lower(raw))){
             for(const char* word:{"Mat","Vct","List"}){
                 const std::size_t n=std::strlen(word);
@@ -676,7 +686,7 @@ private:
                 return span(call,s);
             }
             auto token=ast::make(ast::Kind::Token,k.text);
-            if(isListName(k.text))token->flags=ast::FlagCollection;
+            if(isListName(k.text)||equationMatrixIndex(k.text)>=0)token->flags=ast::FlagCollection;
             return span(token,s);
         }
         if(k.type==TT::End)throw error("Syntax ERROR: operando mancante");
@@ -2039,6 +2049,18 @@ private:
         std::string t=n.text;                        // "Mat A", "Vct Ans", "List 12", "list3"
         Memory memory=Memory::List;
         int index=CollectionResolver::Answer;
+        if(const int eqIndex=equationMatrixIndex(t);eqIndex>=0){
+            // VARS › EQUATION: senza coefficienti o soluzioni la fx-CG50 da' un errore (manuale 1-33).
+            if(!env.ctx.collections)throw MathError("Ma ERROR: "+t+" non disponibile qui");
+            CalcValue stored;
+            if(!env.ctx.collections->collection(CollectionResolver::Memory::Equation,eqIndex,stored)||stored.empty())
+                throw MathError(std::string("Ma ERROR: ")+t+(eqIndex==CollectionResolver::SimRes||eqIndex==CollectionResolver::PlyRes?
+                                ": nessuna soluzione calcolata in EQUATION":": nessun coefficiente in EQUATION"));
+            C out;
+            D::load(stored,out,env);
+            out.type=ValueType::Matrix;
+            return out;
+        }
         if(isListName(t)){
             // Una funzione di GRAPH con una lista si disegna una volta per elemento: li'
             // il nome e' l'elemento del grafico in corso, un numero.
@@ -2717,6 +2739,14 @@ std::string rewriteIdentifiers(const std::string& expression,const std::function
 }
 bool isFunctionReferenceName(const std::string& lowerName) noexcept{
     try{return referenceName(lowerName);}catch(...){return false;}
+}
+int equationMatrixIndex(const std::string& name) noexcept{
+    for(int k=0;k<4;++k)if(name==equationMatrixName(k))return k;
+    return -1;
+}
+const char* equationMatrixName(int index) noexcept{
+    static const char* const names[]={"SimRes","SimCoef","PlyRes","PlyCoef"};
+    return index>=0&&index<4?names[index]:"";
 }
 bool isReservedWord(const std::string& lowerName){return isFunctionName(lowerName)||isConstantName(lowerName)||operatorWord(lowerName)!=0;}
 void seedRandom(std::uint32_t seed) noexcept{g_rng=seed?seed:0x9E3779B9u;}

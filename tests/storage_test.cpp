@@ -72,7 +72,7 @@ int main() {
         ws.functions[1] = {"x^2-1", fx::GraphType::YGreater, false, 3, fx::LineStyle::Normal, {}};
         ws.view.xmin = -10; ws.view.xmax = 10;
         ws.lists[0] = {1, 2, 3.5}; ws.lists[5] = {9};
-        ws.equation.unknowns = 3; ws.equation.simultaneous[4] = 7; ws.equation.degree = 4; ws.equation.polynomial[0] = 1;
+        ws.equation.unknowns = 3; ws.equation.sim(1, 0) = fx::eq::fromStoredDouble(7); ws.equation.degree = 4; ws.equation.polynomial[0] = fx::eq::fromStoredDouble(1);
         ws.chat.push_back({true, "ciao"}); ws.chat.push_back({false, "risposta"});
         const auto bytes = fx::serializeWorkspace(ws);
         fx::Workspace back;
@@ -83,7 +83,7 @@ int main() {
         CHECK(back.history.size() == 2 && back.history[1].value.imag() == 2);
         CHECK(back.functions[1].expr == "x^2-1" && back.functions[1].type == fx::GraphType::YGreater && !back.functions[1].selected);
         CHECK(back.view.xmin == -10 && back.lists[0].size() == 3 && back.lists[0][2] == 3.5 && back.lists[5][0] == 9);
-        CHECK(back.equation.unknowns == 3 && back.equation.simultaneous[4] == 7 && back.equation.degree == 4);
+        CHECK(back.equation.unknowns == 3 && back.equation.sim(1, 0).value == fx::Complex(7, 0) && back.equation.sim(1, 0) == ws.equation.sim(1, 0) && back.equation.degree == 4);
         CHECK(back.chat.size() == 2 && back.chat[1].text == "risposta");
         // Truncated or corrupted data is rejected and leaves the target untouched.
         fx::Workspace target; target.memory.store('B', 5);

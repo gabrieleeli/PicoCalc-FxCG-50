@@ -421,6 +421,10 @@ RunOutcome evaluateEntry(Workspace& ws, const std::string& raw, HistoryEntry& en
             out.graphics = true;
             return out;
         }
+        // VARS › EQUATION: coefficienti e soluzioni di un sistema lineare non si
+        // richiamano insieme (manuale fx-CG50 1-33, nota *4).
+        if (expr.find("SimRes") != std::string::npos && expr.find("SimCoef") != std::string::npos)
+            throw MathError("Ma ERROR: SimRes e SimCoef non si richiamano nella stessa espressione", static_cast<int>(expr.find("SimCoef")) + offset, 7);
         const SimpRequest simp = takeSimp(expr);
         StoreTarget target;
         std::size_t arrow = expr.rfind(kArrow);
@@ -758,7 +762,7 @@ unsigned displayedBase(const HistoryEntry& e) {
 }
 namespace {
 // Output Line della fx-CG50: frazioni con ⌟ ("1⌟3", "2⌟1⌟3"); le altre forme esatte come sempre.
-std::string exactLineText(const exact::Value& v, bool mixed) {
+std::string lineFractionText(const exact::Value& v, bool mixed) {
     exact::Rational r;
     if (!v.rational(r) || r.isInteger()) return exact::toText(v, mixed);
     const std::int64_t n = std::llabs(r.num);
@@ -772,6 +776,11 @@ std::string simpText(const HistoryEntry& e, bool lineStyle) {
     return t;
 }
 } // namespace
+
+ast::NodePtr exactValueTree(const exact::Value& value, bool mixed) { return exactTree(value, mixed); }
+void appendNumberTree(ast::Node& row, double value, DisplayFormat format) { appendNumber(row, value, format); }
+void appendTextTokens(ast::Node& row, const std::string& text) { appendText(row, text); }
+std::string exactLineText(const exact::Value& value, bool mixed) { return lineFractionText(value, mixed); }
 
 std::string elementText(const HistoryEntry& e, std::size_t i, const Settings& s) {
     if (!e.collection || i >= e.collection->value.size()) return {};
@@ -795,7 +804,7 @@ std::string resultText(const HistoryEntry& e, const Settings& s, bool lineStyle)
                     if (v.isList()) { if (i) t += ","; }
                     else t += i % v.cols == 0 ? "[" : ",";
                     const exact::Value* x = elementExact(e, i, s);
-                    t += x ? exactLineText(*x, s.mixedFractions) : elementText(e, i, s);
+                    t += x ? lineFractionText(*x, s.mixedFractions) : elementText(e, i, s);
                     if (!v.isList() && i % v.cols == v.cols - 1u) t += "]";
                 }
                 t += v.isList() ? "}" : "]";
@@ -810,7 +819,7 @@ std::string resultText(const HistoryEntry& e, const Settings& s, bool lineStyle)
         exact::Rational r;
         if (e.view == ViewPeriodic && rationalOf(e, r)) return periodicText(r);
         if (e.fracDen != 0 && showsExact(e, s)) return simpText(e, lineStyle);
-        if (showsExact(e, s)) return lineStyle ? exactLineText(e.exact.value, showsMixed(e, s)) : exact::toText(e.exact.value, showsMixed(e, s));
+        if (showsExact(e, s)) return lineStyle ? lineFractionText(e.exact.value, showsMixed(e, s)) : exact::toText(e.exact.value, showsMixed(e, s));
     }
     return formatValue(e.value, s.complex, s.display);
 }

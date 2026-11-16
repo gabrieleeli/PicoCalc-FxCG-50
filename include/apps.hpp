@@ -185,25 +185,112 @@ private:
     unsigned page_{0}, selected_{0};
 };
 
+// Campo di input Math/Line (v1.12.0): lo stesso editor naturale di Run-Matrix
+// (NaturalEditor, modalita' del SET UP "Input/Output") con i tasti dei modelli
+// della PicoCalc e il disegno 2D di math_renderer. Usato dalle celle dei
+// coefficienti di EQUATION e dall'equazione del Solver.
+//  Tasti: caratteri, DEL, frecce, Home/End, F1 frazione (SHIFT: mista),
+//  F2 √ (SHIFT: x²), F3 potenza (SHIFT: π), F4 menu MATH, F5 i, F6 Ans
+//  (SHIFT: θ), STO →, Ctrl+C/X/V/Z/Y. EXE ed EXIT restano al chiamante.
+class MathField {
+public:
+    void start(Context& ctx, const std::string& expression);
+    bool key(Context& ctx, const KeyEvent& ev);           // true se il tasto e' stato usato
+    std::string text() const { return editor_.toExpression(); }
+    bool empty() const { return editor_.empty(); }
+    bool menuOpen() const noexcept { return menu_.open; }
+    void markError(const ErrorLocation& where);
+    // Disegna l'input in [x, x+width) con la linea di base a `baseline`; scorre
+    // orizzontalmente per tenere visibile il cursore.
+    void draw(gfx::Canvas& c, int x, int baseline, int width, int height) const;
+    void drawMenu(gfx::Canvas& c) const { if (menu_.open) menu_.draw(c); }
+    static const char* const* softKeys(bool shift);
+    NaturalEditor& editor() noexcept { return editor_; }
+private:
+    NaturalEditor editor_;
+    PopupMenu menu_;
+    mutable int scroll_{0};
+};
+
+// EQUATION (fx-CG50, manuale 4-1...4-5): SIML (2-6 incognite), POLY (grado
+// 2-6), SOLVER su qualsiasi variabile, e l'estensione INEQ (disequazioni
+// polinomiali, non presente sulla fx-CG50). Calcolo in equation.hpp.
 class EquationApp final : public App {
 public:
     AppId id() const override { return AppId::Equation; }
     void enter(Context& ctx) override;
+    void leave(Context& ctx) override;
     void key(Context& ctx, const KeyEvent& ev) override;
     void draw(Context& ctx, gfx::Canvas& c) override;
-    enum class Screen { Menu, ChooseSize, Grid, Solver, Result };
+    enum class Screen { Menu, ChooseSize, Coefficients, Solutions, SolverTable, SolverResult };
     enum class Mode { Simultaneous, Polynomial, Solver, Inequality };
     Screen screen() const noexcept { return screen_; }
-    const ResultList& results() const noexcept { return results_; }
+    Mode mode() const noexcept { return mode_; }
+    // ---- per i test e lo stato mostrato
+    bool editing() const noexcept { return editing_; }
+    int row() const noexcept { return row_; }
+    int col() const noexcept { return col_; }
+    const eq::SimulResult& simul() const noexcept { return simul_; }
+    const std::vector<eq::Root>& roots() const noexcept { return shownRoots_; }
+    const std::string& message() const noexcept { return message_; }   // "No Solution", "Infinitely Many Solutions"
+    std::size_t solutionRows() const noexcept;
+    std::string solutionText(std::size_t i, const Context& ctx) const;  // testo lineare della riga i (soluzione o formula)
+    std::string selectedText(const Context& ctx) const;                 // valore completo in basso (testo lineare)
+    const std::vector<char>& solverVars() const noexcept { return vars_; }
+    const eq::SolverOutcome& solverOutcome() const noexcept { return outcome_; }
+    const ResultList& inequalityResults() const noexcept { return ineqResults_; }
 private:
-    void openGrid(Context& ctx);
+    // schermate
+    void chooseMode(Context& ctx, Mode m);
+    void openCoefficients(Context& ctx);
+    void coefficientsKey(Context& ctx, const KeyEvent& ev);
+    void solutionsKey(Context& ctx, const KeyEvent& ev);
+    void openSolver(Context& ctx);
+    void solverKey(Context& ctx, const KeyEvent& ev);
     void solve(Context& ctx);
+    void solveSolver(Context& ctx);
+    // coefficienti
+    int gridRows(const Context& ctx) const;
+    int gridCols(const Context& ctx) const;
+    eq::Number& cell(Context& ctx, int r, int c) const;
+    void commitCell(Context& ctx);
+    void clearResults(Context& ctx);
+    eq::View view(const Context& ctx, std::size_t row) const;
+    // Solver: righe della tabella (0 = Eq, poi le variabili, poi Lower e Upper).
+    int solverRows() const noexcept { return static_cast<int>(vars_.size()) + 3; }
+    void refreshVariables(Context& ctx);
+    void commitSolverRow(Context& ctx);
+    // disegno
+    void drawHeader(Context& ctx, gfx::Canvas& c, int y) const;
+    void drawCoefficients(Context& ctx, gfx::Canvas& c);
+    void drawSolutions(Context& ctx, gfx::Canvas& c);
+    void drawSolver(Context& ctx, gfx::Canvas& c);
+    void drawSolverResult(Context& ctx, gfx::Canvas& c);
+    void drawBottomValue(gfx::Canvas& c, const ast::Node& tree, int baseline);
+
     Screen screen_{Screen::Menu};
     Mode mode_{Mode::Simultaneous};
     int menuSel_{0};
-    CellGrid grid_;
-    Form solverForm_;
-    ResultList results_;
+    int row_{0}, col_{0}, firstCol_{0}, firstRow_{0};
+    bool editing_{false};
+    MathField field_;
+    // risultati
+    eq::SimulResult simul_;
+    std::vector<eq::Root> shownRoots_;
+    std::string message_;
+    std::vector<std::uint8_t> views_;            // S⇔D per riga: 0 automatica, 1 decimale, 2 esatta
+    int solRow_{0}, solFirst_{0};
+    int scroll_{0};
+    mutable int overflow_{0};                    // pixel del valore in basso oltre lo schermo
+    ResultList ineqResults_;
+    // Solver
+    std::vector<char> vars_;
+    int solverRow_{0}, solverFirst_{0};
+    eq::SolverOutcome outcome_;
+    char solvedVar_{0};
+    std::array<double, 26> recall_{};            // valori prima dell'ultimo SOLVE (RECALL)
+    std::array<bool, 26> recallUsed_{};
+    bool recallValid_{false};
 };
 
 class StatisticsApp final : public App {

@@ -32,41 +32,52 @@ int main() {
     board::init();
     Rig r;
     Workspace& ws = r.fw.workspace();
-    // ---------------- EQUATION
+    // ---------------- EQUATION (v1.12.0: schermate del manuale fx-CG50 4-1...4-5)
+    app::Context& ctx = r.fw.apps().context();
     r.type("a"); CHECK(r.fw.apps().activeId() == AppId::Equation);
     r.key(pckey::F2); r.key(pckey::F2);                   // POLY, degree 3
     CHECK(ws.equation.degree == 3);
     r.enter("1"); r.enter("-6"); r.enter("11"); r.enter("-6");
-    CHECK(ws.equation.polynomial[0] == 1 && ws.equation.polynomial[3] == -6);
+    CHECK(ws.equation.polynomial[0].value == Complex(1, 0) && ws.equation.polynomial[3].value == Complex(-6, 0));
     r.key(pckey::F1);
     auto* eq = r.app<app::EquationApp>();
-    CHECK(eq->screen() == app::EquationApp::Screen::Result);
-    CHECK(eq->results().rows.size() == 3);
-    CHECK_EQ_STR(eq->results().rows[0].second, "1");
-    CHECK_EQ_STR(eq->results().rows[2].second, "3");
-    r.key(pckey::Esc); r.key(pckey::Esc); r.key(pckey::Esc);   // result -> grid -> size -> menu
+    CHECK(eq->screen() == app::EquationApp::Screen::Solutions);
+    CHECK(eq->solutionRows() == 3);
+    CHECK_EQ_STR(eq->solutionText(0, ctx), "X1=3");       // reali decrescenti (manuale 4-3)
+    CHECK_EQ_STR(eq->solutionText(2, ctx), "X3=1");
+    r.key(pckey::Esc); r.key(pckey::Esc); r.key(pckey::Esc);   // soluzioni -> coefficienti -> grado -> menu
     r.key(pckey::F1); r.key(pckey::F1);                   // SIML, 2 unknowns: x+y=5, x-y=1
     r.enter("1"); r.enter("1"); r.enter("5"); r.enter("1"); r.enter("-1"); r.enter("1");
     r.key(pckey::F1);
-    CHECK_EQ_STR(eq->results().rows[0].second, "3");
-    CHECK_EQ_STR(eq->results().rows[1].second, "2");
+    CHECK_EQ_STR(eq->solutionText(0, ctx), "X=3");
+    CHECK_EQ_STR(eq->solutionText(1, ctx), "Y=2");
     r.key(pckey::Esc); r.key(pckey::Esc); r.key(pckey::Esc);
-    r.key(pckey::F2); r.key(pckey::F1);                   // POLY degree 2: x^2+1 -> complex roots
+    r.key(pckey::F2); r.key(pckey::F1);                   // POLY degree 2: x^2+1
     r.enter("1"); r.enter("0"); r.enter("1"); r.key(pckey::F1);
-    CHECK_EQ_STR(eq->results().rows[0].second, "i");
-    CHECK_EQ_STR(eq->results().rows[1].second, "-i");
+    CHECK_EQ_STR(eq->message(), "No Solution");          // Complex Mode Real: solo radici reali (manuale 4-4)
+    ws.settings.complex = ComplexMode::Rectangular;
+    r.key(pckey::Esc); r.key(pckey::F1);
+    CHECK_EQ_STR(eq->solutionText(0, ctx), "X1=i");
+    CHECK_EQ_STR(eq->solutionText(1, ctx), "X2=-i");
+    ws.settings.complex = ComplexMode::Real;
     r.key(pckey::Esc); r.key(pckey::Esc); r.key(pckey::Esc);
-    r.key(pckey::F4); r.key(pckey::F2);                   // INEQ degree 2: x^2-3x+2 > 0
+    r.key(pckey::F4); r.key(pckey::F2);                   // INEQ (estensione) degree 2: x^2-3x+2 > 0
     r.enter("1"); r.enter("-3"); r.enter("2"); r.key(pckey::F1);
-    CHECK(eq->results().rows.size() >= 1);
-    CHECK_EQ_STR(eq->results().rows[0].second, "x<1 , 2<x");
-    r.key(pckey::Esc); r.key(pckey::F4); r.key(pckey::F4); r.key(pckey::F1);   // relation cycles: < ... then >= then <=
-    r.key(pckey::Esc); r.key(pckey::Esc); r.key(pckey::Esc);
-    r.key(pckey::F3);                                     // SOLVER
-    r.key(pckey::Enter); r.key(pckey::Break); r.enter("x^3=8"); r.enter("1");
-    r.key(pckey::F1);
+    CHECK(eq->inequalityResults().rows.size() >= 1);
+    CHECK_EQ_STR(eq->inequalityResults().rows[0].second, "x<1 , 2<x");
+    r.key(pckey::Esc); r.key(pckey::F5); r.key(pckey::F5); r.key(pckey::F1);   // relation cycles: < ... then >= then <=
     CHECK(!r.error());
-    CHECK_EQ_STR(eq->results().rows[0].second, "2");
+    r.key(pckey::Esc); r.key(pckey::Esc); r.key(pckey::Esc);
+    r.key(pckey::F3);                                     // SOLVER: l'equazione vuota si scrive subito
+    CHECK(eq->screen() == app::EquationApp::Screen::SolverTable && eq->editing());
+    r.type("x^3"); r.key(pckey::Right); r.enter("=8");    // Math: → esce dall'esponente
+    CHECK(!eq->editing() && eq->solverVars().size() == 1 && eq->row() == 0);
+    r.enter("1");                                         // X = 1 (valore iniziale)
+    CHECK_NEAR(ws.memory.recall('X'), 1, 0);
+    r.key(pckey::F6);                                     // SOLVE
+    CHECK(!r.error());
+    CHECK(eq->screen() == app::EquationApp::Screen::SolverResult);
+    CHECK_NEAR(eq->solverOutcome().value, 2, 1e-12);
     CHECK_NEAR(ws.memory.recall('X'), 2, 1e-12);
     r.home();
     // ---------------- STATISTICS

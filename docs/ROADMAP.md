@@ -1,4 +1,4 @@
-# Roadmap — dopo la v1.11.0
+# Roadmap — dopo la v1.12.0
 
 Il progetto **non** ha la parità con la Casio fx-CG50 e non va presentato come
 tale: le tabelle sotto elencano ciò che manca. Il documento storico
@@ -7,11 +7,13 @@ La v1.9.0 ha unito la v1.8.0 al supporto del Pimoroni Pico Plus 2 W
 ([reports/CONSOLIDAMENTO_v1.9.0.md](reports/CONSOLIDAMENTO_v1.9.0.md)); la
 v1.10.0 ha aggiunto a Run-Matrix matrici, vettori e liste, l'editor
 MAT/VCT, Math/Line, CLIP, parentesi colorate e il cursore sugli errori
-([reports/SVILUPPO_v1.10.0.md](reports/SVILUPPO_v1.10.0.md)); la v1.11.0
-(`main`) ha completato Run-Matrix: List 1–26 e sottonomi, CSV, MatAns/ListAns,
+([reports/SVILUPPO_v1.10.0.md](reports/SVILUPPO_v1.10.0.md)); la v1.11.0 ha
+completato Run-Matrix: List 1–26 e sottonomi, CSV, MatAns/ListAns,
 celle esatte e complesse, INS/⌟/scorrimento in Line, SHIFT+INS, simboli
 ingegneristici, Simp, Base-N intera e comandi grafici
-([reports/SVILUPPO_v1.11.0.md](reports/SVILUPPO_v1.11.0.md)). Le release
+([reports/SVILUPPO_v1.11.0.md](reports/SVILUPPO_v1.11.0.md)); la v1.12.0
+(`main`) ha completato EQUATION (SIML, POLY, SOLVER, VARS › EQUATION;
+[EQUATION.md](EQUATION.md), [reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md)). Le release
 successive si creano solo quando i rispettivi incrementi sono completati e
 verificati. La matrice di parità di GRAPH è in
 [GRAPH_PARITY.md](GRAPH_PARITY.md).
@@ -45,7 +47,7 @@ Run-Matrix con l'editor MAT/VCT e quattro voci del Punto 3. Restano, in ordine:
 
 | # | Voce | Note |
 |---|---|---|
-| 0 | **Esito del collaudo fisico** della v1.11.0 sulla Pico Plus 2 W | procedure [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md), [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md), [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) e [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md); correggere i KO prima del resto e aggiornare a TESTED ON HARDWARE solo le voci provate |
+| 0 | **Esito del collaudo fisico** della v1.12.0 sulla Pico Plus 2 W | procedure [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md), [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md), [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md), [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) e [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md); correggere i KO prima del resto e aggiornare a TESTED ON HARDWARE solo le voci provate |
 | 1 | Dual Screen G+G (COPY, SWAP), GtoT e T+G, Graph to Table | `graph::Viewport` accetta già un'area diversa da 320×282 |
 | 2 | Dyna Graph, Recursion, Conic Graphs | sul servizio GraphCore (`sampleStep`, `Viewport`, G-Solve, `table_model` per le tabelle delle successioni) |
 | 3 | FORMAT durante lo SKETCH, suffissi angolari °/ʳ/ᵍ | piccoli completamenti di GRAPH |
@@ -69,7 +71,7 @@ il testo lineare canonico (`ast::serialize`) e lo reimporta strutturalmente
 | 6 | Colori delle parentesi per livello (blu, rosso, verde, magenta, nero) | **fatto (v1.10.0)**: `NaturalDrawOp::color`, `math::Palette` |
 | 7 | Regola del segno × obbligatorio prima di una frazione e parentesi implicite (`2 1/3` → `2(1/3)` nel lineare) | manuale 1-23 e 2-7 |
 | 8 | Modelli MAT/VCT modificabili nell'editor | **fatto (v1.10.0)** (fino a 6×6) |
-| 9 | Visualizzazione in Graph/Table/Equation delle espressioni con gli stessi modelli | riuso di `math_renderer` |
+| 9 | Visualizzazione in Graph/Table delle espressioni con gli stessi modelli | riuso di `math_renderer` (Equation: **fatto nella v1.12.0**) |
 
 Non anticipato in questa sessione per non interferire: nessuna modifica al
 formato canonico del testo lineare esistente (salvo l'aggiunta di `mixed(…)` e
@@ -97,7 +99,7 @@ Stato e progetto di ogni modalità in [APPLICATIONS_ARCHITECTURE.md](APPLICATION
 | Statistics | regressioni sinusoidale e logistica; test χ², F, 2 campioni, ANOVA nell'interfaccia; grafici a torta e a barre |
 | Graph | Dual Screen G+G/GtoT, Graph to Table, comandi grafici di Run-Matrix/programmi, FORMAT nello SKETCH (dettaglio in [GRAPH_PARITY.md](GRAPH_PARITY.md)) |
 | Table | Dual Screen T+G (LISTMEM con 999 elementi già sulla Plus; 255 sul Pico 2 W) |
-| Equation | interfaccia per i sistemi di disequazioni; risultati esatti (servizio Exact) |
+| Equation | **parità completata nella v1.12.0** ([EQUATION.md](EQUATION.md)); restano come estensioni: interfaccia per i sistemi di disequazioni; forme esatte di quozienti complessi (`1/(1+i)`) e delle radici cubiche |
 | Recursion, Conic Graphs, Dyna Graph | modelli dati pronti (`app_models.hpp`) e servizio GraphCore per il disegno; mancano controller e UI |
 | Financial | TVM (modello pronto), flussi di cassa, ammortamento |
 | Spreadsheet, eActivity, Program | modelli pronti; l'area file su microSD esiste (servizio Files, v1.8.0); Program richiede l'interprete |
