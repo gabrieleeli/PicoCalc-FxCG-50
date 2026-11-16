@@ -1,8 +1,38 @@
-# Build status — v1.11.0 (completamento di Run-Matrix: List 1–26, CSV, MatAns, Line, Base-N, comandi grafici)
+# Build status — v1.12.0 (completamento di EQUATION)
 
-Le note storiche delle versioni v0.3–v1.5.4 restano nella cronologia Git e in
-[CHANGELOG.md](CHANGELOG.md). Le sezioni dopo "v1.11.0" descrivono le build
-precedenti e restano valide come confronto.
+Stato delle build per versione; le novità sono in [CHANGELOG.md](CHANGELOG.md).
+Le sezioni dopo "v1.12.0" descrivono le build delle versioni precedenti.
+
+## v1.12.0 — `main`
+
+Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`),
+una cartella per scheda, stesso ambiente della v1.11.0 (Pico SDK 2.2.0,
+`gcc-arm-none-eabi` 13.2.1). **Nessuna prova su hardware.**
+
+| Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (3 360 256 byte) | `build/pico2w/picocalc_fxai_pico2w.uf2` (3 342 848 byte) |
+| Versione nel binario | `1.12.0 (pico_plus_2w)` (`picotool` non installato in questo ambiente; lo verifica il workflow) | `1.12.0 (pico2w)` |
+| Immagine flash | 1 679 688 byte (`__flash_binary_end` = `0x1019A148`) = 40 % della partizione da 4 MB; +84 732 byte rispetto alla v1.11.0 | 1 670 916 byte (`0x10197F04`) = 79 % della partizione da 2 MB; +84 748 byte |
+| Resto della flash | invariato | invariato |
+| RAM statica | 302 248 byte (−308: la vecchia griglia di EQUATION non c'è più) | 298 324 byte (−308) |
+| Heap SRAM | 191 320 byte (`__end__` = `0x200494A8` → `0x20078000`) | 195 244 byte |
+| PSRAM | 8 MB come pool TLSF separato (anche i coefficienti di EQUATION, ≈ 7,6 KB) | — |
+| Frame di stack (`-fstack-usage`) | massimo invariato `SystemApp::enter` 1 840 B; codice nuovo: forma esatta dei complessi 784 B (tabelle sull'heap), `solveSimultaneous` 776 B, `solvePolynomial` 760 B, `numericPolynomial` 712 B, `EquationApp::solve` 552 B; nessuna ricorsione nuova | uguale |
+| Warning | **nessuno** (0 righe `warning:`) | nessuno |
+| SHA-256 dell'UF2 locale | `6f28c35d3744fc1d6b61a3634bf2308c5e0cf9bc055043b1a208bae8a48d1125` | `67fee0302167ee2d1fe98bfcd0fc661cc2d371966d5fa8ff4d4bd6fb608a1590` |
+
+Gli UF2 della release sono compilati dal workflow sul commit pubblicato e
+possono avere hash diversi da quelli locali.
+
+### Test
+
+| Suite | Pico Plus 2 W | Pico 2 W |
+|---|---|---|
+| CTest (`tests/run_host_tests.sh`) | 41/41: 39 suite C++ con **10 316** controlli, `mem_pools_smoke` (≈ 333 000) e `sd_interop_test` (41) | 41/41: **10 310** controlli + ≈ 334 000 + 41 |
+| AddressSanitizer + UBSan (`--sanitize`) | 41/41 | 41/41 |
+| ThreadSanitizer (`--tsan`) | superato | superato |
+| Relay AI (Python, `unittest`) | 15/15 | — |
 
 ## v1.11.0 — `main`
 

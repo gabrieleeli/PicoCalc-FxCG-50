@@ -206,15 +206,15 @@ aperto da una modalità torna alla modalità; record alla versione 8.
 
 | Verifica | Risultato |
 |---|---|
-| Test host, profilo Pimoroni Pico Plus 2 W | @@T_PLUS@@ |
-| Test host, profilo Raspberry Pi Pico 2 W | @@T_2W@@ |
-| AddressSanitizer + UBSan (entrambi i profili) | @@T_SAN@@ |
-| ThreadSanitizer (allocatore su due thread, entrambi i profili) | @@T_TSAN@@ |
-| Relay AI | @@T_RELAY@@ |
+| Test host, profilo Pimoroni Pico Plus 2 W | 41/41 test, **10 316** controlli nelle 39 suite C++ + ≈ 333 000 dello stress dell'allocatore + 41 dello script FAT/exFAT, 0 errori |
+| Test host, profilo Raspberry Pi Pico 2 W | 41/41 test, **10 310** controlli + ≈ 334 000 + 41, 0 errori |
+| AddressSanitizer + UBSan (entrambi i profili) | 41/41 su entrambi i profili, 0 errori |
+| ThreadSanitizer (allocatore su due thread, entrambi i profili) | 0 errori |
+| Relay AI | 15/15 |
 | Simulatore | nuovo script `tests/sim/equation.txt`, screenshot 08 (rigenerato) e 62–76, compressi senza perdita (palette PNG, `compress_level` 9, pixel verificati: 36 KB) |
 | **Hardware fisico** | **non eseguito**: nessuna PicoCalc disponibile in questa sessione; procedura [HARDWARE_TEST_v1.12.0.md](../HARDWARE_TEST_v1.12.0.md) (HW-120…HW-134) |
 
-Nuova suite `equation_v112_test` (@@N_EQ@@ controlli): un gruppo per ogni
+Nuova suite `equation_v112_test` (244 controlli): un gruppo per ogni
 punto del §4 della richiesta — coefficienti (frazioni, radicali, π, A–Z, Ans,
 complessi esatti, Non-Real, Type, EDIT, conversione dei double), SIML
 (esempio del manuale, frazioni, radicali e π, Hilbert 6×6 esatta e decimale,
@@ -240,13 +240,13 @@ solo ai cambiamenti voluti (versione 8 del record, nuove schermate).
 
 | | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
 |---|---|---|
-| Esito | @@FW_PLUS@@ | @@FW_2W@@ |
-| Immagine flash | @@IMG_PLUS@@ | @@IMG_2W@@ |
-| RAM statica | @@RAM_PLUS@@ | @@RAM_2W@@ |
-| SHA-256 dell'UF2 locale | @@SHA_PLUS@@ | @@SHA_2W@@ |
+| Esito | compilato, 0 warning | compilato, 0 warning |
+| Immagine flash | 1 679 688 byte (40 % di 4 MB; +84 732 rispetto alla v1.11.0) | 1 670 916 byte (79 % di 2 MB; +84 748) |
+| RAM statica | 302 248 byte (−308); heap SRAM 191 320 byte | 298 324 byte (−308); heap SRAM 195 244 byte |
+| SHA-256 dell'UF2 locale | `6f28c35d3744fc1d6b61a3634bf2308c5e0cf9bc055043b1a208bae8a48d1125` | `67fee0302167ee2d1fe98bfcd0fc661cc2d371966d5fa8ff4d4bd6fb608a1590` |
 
 Pico SDK 2.2.0, `gcc-arm-none-eabi` 13.2.1, `-O2`, build pulite
-(`scripts/build.sh --clean`). Nessun pin, driver, partizione o script del
+(`scripts/build.sh --clean`); la versione `1.12.0 (pico_plus_2w)` / `1.12.0 (pico2w)` è nel binario (`picotool` non è installato in questo ambiente). Frame di stack (`-fstack-usage`): il massimo resta `SystemApp::enter` 1 840 B; codice nuovo: forma esatta dei complessi 784 B (tabelle sull'heap; inline erano 1 928 B in `evaluateNumber`), `solveSimultaneous` 776 B, `solvePolynomial` 760 B, `numericPolynomial` 712 B; nessuna ricorsione nuova. Nessun pin, driver, partizione o script del
 linker cambiato; EQUATION ha gli stessi limiti sulle due schede; il blocco v8
 occupa da ≈ 1,2 KB (coefficienti nulli) a ≈ 4 KB nel record (59,75 KB sul
 Pico 2 W, 511,75 KB sulla Plus). Gli UF2 della release sono quelli compilati
@@ -254,7 +254,7 @@ dal workflow sul commit pubblicato.
 
 ## 8. Pubblicazione
 
-- Prima della pubblicazione `main` è stato ricontrollato: @@MAIN_CHECK@@
+- Prima della pubblicazione `main` è stato ricontrollato: `origin/main` era ancora `f6933fd` (tag `v1.11.0`): nessun lavoro parallelo da integrare, nessuna rinumerazione necessaria.
 - Un solo commit della v1.12.0 su `main` (fast-forward); i commit intermedi
   restano sul branch di sessione `ccr-bbf29b2b-0ipbnx`. Nessun force push.
 - Tag e release dal workflow `Build, test e release` avviato a mano su
