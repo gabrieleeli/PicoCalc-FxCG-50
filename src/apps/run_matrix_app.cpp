@@ -747,7 +747,7 @@ void RunMatrixApp::draw(Context& ctx, gfx::Canvas& c) {
             // Math: l'espressione disegnata in 2D; Line: su una riga, come digitata.
             NaturalEditor tmp;
             tmp.setLinear(lineMode);
-            try { tmp.setExpression(hist[i].expression); } catch (...) { tmp.clear(); tmp.insertText("?"); }
+            try { tmp.setExpression(lineMode ? NaturalEditor::toLinearText(hist[i].expression) : hist[i].expression); } catch (...) { tmp.clear(); tmp.insertText("?"); }
             exprTrees[i] = tmp.copyTree();
         }
         resultTrees[i] = lineMode ? textRow(resultText(hist[i], s, true)) : resultTree(hist[i], s);

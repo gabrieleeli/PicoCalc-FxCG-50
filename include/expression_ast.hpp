@@ -1,4 +1,5 @@
 #pragma once
+#include <cctype>
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
@@ -69,6 +70,34 @@ struct SerializeMap {
 };
 
 namespace detail {
+// v1.12.0, manuale 1-23: una frazione accostata a un operando (2[1/3], [1/2]x)
+// e' un fattore intero della moltiplicazione implicita: nel testo lineare va
+// tra parentesi ("2((1)/(3))"), cosi' 6÷2[1/3] resta 6÷(2×1/3) come sulla
+// calcolatrice. L'import dell'editor toglie le stesse parentesi.
+inline bool operandToken(const std::string& t) {
+    if (t.empty()) return false;
+    const unsigned char c = static_cast<unsigned char>(t[0]);
+    if (std::isalnum(c) || c == '.' || c == '#' || c == '@' || c == '"') return true;
+    if (t == ")" || t == "]" || t == "}" || t == "!") return true;
+    static const char* const symbols[] = {"\xCF\x80", "\xCE\xB8", "\xC2\xB0", "\xCA\xB3", "\xE1\xB5\x8D", "\xE2\x80\xB2", "\xE2\x80\xB3", "\xE2\x8C\x9F"};
+    for (const char* sym : symbols) if (t == sym) return true;
+    return false;
+}
+inline bool operandBefore(const Node& n) { return n.kind == Kind::Token ? operandToken(n.text) : true; }
+inline bool operandAfter(const Node& n) {
+    if (n.kind != Kind::Token) return true;
+    if (n.text.empty()) return false;
+    const unsigned char c = static_cast<unsigned char>(n.text[0]);
+    if (std::isalnum(c) || c == '.' || c == '(' || c == '[' || c == '{' || c == '@') return true;
+    return n.text == "\xCF\x80" || n.text == "\xCE\xB8";
+}
+// La frazione in posizione i della riga ha bisogno delle parentesi implicite.
+inline bool impliedFraction(const Node& row, std::size_t i) {
+    if (row.kind != Kind::Row || i >= row.children.size() || !row.children[i] || row.children[i]->kind != Kind::Fraction) return false;
+    const bool before = i > 0 && row.children[i - 1] && operandBefore(*row.children[i - 1]);
+    const bool after = i + 1 < row.children.size() && row.children[i + 1] && operandAfter(*row.children[i + 1]);
+    return before || after;
+}
 inline void serializeInto(const Node& n, std::string& out, SerializeMap* map);
 inline void serializeChild(const Node& n, std::size_t i, std::string& out, SerializeMap* map) {
     if(!n.children[i]) throw std::runtime_error("Figlio AST nullo");
@@ -83,7 +112,13 @@ inline void serializeInto(const Node& n, std::string& out, SerializeMap* map) {
     case Kind::Row: {
         std::size_t slot=0;
         if(map){ slot=map->rows.size(); map->rows.push_back({&n, map->path, out.size(), out.size(), {}}); map->rows[slot].childStart.reserve(n.children.size()); }
-        for(std::size_t i=0;i<n.children.size();++i){ if(map) map->rows[slot].childStart.push_back(out.size()); child(i); }
+        for(std::size_t i=0;i<n.children.size();++i){
+            if(map) map->rows[slot].childStart.push_back(out.size());
+            const bool implied=impliedFraction(n,i);
+            if(implied) out+="(";
+            child(i);
+            if(implied) out+=")";
+        }
         if(map) map->rows[slot].end=out.size();
         return;
     }
