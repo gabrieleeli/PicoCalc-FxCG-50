@@ -52,8 +52,19 @@ void StatisticsApp::setupGrid(Context& ctx) {
     grid_.rows = static_cast<int>(std::max<std::size_t>(1, longest));
     grid_.header = [](int c) { return "List " + std::to_string(c + 1); };
     // Riga SUB: sottonomi delle liste (fx-CG50, fino a 8 caratteri).
-    grid_.subHeader = [ws](int c) { return ws->listName(static_cast<std::size_t>(c)); };
-    grid_.setSubHeader = [ws, &ctx](int c, const std::string& name) { ws->setListName(static_cast<std::size_t>(c), name); ctx.markDirty(); };
+    // SET UP "Sub Name" Off (v1.12.0): la riga SUB non si mostra.
+    if (ctx.ws.settings.subName) {
+        grid_.subHeader = [ws](int c) { return ws->listName(static_cast<std::size_t>(c)); };
+        grid_.setSubHeader = [ws, &ctx](int c, const std::string& name) { ws->setListName(static_cast<std::size_t>(c), name); ctx.markDirty(); };
+    } else {
+        grid_.subHeader = nullptr;
+        grid_.setSubHeader = nullptr;
+    }
+    // List File n della fx-CG50: indicato nell'intestazione quando non e' il File 1.
+    if (ctx.ws.settings.listFile != 0) {
+        const int file = ctx.ws.settings.listFile + 1;
+        grid_.header = [file](int c) { return "F" + std::to_string(file) + " List " + std::to_string(c + 1); };
+    }
     grid_.columnLength = [&lists](int c) { return static_cast<int>(lists[static_cast<std::size_t>(c)].size()); };
     grid_.get = [&lists](int r, int c, double& v) { const auto& l = lists[static_cast<std::size_t>(c)]; if (static_cast<std::size_t>(r) >= l.size()) return false; v = l[static_cast<std::size_t>(r)]; return true; };
     grid_.set = [&lists, ws, &ctx](int r, int c, double v) {
@@ -95,6 +106,8 @@ void StatisticsApp::runCalc(Context& ctx, int choice) {
         const auto type = static_cast<RegType>(choice - 2);
         reg_ = stats::regress(type, X, Y);
         hasReg_ = true;
+        // Per x̂, ŷ e VARS STAT di Run-Matrix (v1.12.0): l'ultima regressione calcolata.
+        ctx.ws.settings.statRegType = static_cast<std::uint8_t>(type);
         results_.title = std::string("Regressione ") + stats::regFormula(type);
         static const char* names[] = {"a", "b", "c", "d", "e"};
         for (std::size_t i = 0; i < reg_.coef.size() && i < 5; ++i) results_.add(names[i], F(reg_.coef[i]));

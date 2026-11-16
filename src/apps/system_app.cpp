@@ -1,5 +1,6 @@
 // SYSTEM / SET UP: Input/Output (Math, Line), angle unit, display format, complex mode, exact results, Frac Result (d/c, ab/c),
 // Mode (Comp, Base-N Dec/Hex/Bin/Oct), Simplify (Auto/Manual), CSV separator and decimal symbol,
+// List File 1-6 and Sub Name (v1.12.0),
 // backlights, Wi-Fi and AI relay configuration, device information and reset.
 #include "apps.hpp"
 #include "board_config.hpp"
@@ -43,7 +44,9 @@ FormField text(const char* l, const std::string& v, bool secret = false) { retur
 FormField number(const char* l, double v) { return {l, formatReal(v), FormField::Type::Number, {}, 0}; }
 enum Field { FInput, FAngle, FDisplay, FComplex, FFrac, FMixed, FLcd, FKbd, FFiles, FSsid, FPass, FHost, FPort, FPath, FToken, FProvider, FModel, FTokens,
              // v1.11.0: modalita' di calcolo (Comp / Base-N), Simplify, formato dei file CSV
-             FMode, FSimplify, FCsvSep, FCsvDec };
+             FMode, FSimplify, FCsvSep, FCsvDec,
+             // v1.12.0: List File 1-6 e Sub Name (SET UP della fx-CG50)
+             FListFile, FSubName };
 } // namespace
 
 void SystemApp::enter(Context& ctx) {
@@ -71,6 +74,8 @@ void SystemApp::enter(Context& ctx) {
         choice("Simplify", {"Auto", "Manual"}, s.simplifyManual ? 1 : 0),
         choice("CSV Separator", {",", ";"}, s.csvSeparator == ';' ? 1 : 0),
         choice("CSV Decimal", {".", ","}, s.csvDecimal == ',' ? 1 : 0),
+        choice("List File", {"File 1", "File 2", "File 3", "File 4", "File 5", "File 6"}, s.listFile),
+        choice("Sub Name", {"On", "Off"}, s.subName ? 0 : 1),
     };
     form_.selected = 0; info_ = false; confirmReset_ = false;
 }
@@ -99,6 +104,9 @@ void SystemApp::apply(Context& ctx) {
     const char sep = f[FCsvSep].choice == 1 ? ';' : ',', dec = f[FCsvDec].choice == 1 ? ',' : '.';
     if (sep == dec) throw MathError("Argument ERROR: CSV, separatore e simbolo decimale devono essere diversi");
     s.csvSeparator = sep; s.csvDecimal = dec;
+    // List File: le 26 liste del file scelto diventano List 1-26 (gli altri file restano in memoria).
+    ctx.ws.selectListFile(static_cast<std::size_t>(std::clamp(f[FListFile].choice, 0, 5)));
+    s.subName = f[FSubName].choice == 0;
     ctx.ws.apply();
     ctx.platform.setBacklight(s.lcdBacklight, s.kbdBacklight);
     ctx.markDirty();

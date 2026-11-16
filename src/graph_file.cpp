@@ -108,7 +108,7 @@ std::string parseSketch(const std::string& value, SketchItem& s) {
             double xy[2];
             if (!numbers(pt, ',', 2, xy)) return "tracciato SKETCH non valido";
             s.path.push_back(static_cast<float>(xy[0])); s.path.push_back(static_cast<float>(xy[1]));
-            if (s.path.size() > 2 * MaxPenPoints) return "tracciato SKETCH troppo lungo";
+            if (s.path.size() > 2 * std::max(MaxPenPoints, MaxDataPoints)) return "tracciato SKETCH troppo lungo";
         }
     }
     const std::string e = validateSketch(s);
@@ -196,6 +196,9 @@ std::string encode(const Project& p) {
     if (!p.overlay.empty()) s += "overlay=" + escape(p.overlay) + "\n";
     for (std::size_t i = 0; i < p.functions.size(); ++i) if (!p.functions[i].empty()) s += functionLine(i, p.functions[i]);
     for (const auto& item : p.sketch) s += sketchLine(item);
+    for (const auto& cg : p.commands)
+        s += std::string("c=") + graphTypeName(cg.type) + "|" + graphColorName(cg.color) + "|" + lineStyleName(cg.style) + "|" +
+             escape(cg.expr) + "|" + escape(cg.expr2) + "\n";
     return close(std::move(s));
 }
 
@@ -264,6 +267,16 @@ std::string decode(const std::string& text, Project& out) {
             err = parseSketch(value, item);
             if (!err.empty()) return err;
             p.sketch.push_back(std::move(item));
+        } else if (key == "c") {
+            // Grafico di un comando di Run-Matrix (v1.12.0): tipo|colore|stile|espressione|Yt.
+            if (p.commands.size() >= MaxCommandGraphs) return "troppi grafici dei comandi";
+            const auto parts = split(value, '|');
+            CommandGraph cg;
+            ok = parts.size() == 5 && parseGraphTypeName(parts[0], cg.type) && parseGraphColorName(parts[1], cg.color) &&
+                 parseLineStyleName(parts[2], cg.style) && unescape(parts[3], cg.expr) && unescape(parts[4], cg.expr2) &&
+                 !cg.expr.empty() && cg.expr.size() <= MaxGraphExpression && cg.expr2.size() <= MaxGraphExpression &&
+                 (cg.type != GraphType::Param || !cg.expr2.empty());
+            if (ok) p.commands.push_back(std::move(cg));
         } else if (key.size() >= 2 && key[0] == 'f' && std::isdigit(static_cast<unsigned char>(key[1]))) {
             err = parseFunction(key, value, p.functions, seen);
             if (!err.empty()) return err;

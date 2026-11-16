@@ -751,6 +751,16 @@ void RunMatrixApp::draw(Context& ctx, gfx::Canvas& c) {
             exprTrees[i] = tmp.copyTree();
         }
         resultTrees[i] = lineMode ? textRow(resultText(hist[i], s, true)) : resultTree(hist[i], s);
+        // Risultati intermedi di ◢ (v1.12.0): prima del risultato finale, come "- Disp -" della fx-CG50.
+        if (!hist[i].displays.empty() && hist[i].error.empty()) {
+            auto combined = ast::make(ast::Kind::Row);
+            for (const std::string& d : hist[i].displays) {
+                combined->children.push_back(ast::make(ast::Kind::Token, d));
+                combined->children.push_back(ast::make(ast::Kind::Token, "  \xE2\x97\xA2  "));
+            }
+            for (const auto& ch : resultTrees[i]->children) combined->children.push_back(ch);
+            resultTrees[i] = combined;
+        }
         blocks.push_back({live ? editorH : math::measure(*exprTrees[i]).height + 4, static_cast<int>(i), false, live});
         blocks.push_back({math::measure(*resultTrees[i]).height + 6, static_cast<int>(i), true, false});
     }

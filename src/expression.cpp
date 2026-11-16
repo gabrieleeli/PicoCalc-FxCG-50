@@ -945,6 +945,7 @@ struct Env {
     std::uint8_t refDepth{};   // nested graph-function references
     std::uintptr_t stackBase{};
     bool decimal{};            // exact evaluation met a plain decimal literal
+    std::uint8_t solving{};    // dentro Solve/SolveN/FMin/FMax (manuale 2-28: funzioni vietate negli argomenti)
     // Nodo dell'espressione analizzata la cui operazione e' in corso: quando
     // viene lanciato un errore il suo intervallo arriva a EvalInfo::error.
     const ast::Node* at{};
@@ -1087,8 +1088,17 @@ template<typename F> double ridders(F f,double x){
 
 // Calculus functions evaluate their body lazily with x bound; env.depth limits
 // how many of them can be nested.
+// Manuale 2-28: dentro gli argomenti di Solve, SolveN, FMin e FMax non si usano
+// Solve(, SolveN(, FMin(, FMax(, Σ( e d²/dx²(.
+void checkRestricted(const Env& env,const ast::Node& n){
+    const std::string& f=n.text;
+    if(env.solving&&(f=="solve"||f=="solve_n"||f=="f_min"||f=="f_max"||f=="sum"||f=="prod"||f=="derivative2"))
+        throw SyntaxError("Syntax ERROR: "+f+" non ammessa dentro Solve/SolveN/FMin/FMax",n.pos,n.len);
+}
+struct SolvingScope{Env& e;explicit SolvingScope(Env& env):e(env){++e.solving;}~SolvingScope(){--e.solving;}};
 template<typename T> FXAI_NOINLINE T callCalculus(const ast::Node& n,Env& env){
     const std::string& f=n.text;
+    if(f=="sum"||f=="prod"||f=="solve"||f=="derivative2")checkRestricted(env,n);
     auto arg=[&](std::size_t i)->T{return evalNode<T>(*n.children.at(i),env);};
     auto rarg=[&](std::size_t i)->double{return asReal<T>(arg(i),f.c_str());};
     auto R=[](double v){return fromReal<T>(v);};
@@ -1128,6 +1138,7 @@ template<typename T> FXAI_NOINLINE T callCalculus(const ast::Node& n,Env& env){
         if(f=="derivative"||f=="diff"){return R(ridders(fx,rarg(1)));}
         if(f=="derivative2"){const double x0=rarg(1);auto d1=[&](double v){return ridders(fx,v);};return R(ridders(d1,x0));}
         if(f=="solve"){
+            const SolvingScope scope(env);
             // Solve(f, stima[, inferiore, superiore]): Newton dalla stima, la soluzione deve stare nei limiti.
             double x=rarg(1);
             double lo=-std::numeric_limits<double>::infinity(),hi=std::numeric_limits<double>::infinity();
@@ -3070,7 +3081,11 @@ private:
         if(f=="seq"){if(count!=5)throw SyntaxError("Argument ERROR: Seq(espressione,variabile,inizio,fine,incremento)");return sequence(n);}
         if(f=="solve_n"||f=="f_min"||f=="f_max"){
             if constexpr(std::is_same_v<D,ExactDomain>)throw NoExactForm{};
-            else return f=="solve_n"?solveN(n):extremum(n,f=="f_max");
+            else{
+                checkRestricted(env,n);
+                const SolvingScope scope(env);
+                return f=="solve_n"?solveN(n):extremum(n,f=="f_max");
+            }
         }
         // I riferimenti alle funzioni di GRAPH e le funzioni di calcolo mantengono
         // la loro valutazione (pigra); una collezione puo' stare nei loro argomenti.
