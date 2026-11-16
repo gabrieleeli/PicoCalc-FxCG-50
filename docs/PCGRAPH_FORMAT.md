@@ -109,6 +109,7 @@ crc32=76C89E50
 | `overlay=` | percorso dell'immagine richiamata (RECALL) |
 | `f<n>=` | funzione `n` (1–20): `tipo|selezione|colore|stile|espressione|Yt`; le righe vuote non sono scritte; `Yt` solo per `Param` |
 | `s=` | elemento SKETCH (max 64): `tipo|x0;y0;x1;y1|colore|stile|testo|percorso` |
+| `c=` | grafico di un comando di Run-Matrix (v1.12.0, max 10): `tipo|colore|stile|espressione|espressione2`; `tipo` come `functype=` (anche le disequazioni `Y>=` …), `espressione2` solo per `Param` (aggiunta compatibile: i firmware precedenti ignorano la chiave) |
 | `end` | fine dei dati (obbligatoria); testo dopo `end` è un errore |
 | `crc32=` | CRC-32 di tutti i byte dal primo carattere di `PCGRAPH` fino al `\n` di `end` compreso, 8 cifre esadecimali maiuscole |
 
@@ -120,11 +121,18 @@ lineare dell'editor (`(x)^(3)`, `@Y1` per i riferimenti ad altre funzioni,
 1000 caratteri (`MaxGraphExpression`).
 
 **Elementi SKETCH** (`tipo` = `Plot`, `PlotOff`, `Line`, `Tangent`, `Normal`,
-`Circle`, `Vertical`, `Horizontal`, `Text`, `Pen`, `Inverse`): coordinate
+`Circle`, `Vertical`, `Horizontal`, `Text`, `Pen`, `Inverse` e, dalla v1.12.0,
+`Integral` e `Data`): coordinate
 matematiche; per `Tangent`/`Normal` `x1;y1` è la direzione, per `Circle` `x1` è
 il raggio; per `Text` il campo testo (≤ 32 caratteri) è la scritta, per
 `Inverse` è l'espressione del grafico invertito (ridisegnato come X = f(y));
 `percorso` (solo `Pen`) = punti `x,y` separati da `;`, max 400.
+`Integral` (G∫dx): `x0` e `x1` sono gli estremi (x0 ≤ x1), il testo è
+l'espressione integrata. `Data` (DrawStat, DrawR, DrawWeb, DrawFTG): il
+percorso contiene fino a 999 punti `x,y`, `y1` = 1 se i punti sono collegati
+(…-Con), 0 se solo punti (…-Plt). Un file con questi tipi letto da un
+firmware precedente alla v1.12.0 viene rifiutato con il messaggio di tipo
+sconosciuto, senza modificare il progetto aperto.
 
 **Lettura**: CRC, intestazione e versione sono controllati prima di
 interpretare i dati; ogni valore è validato (tipi, colori, stili, numeri finiti,

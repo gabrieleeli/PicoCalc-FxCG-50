@@ -1,10 +1,47 @@
-# Build status — v1.11.0 (completamento di Run-Matrix: List 1–26, CSV, MatAns, Line, Base-N, comandi grafici)
+# Build status — v1.12.0 (completamento totale di Run-Matrix)
 
 Le note storiche delle versioni v0.3–v1.5.4 restano nella cronologia Git e in
-[CHANGELOG.md](CHANGELOG.md). Le sezioni dopo "v1.11.0" descrivono le build
+[CHANGELOG.md](CHANGELOG.md). Le sezioni dopo "v1.12.0" descrivono le build
 precedenti e restano valide come confronto.
 
-## v1.11.0 — `main`
+## v1.12.0 — `main`
+
+Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`),
+una cartella per scheda, nello stesso ambiente delle versioni precedenti (Pico
+SDK 2.2.0, `gcc-arm-none-eabi` 13.2.1). **Nessuna prova su hardware.**
+
+| Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (3 520 000 byte) | `build/pico2w/picocalc_fxai_pico2w.uf2` (3 502 592 byte) |
+| Immagine flash | 1 759 736 byte (`__flash_binary_end` = `0x101AD9F8`) = 42 % della partizione firmware da 4 MB; +164 780 byte rispetto alla v1.11.0 (libreria CALC/STAT/TVM/CONVERT, menu, CATALOG, comandi grafici) | 1 750 924 byte (`0x101AB78C`) = 83 % della partizione da 2 MB; +164 756 byte |
+| Resto della flash | invariato (diagnostica, LittleFS ≈ 11 MB anche per CSV, Pict e Capture, BTstack, workspace 2 × 512 KB) | invariato (LittleFS ≈ 1,9 MB, workspace 128 KB) |
+| RAM statica | 307 564 byte fino a `__end__` = `0x2004B16C` (+5 008 byte: glifi nuovi, tabelle dei nomi e del CATALOG, stato dei menu) | 303 640 byte (`0x2004A218`, +5 008 byte) |
+| Heap SRAM | 183 956 byte (`__end__` → `0x20078000`) | 187 880 byte |
+| PSRAM | 8 MB come pool TLSF separato (liste di tutti i List File, matrici con le forme esatte, catture) | — |
+| Stack | core 0: 32 KB con guardia MSPLIM; core 1: 4 KB in SCRATCH_X (invariati) | uguale |
+| Frame di stack (`-fstack-usage`) | massimo `SystemApp::enter` 2 016 B (due voci nuove del SET UP; non è sul percorso di una ricorsione), poi `diag::testMemory` 1 712 B; codice nuovo: `evaluateStatement` 880 B, `RunMatrixApp::runAction` 528 B, `graphcmd::Runner::run` 400 B, `CollEval::solveN` 392 B, `CollEval::libraryCall` 392 B, `Workspace::special` 224 B (il motore dei grafici di DrawFTG e TABLE Result è sullo heap); la ricorsione del valutatore resta sotto il budget di 16 KB | uguale |
+| Warning | **nessuno** del compilatore (0 righe `warning:`; resta l'avviso di CMake dell'SDK sulla ricerca di picotool, come nelle versioni precedenti) | nessuno |
+| SHA-256 dell'UF2 locale | `da499fd89d5e01e61a7c5fdd25598ca634b8971ccd8769c92337fbb0c5a38251` | `b48559dffeb103ef938b458f5c2e238eac8b4a52a331b8ecf10b5e58ac32ab55` |
+
+Gli UF2 allegati alla GitHub Release sono compilati dal workflow
+`.github/workflows/release.yml` sul commit pubblicato e verificati con
+`sha256sum -c SHA256SUMS`; i loro hash possono differire da quelli locali.
+
+### Test
+
+| Suite | Pico Plus 2 W | Pico 2 W |
+|---|---|---|
+| CTest (`tests/run_host_tests.sh`) | 44/44: 42 suite C++ con **10 484** controlli, `mem_pools_smoke` (≈ 334 000 verifiche) e `sd_interop_test` | 44/44: **11 445** controlli + ≈ 334 000 |
+| AddressSanitizer + UBSan (`--sanitize`) | 44/44 | 44/44 |
+| ThreadSanitizer (`--tsan`, allocatore su due thread) | superato | superato |
+| Relay AI (Python, `unittest`) | 15/15 | — |
+| Simulatore | screenshot 62–72 nuovi (`tests/sim/run_matrix_v112.txt`), compressi senza perdita | |
+
+Nuove suite: `calc_v112_test` (207 controlli), `run_matrix_v112_test` (138),
+`graph_cmd_v112_test` (56), `editor_v112_test` (488); `architecture_test`
+1 225. Il dispositivo non è stato usato.
+
+## v1.11.0 — tag `v1.11.0`
 
 Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`),
 una cartella per scheda, nello stesso ambiente della v1.9.0/v1.10.0 (Pico SDK

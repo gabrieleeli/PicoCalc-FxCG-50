@@ -1,4 +1,4 @@
-# Motore matematico — v1.11.0
+# Motore matematico — v1.12.0
 
 Riferimenti storici: `archive/VPAM_SHARED_AST.md`, `archive/RUN_MATRIX_PHASE*.md` e
 `archive/math_engine_original.py` descrivono le versioni precedenti (vedi [README.md](README.md)).
@@ -27,6 +27,36 @@ Esiste **un solo** parser e **un solo** valutatore numerico (templato sul tipo):
 Run-Matrix, Graph, Table, Equation, Statistics e i test usano lo stesso codice
 (`include/expression.hpp`). `CompiledExpression` analizza una volta e valuta molte
 volte (grafici, tabelle, solver).
+
+## Novità della v1.12.0
+
+Tutto resta nel **parser, AST e valutatore unici**; il nuovo modulo
+`calc_library` (puro calcolo, senza workspace né parser) fornisce unità,
+distribuzioni, funzioni TVM, nomi mostrati e CATALOG.
+
+| Area | Testo canonico | Valutazione |
+|---|---|---|
+| CALC | `solve(f,s[,a,b])` anche `a=b`, `solve_n(…)`, `f_min(…)`, `f_max(…)`, `sum(f,k,a,b[,n])`, `prod(…)`, `integral(f,a,b[,tol])`, `derivative2(…)` | Solve in `callCalculus`; SolveN, FMin, FMax in `CollEval` (risultato lista); funzioni vietate negli argomenti con `Env::solving` |
+| PROB | `ran 3`, `ran_list(n)`, `ran_samp(l,n[,m])`, `randint/rannorm/ranbin(…,n)`, `prob_p`…`prob_t` | sequenze di Ran# con semi fissi; liste in `CollEval` |
+| NUMERIC, ANGLE | `num_rnd(x)`, `30ʳ`, `50ᵍ`, `2°20′30″`, `pol/rec` (lista) | Rnd con `EvalContext::displayMode/displayDigits` |
+| COMPLEX | `r∠θ` (operatore tra × e +) | complesso; Non-Real ERROR nel modo Real |
+| STAT | `x_hat`, `y_hat`, `norm_pd`…`invhypergeo_cd`, `s_dev`, `stat_var`, `mean(l,f)`, `median(l,f)` | regressione e dati da `NameResolver` (`reg_*`, `stat_*`) |
+| TVM | `smpl_si`, `cmpd_pv`…, `cash_npv(I%,lista)`…, `amt_bal`… (fino a 7 argomenti), `days_prd` | `calclib`; `MaxCallArguments` = 8 |
+| CONVERT | `10[cm]▶[in]` | token unità `U`/`V` del lexer, nodo `convert`, anche su liste |
+| ESYM | `#P`, `#E` | fattori 10¹⁵ e 10¹⁸; display Eng con P ed E |
+| Overflow | | `checkFinite`: \|x\| ≥ 10¹⁰⁰ è Math ERROR a ogni passaggio |
+| Variabili | `v_a`…`v_z`, `r_var`, `theta`, `f_1`…`f_20`, `str_1`…`str_20` | memoria (A–Z, r, θ), `ServiceResolver::functionMemory` |
+| VARS | `xfct`, `stat_n`…, `reg_a`…, `d_start`…, `r_start`, `rec_a0`…, `tvm_n`…, `eq_simres`…, `tbl_result` | `NameResolver` / `CollectionResolver::special` |
+| Liste | `List "QTY"` | `CollectionResolver::listByName` |
+| Stringhe | `"testo"` | token stringa: argomenti di InvNormCD e List, Str, risultati stringa |
+| Simplify Manual | | `evaluateUnreducedFraction`: dominio delle frazioni non ridotte sullo stesso AST (m.c.m. per + −, prodotti per × ÷, potenze intere) |
+| Base-N | | Bin a 16 bit (`baseBits`), Dec/Oct/Hex a 32 |
+| PxlTest( | `pxl_test(r,c)` | `ServiceResolver::pixelTest` (GRAPH tramite l'AppManager) |
+
+Il testo canonico usa nomi con `_` per i comandi nuovi: un solo token, che non
+si forma digitando lettere; editor e renderer li mostrano con il nome della
+calcolatrice (`calclib::displayName`). Le parentesi implicite di una frazione
+accostata a un operando sono scritte nel testo canonico (`2((1)/(3))`).
 
 ## Novità della v1.11.0
 
@@ -301,15 +331,16 @@ sull'heap (PSRAM sulla Plus), mai sullo stack.
 | `solvers.hpp/.cpp` | polinomi, disequazioni, solver numerico |
 | `statistics.hpp/.cpp` | statistiche, regressioni, distribuzioni, test |
 | `exact.hpp/.cpp` | razionali, radicali, multipli di π, letterali periodici, regole di visualizzazione |
-| `run_matrix.hpp/.cpp` | riga di Run-Matrix (→, →A~F, Pol/Rec), cronologia con ricalcolo, viste dei risultati |
+| `run_matrix.hpp/.cpp` | riga di Run-Matrix (→ verso variabili, memorie, Str, f1–f20, variabili di sistema; `:` e `◢`; Swap/\*Row), cronologia con ricalcolo, viste dei risultati (ENG, ►r∠θ) |
+| `calc_library.hpp/.cpp` | v1.12.0: unità di CONVERT, distribuzioni, TVM, nomi mostrati, CATALOG (puro calcolo) |
 | `graph_engine.hpp/.cpp`, `graph_solve.hpp/.cpp` | motore dei grafici e G-Solve sullo stesso valutatore ([GRAPH_ENGINE.md](GRAPH_ENGINE.md)) |
 
 ## Non ancora disponibile
 
-(Aggiornato alla v1.11.0.) Derivate e integrali simbolici e limiti non
+(Aggiornato alla v1.12.0.) Derivate e integrali simbolici e limiti non
 esistono sulla fx-CG50 (niente CAS): restano numerici come sulla
-calcolatrice. Mancano i simboli P/E e ►ENG, il riferimento alle liste per
-sottonome, le regressioni sinusoidale e logistica.
+calcolatrice. Le regressioni sinusoidale e logistica (modalità Statistics)
+non sono realizzate; Run-Matrix è completo ([RUN_MATRIX.md](RUN_MATRIX.md)).
 
 ### Prima della v1.11.0
 

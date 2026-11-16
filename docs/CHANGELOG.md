@@ -73,6 +73,13 @@ rapporto con la tabella finale: [reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v
   `calc_library` puro, separazione di Run-Matrix ampliata); script del
   simulatore `tests/sim/run_matrix_v112.txt` (screenshot 62–72).
 
+### Firmware
+- Il motore dei grafici usato da DrawFTG e da TABLE Result (VARS) è allocato
+  sullo heap: i frame di `graphcmd::Runner::run` e `Workspace::special` sono
+  scesi a 400 e 224 byte (`-fstack-usage`) sullo stack da 32 KB.
+- Build delle due schede senza warning: immagine di 1 759 736 byte sulla Plus
+  (42 % di 4 MB) e di 1 750 924 byte sul Pico 2 W (83 % di 2 MB).
+
 ## v1.11.0 — completamento di Run-Matrix: List 1–26, CSV, MatAns/ListAns, Line (INS, ⌟), simboli ingegneristici, Simp, Base-N, comandi grafici
 
 Base: tag `v1.10.0` (commit `dfdb08b`, uguale a `origin/main`). Analisi delle

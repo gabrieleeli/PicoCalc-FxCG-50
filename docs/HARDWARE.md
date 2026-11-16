@@ -85,6 +85,32 @@ in [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md) e diagnostica SYSTEM → F
 - Le regioni non si sovrappongono mai all'immagine del firmware e vengono
   limitate alla capacità reale del chip (JEDEC ID letto all'avvio).
 
+## Differenze tra le schede che riguardano la v1.12.0
+
+Le novità della v1.12.0 (completamento di Run-Matrix: List File, stringhe,
+function memory, CALC/PROB/STAT/CONVERT/TVM, Base-N completa, editor senza
+limite, comandi grafici Draw…/Pict/PxlTest(, CATALOG, CAPTURE) sono **solo
+software**: pin, driver, periferiche, mappa della flash e script del linker
+restano quelli della v1.11.0. Le immagini di StoPict e le catture di CAPTURE
+(`PICOCALC/CAPT`) usano le stesse due memorie dei progetti GRAPH (microSD o
+LittleFS interno). PxlTest( legge la schermata di GRAPH ridisegnata nel
+framebuffer della scheda (nessuna periferica nuova).
+
+Le differenze sono nei limiti (`include/limits.hpp`):
+
+| Voce | Pico 2 W | Pico Plus 2 W |
+|---|---|---|
+| List File 1–6 | 6 file × 26 liste, 1 530 elementi in tutto (stesso budget della v1.11.0) | 6 × 26, 20 000 elementi in tutto, in PSRAM |
+| Forme esatte delle celle di matrici e vettori | 400 in tutte le memorie (≈ 10 KB nel record), nessun limite per memoria | 4 000 (≈ 104 KB) |
+| Punti di DrawStat/DrawR/DrawFTG | 1 000 | 4 000 |
+| Str 1–20, f1–f20 | 255 caratteri ciascuna | uguale |
+| Motore dei grafici di DrawFTG e TABLE Result | sullo heap (frame di stack ≤ 400 B) | uguale |
+
+Immagine del firmware v1.12.0: +165 KB circa rispetto alla v1.11.0 su
+entrambe le schede (1 759 736 byte = 42 % della partizione da 4 MB sulla
+Plus, 1 750 924 byte = 83 % della partizione da 2 MB sul Pico 2 W); RAM
+statica +5 008 byte. Valori esatti in [BUILD_STATUS.md](BUILD_STATUS.md).
+
 ## Differenze tra le schede che riguardano la v1.11.0
 
 Anche le novità della v1.11.0 (List 1–26, CSV, MatAns/ListAns, celle esatte,
@@ -162,7 +188,10 @@ le schede (1 515 272 byte = 36 % della partizione da 4 MB sulla Plus,
    sugli errori, Math/Line): [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md) (HW-90…HW-99);
    novità della v1.11.0 (List 1–26, CSV su microSD e flash interna, MatAns,
    INS e ⌟, Eng, Simp, Base-N, comandi grafici):
-   [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md) (HW-100…HW-115).
+   [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md) (HW-100…HW-115);
+   novità della v1.12.0 (List File, CALC/PROB/CONVERT, PxlTest(, Draw…,
+   StoPict, CAPTURE, CATALOG, ENG, Base-N):
+   [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md) (HW-120…HW-139).
 8. microSD e TABLE: seguire [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md)
    (diagnostica SYSTEM → DIAG con log `[DIAG]` sulla seriale USB). In sintesi:
    FILE > SAVE AS, estrarre e reinserire la scheda,

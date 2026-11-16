@@ -1,4 +1,4 @@
-# Test — v1.11.0 (List 1–26, CSV, MatAns/ListAns, Line, simboli ingegneristici, Simp, Base-N, comandi grafici)
+# Test — v1.12.0 (completamento totale di Run-Matrix: CALC, STAT, TVM, CONVERT, Base-N, List File, Str, function memory, comandi grafici, round-trip dell'editor)
 
 ## Cosa viene provato e dove
 
@@ -18,7 +18,7 @@
 | Relay AI | `unittest` Python con SDK ufficiali e API simulate, TLS in loopback | eseguito: 15 test |
 | Compilazione firmware RP2350 | Pico SDK 2.2.0, `scripts/build.sh --board pico_plus_2w` e `--board pico2w` | eseguita, nessun warning, `picotool info` verificato ([BUILD_STATUS.md](BUILD_STATUS.md)) |
 | Stack sul target | `-fstack-usage` su tutto il firmware | eseguito (frame massimo 1712 byte su 32 KB) |
-| Collaudo fisico | procedure [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md), [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md), [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) e [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md), SYSTEM → DIAG | **non eseguito: in attesa dei risultati dal dispositivo** |
+| Collaudo fisico | procedure [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md), [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md), [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md), [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) e [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md), SYSTEM → DIAG | **non eseguito: in attesa dei risultati dal dispositivo** |
 
 Quattro livelli distinti, mai confusi nella documentazione:
 **test host** (logica compilata dallo stesso sorgente del firmware ed eseguita
@@ -50,6 +50,10 @@ errore, non solo il primo.
 |---|---|---|---|
 | expression_test (v1.10.0: 154) | 155 | 155 | priorità Casio, funzioni, complessi, formati e arrotondamento come la calcolatrice, limiti di lunghezza/annidamento, budget di stack |
 | exact_test | 152 | 152 | razionali (overflow, confronto esatto), radicali, π, letterali decimali e periodici, sviluppo periodico, limiti di visualizzazione CG50, valutatore esatto (trigonometria esatta, radici, log, n!, nCr, relazioni, Σ/Π, memoria esatta, catene lunghe, budget di stack), coerenza esatto/virgola mobile |
+| calc_v112_test **nuova v1.12.0** | 207 | 207 | CALC con i valori del manuale (d/dx 52, d²/dx² 26, ∫ 404/3, Σ con variabile e passo, Solve con limiti ed equazione, SolveN anche con radice doppia e poli, FMin/FMax, funzioni vietate), PROB (sequenze di Ran#, RanInt#/RanNorm#/RanBin# con n, RanList#, RanSamp# con e senza ripetizione, P Q R t), Rnd, ʳ ᵍ ° ′ ″, Pol/Rec in List Ans, ∠ e ►r∠θ/►a+bi, 24 distribuzioni con valori di riferimento, S-Dev/Var/Mean/Median con frequenze, x̂ ŷ e VARS STAT, 22 funzioni TVM, CONVERT (anche su liste, grandezze diverse), P ed E, ENG/ENG←, overflow, Simplify Manual (m.c.m., prodotti, ▶Simp senza F=, divisore non valido, modo complesso), Base-N (Bin 16 bit, Hex con v_a, liste e matrici nella base, Oct), messaggi dell'Appendice α |
+| run_matrix_v112_test **nuova v1.12.0** | 138 | 138 | `:` e `◢` (posizione degli errori, ricalcolo), stringhe e Str, function memory (X, argomento, ricorsione), r e θ, variabili di sistema (V-Window con Range ERROR, Xfct, TblStart, D Start, R End, TVM), formula an+1, List "QTY", List File 1–6 e budget comune, n→Dim List, Fill su liste e matrici, Swap/\*Row/\*Row+/Row+, forme esatte oltre 64 elementi e celle decimali, VARS EQUATION e TABLE Result, migrazione v7→v8 dal fixture della v1.11.0, record v8 con tutti i campi nuovi e record troncati, interfaccia (OPTN nell'ordine della fx-CG50, ENG, CONVERT, VARS STAT, Hex con v_a, FUNCMEM, CATALOG, CAPTURE e RclCapt) |
+| graph_cmd_v112_test **nuova v1.12.0** | 56 | 56 | le otto disequazioni, G∫dx, prefissi di stile (anche da soli), StoPict/RclPict/BG-Pict/RclCapt, G-SelOn/Off, DrawGraph, DrawStat, DrawR-Con/Plt, DrawWeb, DrawFTG-Con/Plt, DrawDyna (anche il limite di 10 grafici, tutto o niente), limite dei punti per scheda, `.pcgraph` con i grafici dei comandi (codifica, decodifica, identità), PxlTest( sul firmware (punto acceso, assi, fuori schermo, errore), StoPict eseguito da GRAPH |
+| editor_v112_test **nuova v1.12.0** | 488 | 488 | corpus di 68 testi canonici (testo → albero → testo e stesso disegno, Math e Line), 13 alberi costruiti con i modelli (gruppo con frazione, radice con indice n+1, d²/dx², Σ e Π con variabile, matrice, frazione mista, potenze, |x|, logₐb, ∫), parentesi implicite (`6÷2[1/3]` = 9, con × = 1), testo Line minimo e stesso valore, Math ↔ Line della riga di input, nomi mostrati, sottolineatura di v_a, glifi nuovi nei due font, voci del CATALOG |
 | lists_csv_test **nuova v1.11.0** | 721 | 721 | List 1–26 nei calcoli (anche `List12`, `→List 20[1]`), sottonomi (limiti, caratteri, record), budget di tutte le liste per scheda (tutto o niente, 20 liste da 999 sulla Plus, 6 da 255 sul Pico 2 W), GRAPH con List 12, Statistics (26 colonne, riga SUB, SET XList, 1-Var), CSV: codifica e decodifica (separatori, decimale `,`, CR/LF/CRLF, intestazione, celle vuote, testo non numerico, tabulatore, file vuoto, oltre i limiti, complessi), liste e matrici dal file, file su microSD e LittleFS, file mancante e nomi non validi, interruzione di alimentazione durante il salvataggio sulla flash interna (vecchio o nuovo, mai misto), CSV dalle applicazioni (OPTN, F4) sulle due memorie, Format ERROR senza modifiche, scheda assente; editor MAT/VCT con celle esatte, complesse ed espressioni, scorrimento delle colonne; forme esatte nei calcoli (`Mat A×6`, `Det`, `→Mat A[2,2]`) e nel record v7 (anche forme incoerenti rifiutate); migrazione v6→v7 dal fixture della v1.10.0 (valori predefiniti, calcoli, round trip, troncamenti) |
 | calc_v111_test **nuova v1.11.0** | 133 | 133 | simboli ingegneristici (valori, priorità, errori, forma esatta decimale, riscrittura), display Eng con i simboli (f…T, oltre ×10ⁿ) e in Run-Matrix (`999k+25k`, `9/10`, S⇔D), frazioni `⌟` (valori, errori, output Line anche negli elementi), ▶Simp con e senza fattore (Ans, errori, segno, S⇔D), Simplify Manual (modello, `⌟`, ricalcolo, persistenza), Base-N: letterali Hex/Bin/Oct/Dec, complemento a due, limiti a 32 bit, prefissi, divisione intera, operatori bit a bit anche senza spazi (`FFxor0F`), Not/Neg, funzioni escluse, testo dei risultati, Run-Matrix con basi diverse nella cronologia, viste ▶Dec…▶Oct, ricalcolo e record v7 |
 | run_matrix_v111_test **nuova v1.11.0** | 106 | 106 | INS (sovrascrittura in Line, anche di `⌟`; nessuna in Math), SHIFT+INS (gruppo, numero, funzione, frazione, annullamento), tasti sul firmware (SHIFT DEL, F1 → `⌟`, scorrimento del risultato con ←/→, SHIFT+INS + √), MatAns/ListAns (apertura automatica, navigazione, sola lettura, F4 dalla cronologia, vista naturale senza schermata), comandi grafici (ognuno, variabili negli argomenti, Line, pixel, Tangent/Normal, Graph dei 4 tipi, disegno nel motore, errori tutto o niente con posizione, limite di 64 elementi, Cls, ricalcolo senza riesecuzione, riga modificata rieseguita, persistenza), schermata di GRAPH e ritorno con EXIT, menu SKETCH, riga di comando modificata che apre GRAPH, SET UP (Mode, Simplify, CSV con la combinazione rifiutata) |
@@ -99,6 +103,20 @@ generato con i sorgenti della v1.9.0 (commit `bb2bdee`), per la lettura nel
 formato v6. `lists_csv_test` usa `tests/fixtures/workspace_v1_10_0.inc`, un
 record v6 generato con i sorgenti della v1.10.0 (tag `v1.10.0`, commit
 `dfdb08b`) prima di ogni modifica della v1.11.0, per la migrazione al v7.
+`run_matrix_v112_test` usa `tests/fixtures/workspace_v1_11_0.inc`, un record
+v7 generato con i sorgenti della v1.11.0 (tag `v1.11.0`, commit `f6933fd`)
+prima di ogni modifica della v1.12.0, per la migrazione al v8.
+
+v1.12.0: 44 test per profilo (43 suite C++ e l'interoperabilità FAT/exFAT):
+10 484 controlli sulla Plus e 11 445 sul Pico 2 W più ≈ 334 000 verifiche
+dello stress dell'allocatore; si aggiungono le quattro suite nuove (889
+controlli) e `architecture_test` (1 225) cresce per le regole nuove (parser
+unico, `calc_library` puro, separazione di Run-Matrix ampliata). Test
+esistenti adattati solo a cambiamenti voluti, con il motivo accanto: Pol/Rec
+danno una lista, Bin a 16 bit, Simplify Manual con il m.c.m. e ▶Simp senza
+«F=1», Eng con P ed E, record alla versione 8, modello Σ con la variabile,
+OPTN nell'ordine della fx-CG50 (posizioni delle voci nei test dell'interfaccia).
+Nessuna verifica è stata tolta.
 
 v1.11.0: rispetto alla v1.10.0 (8 587 / 8 581 controlli) si aggiungono le tre
 suite nuove (960 controlli); `architecture_test` cresce perché il registro ha
@@ -146,7 +164,9 @@ CLIP, cursore sull'errore, modalità Line: 44–51), `tests/sim/run_matrix_v111.
 (List 1–26 e sottonomi, CSV, MatAns, celle esatte, Line con ⌟ e INS,
 risultato scorrevole, Eng, Simp, Base-N, comandi grafici: 52–61),
 `tests/sim/graph.txt` (GRAPH e TABLE 06, 07, 20–37) e `tests/sim/graph3d.txt`
-(3D Graph 40–43). Il simulatore scrive PNG non compressi: prima di copiarli in
+(3D Graph 40–43) e `tests/sim/run_matrix_v112.txt` (SolveN e FMin, OPTN,
+CATALOG, distribuzioni, CONVERT, modelli d²/dx² e Σ, istruzioni multiple,
+VARS STAT, Graph Y>, G∫dx, ENG: 62–72). Il simulatore scrive PNG non compressi: prima di copiarli in
 `docs/screenshots` vanno compressi senza perdita (nella v1.11.0: palette PNG
 con `compress_level` 9 tramite Pillow, con la verifica che i pixel restino
 identici):
@@ -155,6 +175,7 @@ identici):
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix_v110.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix_v111.txt
+build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix_v112.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph3d.txt
 ```

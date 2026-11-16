@@ -1,4 +1,4 @@
-# Architettura — v1.11.0
+# Architettura — v1.12.0
 
 Architettura di ogni modalità, servizi condivisi, dati scambiati e regole
 verificate dai test: [APPLICATIONS_ARCHITECTURE.md](APPLICATIONS_ARCHITECTURE.md).
@@ -24,6 +24,7 @@ verificate dai test: [APPLICATIONS_ARCHITECTURE.md](APPLICATIONS_ARCHITECTURE.md
 │ graph3d (superfici 3D)    │ math_engine, point_a, app_models,        │
 │                           │ graph_engine, graph_solve (GraphCore),   │
 │                           │ graph_commands (comandi grafici, v1.11)  │
+│                           │ calc_library (CONVERT, DIST, TVM, v1.12) │
 ├───────────────────────────┴──────────────────────────────────────────┤
 │ File (file_store, graph_file, pict, csv_io) → FatFs → protocollo SD  │
 │                                     → LittleFS (flash_fs) → flash    │
@@ -88,12 +89,14 @@ metodi controllati (`storeMatrix`, `storeVector`, `storeList`,
 `storeCollectionAnswer`) che verificano tipo, forma e limiti della scheda. Così
 Run-Matrix non accede direttamente a `ws.lists` (lo verifica `architecture_test`).
 
-`serializeWorkspace()` produce un blob binario versionato (versione 7 dalla
+`serializeWorkspace()` produce un blob binario versionato (versione 8 dalla
+v1.12.0 con List File 1–6, Sub Name, r e θ, Str, function memory, variabili
+di Dyna/Recursion/TVM, celle decimali, ENG e ◢ della cronologia; versione 7 dalla
 v1.11.0 con Base-N, Simplify, formato CSV, List 7–26 e sottonomi, forme
 esatte delle memorie, base e ▶Simp della cronologia, grafici dei comandi;
 versione 6 dalla v1.10.0 con Input/Output, matrici, vettori e risultati
 collezione della cronologia; versione 5 dalla v1.9.0 con il 3D Graph e
-l'archivio dei file; le versioni 1–6 vengono ancora lette); `RecordStore` lo scrive in uno dei due
+l'archivio dei file; le versioni 1–7 vengono ancora lette); `RecordStore` lo scrive in uno dei due
 slot flash con CRC-32 dell'intestazione e del contenuto. Formato in
 [STORAGE.md](STORAGE.md#workspace-in-flash).
 
@@ -137,6 +140,28 @@ testo ──Lexer (token con posizione)──▶ Parser ──▶ ast::Node (pos
   solo mentre l'eccezione risale: nessun costo per GRAPH che campiona in un
   ciclo). `ast::SerializeMap` riporta la posizione del testo nell'albero
   dell'editor (`NaturalEditor::markError`).
+
+### Novità del motore e dei dati (v1.12.0)
+
+- **Parser, AST e valutatore unici**: SolveN, FMin, FMax, distribuzioni, TVM,
+  CONVERT, ∠, ʳ ᵍ, ° ′ ″, stringhe, Str, function memory e variabili di VARS
+  sono token e nodi dello stesso parser; `:`/`◢` dividono la riga prima del
+  parser. `architecture_test` verifica che nessun altro sorgente definisca un
+  lexer, un parser o istanze del valutatore.
+- **`calc_library`**: unità, distribuzioni, TVM, nomi e CATALOG; puro calcolo.
+- **Interfacce del workspace per il valutatore**: `CollectionResolver::listByName`
+  (List "QTY"), `CollectionResolver::special` (VARS EQUATION, TABLE Result),
+  `ServiceResolver` (PxlTest(, function memory), `NameResolver` (FACTOR, STAT,
+  DYNA, RECURSION, TVM). Run-Matrix assegna i dati solo con metodi controllati
+  (`storeSystemVariable`, `setString`, `setFunctionMemory`, `setRecursionFormula`,
+  `setList`, `storeList`, `storeMatrix`); List File si cambia solo dal SET UP
+  (`selectListFile`). Nuova sezione dati `Strings` nel registro delle app.
+- **PxlTest(**: `Workspace::pixelProbe` (non salvato) è collegato
+  dall'AppManager a `GraphApp::probePixel`, che disegna la schermata del
+  grafico nel framebuffer e ne legge il pixel: Run-Matrix non disegna nulla.
+- **Comandi grafici**: nuovi elementi SKETCH `Integral` e `Data`, grafici dei
+  comandi di tipo disequazione, richiesta `GraphState::storePict`; tutto
+  disegnato dal motore e dal renderer di GRAPH e salvato nei `.pcgraph`.
 
 ### Novità del motore e dei dati (v1.11.0)
 

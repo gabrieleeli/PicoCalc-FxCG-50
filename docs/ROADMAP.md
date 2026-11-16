@@ -1,17 +1,23 @@
-# Roadmap — dopo la v1.11.0
+# Roadmap — dopo la v1.12.0
 
 Il progetto **non** ha la parità con la Casio fx-CG50 e non va presentato come
-tale: le tabelle sotto elencano ciò che manca. Il documento storico
+tale: le tabelle sotto elencano ciò che manca. Fa eccezione **Run-Matrix**, che
+dalla v1.12.0 ha ogni voce della tabella di parità presente o documentata come
+differenza inevitabile ([reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md)). Il documento storico
 `archive/CG50_PARITY_ROADMAP.md` descrive gli obiettivi delle versioni precedenti.
 La v1.9.0 ha unito la v1.8.0 al supporto del Pimoroni Pico Plus 2 W
 ([reports/CONSOLIDAMENTO_v1.9.0.md](reports/CONSOLIDAMENTO_v1.9.0.md)); la
 v1.10.0 ha aggiunto a Run-Matrix matrici, vettori e liste, l'editor
 MAT/VCT, Math/Line, CLIP, parentesi colorate e il cursore sugli errori
 ([reports/SVILUPPO_v1.10.0.md](reports/SVILUPPO_v1.10.0.md)); la v1.11.0
-(`main`) ha completato Run-Matrix: List 1–26 e sottonomi, CSV, MatAns/ListAns,
+ha completato Run-Matrix: List 1–26 e sottonomi, CSV, MatAns/ListAns,
 celle esatte e complesse, INS/⌟/scorrimento in Line, SHIFT+INS, simboli
 ingegneristici, Simp, Base-N intera e comandi grafici
-([reports/SVILUPPO_v1.11.0.md](reports/SVILUPPO_v1.11.0.md)). Le release
+([reports/SVILUPPO_v1.11.0.md](reports/SVILUPPO_v1.11.0.md)); la v1.12.0
+(`main`) ne ha completato la parità: List "nome" e List File, P/E e ENG,
+Simplify Manual, Base-N completa, tutti i comandi grafici, round trip
+Math/Line, CALC/PROB/STAT/CONVERT/TVM, CATALOG e CAPTURE
+([reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md)). Le release
 successive si creano solo quando i rispettivi incrementi sono completati e
 verificati. La matrice di parità di GRAPH è in
 [GRAPH_PARITY.md](GRAPH_PARITY.md).
@@ -45,16 +51,16 @@ Run-Matrix con l'editor MAT/VCT e quattro voci del Punto 3. Restano, in ordine:
 
 | # | Voce | Note |
 |---|---|---|
-| 0 | **Esito del collaudo fisico** della v1.11.0 sulla Pico Plus 2 W | procedure [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md), [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md), [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) e [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md); correggere i KO prima del resto e aggiornare a TESTED ON HARDWARE solo le voci provate |
+| 0 | **Esito del collaudo fisico** della v1.12.0 sulla Pico Plus 2 W | procedure [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md), [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md), [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md), [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) e [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md); correggere i KO prima del resto e aggiornare a TESTED ON HARDWARE solo le voci provate |
 | 1 | Dual Screen G+G (COPY, SWAP), GtoT e T+G, Graph to Table | `graph::Viewport` accetta già un'area diversa da 320×282 |
-| 2 | Dyna Graph, Recursion, Conic Graphs | sul servizio GraphCore (`sampleStep`, `Viewport`, G-Solve, `table_model` per le tabelle delle successioni) |
-| 3 | FORMAT durante lo SKETCH, suffissi angolari °/ʳ/ᵍ | piccoli completamenti di GRAPH |
-| 4 | Completamenti di matrici e liste | **fatti nella v1.10.0 e nella v1.11.0**: matrici/vettori/liste nel parser, editor MAT/VCT, List 1–26 e sottonomi, CSV, MatAns/ListAns, celle esatte e complesse. Restano: List File 1–6, `List "nome"` nei calcoli, RanList#/RanSamp# |
-| 5 | Punto 3: Natural V.P.A.M. ↔ formato lineare | descritto sotto |
+| 2 | Dyna Graph, Recursion, Conic Graphs | sul servizio GraphCore (`sampleStep`, `Viewport`, G-Solve, `table_model` per le tabelle delle successioni); i dati (D Start/End/pitch, an+1, a0, R Start/End) sono nel workspace dalla v1.12.0 e i comandi DrawDyna/DrawR/DrawWeb li disegnano già |
+| 3 | FORMAT durante lo SKETCH | piccolo completamento di GRAPH (i suffissi angolari °/ʳ/ᵍ sono fatti nella v1.12.0) |
+| 4 | Completamenti di matrici e liste | **fatti nella v1.10.0 e nella v1.11.0**: matrici/vettori/liste nel parser, editor MAT/VCT, List 1–26 e sottonomi, CSV, MatAns/ListAns, celle esatte e complesse; **v1.12.0**: List File 1–6, `List "nome"` nei calcoli, RanList#/RanSamp# e tutte le funzioni di lista |
+| 5 | Punto 3: Natural V.P.A.M. ↔ formato lineare | **fatto** (v1.10.0–v1.12.0), dettaglio sotto |
 
 ### Punto 3: Natural V.P.A.M. ↔ formato lineare
 
-Stato attuale (v1.10.0): editor e parser condividono `ast::Node`; l'editor produce
+Stato (v1.12.0): tutte le voci sono fatte. Editor e parser condividono `ast::Node`; l'editor produce
 il testo lineare canonico (`ast::serialize`) e lo reimporta strutturalmente
 (`NaturalEditor::setExpression`); Run-Matrix usa solo questa pipeline. Le voci
 1, 3, 4, 6 e 8 sono state fatte nella v1.10.0 (con i limiti scritti accanto):
@@ -62,14 +68,14 @@ il testo lineare canonico (`ast::serialize`) e lo reimporta strutturalmente
 | # | Voce | Note |
 |---|---|---|
 | 1 | Impostazione **Input/Output Math/Line** (SET UP) | **fatto (v1.10.0)**; INS, ⌟ e risultati scorrevoli nella v1.11.0 |
-| 2 | Round-trip garantito testo ↔ albero | oggi `(x)` torna come token e non come nodo `Group`, `root(n,x)` con indice non letterale torna come lettere, d²/dx² non ha modello; servono test su un corpus: `serialize(import(t)) == t` e stesso disegno |
+| 2 | Round-trip garantito testo ↔ albero | **fatto (v1.12.0)**: `Group` per le parentesi che contengono modelli, `root(n,x)` con qualsiasi indice, modello d²/dx², Σ/Π con variabile e passo; corpus `serialize(import(t)) == t` in `editor_v112_test` |
 | 3 | Cursore sul punto dell'errore dopo EXIT | **fatto (v1.10.0)**: `ErrorLocation`, `ast::SerializeMap`, `NaturalEditor::markError` |
 | 4 | Selezione parziale CLIP (copia/taglia di un intervallo) | **fatto (v1.10.0)**, con le parentesi sempre bilanciate |
-| 5 | SHIFT+INS: usare un'espressione esistente come argomento di un modello | manuale 1-20 |
+| 5 | SHIFT+INS: usare un'espressione esistente come argomento di un modello | **fatto (v1.11.0)** |
 | 6 | Colori delle parentesi per livello (blu, rosso, verde, magenta, nero) | **fatto (v1.10.0)**: `NaturalDrawOp::color`, `math::Palette` |
-| 7 | Regola del segno × obbligatorio prima di una frazione e parentesi implicite (`2 1/3` → `2(1/3)` nel lineare) | manuale 1-23 e 2-7 |
+| 7 | Regola del segno × obbligatorio prima di una frazione e parentesi implicite (`2 1/3` → `2(1/3)` nel lineare) | **fatto (v1.12.0)**: `ast::impliedFraction` |
 | 8 | Modelli MAT/VCT modificabili nell'editor | **fatto (v1.10.0)** (fino a 6×6) |
-| 9 | Visualizzazione in Graph/Table/Equation delle espressioni con gli stessi modelli | riuso di `math_renderer` |
+| 9 | Visualizzazione in Graph/Table/Equation delle espressioni con gli stessi modelli | **fatto (v1.10.0)**: `math_renderer` condiviso |
 
 Non anticipato in questa sessione per non interferire: nessuna modifica al
 formato canonico del testo lineare esistente (salvo l'aggiunta di `mixed(…)` e
@@ -80,13 +86,13 @@ del suffisso periodico `_cifre`, già coperti da test di round-trip).
 | Funzione | Note |
 |---|---|
 | ~~Matrici, vettori e liste come valori del parser; MAT/VCT/List in Run-Matrix~~ | **fatto nella v1.10.0** (List 1–26 dalla v1.11.0) |
-| ~~Simboli ingegneristici, Simp, Base-N intera, comandi grafici di Run-Matrix~~ | **fatti nella v1.11.0** (sottoinsieme dei comandi, vedi [RUN_MATRIX.md](RUN_MATRIX.md#limiti-noti)) |
-| Modalità Base-N intera (Mode Dec/Hex/Bin/Oct) con and/or/xor/xnor/Not/Neg bit a bit | oggi solo viste Hex/Bin/Oct e letterali 0x/0b/0o |
-| Simboli ingegneristici (k, M, m, µ, …) e ENG→/←ENG | |
-| Simplify Manual e `Simp` | oggi semplificazione automatica |
-| RanList#, RanSamp#, Ran# con sequenze | le liste come valori esistono dalla v1.10.0 |
-| Derivate/integrali simbolici, limiti | |
-| SolveN, FMin/FMax | |
+| ~~Simboli ingegneristici, Simp, Base-N intera, comandi grafici di Run-Matrix~~ | **fatti nella v1.11.0**, completati nella v1.12.0 |
+| ~~Base-N completa (A–F in Hex, liste e matrici, bit per base)~~ | **fatto nella v1.12.0** |
+| ~~Simboli P/E, ENG→/←ENG~~ | **fatto nella v1.12.0** |
+| ~~Simplify Manual~~ | **fatto nella v1.12.0** (regole del manuale) |
+| ~~RanList#, RanSamp#, Ran# con sequenze~~ | **fatto nella v1.12.0** |
+| ~~SolveN, FMin/FMax, distribuzioni, CONVERT, TVM~~ | **fatto nella v1.12.0** (`calc_library`) |
+| Derivate/integrali simbolici, limiti | fuori dall'ambito: la fx-CG50 non ha un CAS |
 
 ## 4. Modalità
 
@@ -95,11 +101,11 @@ Stato e progetto di ogni modalità in [APPLICATIONS_ARCHITECTURE.md](APPLICATION
 | Modalità | Contenuto da realizzare |
 |---|---|
 | Statistics | regressioni sinusoidale e logistica; test χ², F, 2 campioni, ANOVA nell'interfaccia; grafici a torta e a barre |
-| Graph | Dual Screen G+G/GtoT, Graph to Table, comandi grafici di Run-Matrix/programmi, FORMAT nello SKETCH (dettaglio in [GRAPH_PARITY.md](GRAPH_PARITY.md)) |
+| Graph | Dual Screen G+G/GtoT, Graph to Table, FORMAT nello SKETCH (i comandi grafici di Run-Matrix sono completi dalla v1.12.0) (dettaglio in [GRAPH_PARITY.md](GRAPH_PARITY.md)) |
 | Table | Dual Screen T+G (LISTMEM con 999 elementi già sulla Plus; 255 sul Pico 2 W) |
 | Equation | interfaccia per i sistemi di disequazioni; risultati esatti (servizio Exact) |
 | Recursion, Conic Graphs, Dyna Graph | modelli dati pronti (`app_models.hpp`) e servizio GraphCore per il disegno; mancano controller e UI |
-| Financial | TVM (modello pronto), flussi di cassa, ammortamento |
+| Financial | schermate di TVM, flussi di cassa e ammortamento (le funzioni di calcolo sono in `calc_library` dalla v1.12.0 e Run-Matrix le usa) |
 | Spreadsheet, eActivity, Program | modelli pronti; l'area file su microSD esiste (servizio Files, v1.8.0); Program richiede l'interprete |
 | Geometry, Picture Plot | modelli pronti |
 | 3D Graph | disponibile dalla v1.9.0 per z = f(x, y); mancano sfere, piani, rette e superfici parametriche della fx-CG50, TRACE sulla superficie |

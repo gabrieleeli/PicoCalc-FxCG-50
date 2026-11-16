@@ -10,30 +10,39 @@ Plus 2 W** (RP2350B, 8 MB di PSRAM, 16 MB di flash); profilo alternativo:
 > ogni modalità è reimplementata in modo indipendente. La documentazione Casio è
 > usata solo come riferimento di comportamento.
 
-![Menu principale](docs/screenshots/01_main_menu.png) ![Run-Matrix](docs/screenshots/12_run_matrix_exact.png) ![Matrici](docs/screenshots/46_run_matrix_matrices.png) ![Comandi grafici](docs/screenshots/61_graph_commands.png) ![Base-N](docs/screenshots/60_base_n.png) ![Graph](docs/screenshots/22_graph_multi.png) ![3D Graph](docs/screenshots/41_graph3d_surfaces.png)
+![Menu principale](docs/screenshots/01_main_menu.png) ![Run-Matrix](docs/screenshots/12_run_matrix_exact.png) ![Matrici](docs/screenshots/46_run_matrix_matrices.png) ![Comandi grafici](docs/screenshots/61_graph_commands.png) ![CATALOG](docs/screenshots/64_catalog.png) ![Base-N](docs/screenshots/60_base_n.png) ![Graph](docs/screenshots/22_graph_multi.png) ![3D Graph](docs/screenshots/41_graph3d_surfaces.png)
 
-## Stato (v1.11.0)
+## Stato (v1.12.0)
 
-La v1.11.0 completa **Run-Matrix**: **List 1–26** con i sottonomi, **file
-CSV** di liste e matrici (microSD e flash interna), schermate
-**MatAns/ListAns**, celle dell'editor MAT/VCT con **espressioni esatte e
-complesse**, modalità Line con **INS**, frazioni **⌟** e risultati
-scorrevoli, **SHIFT+INS**, **simboli ingegneristici** e display **Eng**,
-**Simp**, modalità **Base-N intera** con operatori bit a bit e **comandi
-grafici** (Plot, F-Line, Graph Y=…) disegnati da GRAPH; sulla base della
-v1.10.0 (matrici, vettori e liste, editor MAT/VCT, Math/Line, CLIP, parentesi
-colorate, cursore sugli errori).
+La v1.12.0 porta **Run-Matrix** alla parità di funzioni con la fx-CG50
+(tabella voce per voce in
+[docs/reports/SVILUPPO_v1.12.0.md](docs/reports/SVILUPPO_v1.12.0.md)):
+**List "nome"** e **List File 1–6**, tutte le funzioni di lista; simboli
+**P** ed **E** e **ENG/ENG←**; **Simplify** manuale con le regole del
+manuale; Base-N con le variabili A–F in Hex, liste e matrici, i limiti di bit
+e gli errori; editor MAT/VCT senza il limite di 64 elementi con i decimali
+conservati; tutti i comandi grafici (**PxlTest(**, **DrawStat**, **DrawDyna**,
+**DrawR**, **DrawWeb**, **DrawFTG**, **G-SelOn/Off**, **StoPict/RclPict**,
+**BG-Pict**, stili **Sketch**, **Graph Y>/Y</Y≥/Y≤** e X…, **G∫dx**), salvati
+anche nei progetti `.pcgraph`; round trip **Math/Line** esatto con tutti i
+modelli; **CALC** (Solve, SolveN, FMin, FMax, d²/dx², Σ con passo),
+**PROB**, **distribuzioni**, **CONVERT** (103 unità), **TVM**, angoli DMS e
+ʳ/ᵍ, complessi ∠, numeri casuali, variabili statistiche, stringhe Str 1–20,
+**function memory** f1–f20, istruzioni multiple con `:` e **◢**,
+**CATALOG**, **CAPTURE**, menu OPTN/VARS nell'ordine della fx-CG50 e i
+messaggi d'errore della calcolatrice. Nuovo record del workspace **v8**: i
+record della v1.11.0 e precedenti si leggono senza perdite.
 Novità: [docs/CHANGELOG.md](docs/CHANGELOG.md) ·
-rapporto: [docs/reports/SVILUPPO_v1.11.0.md](docs/reports/SVILUPPO_v1.11.0.md) ·
-fonti: [docs/reports/ANALISI_FONTI_v1.11.0.md](docs/reports/ANALISI_FONTI_v1.11.0.md).
+rapporto: [docs/reports/SVILUPPO_v1.12.0.md](docs/reports/SVILUPPO_v1.12.0.md) ·
+fonti: [docs/reports/ANALISI_FONTI_v1.12.0.md](docs/reports/ANALISI_FONTI_v1.12.0.md).
 
 | | Stato |
 |---|---|
 | Compilazione UF2 (Pico SDK 2.2.0) per Pimoroni Pico Plus 2 W e per Pico 2 W | ✅ entrambe compilano, nessun warning; cartelle e UF2 separati per scheda |
-| Test automatici host | ✅ 40 test per ciascun profilo di scheda: 39 suite C++ (9 757 controlli sulla Plus e 9 751 sul Pico 2 W, più le ≈ 333 000 verifiche di integrità dello stress dell'allocatore su due thread) e l'interoperabilità FAT/exFAT con fsck e mtools (41); tutti superati anche con AddressSanitizer/UBSan, allocatore su due thread con ThreadSanitizer; gli stessi test girano su GitHub Actions a ogni push |
+| Test automatici host | ✅ 44 test per ciascun profilo di scheda: 43 suite C++ (10 484 controlli sulla Plus e 11 445 sul Pico 2 W, più le ≈ 334 000 verifiche di integrità dello stress dell'allocatore su due thread) e l'interoperabilità FAT/exFAT con fsck e mtools; tutti superati anche con AddressSanitizer/UBSan, allocatore su due thread con ThreadSanitizer; gli stessi test girano su GitHub Actions a ogni push |
 | Test relay AI | ✅ 15 test (SDK ufficiali contro API simulate, TLS reale in loopback) |
-| Parità con la fx-CG50 | ❌ **non completa** — GRAPH: matrice voce per voce in [docs/GRAPH_PARITY.md](docs/GRAPH_PARITY.md); Run-Matrix: [docs/RUN_MATRIX.md](docs/RUN_MATRIX.md#limiti-noti) |
-| **Prova su PicoCalc fisica** | ❌ **non ancora eseguita**, né con il Pico Plus 2 W né con il Pico 2 W: display, tastiera, flash, PSRAM, microSD, Wi-Fi e TLS vanno collaudati con [docs/HARDWARE_TEST_v1.11.0.md](docs/HARDWARE_TEST_v1.11.0.md), [v1.10.0](docs/HARDWARE_TEST_v1.10.0.md), [v1.9.0](docs/HARDWARE_TEST_v1.9.0.md) e [v1.8.0](docs/HARDWARE_TEST_v1.8.0.md), diagnostica SYSTEM → DIAG |
+| Parità con la fx-CG50 | Run-Matrix: ✅ **completa** (ogni voce presente o differenza inevitabile documentata, [SVILUPPO_v1.12.0](docs/reports/SVILUPPO_v1.12.0.md#5-tabella-di-parit%C3%A0-finale)); le altre modalità: ❌ **non complete** — GRAPH in [docs/GRAPH_PARITY.md](docs/GRAPH_PARITY.md), elenco in [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md) |
+| **Prova su PicoCalc fisica** | ❌ **non ancora eseguita**, né con il Pico Plus 2 W né con il Pico 2 W: display, tastiera, flash, PSRAM, microSD, Wi-Fi e TLS vanno collaudati con [docs/HARDWARE_TEST_v1.12.0.md](docs/HARDWARE_TEST_v1.12.0.md), [v1.11.0](docs/HARDWARE_TEST_v1.11.0.md), [v1.10.0](docs/HARDWARE_TEST_v1.10.0.md), [v1.9.0](docs/HARDWARE_TEST_v1.9.0.md) e [v1.8.0](docs/HARDWARE_TEST_v1.8.0.md), diagnostica SYSTEM → DIAG |
 
 Dettagli: [docs/BUILD_STATUS.md](docs/BUILD_STATUS.md) · stato per funzione:
 [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md) · scheda e memoria:
@@ -147,7 +156,7 @@ Senza rete tutte le funzioni matematiche restano disponibili.
 [GRAPH_PARITY](docs/GRAPH_PARITY.md) · [GRAPH_ENGINE](docs/GRAPH_ENGINE.md) ·
 [STORAGE](docs/STORAGE.md) · [PCGRAPH_FORMAT](docs/PCGRAPH_FORMAT.md) ·
 [TABLE](docs/TABLE.md) · [PICO_PLUS_2W](docs/PICO_PLUS_2W.md) ·
-[HARDWARE_TEST v1.11.0](docs/HARDWARE_TEST_v1.11.0.md) · [v1.10.0](docs/HARDWARE_TEST_v1.10.0.md) · [v1.9.0](docs/HARDWARE_TEST_v1.9.0.md) · [v1.8.0](docs/HARDWARE_TEST_v1.8.0.md) ·
+[HARDWARE_TEST v1.12.0](docs/HARDWARE_TEST_v1.12.0.md) · [v1.11.0](docs/HARDWARE_TEST_v1.11.0.md) · [v1.10.0](docs/HARDWARE_TEST_v1.10.0.md) · [v1.9.0](docs/HARDWARE_TEST_v1.9.0.md) · [v1.8.0](docs/HARDWARE_TEST_v1.8.0.md) ·
 [GRAPHICS_ENGINE](docs/GRAPHICS_ENGINE.md) · [MATH_ENGINE](docs/MATH_ENGINE.md) ·
 [AI_INTEGRATION](docs/AI_INTEGRATION.md) · [TESTING](docs/TESTING.md) ·
 [ROADMAP](docs/ROADMAP.md) · [CHANGELOG](docs/CHANGELOG.md) ·

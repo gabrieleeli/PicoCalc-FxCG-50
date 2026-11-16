@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <vector>
 
 namespace fx::graphcmd {
@@ -349,7 +350,9 @@ struct Runner {
         case Cmd::DrawFtgCon: case Cmd::DrawFtgPlt: {
             // La tabella delle funzioni selezionate (TblStart..TblEnd, TblPitch): punti (x, Yn(x)).
             noArgs();
-            graph::GraphEngine engine;
+            // Sullo heap: il motore e' troppo grande per lo stack da 32 KB dell'RP2350.
+            const auto enginePtr = std::make_unique<graph::GraphEngine>();
+            graph::GraphEngine& engine = *enginePtr;
             engine.build({&ws.functions, &ws.memory, &ws, &ws.lists, nullptr});
             const TableRange& t = ws.table;
             if (t.step == 0 || (t.end - t.start) / t.step < 0) throw MathError("Argument ERROR: intervallo di TABLE non valido");

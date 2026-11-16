@@ -179,7 +179,9 @@ bool Workspace::special(const std::string& n, CalcValue& out) const {
     }
     if (n == "tbl_result") {
         // La tabella di TABLE: colonna della variabile e una colonna per funzione selezionata.
-        graph::GraphEngine engine;
+        // Sullo heap: il motore e' troppo grande per lo stack da 32 KB dell'RP2350.
+        const auto enginePtr = std::make_unique<graph::GraphEngine>();
+        graph::GraphEngine& engine = *enginePtr;
         engine.build({&functions, &memory, this, &lists, nullptr});
         const std::vector<table::Column> cols = table::columns(engine, table.funcType, false);
         if (cols.empty()) throw MathError("Math ERROR: nessuna funzione selezionata in TABLE");
