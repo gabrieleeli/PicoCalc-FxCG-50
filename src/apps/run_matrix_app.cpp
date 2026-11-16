@@ -243,6 +243,8 @@ void RunMatrixApp::evaluate(Context& ctx) {
         const std::size_t later = ctx.ws.history.size() - static_cast<std::size_t>(edited) - 1;
         if (failed) ctx.toast(std::to_string(failed) + " righe successive con errore");
         else if (later) ctx.toast("Ricalcolate " + std::to_string(later + 1) + " righe");
+        // Una riga di comando grafico modificata si riesegue: il disegno si vede in GRAPH.
+        if (ctx.ws.history[static_cast<std::size_t>(edited)].command) ctx.open(AppId::Graph);
         return;
     }
     if (editor_.empty()) {

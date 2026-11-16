@@ -260,6 +260,12 @@ int main() {
         r.type("1,1"); r.key(pckey::Enter);
         CHECK(r.active<app::GraphApp>() != nullptr && ws.graph.sketch.size() == 1);
         r.key(pckey::Esc);
+        // Riga di comando modificata nella cronologia: si riesegue e si apre GRAPH
+        r.key(pckey::Up); r.key(pckey::Enter);                         // MODIF sulla riga "Plot 1,1"
+        r.key(pckey::Backspace); r.type("2"); r.key(pckey::Enter);     // Plot 1,2
+        CHECK(r.active<app::GraphApp>() != nullptr && ws.graph.sketch.size() == 2 && ws.graph.sketch.back().y0 == 2);
+        r.key(pckey::Esc);
+        CHECK(r.active<app::RunMatrixApp>() != nullptr);
         // Errore: resta in Run-Matrix con il cursore sulla causa
         r.enter("Circle 0,0,0");
         CHECK(r.error() && r.active<app::RunMatrixApp>() != nullptr);

@@ -1,10 +1,10 @@
-# Test — v1.10.0 (matrici, vettori e liste; editor MAT/VCT; Math/Line; CLIP; parentesi; errori)
+# Test — v1.11.0 (List 1–26, CSV, MatAns/ListAns, Line, simboli ingegneristici, Simp, Base-N, comandi grafici)
 
 ## Cosa viene provato e dove
 
 | Livello | Strumento | Stato |
 |---|---|---|
-| Logica portabile (motore, editor, app, grafici, tabelle, 3D, file, storage, memoria, protocollo AI) | test host C++ (CTest), **per entrambi i profili di scheda** (`FXAI_TEST_BOARD=PICO_PLUS_2W` e `PICO2W`) | eseguito: 36 suite; 8 587 controlli (Plus) / 8 581 (Pico 2 W) più ≈ 333 000 verifiche dello stress dell'allocatore (`mem_pools_smoke`) |
+| Logica portabile (motore, editor, app, grafici, tabelle, 3D, file, storage, memoria, protocollo AI) | test host C++ (CTest), **per entrambi i profili di scheda** (`FXAI_TEST_BOARD=PICO_PLUS_2W` e `PICO2W`) | eseguito: 39 suite; 9 757 controlli (Plus) / 9 751 (Pico 2 W) più ≈ 333 000 verifiche dello stress dell'allocatore (`mem_pools_smoke`) |
 | Integrazione continua | GitHub Actions (`.github/workflows/release.yml`, `ubuntu-24.04`) | a ogni push: test host dei due profili, ASan/UBSan, TSan, relay, firmware dei due moduli, pacchetto |
 | Architettura (registro ↔ sorgenti ↔ firmware) | `architecture_test` | eseguito |
 | Stessi test con AddressSanitizer + UBSan | `--sanitize` | eseguito su entrambi i profili |
@@ -12,13 +12,13 @@
 | Memoria esaurita con `operator new` instradato nei pool | `oom_test` (SRAM simulata limitata, senza PSRAM) | eseguito |
 | PSRAM | pool PSRAM simulato sul PC (arena TLSF; 8 MB nei test di sistema e nel simulatore), self-test con modelli di guasto | eseguito; il chip APS6404L reale non è provato |
 | Flash interna | modello NOR (`storage::RamFlash`: erase a 0xFF, program che azzera bit, interruzione dopo n byte) per il record A/B e per LittleFS | eseguito; la flash reale non è provata |
-| Interfaccia | simulatore host + screenshot PNG | eseguito (`docs/screenshots/`: Run-Matrix 12–19 e 44–51, GRAPH/TABLE 06, 07, 20–37, 3D Graph 40–43) |
+| Interfaccia | simulatore host + screenshot PNG | eseguito (`docs/screenshots/`: Run-Matrix 12–19, 44–51 e 52–61, GRAPH/TABLE 06, 07, 20–37, 3D Graph 40–43) |
 | microSD (protocollo SD in SPI + FatFs) | scheda SD simulata nei test host | eseguito (`sd_fatfs_test`); bus SPI0 reale non provato |
 | Interoperabilità FAT/exFAT | `sd_interop_test` (immagini con mkfs.fat/mkfs.exfat, fsck, mtools) | eseguito: 41 controlli |
 | Relay AI | `unittest` Python con SDK ufficiali e API simulate, TLS in loopback | eseguito: 15 test |
 | Compilazione firmware RP2350 | Pico SDK 2.2.0, `scripts/build.sh --board pico_plus_2w` e `--board pico2w` | eseguita, nessun warning, `picotool info` verificato ([BUILD_STATUS.md](BUILD_STATUS.md)) |
 | Stack sul target | `-fstack-usage` su tutto il firmware | eseguito (frame massimo 1712 byte su 32 KB) |
-| Collaudo fisico | procedure [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md), [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) e [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md), SYSTEM → DIAG | **non eseguito: in attesa dei risultati dal dispositivo** |
+| Collaudo fisico | procedure [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md), [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md), [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) e [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md), SYSTEM → DIAG | **non eseguito: in attesa dei risultati dal dispositivo** |
 
 Quattro livelli distinti, mai confusi nella documentazione:
 **test host** (logica compilata dallo stesso sorgente del firmware ed eseguita
@@ -48,15 +48,18 @@ errore, non solo il primo.
 
 | Suite | Pico Plus 2 W | Pico 2 W | Contenuto |
 |---|---|---|---|
-| expression_test | 154 | 154 | priorità Casio, funzioni, complessi, formati e arrotondamento come la calcolatrice, limiti di lunghezza/annidamento, budget di stack |
+| expression_test (v1.10.0: 154) | 155 | 155 | priorità Casio, funzioni, complessi, formati e arrotondamento come la calcolatrice, limiti di lunghezza/annidamento, budget di stack |
 | exact_test | 152 | 152 | razionali (overflow, confronto esatto), radicali, π, letterali decimali e periodici, sviluppo periodico, limiti di visualizzazione CG50, valutatore esatto (trigonometria esatta, radici, log, n!, nCr, relazioni, Σ/Π, memoria esatta, catene lunghe, budget di stack), coerenza esatto/virgola mobile |
-| matrix_test **nuova v1.10.0** | 673 | 673 | parsing di matrici, vettori, liste, riferimenti e indici; posizioni dei token e dei nodi; matrici (+ − × ^, inversa, Det, Trn, Identity, Dim, Augment, Fill, Ref, Rref, Mat→List, List→Mat, Abs/Int), vettori (DotP, CrossP, Norm, UnitV, Angle), liste (elemento per elemento, Sum, Prod, Mean, Median, Min, Max, Cuml, Percent, ΔList, SortA/D, Seq, Augment), complessi; errori di dimensione e di tipo con la posizione; annidamento profondo e Stack ERROR; forme esatte; nucleo di Run-Matrix (→Mat/Vct/List, elementi, Dim, MatAns/VctAns/ListAns, risultati oltre 6×6, viste, modifica della cronologia); limiti per scheda; record v6 (round trip, troncamenti) e lettura dei record v1.9.0 e v1.8.0 |
-| editor_v110_test **nuova v1.10.0** | 161 | 161 | modelli MAT/VCT (inserimento, navigazione a griglia, importazione, disegno), Math/Line (modelli lineari, conversione, incolla), CLIP (selezione, copia/taglia/incolla, parentesi bilanciate, nome di funzione, intero modello), parentesi colorate per livello e contrasto ≥ 4,5:1, cursore sulla causa degli errori (anche dentro i modelli), 600 sequenze casuali di modifica; sul firmware: errori e cursore, editor MAT/VCT (DIM, celle, ROW-OP, ROW, M⇔V, vettori), CLIP con SHIFT 8/9, Line da SET UP, riavvio con matrici e impostazione conservate |
+| lists_csv_test **nuova v1.11.0** | 721 | 721 | List 1–26 nei calcoli (anche `List12`, `→List 20[1]`), sottonomi (limiti, caratteri, record), budget di tutte le liste per scheda (tutto o niente, 20 liste da 999 sulla Plus, 6 da 255 sul Pico 2 W), GRAPH con List 12, Statistics (26 colonne, riga SUB, SET XList, 1-Var), CSV: codifica e decodifica (separatori, decimale `,`, CR/LF/CRLF, intestazione, celle vuote, testo non numerico, tabulatore, file vuoto, oltre i limiti, complessi), liste e matrici dal file, file su microSD e LittleFS, file mancante e nomi non validi, interruzione di alimentazione durante il salvataggio sulla flash interna (vecchio o nuovo, mai misto), CSV dalle applicazioni (OPTN, F4) sulle due memorie, Format ERROR senza modifiche, scheda assente; editor MAT/VCT con celle esatte, complesse ed espressioni, scorrimento delle colonne; forme esatte nei calcoli (`Mat A×6`, `Det`, `→Mat A[2,2]`) e nel record v7 (anche forme incoerenti rifiutate); migrazione v6→v7 dal fixture della v1.10.0 (valori predefiniti, calcoli, round trip, troncamenti) |
+| calc_v111_test **nuova v1.11.0** | 133 | 133 | simboli ingegneristici (valori, priorità, errori, forma esatta decimale, riscrittura), display Eng con i simboli (f…T, oltre ×10ⁿ) e in Run-Matrix (`999k+25k`, `9/10`, S⇔D), frazioni `⌟` (valori, errori, output Line anche negli elementi), ▶Simp con e senza fattore (Ans, errori, segno, S⇔D), Simplify Manual (modello, `⌟`, ricalcolo, persistenza), Base-N: letterali Hex/Bin/Oct/Dec, complemento a due, limiti a 32 bit, prefissi, divisione intera, operatori bit a bit anche senza spazi (`FFxor0F`), Not/Neg, funzioni escluse, testo dei risultati, Run-Matrix con basi diverse nella cronologia, viste ▶Dec…▶Oct, ricalcolo e record v7 |
+| run_matrix_v111_test **nuova v1.11.0** | 106 | 106 | INS (sovrascrittura in Line, anche di `⌟`; nessuna in Math), SHIFT+INS (gruppo, numero, funzione, frazione, annullamento), tasti sul firmware (SHIFT DEL, F1 → `⌟`, scorrimento del risultato con ←/→, SHIFT+INS + √), MatAns/ListAns (apertura automatica, navigazione, sola lettura, F4 dalla cronologia, vista naturale senza schermata), comandi grafici (ognuno, variabili negli argomenti, Line, pixel, Tangent/Normal, Graph dei 4 tipi, disegno nel motore, errori tutto o niente con posizione, limite di 64 elementi, Cls, ricalcolo senza riesecuzione, riga modificata rieseguita, persistenza), schermata di GRAPH e ritorno con EXIT, menu SKETCH, riga di comando modificata che apre GRAPH, SET UP (Mode, Simplify, CSV con la combinazione rifiutata) |
+| matrix_test (v1.10.0: 673) | 775 | 775 | parsing di matrici, vettori, liste, riferimenti e indici; posizioni dei token e dei nodi; matrici (+ − × ^, inversa, Det, Trn, Identity, Dim, Augment, Fill, Ref, Rref, Mat→List, List→Mat, Abs/Int), vettori (DotP, CrossP, Norm, UnitV, Angle), liste (elemento per elemento, Sum, Prod, Mean, Median, Min, Max, Cuml, Percent, ΔList, SortA/D, Seq, Augment), complessi; errori di dimensione e di tipo con la posizione; annidamento profondo e Stack ERROR; forme esatte; nucleo di Run-Matrix (→Mat/Vct/List, elementi, Dim, MatAns/VctAns/ListAns, risultati oltre 6×6, viste, modifica della cronologia); limiti per scheda; record v6 (round trip, troncamenti) e lettura dei record v1.9.0 e v1.8.0 |
+| editor_v110_test (v1.10.0: 161) | 164 | 164 | modelli MAT/VCT (inserimento, navigazione a griglia, importazione, disegno), Math/Line (modelli lineari, conversione, incolla), CLIP (selezione, copia/taglia/incolla, parentesi bilanciate, nome di funzione, intero modello), parentesi colorate per livello e contrasto ≥ 4,5:1, cursore sulla causa degli errori (anche dentro i modelli), 600 sequenze casuali di modifica; sul firmware: errori e cursore, editor MAT/VCT (DIM, celle, ROW-OP, ROW, M⇔V, vettori), CLIP con SHIFT 8/9, Line da SET UP, riavvio con matrici e impostazione conservate |
 | run_matrix_test | 182 | 182 | esempi frazione ⇔ decimale, frazioni miste, periodo, input decimale, irrazionali mai convertiti, radicali e π (esempi del manuale), Ans/A–Z esatti, →A~F, variabili condivise, Int÷/Rmdr/MOD_Exp/logica, modifica della cronologia con ricalcolo, alberi 2D, persistenza e lettura dei record v1.6.0 (anche con V-Window non più valida), dati corrotti, flussi completi da tastiera attraverso il `Firmware` |
-| architecture_test (v1.9.0: 557) | 594 | 594 | registro coerente, controller registrati = modalità disponibili, schermate "non disponibile", include/sezioni del workspace/collegamenti dichiarati (anche GraphCore, Files, dato Graph), separazione di Run-Matrix, stratificazione motore/UI, nessun ciclo di include, modelli dati delle modalità future; 3D Graph e servizi Graph3D/Hardware |
+| architecture_test (v1.10.0: 594) | 686 | 686 | registro coerente, sezioni dei membri e dei metodi del workspace (`dataSectionOfMember`), comandi grafici solo tramite `graphcmd::execute` e disegnati da GRAPH, moduli `value`/`csv_io`/`graph_commands` nel livello del motore, controller registrati = modalità disponibili, schermate "non disponibile", include/sezioni del workspace/collegamenti dichiarati (anche GraphCore, Files, dato Graph), separazione di Run-Matrix, stratificazione motore/UI, nessun ciclo di include, modelli dati delle modalità future; 3D Graph e servizi Graph3D/Hardware |
 | editor_test | 179 | 179 | modelli 2D (anche frazione mista, periodo, radice con indice), navigazione, undo/redo, copia/incolla, layout e cursore, limiti |
 | math_engine_test (v1.8.0: 108) | 108 | 109 | matrici, vettori, basi, sessagesimale, frazioni, calcolo numerico; capacità della cronologia di sessione per scheda |
-| storage_test (v1.9.0: 792) | 797 | 797 | serializzazione del workspace (formato v5 con lo stato di GRAPH, TABLE e 3D Graph; lettura dei formati precedenti), slot A/B, CRC, interruzione di alimentazione in ogni punto della scrittura |
+| storage_test (v1.10.0: 797) | 809 | 809 | serializzazione del workspace (formato v5 con lo stato di GRAPH, TABLE e 3D Graph; lettura dei formati precedenti), slot A/B, CRC, interruzione di alimentazione in ogni punto della scrittura |
 | app_test | 62 | 62 | AppManager, tasti globali, errori, barra di stato, TileDiff, rendering delle schermate |
 | apps_flow_test | 56 | 56 | percorsi completi: Statistics → Graph, Graph ↔ Table, Equation, System, Memory, Conversion |
 | solvers_test | 60 | 60 | polinomi (Aberth), disequazioni, solver numerico |
@@ -85,7 +88,7 @@ errore, non solo il primo.
 | internal_fs_test **nuova** | 197 | 197 | LittleFS su flash NOR simulata: contratto `files::FileSystem` come FatFs, partizione piena, interruzione di alimentazione durante `writeAtomic`, rimontaggio senza riformattare, progetti GRAPH nell'archivio interno |
 | graph3d_test **nuova** | 111 | 111 | motore 3D (campionamento, poli e domini, proiezione, z-buffer e pittore, rotazione, colori per superficie) e modalità 3D Graph (lista, editor, V-Window, campionamento incrementale, rotazione/zoom senza ricalcolo, AUTO, persistenza, budget di memoria con e senza PSRAM) |
 | system_diag_test **nuova** | 15 | 12 | SYSTEM → DIAG completa (MEM, PSR, ALC, FLS, LCD, SD, INT, GPH) con la memoria della scheda; Plus con PSRAM fallita; pagina INFO; "Archivio file"; riga del chip della flash; kernel di stress dell'allocatore |
-| **Totale** | **8 587** + ≈ 333 000 dello stress + 41 dello script | **8 581** + ≈ 334 000 + 41 | 0 errori, con e senza sanitizer (ASan + UBSan); `mem_pools_tsan` con ThreadSanitizer |
+| **Totale** | **9 757** + ≈ 333 000 dello stress + 41 dello script | **9 751** + ≈ 334 000 + 41 | 0 errori, con e senza sanitizer (ASan + UBSan); `mem_pools_tsan` con ThreadSanitizer |
 
 `run_matrix_test` usa `tests/fixtures/workspace_v1_6_0.inc`, un record salvato
 dai sorgenti della v1.6.0 (commit 7dc65cd), per verificare la compatibilità.
@@ -93,7 +96,18 @@ dai sorgenti della v1.6.0 (commit 7dc65cd), per verificare la compatibilità.
 generato con i sorgenti della v1.8.0, per la migrazione al formato v5.
 `matrix_test` usa anche `tests/fixtures/workspace_v1_9_0.inc`, un record v5
 generato con i sorgenti della v1.9.0 (commit `bb2bdee`), per la lettura nel
-formato v6.
+formato v6. `lists_csv_test` usa `tests/fixtures/workspace_v1_10_0.inc`, un
+record v6 generato con i sorgenti della v1.10.0 (tag `v1.10.0`, commit
+`dfdb08b`) prima di ogni modifica della v1.11.0, per la migrazione al v7.
+
+v1.11.0: rispetto alla v1.10.0 (8 587 / 8 581 controlli) si aggiungono le tre
+suite nuove (960 controlli); `architecture_test` cresce perché il registro ha
+un servizio, due sorgenti e regole in più, `storage_test`, `matrix_test` ed
+`expression_test` perché il record è più lungo e il formato Eng ha un caso
+in più. Test esistenti adattati solo a cambiamenti voluti: `board_profile_test`,
+`table_test` e `matrix_test` (record alla versione 7, List 7–26 ora valide),
+`editor_v110_test` (in Line il tasto frazione scrive `⌟`), `expression_test`
+(Eng con i simboli). Nessuna verifica è stata tolta.
 
 v1.10.0: rispetto alla v1.9.0 (7 705 / 7 699 controlli) si aggiungono le due
 suite nuove (834 controlli) e 6 controlli in `oom_test`; `architecture_test`
@@ -128,13 +142,20 @@ F1–F10, SHIFT, OPTN, VARS, SETUP, frecce, HOME, END, PGUP, PGDN), `hold <NOME>
 
 Gli script degli screenshot sono `tests/sim/run_matrix.txt` (Run-Matrix 12–19),
 `tests/sim/run_matrix_v110.txt` (editor MAT/VCT, matrici, parentesi colorate,
-CLIP, cursore sull'errore, modalità Line: 44–51), `tests/sim/graph.txt` (GRAPH
-e TABLE 06, 07, 20–37) e `tests/sim/graph3d.txt` (3D Graph 40–43):
+CLIP, cursore sull'errore, modalità Line: 44–51), `tests/sim/run_matrix_v111.txt`
+(List 1–26 e sottonomi, CSV, MatAns, celle esatte, Line con ⌟ e INS,
+risultato scorrevole, Eng, Simp, Base-N, comandi grafici: 52–61),
+`tests/sim/graph.txt` (GRAPH e TABLE 06, 07, 20–37) e `tests/sim/graph3d.txt`
+(3D Graph 40–43). Il simulatore scrive PNG non compressi: prima di copiarli in
+`docs/screenshots` vanno compressi senza perdita (nella v1.11.0: palette PNG
+con `compress_level` 9 tramite Pillow, con la verifica che i pixel restino
+identici):
 
 ```bash
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix_v110.txt
-build/host-pico_plus_2w/picocalc_sim docs/screenshots tests/sim/graph.txt
+build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix_v111.txt
+build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph3d.txt
 ```
 

@@ -158,7 +158,7 @@ TABLE completata nel collaudo della v1.8.0: dettaglio in [TABLE.md](TABLE.md).
 | Lista delle relazioni di TABLE (SELECT, DELETE, TYPE, STYLE, SET, TABLE, modifica) | TESTED ON SIMULATOR | funzioni condivise con GRAPH | table_test, screenshot 35 |
 | Tipi della tabella Y=, r=, Param (un tipo per tabella) | TESTED ON HOST | colonne Y, r, Xt/Yt | table_test |
 | SET (Start, End, Step), fino a 999 righe | TESTED ON SIMULATOR | errori Argument/Memory; il modulo torna ai valori validi | table_test, screenshot 36 |
-| Variable = LIST (x da List 1–6) | TESTED ON HOST | Setup di TABLE | table_test |
+| Variable = LIST (x da List 1–26, v1.11.0) | TESTED ON HOST | Setup di TABLE | table_test |
 | Tabella delle derivate (Derivative On), errore con intervallo/[A=] | TESTED ON SIMULATOR | dY/dX, dr/dθ | table_test, graph_app_test, screenshot 32 |
 | Celle di 6 caratteri, valore completo della cella selezionata | TESTED ON SIMULATOR | | table_test, screenshot 36 |
 | EDIT del valore di x (anche digitato), valore non valido → errore | TESTED ON SIMULATOR | | table_test, screenshot 37 |
@@ -300,3 +300,10 @@ come sulla CG50 (TESTED ON HOST).
 
 Screenshot: `docs/screenshots/06`, `07`, `20`–`37`, prodotti dallo script
 `tests/sim/graph.txt` con lo stesso codice del firmware.
+
+## Comandi grafici da Run-Matrix (v1.11.0)
+
+| Voce fx-CG50 | Stato | Dove | Test |
+|---|---|---|---|
+| Cls, ViewWindow, Graph Y=/r=/X=/(X,Y)=, Plot/PlotOn/PlotOff/PlotChg, Line, F-Line, Circle, Vertical, Horizontal, Text, PxlOn/PxlOff/PxlChg, Tangent, Normal, Inverse eseguiti in Run-Matrix | TESTED ON SIMULATOR | `graph_commands.cpp` (interprete), disegno di GRAPH (`GraphSource::commands`, SKETCH) | run_matrix_v111_test, screenshot 61 |
+| PxlTest(, DrawStat, DrawDyna, DrawR, DrawFTG, G-SelOn/Off, StoPict/RclPict, BG-Pict, stili SketchThick…, Graph Y> e disequazioni, G∫dx | NOT STARTED | richiedono i programmi o modalità non realizzate | — |

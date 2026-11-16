@@ -85,6 +85,30 @@ in [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md) e diagnostica SYSTEM → F
 - Le regioni non si sovrappongono mai all'immagine del firmware e vengono
   limitate alla capacità reale del chip (JEDEC ID letto all'avvio).
 
+## Differenze tra le schede che riguardano la v1.11.0
+
+Anche le novità della v1.11.0 (List 1–26, CSV, MatAns/ListAns, celle esatte,
+Line con INS e ⌟, simboli ingegneristici, Simp, Base-N, comandi grafici) sono
+**solo software**: pin, driver, periferiche, mappa della flash e script del
+linker restano quelli della v1.9.0/v1.10.0 (verificati di nuovo sugli header
+del Pico SDK 2.2.0 e con gli `static_assert` di `board_config.hpp`). I CSV
+usano le stesse due memorie dei progetti GRAPH: la microSD su SPI0 e LittleFS
+nella partizione interna (≈ 11 MB sulla Plus, ≈ 1,9 MB sul Pico 2 W).
+
+Le differenze sono nei limiti (`include/limits.hpp`):
+
+| Voce | Pico 2 W | Pico Plus 2 W |
+|---|---|---|
+| Elementi per lista | 255 | 999 (come la fx-CG50) |
+| Elementi in tutte le 26 liste | 1 530 (l'occupazione massima delle 6 liste della v1.10.0: ≈ 12 KB nel record da 59,75 KB) | 20 000 (≈ 156 KB nel record da 511,75 KB; liste in PSRAM) |
+| CSV letto al massimo | ≈ 41 KB | ≈ 484 KB |
+| Forme esatte delle memorie | fino a 64 elementi per memoria (≈ 56 byte per elemento) | uguale |
+
+Immagine del firmware v1.11.0: +80 KB circa rispetto alla v1.10.0 su
+entrambe le schede (1 594 956 byte = 38 % della partizione da 4 MB sulla
+Plus, 1 586 168 byte = 76 % della partizione da 2 MB sul Pico 2 W); RAM
+statica +924 byte. Valori esatti in [BUILD_STATUS.md](BUILD_STATUS.md).
+
 ## Differenze tra le schede che riguardano la v1.10.0
 
 Le novità della v1.10.0 (matrici, vettori e liste, editor MAT/VCT, Math/Line,
@@ -135,7 +159,10 @@ le schede (1 515 272 byte = 36 % della partizione da 4 MB sulla Plus,
 7. PSRAM, flash, 3D e prestazioni della Plus: seguire
    [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) (HW-40…HW-82); novità
    della v1.10.0 (MAT/VCT, parentesi colorate sul pannello, CLIP, cursore
-   sugli errori, Math/Line): [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md) (HW-90…HW-99).
+   sugli errori, Math/Line): [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md) (HW-90…HW-99);
+   novità della v1.11.0 (List 1–26, CSV su microSD e flash interna, MatAns,
+   INS e ⌟, Eng, Simp, Base-N, comandi grafici):
+   [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md) (HW-100…HW-115).
 8. microSD e TABLE: seguire [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md)
    (diagnostica SYSTEM → DIAG con log `[DIAG]` sulla seriale USB). In sintesi:
    FILE > SAVE AS, estrarre e reinserire la scheda,

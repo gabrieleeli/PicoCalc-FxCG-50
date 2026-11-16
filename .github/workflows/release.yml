@@ -1,6 +1,6 @@
 # Compilazione, test e pubblicazione del firmware PicoCalc FX-CG50 AI.
 #
-# A ogni push su main (e sui branch di lavoro claude/**): test host dei due
+# A ogni push su main (e sui branch di lavoro claude/** e ccr-**): test host dei due
 # profili di scheda, test del relay AI, firmware UF2 per Pimoroni Pico Plus 2 W
 # e Raspberry Pi Pico 2 W, pacchetto di release come artefatto della run.
 #
@@ -12,7 +12,7 @@ name: Build, test e release
 
 on:
   push:
-    branches: [main, 'claude/**']
+    branches: [main, 'claude/**', 'ccr-**']
   workflow_dispatch:
     inputs:
       publish:

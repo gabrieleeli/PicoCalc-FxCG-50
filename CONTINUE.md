@@ -1,44 +1,47 @@
 # CONTINUE — punto di ripresa del progetto PicoCalc FX-CG50 AI
 
 Documento di checkpoint per riprendere lo sviluppo esattamente da qui.
-Ultimo aggiornamento: **v1.10.0 — matrici, vettori e liste in Run-Matrix,
-editor MAT/VCT, Math/Line, CLIP, parentesi colorate, cursore sugli errori**,
-branch **`main`**, tag `v1.10.0` (e `v1.9.0` sul commit `bb2bdee`) creati dal
-workflow `.github/workflows/release.yml`. Rapporti:
-`docs/reports/ANALISI_FONTI_v1.10.0.md`, `docs/reports/SVILUPPO_v1.10.0.md`;
-v1.9.0: `docs/reports/CONSOLIDAMENTO_v1.9.0.md`.
+Ultimo aggiornamento: **v1.11.0 — completamento di Run-Matrix** (List 1–26 e
+sottonomi, CSV, MatAns/ListAns, celle esatte e complesse, Line con INS e ⌟,
+SHIFT+INS, simboli ingegneristici, Simp, Base-N intera, comandi grafici),
+branch **`main`**, tag `v1.11.0` creato dal workflow
+`.github/workflows/release.yml`. Rapporti:
+`docs/reports/ANALISI_FONTI_v1.11.0.md`, `docs/reports/SVILUPPO_v1.11.0.md`;
+v1.10.0: `docs/reports/SVILUPPO_v1.10.0.md`; v1.9.0:
+`docs/reports/CONSOLIDAMENTO_v1.9.0.md`.
 
 ## 0. Branch
 
 | Branch | Contenuto | Regola |
 |---|---|---|
-| **`main`** | **v1.10.0** (tag `v1.10.0`): v1.9.0 + matrici/vettori/liste, editor MAT/VCT, Math/Line, CLIP, parentesi colorate, cursore sugli errori | si continua qui |
+| **`main`** | **v1.11.0** (tag `v1.11.0`): v1.10.0 + completamento di Run-Matrix | si continua qui |
+| tag `v1.10.0` (`dfdb08b`), `v1.9.0` (`bb2bdee`) | versioni precedenti su `main` | non spostare |
 | `version/v1.5.4`, `version/v1.6.0`, `version/v1.7.0`, `version/v1.8.0` | snapshot storici, uno per versione | non modificare |
 
-I branch duplicati della 1.9.0 e i branch temporanei (`version/v1.9.0`,
-`release/1.9.0`, `claude/laughing-mendel-jewowt`, `claude/loving-meitner-jifxhg`,
-`claude/peaceful-euler-auyrm5`, `claude/pimoroni-pico-plus-2w-94lg56`,
-`ccr-90a0c133-k0rf3a`) sono **interamente contenuti in `main`** (verificato con
-`git merge-base --is-ancestor`) e vanno eliminati: l'ambiente di sviluppo della
-sessione ha rifiutato l'eliminazione dei branch remoti (HTTP 403), quindi va
-fatta dal proprietario (comandi nel rapporto, §16). Un solo branch per
-versione; mai force-push; nessuna release o tag nuovi senza richiesta.
-Il branch di lavoro della v1.10.0 (`claude/inspiring-maxwell-xm4clv`) ha
-commit intermedi; `main` riceve un solo commit con tutta la v1.10.0, quindi
-anche quel branch può essere eliminato dopo la pubblicazione.
+Il branch di lavoro della v1.11.0 (`ccr-b2793f7c-vk8p8o`) ha commit
+intermedi; `main` riceve un solo commit con tutta la v1.11.0 (fast-forward),
+quindi quel branch può essere eliminato dopo la pubblicazione, come i
+duplicati della 1.9.0 elencati nel rapporto del consolidamento (l'ambiente
+di sviluppo rifiuta l'eliminazione dei branch remoti e il push dei tag:
+HTTP 403). Un solo branch per versione; mai force-push.
 
 ## 1. Stato attuale
 
-**v1.10.0** (sopra la v1.9.0 descritta qui sotto): matrici, vettori e liste
-come valori del parser (`CalcValue`, `evaluateAny`, `CollEval`), editor
-MAT/VCT (SHIFT 3), modalità Math/Line (SET UP › Input/Output), CLIP (SHIFT 8,
-F1/F2, SHIFT 9), parentesi colorate, cursore ed evidenziazione sulla causa
-degli errori, record del workspace v6. Test host: 37 per profilo (8 587
-controlli sulla Plus, 8 581 sul Pico 2 W), anche con ASan/UBSan e TSan; firmware
-compilato per le due schede senza warning (immagine di 1 515 272 byte sulla
-Plus, 1 506 516 byte sul Pico 2 W; RAM statica 301 632 / 297 708 byte); gli
-stessi passi girano su GitHub Actions (`.github/workflows/release.yml`).
-**Nessuna prova su hardware**: `docs/HARDWARE_TEST_v1.10.0.md` (HW-90…HW-99).
+**v1.11.0** (sopra la v1.10.0): List 1–26 con i sottonomi e il budget per
+scheda; CSV di liste e matrici su microSD e flash interna; schermate
+MatAns/VctAns/ListAns; editor MAT/VCT con celle esatte e complesse e colonne
+scorrevoli; modalità Line con INS, `⌟` e risultati scorrevoli; SHIFT+INS in
+Math; simboli ingegneristici e display Eng; ▶Simp e Simplify; Base-N intera
+a 32 bit; comandi grafici disegnati da GRAPH; record del workspace **v7**.
+Test host: 40 per profilo (9 757 controlli sulla Plus, 9 751 sul Pico 2 W),
+anche con ASan/UBSan e TSan; relay 15/15; firmware compilato per le due
+schede senza warning (immagine di 1 594 956 byte sulla Plus, 1 586 168 byte
+sul Pico 2 W; RAM statica 302 556 / 298 632 byte); gli stessi passi girano su
+GitHub Actions (`.github/workflows/release.yml`).
+**Nessuna prova su hardware**: `docs/HARDWARE_TEST_v1.11.0.md` (HW-100…HW-115).
+
+v1.10.0: matrici, vettori e liste come valori del parser, editor MAT/VCT,
+Math/Line, CLIP, parentesi colorate, cursore sugli errori, record v6.
 
 Stato della v1.9.0 (invariato dove non indicato):
 
@@ -62,24 +65,26 @@ Stato della v1.9.0 (invariato dove non indicato):
 - Memoria e flash della Plus: `docs/PICO_PLUS_2W.md`; formato del record:
   versione 5 (`docs/STORAGE.md`).
 
-## 2. Cosa è stato fatto nell'ultima sessione
+## 2. Cosa è stato fatto nell'ultima sessione (v1.11.0)
 
 | Area | Contenuto |
 |---|---|
-| Git | analisi di tutti i branch; merge della v1.8.0 nella linea 1.9.0 con l'architettura della v1.8.0; `main` avanzato solo con fast-forward; branch duplicati verificati; eliminazione dei branch e push del tag `v1.9.0` rifiutati dall'ambiente (HTTP 403), da fare |
-| Hardware | profili `PICO_PLUS_2W` (predefinito) e `PICO2W`, mappa della flash per scheda, PSRAM con self-test e avvio solo SRAM in caso di guasto, pool TLSF, `operator new` instradato, limiti per scheda e per memoria presente, MSPLIM, HardFault, core 1 per la diagnostica, lettura del JEDEC ID della flash |
-| Correzioni | ultimo settore (RP2350-E10), scrittura flash da buffer in PSRAM, "Memory ERROR" che allocava (terminazione), `bad_alloc` dell'autosalvataggio, modifiche perse dopo un salvataggio fallito per memoria, `Workspace` di 5,4 KB sullo stack, yaw 3D, UF2 della scheda sbagliata |
-| Applicazioni | 3D Graph; cache dei layer di GRAPH in PSRAM; archivio dei file su LittleFS; SYSTEM INFO/DIAG estesi; MEMORY per il 3D |
-| Test | suite per entrambi i profili, sanitizer, 6 nuove suite, fixture generata dai sorgenti della v1.8.0 |
+| Git | partenza verificata dal tag `v1.10.0` (`dfdb08b` = `origin/main`); sviluppo sul branch di sessione; un solo commit su `main` in fast-forward; tag e release dal workflow (il push dei tag dall'ambiente è rifiutato) |
+| Liste | List 1–26 nel parser, nel workspace, in Statistics (SUB, SET XList/YList), GRAPH, TABLE, `.pcgraph`; budget per scheda |
+| File | modulo `csv_io`: CSV di liste e matrici su microSD e LittleFS, scrittura atomica, separatore e decimale configurabili |
+| Run-Matrix | MatAns/ListAns, celle esatte e complesse e colonne scorrevoli nell'editor MAT/VCT, Line (INS, ⌟, scorrimento), SHIFT+INS, simboli ingegneristici e Eng, Simp, Base-N intera, comandi grafici (`graph_commands`) disegnati da GRAPH |
+| Workspace | record v7; fixture della v1.10.0 per la migrazione |
+| Architettura | servizio GraphCmd, collegamenti Run-Matrix ⇄ Graph, `dataSectionOfMember`, test di architettura più stretto |
+| Test | `lists_csv_test`, `calc_v111_test`, `run_matrix_v111_test`; screenshot 52–61 e rigenerati, compressi senza perdita |
 
 ## 3. Funzionalità ancora da completare
 
-- Dual Screen (G+G, GtoT, T+G) e Graph to Table; comandi grafici di
-  Run-Matrix/programmi; FORMAT durante lo SKETCH; suffissi angolari °/ʳ/ᵍ.
-- Liste: 999 elementi sulla Plus; sul Pico 2 W restano 255 (record da 64 KB).
-- Run-Matrix (dopo la v1.10.0): List 7–26 e nomi delle liste, CSV delle
-  matrici, schermate MatAns/ListAns oltre 6×6, celle complesse nell'editor
-  MAT/VCT, INS in Line, SHIFT+INS, Base-N intera, simboli ingegneristici.
+- Dual Screen (G+G, GtoT, T+G) e Graph to Table; FORMAT durante lo SKETCH;
+  suffissi angolari °/ʳ/ᵍ.
+- Run-Matrix (dopo la v1.11.0): List File 1–6 e `List "nome"` nei calcoli;
+  comandi grafici dei programmi non realizzati (`PxlTest(`, `DrawStat`,
+  `StoPict`/`RclPict`, stili, disequazioni, `G∫dx`); simboli P/E e ►ENG;
+  regola completa di Simplify Manual; variabili A–F in Hex.
 - 3D Graph: sfere, piani e rette parametriche della fx-CG50.
 - Modalità con solo modello dati: eActivity, Spreadsheet, Dyna Graph,
   Recursion, Conic Graphs, Program, Financial, Link, Geometry, Picture Plot;
@@ -88,7 +93,7 @@ Stato della v1.9.0 (invariato dove non indicato):
 ## 4. Prossimi passaggi esatti
 
 1. **Collaudo fisico sulla PicoCalc con il Pimoroni Pico Plus 2 W**: HW-01…HW-36,
-   HW-40…HW-82 e HW-90…HW-99 (log USB dall'accensione, righe `[psram]`,
+   HW-40…HW-82, HW-90…HW-99 e HW-100…HW-115 (log USB dall'accensione, righe `[psram]`,
    `[flash]`, `[mem]`, `[DIAG]`, `[fault]`, foto). Ogni KO va riprodotto con un test e corretto;
    solo le voci provate passano a TESTED ON HARDWARE (data, modulo, revisione
    della scheda).
@@ -137,9 +142,11 @@ scripts/make_release.sh
 ```
 
 ```bash
-# Simulatore (profilo Plus, pool PSRAM simulato): Run-Matrix, MAT/VCT e novità 1.10.0, GRAPH/TABLE, 3D
+# Simulatore (profilo Plus, pool PSRAM simulato): Run-Matrix, MAT/VCT e novità 1.10.0 e 1.11.0, GRAPH/TABLE, 3D
+# (il simulatore scrive PNG non compressi: comprimerli senza perdita prima di copiarli in docs/screenshots)
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix_v110.txt
+build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix_v111.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph3d.txt
 ```

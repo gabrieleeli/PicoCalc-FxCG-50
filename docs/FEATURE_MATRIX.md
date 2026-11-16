@@ -1,9 +1,13 @@
-# Feature matrix — v1.10.0
+# Feature matrix — v1.11.0
 
-La v1.10.0 contiene tutte le funzioni della v1.9.0 (v1.8.0 completa + layer
-hardware e di memoria per il Pimoroni Pico Plus 2 W) più matrici, vettori e
-liste nel parser, l'editor MAT/VCT, la modalità Math/Line, la selezione CLIP,
-le parentesi colorate e il cursore sulla causa degli errori
+La v1.11.0 contiene tutte le funzioni della v1.10.0 più il completamento di
+Run-Matrix: List 1–26 con i sottonomi, file CSV di liste e matrici,
+schermate MatAns/ListAns, celle esatte e complesse nell'editor MAT/VCT,
+modalità Line con INS, ⌟ e risultati scorrevoli, SHIFT+INS, simboli
+ingegneristici e display Eng, Simp, Base-N intera e comandi grafici
+([reports/SVILUPPO_v1.11.0.md](reports/SVILUPPO_v1.11.0.md)). v1.10.0:
+matrici, vettori e liste nel parser, editor MAT/VCT, Math/Line, CLIP,
+parentesi colorate, cursore sugli errori
 ([reports/SVILUPPO_v1.10.0.md](reports/SVILUPPO_v1.10.0.md)). Origine dei
 componenti della v1.9.0: [reports/CONSOLIDAMENTO_v1.9.0.md](reports/CONSOLIDAMENTO_v1.9.0.md).
 
@@ -69,7 +73,7 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Tasti funzione F1–F6 stile CG50, SHIFT one-shot | TESTED ON HOST |
 | Finestre di errore stile CG50 (Math/Syntax/Non-Real ERROR) | TESTED ON HOST |
 | Menu popup, form, liste di risultati, griglie di celle | TESTED ON HOST |
-| Font Unifont 8×16 e Spleen 6×12 (greco, simboli matematici) | TESTED ON HOST |
+| Font Unifont 8×16 e Spleen 6×12 (greco, simboli matematici; ⌟ disegnato dal progetto, v1.11.0) | TESTED ON HOST |
 | Animazioni di transizione | IN PROGRESS (primitiva `ui::Animation`, non usata nelle schermate) |
 | Simulatore host con screenshot PNG | TESTED ON HOST |
 
@@ -90,7 +94,9 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Modalità di input/output Math e Line (SET UP › Input/Output, persistente) | TESTED ON SIMULATOR (v1.10.0) |
 | Parentesi colorate per livello (blu, rosso, verde, magenta, nero) | TESTED ON SIMULATOR (v1.10.0; contrasto verificato sul PC, colori sul pannello reale non provati) |
 | Cursore ed evidenziazione sulla causa di un errore | TESTED ON SIMULATOR (v1.10.0) |
-| Sovrascrittura (INS) in modalità Line, SHIFT+INS (argomento di un modello) | NOT STARTED |
+| Sovrascrittura (INS) in modalità Line, SHIFT+INS (argomento di un modello) | TESTED ON SIMULATOR (v1.11.0) |
+| Frazioni ⌟ in modalità Line (input e risultati) | TESTED ON SIMULATOR (v1.11.0) |
+| Risultati più lunghi della riga scorrevoli (←/→ sulla riga selezionata) | TESTED ON SIMULATOR (v1.11.0) |
 
 ## Motore matematico
 
@@ -108,7 +114,7 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Variabili di altre modalità via workspace (VARS: V-WIN, TABLE) | TESTED ON SIMULATOR |
 | Costanti matematiche e fisiche | TESTED ON HOST |
 | Numeri complessi nel parser (a+bi, r∠θ, arg, conj, re, im) | TESTED ON HOST |
-| Formati Norm1/Norm2/Fix/Sci/Eng (10 cifre) | TESTED ON HOST |
+| Formati Norm1/Norm2/Fix/Sci/Eng (10 cifre; Eng con i simboli f…T dalla v1.11.0) | TESTED ON SIMULATOR |
 | Aritmetica esatta: razionali, radicali a√b/c (≤ 2 termini), multipli di π | TESTED ON HOST |
 | Valutazione esatta sullo stesso AST (trigonometria ai multipli di 30°/45°, radici, log esatti, n!, nCr…) | TESTED ON HOST |
 | S⇔D con valore interno preservato; regole di visualizzazione CG50 (10 caratteri, limiti radicali e π) | TESTED ON SIMULATOR |
@@ -117,9 +123,11 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Arrotondamento di visualizzazione come la calcolatrice (mantissa 15 cifre, per eccesso a metà) | TESTED ON HOST |
 | Operatori relazionali e logici (= ≠ < > ≤ ≥, And, Or, Xor, Not) | TESTED ON HOST |
 | Int÷, Rmdr, MOD_Exp, RndFix, RanNorm#, RanBin# | TESTED ON HOST |
-| Simboli ingegneristici (k, M, m, µ…), Simp manuale | NOT STARTED |
+| Simboli ingegneristici in input (m µ n p f k M G T, OPTN › ESYM) | TESTED ON SIMULATOR (v1.11.0) |
+| ▶Simp con e senza fattore (F=n), Simplify Auto/Manual | TESTED ON SIMULATOR (v1.11.0) |
+| Simboli P, E e conversioni ►ENG/►ENG← | NOT STARTED |
 | Base-N (letterali 0x/0b/0o, visualizzazione Hex/Bin/Oct) | TESTED ON HOST |
-| Modalità Base-N intera (Mode Hex/Bin/Oct) con operatori bit a bit | NOT STARTED (viste Hex/Bin/Oct dei risultati presenti) |
+| Modalità Base-N intera (Mode Dec/Hex/Bin/Oct, 32 bit in complemento a due) con And, Or, Xor, Xnor, Not, Neg e prefissi d h b o | TESTED ON SIMULATOR (v1.11.0) |
 | Sessagesimale (dms, °, visualizzazione DMS) | TESTED ON HOST |
 | Pol / Rec | TESTED ON HOST |
 | Integrali (Gauss-Kronrod adattivo), derivate (Ridders), d²/dx² | TESTED ON HOST |
@@ -128,7 +136,8 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Matrici: somma, prodotto, det, inversa, trasposta, traccia, RREF, sistemi (API C++) | TESTED ON HOST |
 | Matrici come valori nel parser: + − × ^, inversa, Det, Trn, Identity, Dim, Augment, Fill, Ref, Rref, Mat→List, List→Mat, Norm, elementi `Mat A[r,c]`, forme esatte, complessi | TESTED ON HOST (v1.10.0) |
 | Vettori come valori nel parser: DotP, CrossP, Angle, UnitV, Norm, `Vct A[n]` | TESTED ON HOST (v1.10.0) |
-| Liste come valori nel parser: aritmetica elemento per elemento, Sum, Prod, Min, Max, Mean, Median, Cuml, Percent, ΔList, SortA/D, Seq, Augment, `List 1[n]` | TESTED ON HOST (v1.10.0; List 1–6, non 7–26) |
+| Liste come valori nel parser: aritmetica elemento per elemento, Sum, Prod, Min, Max, Mean, Median, Cuml, Percent, ΔList, SortA/D, Seq, Augment, `List 1[n]` | TESTED ON HOST (v1.10.0; List 1–26 dalla v1.11.0) |
+| Forme esatte conservate nelle memorie Mat/Vct (fino a 64 elementi) | TESTED ON HOST (v1.11.0) |
 | Errori Dimension ERROR / Type ERROR con posizione | TESTED ON HOST (v1.10.0) |
 | Vettori: somma, prodotto scalare/vettoriale, norma, angolo (API C++) | TESTED ON HOST |
 | Conversioni metriche (10 grandezze, prefissi SI) | TESTED ON HOST |
@@ -141,8 +150,12 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Run-Matrix | TESTED ON SIMULATOR | forme esatte, S⇔D, frazioni miste, periodo, cronologia modificabile con ricalcolo, OPTN, VARS, Base-N, DMS (dettagli in RUN_MATRIX.md) |
 | Run-Matrix: cronologia modificabile sul posto con ricalcolo delle righe successive | TESTED ON SIMULATOR | |
 | Run-Matrix: matrici/vettori/liste (MAT/VCT/List) e memorie MatAns/VctAns/ListAns | TESTED ON SIMULATOR | v1.10.0, [RUN_MATRIX.md](RUN_MATRIX.md#matrici-vettori-e-liste-v1100) |
-| Run-Matrix: editor MAT/VCT (DIM, celle, ROW-OP, ROW, COLUMN, DELETE, DEL-ALL, M⇔V) | TESTED ON SIMULATOR | v1.10.0; CSV LOAD/SAVE non realizzato |
-| Statistics | TESTED ON HOST | liste, 1/2-Var, 9 regressioni, grafici, DIST, test Z/t, intervalli |
+| Run-Matrix: editor MAT/VCT (DIM, celle, ROW-OP, ROW, COLUMN, DELETE, DEL-ALL, M⇔V) | TESTED ON SIMULATOR | v1.10.0; dalla v1.11.0 celle con espressioni esatte e complesse, colonne scorrevoli con la cella corrente, CSV LOAD/SAVE·AS |
+| Run-Matrix: schermate MatAns / VctAns / ListAns oltre 6×6 o 20 elementi | TESTED ON SIMULATOR | v1.11.0 |
+| Run-Matrix: comandi grafici (Cls, ViewWindow, Graph Y=/r=/X=/(X,Y)=, Plot…, Line, F-Line, Circle, Vertical, Horizontal, Text, Pxl…, Tangent, Normal, Inverse) disegnati da GRAPH | TESTED ON SIMULATOR | v1.11.0; PxlTest(, DrawStat, StoPict e gli altri comandi dei programmi NOT STARTED |
+| Statistics | TESTED ON SIMULATOR | List 1–26 con sottonomi (v1.11.0), SET XList/YList, CSV LOAD/SAVE·AS, 1/2-Var, 9 regressioni, grafici, DIST, test Z/t, intervalli |
+| Liste: file CSV su microSD e flash interna (separatore e decimale configurabili, scrittura atomica) | TESTED ON HOST | v1.11.0, anche con interruzione di alimentazione sulla flash interna |
+| Liste: List File 1–6 e riferimento per sottonome (`List "QTY"`) | NOT STARTED | |
 | Regressioni sinusoidale e logistica | NOT STARTED | |
 | Test χ², F, 2-campioni, ANOVA nell'interfaccia | NOT STARTED | ANOVA e t a 2 campioni esistono come API C++ |
 | Grafico a torta / a barre | NOT STARTED | |
@@ -151,7 +164,8 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Graph: progetti `.pcgraph` su microSD (NEW/OPEN/SAVE/SAVE AS/RENAME/DELETE) | TESTED ON SIMULATOR | scheda simulata; formato in [PCGRAPH_FORMAT.md](PCGRAPH_FORMAT.md) |
 | Graph: budget dei punti 40 000/400 000 con la PSRAM (6000/24 000 senza) | TESTED ON HOST | `graphics_memory_test`: 20 parametriche dense complete con la PSRAM, troncate senza |
 | Graph: layer statici in PSRAM durante TRACE/puntatore | TESTED ON HOST | immagine identica al pixel a un ridisegno completo (`graphics_memory_test`) |
-| Graph: Dual Screen G+G/GtoT, Graph to Table, comandi grafici di Run-Matrix | NOT STARTED | |
+| Graph: Dual Screen G+G/GtoT, Graph to Table | NOT STARTED | |
+| Graph: disegno dei comandi grafici di Run-Matrix (EXIT torna a Run-Matrix) | TESTED ON SIMULATOR | v1.11.0 |
 | Grafici impliciti (f(x,y)=0) | NOT STARTED | non presenti nella modalità Graph della CG50 (Conic Graphs) |
 | Table: lista delle relazioni, Y=/r=/Param, SET, Variable Range/List, derivate, celle di 6 caratteri | TESTED ON SIMULATOR | [TABLE.md](TABLE.md), screenshot 32, 35–37 |
 | Table: EDIT, ROW DELETE/INSERT/ADD, DELETE, LISTMEM, GPH-CON/GPH-PLT dalle righe | TESTED ON HOST | `table_test` |
@@ -177,7 +191,7 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Impostazioni, variabili, Ans | TESTED ON HOST |
 | Storia Run-Matrix (con forma esatta, vista, frazione mista) | TESTED ON HOST |
 | Lettura dei record v1.6.0 (formato versione 1) | TESTED ON HOST |
-| Liste statistiche | TESTED ON HOST |
+| Liste statistiche (List 1–26 e sottonomi dalla v1.11.0, record v7) | TESTED ON HOST |
 | Stato di GRAPH (20 funzioni, V-Window, Setup, memorie V-Window e grafiche, SKETCH) e di TABLE (range, variabile, tipo, righe) — record v4 | TESTED ON HOST |
 | Record v5 (v1.9.0): 3D Graph e archivio dei file; lettura dei record v4 della v1.8.0 | TESTED ON HOST |
 | Liste di 999 elementi e cronologia di 200 righe (Pico Plus 2 W) | TESTED ON HOST |
@@ -190,7 +204,8 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Conversazioni AI (cancellabili da AI Chat e Memory) | TESTED ON HOST |
 | Programmi, file Python, documenti | NOT STARTED |
 | Matrici e vettori salvati nel workspace (record v6) | TESTED ON HOST (v1.10.0) |
-| Matrici come file CSV (manuale 2-48) | NOT STARTED |
+| Matrici e liste come file CSV (manuale 2-48, 3-18) | TESTED ON HOST (v1.11.0) |
+| Record v7 (v1.11.0): Base-N, Simplify, CSV, List 7–26, sottonomi, forme esatte delle memorie, ▶Simp e base della cronologia, grafici dei comandi; lettura dei record v6 della v1.10.0 | TESTED ON HOST |
 
 ## Relay AI
 
