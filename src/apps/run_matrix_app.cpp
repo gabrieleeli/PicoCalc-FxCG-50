@@ -94,7 +94,8 @@ ast::NodePtr textRow(const std::string& text) {
 }
 // VARS categories: alpha memory, answer memories and the variables owned by
 // Graph (V-Window) and Table, read through the workspace.
-const char* const kVarsCategories[] = {"A~Z  variabili", "Ans  PreAns", "V-WIN  finestra Graph", "TABLE  intervallo Table"};
+const char* const kVarsCategories[] = {"A~Z  variabili", "Ans  PreAns", "V-WIN  finestra Graph", "TABLE  intervallo Table",
+                                       "EQUATION  SimRes PlyRes"};
 struct SharedVar { const char* token; const char* label; };
 const SharedVar kVWin[] = {{"xmin", "Xmin"}, {"xmax", "Xmax"}, {"xscl", "Xscl"}, {"ymin", "Ymin"}, {"ymax", "Ymax"},
                            {"yscl", "Yscl"}, {"tmin", "Tmin"}, {"tmax", "Tmax"}, {"tptch", "Tptch"}};
@@ -361,8 +362,18 @@ void RunMatrixApp::menuChoice(Context& ctx, int choice) {
                      "PreAns = " + formatValue({m.previousAnswer(), m.previousAnswerImag()}, ctx.ws.settings.complex, f)};
         } else if (choice == 2) {
             for (const auto& v : kVWin) { double d = 0; (void)ctx.ws.resolve(v.token, d); items.push_back(std::string(v.label) + " = " + formatReal(d, f)); }
-        } else {
+        } else if (choice == 3) {
             for (const auto& v : kTable) { double d = 0; (void)ctx.ws.resolve(v.token, d); items.push_back(std::string(v.label) + " = " + formatReal(d, f)); }
+        } else {
+            // VARS › EQUATION (manuale 1-33): matrici di soluzioni e coefficienti, lette
+            // dal workspace con CollectionResolver (il risultato va in MatAns).
+            static const char* const kEquationItems[] = {"SimRes   soluzioni del sistema", "SimCoef  coefficienti del sistema",
+                                                         "PlyRes   radici del polinomio", "PlyCoef  coefficienti del polinomio"};
+            for (int k = 0; k < 4; ++k) {
+                CalcValue v;
+                const bool defined = ctx.ws.collection(CollectionResolver::Memory::Equation, k, v) && !v.empty();
+                items.push_back(std::string(kEquationItems[k]) + (defined ? "  " + dimensionText(v) : "  (vuota)"));
+            }
         }
         menu_.show(kVarsCategories[idx], std::move(items));
         menuKind_ = Menu::VarsItems;
@@ -373,7 +384,8 @@ void RunMatrixApp::menuChoice(Context& ctx, int choice) {
         if (varsCategory_ == 0) editor_.insert(static_cast<char>('A' + choice));
         else if (varsCategory_ == 1) editor_.insertText(choice == 0 ? "Ans" : "PreAns");
         else if (varsCategory_ == 2) editor_.insertSymbol(kVWin[idx].token);
-        else editor_.insertSymbol(kTable[idx].token);
+        else if (varsCategory_ == 3) editor_.insertSymbol(kTable[idx].token);
+        else editor_.insertSymbol(equationMatrixName(choice));
         break;
     case Menu::None: break;
     }

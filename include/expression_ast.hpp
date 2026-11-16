@@ -67,6 +67,20 @@ struct SerializeMap {
 };
 
 namespace detail {
+// Vero quando il nodo, scritto subito dopo un altro operando, forma una
+// moltiplicazione implicita (variabile, numero, funzione, parentesi, modello).
+inline bool implicitFactor(const Node* n) {
+    if(!n) return false;
+    if(n->kind!=Kind::Token) return n->kind!=Kind::Row;
+    if(n->text.empty()) return false;
+    static const char* const ops[]={"+","-","*","/","^",")","]","}",",","=","<",">","!","%","\xC3\x97","\xC3\xB7","\xE2\x88\x92",
+        "\xE2\x89\xA4","\xE2\x89\xA5","\xE2\x89\xA0","\xE2\x86\x92","\xE2\x8C\x9F","\xE2\x96\xB6","'","\xC2\xB0"," "};
+    for(const char* o:ops) if(n->text==o) return false;
+    const unsigned char c=static_cast<unsigned char>(n->text[0]);
+    if(c=='#') return false;                                   // simbolo ingegneristico postfisso
+    if(n->text=="and"||n->text=="or"||n->text=="xor"||n->text=="xnor"||n->text=="Rmdr") return false;
+    return true;
+}
 inline void serializeInto(const Node& n, std::string& out, SerializeMap* map);
 inline void serializeChild(const Node& n, std::size_t i, std::string& out, SerializeMap* map) {
     if(!n.children[i]) throw std::runtime_error("Figlio AST nullo");
@@ -81,7 +95,17 @@ inline void serializeInto(const Node& n, std::string& out, SerializeMap* map) {
     case Kind::Row: {
         std::size_t slot=0;
         if(map){ slot=map->rows.size(); map->rows.push_back({&n, map->path, out.size(), out.size(), {}}); map->rows[slot].childStart.reserve(n.children.size()); }
-        for(std::size_t i=0;i<n.children.size();++i){ if(map) map->rows[slot].childStart.push_back(out.size()); child(i); }
+        for(std::size_t i=0;i<n.children.size();++i){
+            if(map) map->rows[slot].childStart.push_back(out.size());
+            // Un modello di frazione seguito da un fattore implicito (1/2 X, 1/2 sqrt 3)
+            // e' racchiuso tra parentesi: nel testo lineare la moltiplicazione
+            // implicita ha la precedenza sulla divisione (fx-CG50) e (1)/(2)X
+            // varrebbe 1/(2X) (v1.12.0).
+            const bool wrap=n.children[i]&&n.children[i]->kind==Kind::Fraction&&i+1<n.children.size()&&implicitFactor(n.children[i+1].get());
+            if(wrap) out+="(";
+            child(i);
+            if(wrap) out+=")";
+        }
         if(map) map->rows[slot].end=out.size();
         return;
     }

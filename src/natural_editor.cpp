@@ -80,7 +80,24 @@ std::pair<std::size_t, NodePtr> takeTrailingOperand(NaturalNode& line, std::size
         while (begin > 0 && alnumToken(*line.children[begin - 1]) && alphaWord(line.children[begin - 1]->text)) --begin;
     } else if (last.kind == Kind::Token) {
         if (!alnumToken(last)) throw SyntaxError("Syntax ERROR: operando non valido prima del modello");
-        while (begin > 0 && alnumToken(*line.children[begin - 1])) --begin;
+        // Come sulla fx-CG50 l'operando e' il valore subito prima del cursore: un
+        // numero (cifre e punto) oppure una sola variabile o parola. G T x² eleva
+        // al quadrato solo T (v1.12.0: prima "GT" diventava (GT)²).
+        auto numeric = [](const NaturalNode& n) {
+            for (unsigned char ch : n.text) if (!(std::isdigit(ch) || ch == '.')) return false;
+            return true;
+        };
+        if (numeric(last)) { while (begin > 0 && alnumToken(*line.children[begin - 1]) && numeric(*line.children[begin - 1])) --begin; }
+        else --begin;
+        // Mat A, Vct B, List 12: il nome della memoria (un token o le lettere
+        // digitate una per una) fa parte dell'operando.
+        std::string word;
+        std::size_t k = begin;
+        while (k > 0 && word.size() < 4 && line.children[k - 1]->kind == Kind::Token && alphaWord(line.children[k - 1]->text)) {
+            word.insert(0, line.children[k - 1]->text);
+            --k;
+            if (word == "Mat" || word == "Vct" || word == "List") { begin = k; break; }
+        }
     } else {
         --begin;
     }
@@ -177,6 +194,16 @@ void importInto(NaturalNode& target, const std::string& s, int depth, bool linea
         if (std::isspace(c)) { ++i; continue; }
         // Simbolo ingegneristico "#k" (v1.11.0): un token, mostrato "k" / "µ".
         if (c == '#' && i + 1 < s.size() && std::strchr("kMGTmunpf", s[i + 1])) { target.children.push_back(token(s.substr(i, 2))); i += 2; continue; }
+        // SimRes, SimCoef, PlyRes, PlyCoef (VARS › EQUATION, v1.12.0): un token ciascuno.
+        if (c == 'S' || c == 'P') {
+            bool done = false;
+            for (int k = 0; k < 4 && !done; ++k) {
+                const std::string word = equationMatrixName(k);
+                if (s.compare(i, word.size(), word) != 0) continue;
+                target.children.push_back(token(word)); i += word.size(); done = true;
+            }
+            if (done) continue;
+        }
         // Mat / Vct / List (comandi OPTN) sono un token ciascuno, anche quando il
         // nome segue senza spazio ("MatA" = Mat A).
         if (c == 'M' || c == 'V' || c == 'L') {
@@ -209,9 +236,18 @@ void importInto(NaturalNode& target, const std::string& s, int depth, bool linea
             const std::size_t next = importMatrix(target, s, i, depth);
             if (next != std::string::npos) { i = next; continue; }
         }
-        // "(a)/(b)" -> fraction, "(a)^(b)" -> power
+        // "(a)/(b)" -> fraction, "(a)^(b)" -> power. "((a)/(b))" e' una frazione
+        // che il serializzatore ha racchiuso perche' seguita da un fattore implicito.
         if (c == '(') {
             const std::size_t close = matchParen(s, i);
+            if (close != std::string::npos && i + 1 < close && s[i + 1] == '(') {
+                const std::size_t a = matchParen(s, i + 1);
+                if (a != std::string::npos && a + 2 < close && s[a + 1] == '/' && s[a + 2] == '(' && matchParen(s, a + 2) == close - 1) {
+                    auto box = node(Kind::Fraction);
+                    box->children = {importRow(s.substr(i + 2, a - i - 2), depth), importRow(s.substr(a + 3, close - 1 - a - 3), depth)};
+                    target.children.push_back(box); i = close + 1; continue;
+                }
+            }
             if (close != std::string::npos && close + 2 < s.size() && (s[close + 1] == '/' || s[close + 1] == '^') && s[close + 2] == '(') {
                 const std::size_t close2 = matchParen(s, close + 2);
                 if (close2 != std::string::npos) {

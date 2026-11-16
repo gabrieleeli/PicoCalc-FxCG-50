@@ -46,6 +46,12 @@ public:
 
     void open(AppId id);
     void home();
+    // SET UP (SHIFT MENU) aperto da una modalita': EXIT torna a quella modalita',
+    // come sulla fx-CG50 (v1.12.0); altrimenti al menu principale.
+    void leaveSetup();
+    // Vero durante enter() della modalita' a cui torna il SET UP: la modalita'
+    // puo' riprendere dalla schermata in cui era.
+    bool resuming() const noexcept { return resuming_; }
     void markDirty() noexcept { dirty_ = true; }
     bool dirty() const noexcept { return dirty_; }
     void clearDirty() noexcept { dirty_ = false; }
@@ -67,6 +73,7 @@ private:
     AppManager& manager_;
     bool dirty_{};
     bool shift_{};
+    bool resuming_{};
     std::string toast_;
     std::uint32_t toastUntil_{};
 };
@@ -114,6 +121,7 @@ public:
 private:
     App* find(AppId id) const noexcept;
     void switchTo(App* app, AppId id);
+    AppId setupReturn_{AppId::MainMenu};     // modalita' da cui si e' aperto il SET UP
     Context ctx_;
     App* apps_[AppCount]{};
     App* launcher_{};

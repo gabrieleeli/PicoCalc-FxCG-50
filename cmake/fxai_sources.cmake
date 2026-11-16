@@ -50,6 +50,7 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/csv_io.cpp
   ${FXAI_ROOT}/src/graph_commands.cpp
   ${FXAI_ROOT}/src/solvers.cpp
+  ${FXAI_ROOT}/src/equation.cpp
   ${FXAI_ROOT}/src/statistics.cpp
   ${FXAI_ROOT}/src/app_registry.cpp
   ${FXAI_ROOT}/src/app_models.cpp
@@ -61,6 +62,7 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/apps/matrix_editor.cpp
   ${FXAI_ROOT}/src/apps/answer_view.cpp
   ${FXAI_ROOT}/src/apps/widgets.cpp
+  ${FXAI_ROOT}/src/apps/math_field.cpp
   ${FXAI_ROOT}/src/apps/equation_app.cpp
   ${FXAI_ROOT}/src/apps/statistics_app.cpp
   ${FXAI_ROOT}/src/apps/graph_app.cpp

@@ -73,7 +73,7 @@ int main() {
         CHECK(w.listName(1).empty());
         const auto blob = serializeWorkspace(w);
         Workspace back;
-        CHECK(blob[4] == 7 && deserializeWorkspace(blob.data(), blob.size(), back));
+        CHECK(blob[4] == 8 && deserializeWorkspace(blob.data(), blob.size(), back));
         CHECK(back.listName(0) == "QTY" && back.listName(25) == "PRICE_1");
     }
     // ================================================================ budget delle liste per scheda
@@ -362,7 +362,7 @@ int main() {
         CHECK_EQ_STR(last(w), "-4");
         // Salvato come v7, riletto uguale
         const auto blob = serializeWorkspace(w);
-        CHECK(blob[4] == 7 && blob[5] == 0);
+        CHECK(blob[4] == 8 && blob[5] == 0);
         Workspace back;
         CHECK(deserializeWorkspace(blob.data(), blob.size(), back));
         CHECK(back.history.size() == w.history.size() && back.lists == w.lists && back.matrices.mat[2] == w.matrices.mat[2]);

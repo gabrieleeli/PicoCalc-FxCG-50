@@ -52,7 +52,9 @@ constexpr std::uint32_t Hardware   = 1u << 19;   // board_config/mem_pools/psram
 // graph_commands.hpp: comandi grafici di Run-Matrix (Plot, F-Line, Graph Y=...)
 // eseguiti sui dati di GRAPH (V-Window, SKETCH) che GRAPH poi disegna (v1.11.0).
 constexpr std::uint32_t GraphCmd   = 1u << 20;
-constexpr std::uint32_t Count      = 21;
+// equation.hpp: motore di EQUATION (v1.12.0): coefficienti esatti, SIML, POLY, SOLVER.
+constexpr std::uint32_t EquationCore = 1u << 21;
+constexpr std::uint32_t Count      = 22;
 } // namespace service
 
 // Sections of fx::Workspace, the only channel through which modes exchange data.

@@ -124,7 +124,7 @@ void SystemApp::key(Context& ctx, const KeyEvent& ev) {
     case Key::F2: apply(ctx); runDiagnostics(ctx); return;
     case Key::F5: confirmReset_ = true; return;
     case Key::F6: apply(ctx); ctx.toast("Impostazioni salvate"); return;
-    case Key::Exit: apply(ctx); ctx.home(); return;
+    case Key::Exit: apply(ctx); ctx.leaveSetup(); return;
     default: break;
     }
     const bool consumed = form_.key(ctx, ev);

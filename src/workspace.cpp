@@ -8,6 +8,19 @@
 namespace fx {
 Workspace::Workspace() { resetAll(); }
 
+// ---------------------------------------------------------------- EQUATION
+EquationState::EquationState()
+    : simultaneous(MaxUnknowns * SimStride), polynomial(MaxDegree + 1), inequality(MaxDegree + 1) {}
+std::vector<eq::Number> EquationState::simCoefficients() const {
+    std::vector<eq::Number> out;
+    out.reserve(static_cast<std::size_t>(unknowns) * (unknowns + 1u));
+    for (std::size_t r = 0; r < unknowns; ++r) for (std::size_t c = 0; c <= unknowns; ++c) out.push_back(sim(r, c));
+    return out;
+}
+std::vector<eq::Number> EquationState::polyCoefficients() const {
+    return std::vector<eq::Number>(polynomial.begin(), polynomial.begin() + degree + 1);
+}
+
 void Workspace::resetAll() {
     settings = Settings{};
     memory.clearAll();
@@ -57,6 +70,26 @@ void checkBudget(const CollectionMemory& m, std::size_t freed, std::size_t added
 
 bool Workspace::collection(Memory memory, int index, CalcValue& out) const {
     const CalcValue* src = nullptr;
+    if (memory == Memory::Equation) {
+        // VARS › EQUATION (manuale 1-33): soluzioni salvate dall'ultimo SOLVE,
+        // coefficienti attuali (errore se non ne e' stato inserito nessuno).
+        mem::PlacementScope heavy(mem::Policy::PREFER_PSRAM);
+        auto coefficients = [&](const std::vector<eq::Number>& c, std::size_t rows, std::size_t cols) {
+            if (std::all_of(c.begin(), c.end(), [](const eq::Number& n) { return n.isZero(); })) return false;
+            out = eq::toMatrix(c, rows, cols);
+            return true;
+        };
+        switch (index) {
+        case SimRes: src = &equation.simResult; break;
+        case PlyRes: src = &equation.polyResult; break;
+        case SimCoef: return coefficients(equation.simCoefficients(), equation.unknowns, equation.unknowns + 1u);
+        case PlyCoef: return coefficients(equation.polyCoefficients(), 1, equation.degree + 1u);
+        default: return false;
+        }
+        if (src->empty()) return false;
+        out = *src;
+        return true;
+    }
     if (memory == Memory::List) {
         if (index == Answer) src = &matrices.listAns;
         else if (index >= 0 && static_cast<std::size_t>(index) < lists.size()) {
@@ -217,7 +250,13 @@ constexpr std::uint32_t Magic = 0x46584157;   // "WAXF"
 // vettori; base e frazione non ridotta (▶Simp) delle righe della cronologia;
 // i grafici dei comandi di Run-Matrix. I record delle versioni 1-6 si caricano
 // con i valori predefiniti di questi campi.
-constexpr std::uint16_t Version = 7;
+// Version 8 (v1.12.0) sposta i dati di EQUATION in coda: coefficienti come
+// numeri con forma esatta (eq::Number), griglia SIML fissa 6 x 7, limiti e
+// variabile del Solver, ultime soluzioni (SimRes, PlyRes). Il blocco della
+// versione 1-7 (coefficienti double) non viene piu' scritto; i record 1-7 si
+// convertono senza perdite (fromStoredDouble, celle SIML riportate alla loro
+// riga e colonna, valore iniziale del Solver nella variabile X).
+constexpr std::uint16_t Version = 8;
 constexpr std::size_t LegacyLists = 6;     // liste del blocco delle versioni 1-6
 constexpr std::uint8_t NoValue = 0xFF;      // byte di tipo di una memoria non definita
 constexpr std::size_t LegacyFunctions = 6;
@@ -250,6 +289,13 @@ struct Writer {
         if (v.complex()) for (double d : v.im) f64(d);
     }
 };
+// Numero di EQUATION (v8): indicatori (1 forma esatta, 2 decimale), valore
+// complesso, forma esatta (parte reale e immaginaria).
+void writeNumber(Writer& w, const eq::Number& n) {
+    w.u8(static_cast<std::uint8_t>((n.hasExact ? 1 : 0) | (n.decimal ? 2 : 0)));
+    w.f64(n.value.real()); w.f64(n.value.imag());
+    if (n.hasExact) { w.slot(ExactSlot{n.exact.re, true, false}); w.slot(ExactSlot{n.exact.im, true, false}); }
+}
 struct Reader {
     const std::uint8_t* p; std::size_t n; std::size_t i{}; bool ok{true};
     bool need(std::size_t k) { if (!ok || i + k > n) { ok = false; return false; } return true; }
@@ -279,6 +325,23 @@ struct Reader {
         } else if (!exact::Value::fromTerms(t, count, e.value) || e.value.termCount() != count) { ok = false; return e; }
         e.valid = (flags & 1) != 0; e.decimal = (flags & 2) != 0;
         return e;
+    }
+    bool number(eq::Number& out) {
+        const std::uint8_t flags = u8();
+        const double re = f64(), im = f64();
+        if (!ok || flags > 3 || !std::isfinite(re) || !std::isfinite(im)) return ok = false;
+        if (flags & 1) {
+            const ExactSlot a = slot(), b = slot();
+            if (!ok || !a.valid || !b.valid) return ok = false;
+            out = eq::Number::fromExact({a.value, b.value}, (flags & 2) != 0);
+            // La forma esatta deve corrispondere al valore memorizzato.
+            const Complex z = out.value;
+            if (!(std::abs(z.real() - re) <= 1e-12 * std::max(1.0, std::abs(re))) || !(std::abs(z.imag() - im) <= 1e-12 * std::max(1.0, std::abs(im)))) return ok = false;
+        } else {
+            if (flags & 2) return ok = false;
+            out = eq::Number::fromComplex({re, im});
+        }
+        return true;
     }
     // Legge cio' che Writer::value() ha scritto e lo controlla con i limiti di
     // questa scheda (un record lo legge solo la scheda che l'ha scritto).
@@ -356,11 +419,7 @@ std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws) {
     w.u8(ws.table.generated ? 1 : 0);
     w.u16(static_cast<std::uint16_t>(ws.table.rows.size())); for (double d : ws.table.rows) w.f64(d);
     for (std::size_t li = 0; li < LegacyLists; ++li) { const auto& l = ws.lists[li]; w.u16(static_cast<std::uint16_t>(l.size())); for (double d : l) w.f64(d); }
-    const EquationState& e = ws.equation;
-    w.u8(e.unknowns); for (double d : e.simultaneous) w.f64(d);
-    w.u8(e.degree); for (double d : e.polynomial) w.f64(d);
-    w.str(e.solverExpr); w.f64(e.solverGuess);
-    w.u8(e.ineqDegree); w.u8(e.ineqRelation); for (double d : e.inequality) w.f64(d);
+    // (v1-v7: qui c'era il blocco di EQUATION, ora in coda al record v8)
     w.u16(static_cast<std::uint16_t>(ws.chat.size()));
     for (const auto& m : ws.chat) { w.u8(m.fromUser ? 1 : 0); w.str(m.text); }
     // v5
@@ -420,6 +479,14 @@ std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws) {
     for (const CommandGraph& cg : g.commandGraphs) {
         w.u8(static_cast<std::uint8_t>(cg.type)); w.str(cg.expr); w.str(cg.expr2); w.u8(cg.color); w.u8(static_cast<std::uint8_t>(cg.style));
     }
+    // v8: EQUATION
+    const EquationState& e = ws.equation;
+    w.u8(e.unknowns); for (const eq::Number& n : e.simultaneous) writeNumber(w, n);
+    w.u8(e.degree); for (const eq::Number& n : e.polynomial) writeNumber(w, n);
+    w.str(e.solverExpr); w.f64(e.solverLower); w.f64(e.solverUpper); w.u8(static_cast<std::uint8_t>(e.solverVariable));
+    w.u8(e.ineqDegree); w.u8(e.ineqRelation); for (const eq::Number& n : e.inequality) writeNumber(w, n);
+    w.value(e.simResult); exactForms(e.simResult);
+    w.value(e.polyResult); exactForms(e.polyResult);
     return std::move(w.out);
 }
 
@@ -541,11 +608,32 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
         l.resize(n); for (auto& d : l) d = r.f64();
     }
     EquationState& e = ws.equation;
-    e.unknowns = r.u8(); for (double& d : e.simultaneous) d = r.f64();
-    e.degree = r.u8(); for (double& d : e.polynomial) d = r.f64();
-    e.solverExpr = r.str(); e.solverGuess = r.f64();
-    e.ineqDegree = r.u8(); e.ineqRelation = r.u8(); for (double& d : e.inequality) d = r.f64();
-    if (e.unknowns < 2 || e.unknowns > 6 || e.degree < 2 || e.degree > 6 || e.ineqDegree < 1 || e.ineqDegree > 6 || e.ineqRelation > 3) return false;
+    double legacyGuess = 0;
+    if (version < 8) {
+        // Record 1-7: coefficienti double, griglia SIML n x (n+1) per righe.
+        e.unknowns = r.u8();
+        double sim[42], poly[7], ineq[7];
+        for (double& d : sim) d = r.f64();
+        e.degree = r.u8(); for (double& d : poly) d = r.f64();
+        e.solverExpr = r.str(); legacyGuess = r.f64();
+        e.ineqDegree = r.u8(); e.ineqRelation = r.u8(); for (double& d : ineq) d = r.f64();
+        if (e.unknowns < 2 || e.unknowns > 6 || e.degree < 2 || e.degree > 6 || e.ineqDegree < 1 || e.ineqDegree > 6 || e.ineqRelation > 3) return false;
+        // Le celle del sistema attivo tornano alla loro riga e colonna; le altre
+        // (valori di sistemi di altre dimensioni) occupano, nell'ordine, le
+        // posizioni libere della griglia 6 x 7: nessun valore va perso.
+        const std::size_t n = e.unknowns, active = n * (n + 1);
+        std::vector<bool> taken(e.simultaneous.size(), false);
+        for (std::size_t k = 0; k < active; ++k) {
+            const std::size_t at = (k / (n + 1)) * EquationState::SimStride + k % (n + 1);
+            e.simultaneous[at] = eq::fromStoredDouble(sim[k]); taken[at] = true;
+        }
+        std::size_t free = 0;
+        for (std::size_t k = active; k < 42; ++k) {
+            while (taken[free]) ++free;
+            e.simultaneous[free] = eq::fromStoredDouble(sim[k]); taken[free] = true;
+        }
+        for (std::size_t k = 0; k < 7; ++k) { e.polynomial[k] = eq::fromStoredDouble(poly[k]); e.inequality[k] = eq::fromStoredDouble(ineq[k]); }
+    }
     const auto cn = r.u16(); if (cn > Workspace::MaxChatMessages) return false;
     for (std::uint16_t i = 0; i < cn && r.ok; ++i) { ChatMessage m; m.fromUser = r.u8() != 0; m.text = r.str(); ws.chat.push_back(std::move(m)); }
     if (version >= 5) {
@@ -652,6 +740,40 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
             if (cg.expr.empty() || cg.expr.size() > MaxGraphExpression || cg.expr2.size() > MaxGraphExpression) return false;
             ws.graph.commandGraphs.push_back(std::move(cg));
         }
+    }
+    if (version >= 8) {
+        e.unknowns = r.u8();
+        for (eq::Number& n : e.simultaneous) if (!r.number(n)) return false;
+        e.degree = r.u8();
+        for (eq::Number& n : e.polynomial) if (!r.number(n)) return false;
+        e.solverExpr = r.str(); e.solverLower = r.f64(); e.solverUpper = r.f64();
+        e.solverVariable = static_cast<char>(r.u8());
+        e.ineqDegree = r.u8(); e.ineqRelation = r.u8();
+        for (eq::Number& n : e.inequality) if (!r.number(n)) return false;
+        if (!r.ok || e.unknowns < 2 || e.unknowns > 6 || e.degree < 2 || e.degree > 6 || e.ineqDegree < 1 || e.ineqDegree > 6 || e.ineqRelation > 3) return false;
+        if (e.solverExpr.size() > limits::kEquationExpression || !std::isfinite(e.solverLower) || !std::isfinite(e.solverUpper) || !(e.solverLower < e.solverUpper)) return false;
+        if (e.solverVariable != 0 && (e.solverVariable < 'A' || e.solverVariable > 'Z')) return false;
+        auto result = [&](CalcValue& v, std::size_t maxRows, std::size_t maxCols) {
+            if (!r.value(v)) return false;
+            if (!v.empty() && (v.type != ValueType::Matrix || v.rows > maxRows || v.cols > maxCols)) return false;
+            const auto has = r.u8();
+            if (has > 1 || (has && (v.empty() || v.complex() || v.size() > CalcValue::ExactElements))) return false;
+            if (!has) return true;
+            v.exact.resize(v.size());
+            for (std::size_t k = 0; k < v.size(); ++k) {
+                const ExactSlot slot = r.slot();
+                if (!r.ok || !slot.valid) return false;
+                v.exact[k] = slot.value;
+                if (!(std::abs(slot.value.toDouble() - v.re[k]) <= 1e-12 * std::max(1.0, std::abs(v.re[k])))) return false;
+            }
+            return true;
+        };
+        if (!result(e.simResult, EquationState::MaxUnknowns, EquationState::MaxUnknowns + 1) ||
+            !result(e.polyResult, EquationState::MaxDegree, 1)) return false;
+    } else {
+        // Il valore iniziale del Solver (v1-v7, sempre per X) diventa il valore di X,
+        // che e' il valore iniziale della fx-CG50, se X non e' stata usata.
+        if (legacyGuess != 0 && std::isfinite(legacyGuess) && !ws.memory.used('X')) ws.memory.store('X', legacyGuess);
     }
     if (ws.listElements() > Workspace::MaxListElements) return false;
     if (!r.ok || r.i != r.n) return false;
