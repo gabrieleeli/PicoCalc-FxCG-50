@@ -25,6 +25,8 @@ struct Project {
     std::array<ViewWindow, VWindowMemories> vmem{};
     std::uint8_t vmemUsed{};
     std::vector<SketchItem> sketch;
+    // v1.12.0: grafici dei comandi di Run-Matrix (Graph Y=, Graph Y>, G∫dx...), righe "c=".
+    std::vector<CommandGraph> commands;
     std::string overlay;                 // picture recalled behind the graphs
     double tableStart{-3}, tableEnd{3}, tableStep{1};
     bool tableFromList{false};                                         // TABLE Setup "Variable": range or list

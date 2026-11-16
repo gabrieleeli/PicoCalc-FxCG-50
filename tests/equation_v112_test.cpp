@@ -450,7 +450,7 @@ int main() {
         ws.equation.simResult = toMatrix(c.v({"1/2", "3"}), 2, 1);
         ws.equation.polyResult = toMatrix(c.v({"1+i"}), 1, 1);
         const auto bytes = serializeWorkspace(ws);
-        CHECK(bytes[4] == 8 && bytes[5] == 0);
+        CHECK(bytes[4] == 9 && bytes[5] == 0);
         Workspace back;
         CHECK(deserializeWorkspace(bytes.data(), bytes.size(), back));
         const EquationState& e = back.equation;
@@ -491,10 +491,10 @@ int main() {
         // I coefficienti migrati si risolvono come prima: il sistema del manuale da' 1, −1, 2
         const SimulResult m = solveSimultaneous(o.simCoefficients(), 3);
         CHECK(m.kind == SimulResult::Kind::Unique && m.solution[0].value == Complex(1, 0) && m.solution[2].value == Complex(2, 0));
-        // Il record migrato si salva come v8 e si rilegge identico
+        // Il record migrato si salva nella versione corrente (v9) e si rilegge identico
         const auto again = serializeWorkspace(old);
         Workspace round;
-        CHECK(again[4] == 8 && deserializeWorkspace(again.data(), again.size(), round) && round.equation.sim(2, 3) == o.sim(2, 3));
+        CHECK(again[4] == 9 && deserializeWorkspace(again.data(), again.size(), round) && round.equation.sim(2, 3) == o.sim(2, 3));
     }
 
     // ================================================================ editor (correzioni della v1.12.0 usate dal Solver)

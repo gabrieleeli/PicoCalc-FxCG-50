@@ -77,6 +77,7 @@ public:
     void insertTenPower();                                 // 10^[]
     void insertIntegral();
     void insertDerivative();
+    void insertSecondDerivative();                         // d²/dx² (v1.12.0)
     void insertSummation();
     void insertProduct();
     // Modello MAT/VCT: rows x cols celle (1..6), cursore nella prima cella.
@@ -134,6 +135,10 @@ public:
     void paste(const NaturalNode& tree);                  // inserts the tree's row content at the cursor
 
     std::string toExpression() const;
+    // v1.12.0: testo Line con le sole parentesi necessarie (1/3, x^2, 2(1/3));
+    // lo stesso valore di toExpression() per l'unico parser.
+    std::string linearText() const;
+    static std::string toLinearText(const std::string& canonical);
     // Layout with the cursor, using the same metrics as the math renderer.
     std::vector<NaturalDrawOp> layout(int x = 0, int baseline = 0, int maxWidth = 300) const;
 

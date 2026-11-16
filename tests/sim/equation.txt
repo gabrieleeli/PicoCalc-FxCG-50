@@ -220,7 +220,13 @@ key DOWN
 key DOWN
 key RIGHT
 key EXIT
+# VARS nell'ordine della fx-CG50 (v1.13.0): EQUATION e' la decima categoria
 key VARS
+key DOWN
+key DOWN
+key DOWN
+key DOWN
+key DOWN
 key DOWN
 key DOWN
 key DOWN

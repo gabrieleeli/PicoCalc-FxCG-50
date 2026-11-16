@@ -4,6 +4,7 @@
 // used to draw the expression.
 #include "math_renderer.hpp"
 #include "font_renderer.hpp"
+#include "calc_library.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -156,19 +157,22 @@ Box measureNode(const NaturalNode& n, int level, bool isRoot, unsigned depth) {
     case Kind::Calculus: {
         const Box core = measureNode(*child(n, 0), level, false, depth + 1);
         const int casc = std::max(core.asc, f.asc()), cdesc = std::max(core.desc, f.desc());
-        if (n.text == "derivative") {
+        if (n.text == "derivative" || n.text == "derivative2") {
             const Box a = measureNode(*child(n, 1), level + 1, false, depth + 1);
             const Face& s = smallFace();
-            const int head = 2 * s.adv + 2;                     // "d/dx" as a small fraction
+            const int head = (n.text == "derivative2" ? 3 : 2) * s.adv + 2;   // "d/dx" / "d²/dx²" as a small fraction
             return {head + 2 * f.adv + core.w + 4 + 2 * s.adv + a.w, std::max(casc, s.axis() + 2 * s.height), std::max(cdesc, 4 + a.desc + a.asc)};
         }
-        const Box lo = measureNode(*child(n, 1), level + 1, false, depth + 1), hi = measureNode(*child(n, 2), level + 1, false, depth + 1);
+        // Σ/Π con la variabile (v1.12.0): figli espressione, variabile, inizio, fine.
+        const bool withVar = n.children.size() == 4;
+        const Box lo = measureNode(*child(n, withVar ? 2 : 1), level + 1, false, depth + 1), hi = measureNode(*child(n, withVar ? 3 : 2), level + 1, false, depth + 1);
         if (n.text == "integral") {
             const int bounds = std::max(lo.w, hi.w);
             return {f.adv + bounds + 2 + core.w + 2 * f.adv, casc + std::max(0, hi.asc + hi.desc - 6), cdesc + std::max(0, lo.asc + lo.desc - 4)};
         }
         const Face& s = smallFace();
-        const int lowW = 2 * s.adv + lo.w;                       // "x=" + lower
+        const int varW = withVar ? measureNode(*child(n, 1), level + 1, false, depth + 1).w + s.adv : 2 * s.adv;
+        const int lowW = varW + lo.w;                            // "x=" + lower
         const int col = std::max({f.adv + 2, hi.w, lowW});
         return {col + 2 + core.w, casc + hi.asc + hi.desc, cdesc + lo.asc + lo.desc};
     }
@@ -253,7 +257,15 @@ void drawRow(Ctx& c, const NaturalNode& n, int x, int base, int level, bool isRo
 void drawNode(Ctx& c, const NaturalNode& n, int x, int base, int level, bool isRoot, unsigned depth) {
     const Face& f = faceFor(level);
     if (depth > MaxDepth) return;
-    if (n.kind == Kind::Token) { const std::uint8_t color = parenToken(c, n.text); addText(c, x, base, displayToken(n.text), f, color); return; }
+    if (n.kind == Kind::Token) {
+        const std::uint8_t color = parenToken(c, n.text);
+        const std::string shown = displayToken(n.text);
+        addText(c, x, base, shown, f, color);
+        // v_a ... v_z (v1.12.0): la variabile scritta esplicitamente (Base-N Hex) e' sottolineata,
+        // come la calcolatrice distingue le variabili A-F dalle cifre esadecimali.
+        if (n.text.size() == 3 && n.text[0] == 'v' && n.text[1] == '_') addLine(c, x, base + 1, x + textWidth(shown, f) - 1, base + 1, color);
+        return;
+    }
     if (n.kind == Kind::Row) { drawRow(c, n, x, base, level, isRoot, depth); return; }
     if (!shapeOk(n)) return;
     switch (n.kind) {
@@ -358,13 +370,15 @@ void drawNode(Ctx& c, const NaturalNode& n, int x, int base, int level, bool isR
         const Box core = measureNode(*child(n, 0), level, false, depth + 1);
         const Box all = measureNode(n, level, false, depth);
         const Face& s = smallFace();
-        if (n.text == "derivative") {
+        if (n.text == "derivative" || n.text == "derivative2") {
+            const bool second = n.text == "derivative2";
             const Box a = measureNode(*child(n, 1), level + 1, false, depth + 1);
             const int bar = base - f.axis();
-            addText(c, x + s.adv / 2 + 1, bar - 1 - s.desc(), "d", s);
-            addLine(c, x, bar, x + 2 * s.adv + 1, bar);
-            addText(c, x + 1, bar + 1 + s.asc(), "dx", s);
-            int px = x + 2 * s.adv + 2;
+            const int hw = (second ? 3 : 2) * s.adv;
+            addText(c, x + s.adv / 2 + 1, bar - 1 - s.desc(), second ? "d\xC2\xB2" : "d", s);
+            addLine(c, x, bar, x + hw + 1, bar);
+            addText(c, x + 1, bar + 1 + s.asc(), second ? "dx\xC2\xB2" : "dx", s);
+            int px = x + hw + 2;
             parens(c, px, base, core.w + 2 * f.adv, std::max(core.asc, f.asc()), std::max(core.desc, f.desc()), f);
             drawNode(c, *child(n, 0), px + f.adv, base, level, false, depth + 1);
             px += core.w + 2 * f.adv + 1;
@@ -373,7 +387,9 @@ void drawNode(Ctx& c, const NaturalNode& n, int x, int base, int level, bool isR
             drawNode(c, *child(n, 1), px + 3 + 2 * s.adv, base + 4 + a.asc, level + 1, false, depth + 1);
             return;
         }
-        const Box lo = measureNode(*child(n, 1), level + 1, false, depth + 1), hi = measureNode(*child(n, 2), level + 1, false, depth + 1);
+        const bool withVar = n.children.size() == 4;
+        const std::size_t loIndex = withVar ? 2 : 1, hiIndex = withVar ? 3 : 2;
+        const Box lo = measureNode(*child(n, loIndex), level + 1, false, depth + 1), hi = measureNode(*child(n, hiIndex), level + 1, false, depth + 1);
         if (n.text == "integral") {
             addText(c, x, base, "∫", f);
             const int bx = x + f.adv;
@@ -384,13 +400,20 @@ void drawNode(Ctx& c, const NaturalNode& n, int x, int base, int level, bool isR
             addText(c, px + core.w, base, "dx", f);
             return;
         }
-        const int lowW = 2 * s.adv + lo.w;
+        const int vw = withVar ? measureNode(*child(n, 1), level + 1, false, depth + 1).w : 0;
+        const int lowW = (withVar ? vw + s.adv : 2 * s.adv) + lo.w;
         const int col = std::max({f.adv + 2, hi.w, lowW});
         addText(c, x + (col - f.adv) / 2, base, n.text == "prod" ? "Π" : "Σ", f);
-        drawNode(c, *child(n, 2), x + (col - hi.w) / 2, base - f.asc() - hi.desc, level + 1, false, depth + 1);
+        drawNode(c, *child(n, hiIndex), x + (col - hi.w) / 2, base - f.asc() - hi.desc, level + 1, false, depth + 1);
         const int lx = x + (col - lowW) / 2, lb = base + f.desc() + lo.asc;
-        addText(c, lx, lb, "x=", s);
-        drawNode(c, *child(n, 1), lx + 2 * s.adv, lb, level + 1, false, depth + 1);
+        if (withVar) {
+            drawNode(c, *child(n, 1), lx, lb, level + 1, false, depth + 1);
+            addText(c, lx + vw, lb, "=", s);
+            drawNode(c, *child(n, loIndex), lx + vw + s.adv, lb, level + 1, false, depth + 1);
+        } else {
+            addText(c, lx, lb, "x=", s);
+            drawNode(c, *child(n, loIndex), lx + 2 * s.adv, lb, level + 1, false, depth + 1);
+        }
         drawNode(c, *child(n, 0), x + col + 2, base, level, false, depth + 1);
         return;
     }
@@ -533,6 +556,11 @@ std::string displayToken(const std::string& t) {
     if (t == "<=") return "\xE2\x89\xA4";
     if (t == ">=") return "\xE2\x89\xA5";
     if (t == "->") return "→";
+    // v1.12.0: comandi della libreria (SolveN, NormPD, Cmpd_PV, f1...), variabili esplicite e stringhe.
+    if (const char* shown = calclib::displayName(low)) return shown;
+    if (low.size() == 3 && low[0] == 'v' && low[1] == '_') return std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(low[2]))));
+    if (low.size() >= 3 && low.size() <= 4 && low[0] == 'f' && low[1] == '_') return "f" + low.substr(2);
+    if (low.size() >= 5 && low.size() <= 6 && low.compare(0, 4, "str_") == 0) return "Str " + low.substr(4);
     return t;
 }
 

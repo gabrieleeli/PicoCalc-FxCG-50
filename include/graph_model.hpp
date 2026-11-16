@@ -125,6 +125,9 @@ struct SketchItem {
         Text = 8,        // text at (x0,y0)
         Pen = 9,         // freehand: path = x,y pairs
         Inverse = 10,    // inverse of y=f(x): text holds f, drawn as x=f(y)
+        // v1.12.0 (comandi di Run-Matrix)
+        Integral = 11,   // G∫dx: area tra y=f(x) (text) e l'asse x da x0 a x1
+        Data = 12,       // DrawStat / DrawR / DrawFTG: punti x,y in path; y1 = 1 collegati, 0 solo punti
     };
     Kind kind{Kind::Point};
     double x0{}, y0{}, x1{}, y1{};
@@ -139,6 +142,7 @@ constexpr std::size_t MaxPenPoints = 400;            // x,y pairs per freehand s
 // 64 KB flash record and the .pcgraph limit (64 strokes x 400 points would be 205 KB).
 constexpr std::size_t MaxSketchPenPoints = 1200;
 constexpr std::size_t MaxSketchText = 32;
+constexpr std::size_t MaxDataPoints = 999;           // punti di un elemento Data (una lista della fx-CG50)
 const char* sketchKindName(SketchItem::Kind k) noexcept;   // "Plot", "PlotOff", "Line", ...
 bool parseSketchKindName(const std::string& name, SketchItem::Kind& out) noexcept;
 std::string validateSketch(const SketchItem& s);
@@ -175,6 +179,9 @@ struct GraphState {
     // Richiesta di Run-Matrix (non salvata): GRAPH apre subito la schermata del
     // grafico e EXIT torna a Run-Matrix, come dopo un comando grafico della fx-CG50.
     bool commandScreen{};
+    // v1.12.0: StoPict n eseguito da Run-Matrix (non salvato): GRAPH salva la
+    // schermata del grafico in Pict n quando la disegna (0 = nessuna richiesta).
+    std::uint8_t storePict{};
 };
 std::size_t graphMemoryBytes(const GraphState& g) noexcept;
 } // namespace fx

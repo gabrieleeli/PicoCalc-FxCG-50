@@ -94,6 +94,12 @@ void GraphApp::enter(Context& ctx) {
     // GPH-CON/GPH-PLT and the graphic commands of Run-Matrix (v1.11.0) open
     // the graph screen directly.
     screen_ = tableDraw(ctx) || ctx.ws.graph.commandScreen ? Screen::Plot : Screen::List;
+    // StoPict n eseguito in Run-Matrix (v1.12.0): la schermata disegnata va in Pict n.
+    if (const std::uint8_t n = ctx.ws.graph.storePict) {
+        ctx.ws.graph.storePict = 0;
+        try { storePicture(ctx, files::join(files::PictFolder, pict::memoryFileName(n))); }
+        catch (const std::exception& e) { ctx.toast(e.what(), 2500); }
+    }
 }
 void GraphApp::leave(Context& ctx) {
     ctx.ws.table.draw = TableRange::Draw::None;

@@ -15,6 +15,13 @@
 //   Circle x,y,r   Vertical x   Horizontal y   Text riga,colonna,"testo"
 //   PxlOn riga,colonna   PxlOff riga,colonna   PxlChg riga,colonna
 //   Tangent f(x),x   Normal f(x),x   Inverse f(x)
+// v1.12.0:
+//   Graph Y> Y< Y≥ Y≤ X> X< X≥ X≤ f    G∫dx f(x),a,b
+//   SketchNormal | SketchThick | SketchBroken | SketchDot | SketchThin [comando]
+//   StoPict n   RclPict n   BG-Pict n   RclCapt n
+//   DrawGraph   DrawStat   DrawDyna   DrawR-Con   DrawR-Plt   DrawWeb   DrawFTG-Con   DrawFTG-Plt
+//   G-SelOn n   G-SelOff n
+// PxlTest( e' una funzione del valutatore (ServiceResolver::pixelTest).
 // Riga e colonna sono pixel della schermata del grafico (1..282, 1..320).
 // Ogni comando e' tutto o niente: errori di sintassi o di calcolo (Syntax
 // ERROR, Math ERROR, Memory ERROR con 64 elementi SKETCH o 10 grafici) non
@@ -30,10 +37,16 @@ namespace fx::graphcmd {
 // Vero se il testo inizia con un comando grafico (grafia della fx-CG50, con o
 // senza lo spazio dopo il nome: "Plot 1,2" e "Plot1,2").
 bool isCommand(const std::string& text);
+// v1.12.0: byte del testo occupati dal nome del comando (con l'eventuale
+// prefisso di stile e gli spazi che seguono), 0 se il testo non e' un comando.
+// L'editor ne fa un solo token, cosi' la riga si mostra "G∫dx x,0,2".
+std::size_t keywordLength(const std::string& text);
 // Esegue il comando sui dati di GRAPH del workspace e chiede la schermata del
 // grafico (GraphState::commandScreen). Lancia SyntaxError / MathError con la
 // posizione nel testo.
 void execute(Workspace& ws, const std::string& text);
+// Cartella delle catture dello schermo di Run-Matrix (CAPTURE, RclCapt n).
+constexpr const char* CaptureFolder = "PICOCALC/CAPT";
 // Nomi dei comandi per il menu SKETCH di Run-Matrix (terminati da nullptr).
 const char* const* menuNames() noexcept;
 

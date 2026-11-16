@@ -1,4 +1,4 @@
-# Architettura delle applicazioni — v1.12.0
+# Architettura delle applicazioni — v1.13.0
 
 Questo documento descrive **come sono costruite tutte le modalità** (quelle
 disponibili e quelle future), quali servizi condivisi usano, quali dati si
@@ -67,7 +67,7 @@ display) → `tick()` per lavoro periodico (rete) → `leave()`.
 
 | Servizio | Header | Usato da |
 |---|---|---|
-| Expression | `expression.hpp`, `expression_ast.hpp` | tutte le modalità di calcolo: **un solo** parser e valutatore |
+| Expression | `expression.hpp`, `expression_ast.hpp`, `calc_library.hpp` (v1.13.0: CONVERT, distribuzioni, PROB, TVM, nomi del CATALOG; funzioni pure senza stato) | tutte le modalità di calcolo: **un solo** parser e valutatore |
 | Exact | `exact.hpp` | Run-Matrix (frazioni, radicali, π), Equation (v1.12.0); previsto per eActivity, Program |
 | Editor | `natural_editor.hpp`, `line_editor.hpp` | Run-Matrix, Graph, Equation (celle e Solver tramite `MathField`, v1.12.0), form |
 | MathRender | `math_renderer.hpp` | Run-Matrix, Graph, Symbols |
@@ -105,12 +105,13 @@ nessuna allocazione dinamica nei percorsi ricorsivi; limiti espliciti
 | `Functions` | Y1–Y20: tipo (12), espressione, Yt, selezione, colore, stile | Graph, Table, Statistics (copia della regressione) | Graph, Table |
 | `View` | V-Window (con T e Xdot) | Graph, Table (GPH-CON/PLT); Run-Matrix solo con il comando `ViewWindow` tramite `graph_commands` (v1.11.0) | Graph, Table; Run-Matrix in sola lettura via `NameResolver` (VARS › V-WIN, `Xdot`) |
 | `Table` | Start/End/Step, variabile (range/lista), tipo, righe generate, richiesta GPH-CON/PLT | Table, Graph (progetto) | Table, Graph |
-| `Lists` | List 1–26 e i sottonomi (v1.11.0) | Statistics (anche CSV), Table (LISTMEM), Run-Matrix tramite `storeList` | Statistics, Graph e Table (grafici e tabelle da lista), Run-Matrix tramite `CollectionResolver` |
+| `Lists` | List 1–26 e i sottonomi (v1.11.0), List File 1–6 (v1.13.0) | Statistics (anche CSV), Table (LISTMEM), System (List File), Run-Matrix tramite `storeList` e `selectListFile` | Statistics, Graph e Table (grafici e tabelle da lista), Run-Matrix tramite `CollectionResolver` (anche `List "nome"` con `listByName`) |
 | `Graph` | Setup di Graph, memorie V-Window e grafiche, SKETCH, immagine richiamata, progetto aperto, grafici dei comandi di Run-Matrix (v1.11.0) | Graph; Run-Matrix solo tramite `graph_commands` (comandi grafici) | Graph, Table (Setup Derivative) |
 | `Equation` | coefficienti con forma esatta, equazione e limiti del Solver, ultime soluzioni (record v8) | Equation | Equation; Run-Matrix solo tramite `CollectionResolver` (VARS › SimRes, SimCoef, PlyRes, PlyCoef) |
 | `Chat` | conversazione AI | AI Chat | AI Chat |
 | `Graph3D` | Z1–Z3, selezione, finestra x/y/z, griglia, vista (rotazione, zoom) | 3D Graph | 3D Graph, Memory |
 | `Matrices` (v1.10.0) | Mat A–Z, Vct A–Z, MatAns, VctAns, ListAns | Run-Matrix (calcoli ed editor MAT/VCT) | Run-Matrix, Memory |
+| `Strings` (v1.13.0) | Str 1–20, function memory f1–f20, variabili di modo (Dyna, Recursion, TVM) | Run-Matrix tramite `setString`, `setFunctionMemory`, `setRecursionFormula`, `storeSystemVariable` | Run-Matrix (VARS, `functionMemory` tramite `ServiceResolver`), GRAPH (DrawDyna/DrawR tramite `graph_commands`) |
 
 Memory e System (RESET) possono cancellare ogni sezione. Le variabili di altre
 modalità entrano in un'espressione **solo** tramite `NameResolver`
@@ -124,12 +125,14 @@ e le memorie Ans) e si assegnano solo con i metodi controllati del workspace
 Run-Matrix legge e scrive le liste di Statistics senza accedere a `ws.lists`.
 Non esistono sistemi di variabili separati per modalità.
 
-Persistenza: `serializeWorkspace()` (versione 8 dalla v1.12.0 con i dati di
+Persistenza: `serializeWorkspace()` (versione 9 dalla v1.13.0 con List File,
+stringhe, function memory, variabili di modo, viste ENG/∠/a+bi e decimali
+delle celle; versione 8 dalla v1.12.0 con i dati di
 EQUATION in coda; versione 7 dalla v1.11.0 con Base-N,
 Simplify, CSV, List 7–26, sottonomi, forme esatte delle memorie e grafici dei
 comandi; versione 6 dalla v1.10.0 con Input/Output, matrici e vettori; versione 5 dalla v1.9.0 con 3D Graph e archivio dei file;
-le versioni 1 della v1.6.0, 2 della v1.7.0, 3 e 4 della v1.8.0 e 5 della v1.9.0
-vengono ancora lette) → `RecordStore` con due slot e CRC-32. I file
+le versioni 1 della v1.6.0, 2 della v1.7.0, 3 e 4 della v1.8.0, 5 della v1.9.0,
+6 della v1.10.0 e 7 della v1.11.0 vengono ancora lette) → `RecordStore` con due slot e CRC-32. I file
 dell'utente (progetti GRAPH, immagini) sono sulla microSD o nella flash interna
 (LittleFS), scelta in SYSTEM, tramite il servizio Files ([STORAGE.md](STORAGE.md)).
 

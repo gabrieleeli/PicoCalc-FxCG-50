@@ -34,6 +34,13 @@ inline constexpr std::size_t kListMaxLength = board::config::kIsPicoPlus2W ? 999
 inline constexpr std::size_t kListCount = 26;
 inline constexpr std::size_t kListStoreElements = board::config::kIsPicoPlus2W ? 20000 : 1530;
 inline constexpr std::size_t kListNameLength = 8;      // sottonome di una lista (fx-CG50: 8 caratteri)
+// v1.12.0 (record v8): List File 1-6 della fx-CG50. Il budget kListStoreElements
+// vale per le liste di tutti i file insieme (stessa RAM e stesso record).
+inline constexpr std::size_t kListFiles = 6;
+inline constexpr std::size_t kFunctionMemories = 20;   // f1-f20 (OPTN › FUNCMEM)
+inline constexpr std::size_t kStrings = 20;            // Str 1-20 (VARS › Str)
+inline constexpr std::size_t kStringLength = 255;      // caratteri di una stringa (fx-CG50: 255)
+inline constexpr std::size_t kFunctionMemoryLength = 255;
 inline constexpr std::size_t kChatMessages = 30;   // AI conversation (the relay keeps the last 20 turns)
 // Matrici e vettori di Run-Matrix (Mat A-Z, Vct A-Z, MatAns, VctAns; record
 // v6). Le due schede non hanno la stessa memoria: il Pico 2 W li tiene nel suo
@@ -45,6 +52,14 @@ inline constexpr std::size_t kMatrixStoreElements = board::config::kIsPicoPlus2W
 // Risultati mostrati in forma naturale nella cronologia (fx-CG50: matrici fino
 // a 6 x 6, vettori fino a 6 elementi, liste fino a 20); i risultati piu' grandi
 // si leggono dalle memorie delle risposte (MatAns, VctAns, ListAns).
+// v1.12.0: forme esatte delle celle (1/3, 2√3, π/4) di tutte le memorie di
+// matrici, vettori e risposte insieme. Nessun limite per singola memoria (la
+// v1.11.0 si fermava a 64 elementi): conta solo la memoria della scheda
+// (~26 byte per forma nel record: 10 KB sul Pico 2 W, 104 KB sulla Plus).
+inline constexpr std::size_t kExactStoreElements = board::config::kIsPicoPlus2W ? 4000 : 400;
+// v1.12.0: punti di DrawStat / DrawR / DrawFTG (elementi SKETCH "Data") di
+// tutta la schermata del grafico (8 byte a punto nel record).
+inline constexpr std::size_t kSketchDataPoints = board::config::kIsPicoPlus2W ? 4000 : 1000;
 inline constexpr std::size_t kNaturalMatrixDim = 6;
 inline constexpr std::size_t kNaturalListLength = 20;
 

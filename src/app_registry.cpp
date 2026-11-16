@@ -29,8 +29,10 @@ const AppInfo kApps[AppCount] = {
     {AppId::RunMatrix, "Run-Matrix", "1", rgb888To565(232, 96, 30), AppStatus::Available,
      "Calcoli e risultati: input Math o Line, risultati esatti e decimali, matrici, vettori e liste con l'editor MAT/VCT e i CSV, schermate MatAns/ListAns, cronologia modificabile, variabili, Base-N intera, simboli ingegneristici, Simp, DMS, comandi grafici disegnati da Graph",
      nullptr, s::Expression | s::Exact | Ui | s::MathRender | s::MathCore | s::RunCore | s::Storage | s::Files | s::GraphCmd,
-     // View e Graph: scritti solo dai comandi grafici tramite graph_commands.hpp (mai direttamente)
-     d::Settings | d::Memory | d::History | d::Matrices | d::View | d::Graph, linkTo(AppId::Graph), kRunMatrixSrc},
+     // View, Table e Graph: scritti solo dai comandi grafici (graph_commands.hpp) e da
+     // storeSystemVariable (->Xmax, ->TblStart, ->Xfct), mai direttamente; Lists solo con
+     // i metodi del workspace (List "QTY", n->Dim List, Fill); Strings: Str, f1-f20, Dyna/Recursion/TVM.
+     d::Settings | d::Memory | d::History | d::Matrices | d::View | d::Table | d::Graph | d::Lists | d::Strings, linkTo(AppId::Graph), kRunMatrixSrc},
     {AppId::Statistics, "Statistics", "2", rgb888To565(30, 160, 90), AppStatus::Available,
      "Liste 1-26 con sottonomi e file CSV, statistiche 1/2 variabili, regressioni, grafici statistici, distribuzioni, test e intervalli",
      nullptr, s::Expression | Ui | s::Stats | s::Storage | s::Files, d::Settings | d::Lists | d::Functions, 0, kStatisticsSrc},
@@ -115,7 +117,7 @@ const AppInfo kApps[AppCount] = {
      "Guida di simboli e funzioni", nullptr, s::Widgets | s::Help, 0, 0, kSymbolsSrc},
 };
 
-const char* const kHExpression[] = {"expression.hpp", "expression_ast.hpp", "value.hpp", nullptr};
+const char* const kHExpression[] = {"expression.hpp", "expression_ast.hpp", "value.hpp", "calc_library.hpp", nullptr};
 const char* const kHExact[] = {"exact.hpp", nullptr};
 const char* const kHEditor[] = {"natural_editor.hpp", "line_editor.hpp", nullptr};
 const char* const kHRender[] = {"math_renderer.hpp", nullptr};
@@ -147,12 +149,18 @@ const ServiceInfo kServices[service::Count] = {
     {s::Graph3D, "Graph3D", kHGraph3D}, {s::Hardware, "Hardware", kHHardware}, {s::GraphCmd, "GraphCmd", kHGraphCmd},
     {s::EquationCore, "EquationCore", kHEquation},
 };
-const char* const kDataNames[data::Count] = {"settings", "memory", "history", "functions", "view", "table", "lists", "equation", "chat", "graph", "graph3d", "matrices"};
+const char* const kDataNames[data::Count] = {"settings", "memory", "history", "functions", "view", "table", "lists", "equation", "chat", "graph", "graph3d", "matrices", "strings"};
 // Membri e metodi del workspace che non hanno il nome di una sezione (v1.11.0).
 struct MemberSection { const char* member; std::uint32_t section; };
 const MemberSection kMembers[] = {
     {"listNames", d::Lists}, {"listName", d::Lists}, {"setListName", d::Lists}, {"setList", d::Lists},
     {"checkListLength", d::Lists}, {"listFits", d::Lists}, {"listElements", d::Lists},
+    // v1.12.0: List "QTY", List File 1-6, Str, function memory, variabili di sistema
+    {"listByName", d::Lists}, {"selectListFile", d::Lists}, {"listFiles", d::Lists},
+    {"setString", d::Strings}, {"functionMemories", d::Strings}, {"setFunctionMemory", d::Strings}, {"modeVars", d::Strings}, {"setRecursionFormula", d::Strings}, {"functionMemory", d::Strings},
+    // Una variabile di sistema puo' essere della V-Window, di TABLE, di GRAPH (Xfct) o di Dyna/Recursion/TVM.
+    {"storeSystemVariable", d::View | d::Table | d::Graph | d::Strings},
+    {"statisticVariable", d::Settings | d::Lists}, {"pixelProbe", d::Graph},
 };
 } // namespace
 

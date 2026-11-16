@@ -198,7 +198,12 @@ int main() {
         const char* forbidden[] = {"GraphApp", "TableApp", "StatisticsApp", "ConversionApp", "EquationApp", "stats::", "sample2D",
                                    "sample3DSurface", "GraphFunction", "ViewWindow", "TableRange", "ws.view", "ws.table", "ws.lists",
                                    "ws.functions", "ws.equation", "ws.graph", "SketchItem", "CommandGraph", "graph::", "pointa::",
-                                   "drawPlot", "canvas.line", "c.line(", "c.circle(", "mathSegment"};
+                                   "drawPlot", "canvas.line", "c.line(", "c.circle(", "mathSegment",
+                                   // v1.12.0: List File, Str, function memory, variabili di Dyna/Recursion/TVM e
+                                   // PxlTest( solo tramite i metodi del workspace e i servizi del valutatore
+                                   "ws.listFiles", "ws.listNames", "ws.modeVars", "ws.functionMemories", "pixelProbe",
+                                   "selectListFile", "ws.settings.listFile", "probePixel", "class Lexer", "class Parser",
+                                   "statistics.hpp", "solvers.hpp", "table_model.hpp"};
         bool usesInterpreter = false, opensGraph = false;
         for (const char* const* src = appInfo(AppId::RunMatrix).sources; *src; ++src) {
             const std::string code = codeOnly(readFile(*src));
@@ -243,6 +248,14 @@ int main() {
         CHECK(runCode.find("eq::") == std::string::npos && runCode.find("equation.hpp") == std::string::npos);
         const std::string wsCode = codeOnly(readFile("src/workspace.cpp"));
         CHECK(wsCode.find("Memory::Equation") != std::string::npos && wsCode.find("eq::toMatrix") != std::string::npos);
+        // v1.13.0: VARS › EQUATION ha un solo percorso (le matrici di EQUATION via
+        // CollectionResolver); nessun secondo calcolo dei risultati nel workspace o nel valutatore.
+        for (const char* src : {"src/expression.cpp", "src/workspace.cpp", "src/calc_library.cpp", "src/apps/run_matrix_app.cpp"}) {
+            const std::string code = codeOnly(readFile(src));
+            ::testutil::report(code.find("eq_sim") == std::string::npos && code.find("eq_ply") == std::string::npos,
+                               "VARS EQUATION has a single path (Memory::Equation)", src, 0, "eq_sim/eq_ply");
+        }
+        CHECK(wsCode.find("solveLinearSystem") == std::string::npos && wsCode.find("polynomialRoots") == std::string::npos);
         // I nomi SimRes... sono token dello stesso lexer.
         CHECK(codeOnly(readFile("src/expression.cpp")).find("equationMatrixName") != std::string::npos);
         // Nessun'altra modalita' disponibile usa il motore di EQUATION.
@@ -269,18 +282,40 @@ int main() {
         const char* engine[] = {"expression.hpp", "exact.hpp", "expression_ast.hpp", "memory.hpp", "math_engine.hpp", "number_format.hpp",
                                 "solvers.hpp", "statistics.hpp", "run_matrix.hpp", "workspace.hpp", "storage.hpp", "app_models.hpp",
                                 "graph_model.hpp", "graph_engine.hpp", "graph_solve.hpp", "file_store.hpp", "graph_file.hpp", "pict.hpp",
-                                "sd_card.hpp", "fatfs_store.hpp", "value.hpp", "csv_io.hpp", "graph_commands.hpp", "equation.hpp"};
+                                "sd_card.hpp", "fatfs_store.hpp", "value.hpp", "csv_io.hpp", "graph_commands.hpp", "calc_library.hpp", "equation.hpp", "limits.hpp"};
         const char* engineSrc[] = {"src/expression.cpp", "src/exact.cpp", "src/memory.cpp", "src/math_engine.cpp", "src/number_format.cpp",
                                    "src/solvers.cpp", "src/statistics.cpp", "src/run_matrix.cpp", "src/workspace.cpp", "src/storage.cpp", "src/app_models.cpp",
                                    "src/graph_model.cpp", "src/graph_engine.cpp", "src/graph_solve.cpp", "src/file_store.cpp", "src/graph_file.cpp", "src/pict.cpp",
                                    "src/sd_card.cpp", "src/fatfs_store.cpp", "src/value.cpp", "src/csv_io.cpp", "src/graph_commands.cpp",
-                                   "src/equation.cpp"};
+                                   "src/calc_library.cpp", "src/equation.cpp"};
         for (const char* h : engine)
             for (const auto& inc : includesOf(codeOnly(readFile(std::string("include/") + h))))
                 ::testutil::report(appLayer.count(inc) == 0, "engine header independent of the UI", h, 0, inc);
         for (const char* s : engineSrc)
             for (const auto& inc : includesOf(codeOnly(readFile(s))))
                 ::testutil::report(appLayer.count(inc) == 0, "engine source independent of the UI", s, 0, inc);
+        // v1.12.0: un solo parser, un solo AST, un solo valutatore. Nessun altro
+        // sorgente definisce un lexer o un parser di espressioni, e la libreria
+        // delle funzioni (calc_library) e' puro calcolo: niente workspace ne' parser.
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(kRoot + "/src")) {
+            if (entry.path().extension() != ".cpp") continue;
+            const std::string rel = entry.path().lexically_relative(kRoot).string();
+            if (rel == "src/expression.cpp") continue;
+            const std::string code = codeOnly(readFile(rel));
+            for (const char* f : {"class Lexer", "class Parser", "struct Lexer", "struct Parser", "evalNode<", "CollEval<"})
+                ::testutil::report(code.find(f) == std::string::npos, "single parser and evaluator", rel.c_str(), 0, f);
+        }
+        {
+            const std::string lib = codeOnly(readFile("src/calc_library.cpp")) + codeOnly(readFile("include/calc_library.hpp"));
+            for (const char* f : {"workspace.hpp", "parseExpression", "evaluateReal", "evaluateAny", "Workspace"})
+                ::testutil::report(lib.find(f) == std::string::npos, "calc_library is pure computation", "src/calc_library.cpp", 0, f);
+            // I comandi grafici valutano gli argomenti con il parser unico.
+            const std::string cmd = codeOnly(readFile("src/graph_commands.cpp"));
+            CHECK(cmd.find("parseExpression(") != std::string::npos && cmd.find("evaluateReal(") != std::string::npos);
+            // PxlTest(: solo l'AppManager collega la schermata di GRAPH al valutatore.
+            CHECK(codeOnly(readFile("src/app_manager.cpp")).find("pixelProbe") != std::string::npos);
+            CHECK(codeOnly(readFile("src/apps/graph_plot.cpp")).find("probePixel") != std::string::npos);
+        }
         // Include graph of include/*.hpp is acyclic.
         std::map<std::string, std::vector<std::string>> graph;
         for (const auto& entry : std::filesystem::directory_iterator(kRoot + "/include")) {

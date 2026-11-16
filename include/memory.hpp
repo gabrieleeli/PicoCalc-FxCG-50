@@ -12,6 +12,10 @@ struct ExactSlot { exact::Value value; bool valid{false}; bool decimal{false}; }
 class CalculatorMemory {
 public:
  static constexpr std::size_t VariableCount=26;
+ // v1.12.0: le variabili r e θ della fx-CG50 (28 variabili in tutto), indicate da questi codici.
+ static constexpr char RSlot='\x01';
+ static constexpr char ThetaSlot='\x02';
+ static constexpr std::size_t SlotCount=VariableCount+2;
  // Stores an approximate value (the exact companion is dropped).
  void store(char name,double value);
  // Stores a value together with its exact form.
@@ -41,9 +45,9 @@ public:
  void addToIndependentMemory(double value) { independent_+=value; }
  void subtractFromIndependentMemory(double value) { independent_-=value; }
 private:
- std::array<double,VariableCount> vars_{};
- std::array<bool,VariableCount> used_{};
- std::array<ExactSlot,VariableCount> exact_{};
+ std::array<double,SlotCount> vars_{};
+ std::array<bool,SlotCount> used_{};
+ std::array<ExactSlot,SlotCount> exact_{};
  ExactSlot exactAns_{}, exactPreAns_{};
  double answer_{}, previousAnswer_{}, independent_{};
  double answerImag_{}, previousAnswerImag_{};

@@ -46,6 +46,15 @@ unsigned integerBaseOf(std::uint8_t baseMode) noexcept;
 // risultato con "F=n"), frazioni non ridotte con Simplify Manual, comandi
 // grafici (Plot, F-Line, Graph Y=..., vedi graph_commands.hpp: la riga mostra
 // "Done" e RunOutcome::graphics chiede la schermata del grafico).
+//
+// v1.12.0: piu' istruzioni separate da ":" (si mostra l'ultimo risultato) o
+// da "◢" (il risultato prima di ◢ si mostra in HistoryEntry::displays);
+// destinazioni r, θ, Str n, f1-f20 (si memorizza il testo dell'espressione),
+// le variabili di sistema (Xmin, Xfct, TblStart, D Start, R Start, a0, n,
+// I%...), "n→Dim List k", List "QTY"; stringhe ("ABC", Str 1) come risultato;
+// Fill(v, Mat A / List n) che modifica la memoria; i comandi delle righe
+// Swap, *Row, *Row+, Row+ sulle matrici; Simplify Manual con le regole di
+// evaluateUnreducedFraction().
 RunOutcome evaluateEntry(Workspace& ws, const std::string& expression, HistoryEntry& entry, const EntryOptions& options = {});
 // evaluateEntry() + append to the workspace history.
 RunOutcome runCalculation(Workspace& ws, const std::string& expression);
@@ -68,7 +77,16 @@ enum ResultView : std::uint8_t {
     ViewDms = 5,
     ViewExact = 6,      // exact form requested with S<->D (also for decimal input)
     ViewPeriodic = 7,   // repeating decimal of a rational: 0.1(6)
+    // v1.12.0
+    ViewEng = 8,        // ENG / ENG←: notazione ingegneristica con HistoryEntry::engShift
+    ViewPolar = 9,      // ►r∠θ di un risultato complesso
+    ViewRect = 10,      // ►a+bi di un risultato complesso
 };
+// ENG (+1) / ENG← (-1) sul risultato (OPTN › ESYM): l'esponente cambia di 3.
+// False quando il risultato non e' un numero reale.
+bool shiftEngineering(HistoryEntry& entry, int direction);
+// ►r∠θ / ►a+bi: vista polare o rettangolare di un risultato complesso.
+bool setComplexView(HistoryEntry& entry, bool polar);
 
 // True when the entry currently shows its exact form (fraction, surd, pi).
 bool showsExact(const HistoryEntry& entry, const Settings& settings);

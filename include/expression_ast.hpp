@@ -1,8 +1,10 @@
 #pragma once
+#include <cctype>
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
 #include <stdexcept>
+#include <cstring>
 #include <string>
 #include <utility>
 #include <vector>
@@ -47,7 +49,9 @@ inline bool validShape(const Node& n) noexcept {
     case Kind::Fraction: case Kind::Power: case Kind::Subscript: case Kind::Binary: return count==2;
     case Kind::Radical: case Kind::Group: case Kind::Unary: return count==1;
     case Kind::Call: return !n.text.empty() && count>=1;
-    case Kind::Calculus: return (n.text=="derivative"&&count==2)||((n.text=="integral"||n.text=="sum"||n.text=="prod")&&count==3);
+    // v1.12.0: d²/dx² (due campi) e Σ/Π con la variabile (espressione, variabile, inizio, fine).
+    case Kind::Calculus: return ((n.text=="derivative"||n.text=="derivative2")&&count==2)||(n.text=="integral"&&count==3)||
+                                ((n.text=="sum"||n.text=="prod")&&(count==3||count==4));
     }
     return false;
 }
@@ -67,19 +71,65 @@ struct SerializeMap {
 };
 
 namespace detail {
+// Testi che dopo un operando non formano una moltiplicazione implicita.
+inline const char* const* nonFactorTexts(std::size_t& count) {
+    static const char* const ops[]={"+","-","*","/","^",")","]","}",",","=","<",">","!","%","\xC3\x97","\xC3\xB7","\xE2\x88\x92",
+        "\xE2\x89\xA4","\xE2\x89\xA5","\xE2\x89\xA0","\xE2\x86\x92","\xE2\x8C\x9F","\xE2\x96\xB6","'","\xC2\xB0"," ",":","\xE2\x97\xA2"};
+    count=sizeof(ops)/sizeof(ops[0]);
+    return ops;
+}
 // Vero quando il nodo, scritto subito dopo un altro operando, forma una
 // moltiplicazione implicita (variabile, numero, funzione, parentesi, modello).
 inline bool implicitFactor(const Node* n) {
     if(!n) return false;
     if(n->kind!=Kind::Token) return n->kind!=Kind::Row;
     if(n->text.empty()) return false;
-    static const char* const ops[]={"+","-","*","/","^",")","]","}",",","=","<",">","!","%","\xC3\x97","\xC3\xB7","\xE2\x88\x92",
-        "\xE2\x89\xA4","\xE2\x89\xA5","\xE2\x89\xA0","\xE2\x86\x92","\xE2\x8C\x9F","\xE2\x96\xB6","'","\xC2\xB0"," "};
-    for(const char* o:ops) if(n->text==o) return false;
+    std::size_t count=0;
+    const char* const* ops=nonFactorTexts(count);
+    for(std::size_t k=0;k<count;++k) if(n->text==ops[k]) return false;
     const unsigned char c=static_cast<unsigned char>(n->text[0]);
     if(c=='#') return false;                                   // simbolo ingegneristico postfisso
     if(n->text=="and"||n->text=="or"||n->text=="xor"||n->text=="xnor"||n->text=="Rmdr") return false;
     return true;
+}
+// La stessa regola sul testo lineare: il testo da pos comincia con un fattore implicito.
+inline bool implicitFactorText(const std::string& s, std::size_t pos) {
+    if(pos>=s.size()) return false;
+    std::size_t count=0;
+    const char* const* ops=nonFactorTexts(count);
+    for(std::size_t k=0;k<count;++k) if(s.compare(pos,std::strlen(ops[k]),ops[k])==0) return false;
+    if(s[pos]=='#') return false;
+    for(const char* w:{"and","or","xor","xnor","Rmdr"}) if(s.compare(pos,std::strlen(w),w)==0) return false;
+    return true;
+}
+// v1.12.0, manuale 1-23: una frazione accostata a un operando (2[1/3], [1/2]x)
+// e' un fattore intero della moltiplicazione implicita: nel testo lineare va
+// tra parentesi ("2((1)/(3))"), cosi' 6÷2[1/3] resta 6÷(2×1/3) come sulla
+// calcolatrice. L'import dell'editor toglie le stesse parentesi.
+inline bool operandToken(const std::string& t) {
+    if (t.empty()) return false;
+    const unsigned char c = static_cast<unsigned char>(t[0]);
+    if (std::isalnum(c) || c == '.' || c == '#' || c == '@' || c == '"') return true;
+    if (t == ")" || t == "]" || t == "}" || t == "!") return true;
+    static const char* const symbols[] = {"\xCF\x80", "\xCE\xB8", "\xC2\xB0", "\xCA\xB3", "\xE1\xB5\x8D", "\xE2\x80\xB2", "\xE2\x80\xB3", "\xE2\x8C\x9F"};
+    for (const char* sym : symbols) if (t == sym) return true;
+    return false;
+}
+inline bool operandBefore(const Node& n) { return n.kind == Kind::Token ? operandToken(n.text) : true; }
+inline bool operandAfter(const Node& n) {
+    if (n.kind != Kind::Token) return true;
+    if (n.text.empty()) return false;
+    const unsigned char c = static_cast<unsigned char>(n.text[0]);
+    if (std::isalnum(c) || c == '.' || c == '(' || c == '[' || c == '{' || c == '@') return true;
+    return n.text == "\xCF\x80" || n.text == "\xCE\xB8";
+}
+// La frazione in posizione i della riga ha bisogno delle parentesi implicite.
+inline bool impliedFraction(const Node& row, std::size_t i) {
+    if (row.kind != Kind::Row || i >= row.children.size() || !row.children[i] || row.children[i]->kind != Kind::Fraction) return false;
+    const bool before = i > 0 && row.children[i - 1] && operandBefore(*row.children[i - 1]);
+    const bool after = i + 1 < row.children.size() && row.children[i + 1] &&
+                       (operandAfter(*row.children[i + 1]) || implicitFactor(row.children[i + 1].get()));
+    return before || after;
 }
 inline void serializeInto(const Node& n, std::string& out, SerializeMap* map);
 inline void serializeChild(const Node& n, std::size_t i, std::string& out, SerializeMap* map) {
@@ -97,14 +147,12 @@ inline void serializeInto(const Node& n, std::string& out, SerializeMap* map) {
         if(map){ slot=map->rows.size(); map->rows.push_back({&n, map->path, out.size(), out.size(), {}}); map->rows[slot].childStart.reserve(n.children.size()); }
         for(std::size_t i=0;i<n.children.size();++i){
             if(map) map->rows[slot].childStart.push_back(out.size());
-            // Un modello di frazione seguito da un fattore implicito (1/2 X, 1/2 sqrt 3)
-            // e' racchiuso tra parentesi: nel testo lineare la moltiplicazione
-            // implicita ha la precedenza sulla divisione (fx-CG50) e (1)/(2)X
-            // varrebbe 1/(2X) (v1.12.0).
-            const bool wrap=n.children[i]&&n.children[i]->kind==Kind::Fraction&&i+1<n.children.size()&&implicitFactor(n.children[i+1].get());
-            if(wrap) out+="(";
+            // Frazione accostata a un operando, prima o dopo (2[1/3], [1/2]X, [1/2]√3):
+            // tra parentesi nel testo lineare (manuale 1-23; v1.12.0 e v1.13.0).
+            const bool implied=impliedFraction(n,i);
+            if(implied) out+="(";
             child(i);
-            if(wrap) out+=")";
+            if(implied) out+=")";
         }
         if(map) map->rows[slot].end=out.size();
         return;
@@ -141,8 +189,8 @@ inline void serializeInto(const Node& n, std::string& out, SerializeMap* map) {
         for(std::size_t i=0;i<n.children.size();++i){ if(i) out+=","; child(i); }
         out+="}"; return;
     case Kind::Calculus:
-        out+=n.text; out+="("; child(0); out+=","; child(1);
-        if(n.children.size()==3){ out+=","; child(2); }
+        out+=n.text; out+="(";
+        for(std::size_t i=0;i<n.children.size();++i){ if(i) out+=","; child(i); }
         out+=")"; return;
     }
     throw std::runtime_error("Tipo di nodo VPAM sconosciuto");

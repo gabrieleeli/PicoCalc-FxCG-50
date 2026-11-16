@@ -1,4 +1,5 @@
 #include "natural_editor.hpp"
+#include "graph_commands.hpp"
 #include "expression.hpp"
 #include "math_renderer.hpp"
 #include <algorithm>
@@ -189,6 +190,15 @@ void appendToken(NaturalNode& r, std::string text) {
 void importInto(NaturalNode& target, const std::string& s, int depth, bool linear) {
     if (depth > static_cast<int>(NaturalEditor::MaxTemplateDepth)) throw MathError("Stack ERROR: annidamento eccessivo");
     std::size_t i = 0;
+    // v1.12.0: il nome di un comando grafico all'inizio della riga ("G∫dx ",
+    // "SketchThick F-Line ", "Graph Y>") e' un solo token, con i suoi spazi.
+    if (depth == 0) {
+        const std::size_t lead = s.find_first_not_of(' ');
+        if (lead != std::string::npos) {
+            const std::size_t n = graphcmd::keywordLength(s.substr(lead));
+            if (n) { target.children.push_back(token(s.substr(lead, n))); i = lead + n; }
+        }
+    }
     while (i < s.size()) {
         const unsigned char c = static_cast<unsigned char>(s[i]);
         if (std::isspace(c)) { ++i; continue; }
@@ -220,6 +230,15 @@ void importInto(NaturalNode& target, const std::string& s, int depth, bool linea
             }
             if (done) continue;
         }
+        // v1.12.0: i comandi del testo canonico con "_" (solve_n, norm_pd, v_a, f_1,
+        // str_1...) sono un solo token, mostrato con il nome della calcolatrice.
+        if (std::isalpha(c)) {
+            std::size_t e = i; while (e < s.size() && (std::isalnum(static_cast<unsigned char>(s[e])) || s[e] == '_')) ++e;
+            const std::string word = s.substr(i, e - i);
+            if (word.find('_') != std::string::npos && isReservedWord(lowerCopy(word))) {
+                target.children.push_back(token(lowerCopy(word))); i = e; continue;
+            }
+        }
         if (linear) {
             if (c == '@') {
                 std::size_t e = i + 1;
@@ -236,24 +255,37 @@ void importInto(NaturalNode& target, const std::string& s, int depth, bool linea
             const std::size_t next = importMatrix(target, s, i, depth);
             if (next != std::string::npos) { i = next; continue; }
         }
-        // "(a)/(b)" -> fraction, "(a)^(b)" -> power. "((a)/(b))" e' una frazione
-        // che il serializzatore ha racchiuso perche' seguita da un fattore implicito.
+        // "(a)/(b)" -> fraction, "(a)^(b)" -> power. "((a)/(b))" accanto a un fattore
+        // implicito e' una frazione che il serializzatore ha racchiuso (vedi sotto).
         if (c == '(') {
             const std::size_t close = matchParen(s, i);
-            if (close != std::string::npos && i + 1 < close && s[i + 1] == '(') {
-                const std::size_t a = matchParen(s, i + 1);
-                if (a != std::string::npos && a + 2 < close && s[a + 1] == '/' && s[a + 2] == '(' && matchParen(s, a + 2) == close - 1) {
-                    auto box = node(Kind::Fraction);
-                    box->children = {importRow(s.substr(i + 2, a - i - 2), depth), importRow(s.substr(a + 3, close - 1 - a - 3), depth)};
-                    target.children.push_back(box); i = close + 1; continue;
-                }
-            }
             if (close != std::string::npos && close + 2 < s.size() && (s[close + 1] == '/' || s[close + 1] == '^') && s[close + 2] == '(') {
                 const std::size_t close2 = matchParen(s, close + 2);
                 if (close2 != std::string::npos) {
                     auto box = node(s[close + 1] == '/' ? Kind::Fraction : Kind::Power);
                     box->children = {importRow(s.substr(i + 1, close - i - 1), depth), importRow(s.substr(close + 3, close2 - close - 3), depth)};
                     target.children.push_back(box); i = close2 + 1; continue;
+                }
+            }
+            // v1.12.0: un gruppo "( )" che contiene modelli (frazioni, potenze, radici...)
+            // torna un nodo Group, con le parentesi alte quanto il contenuto come sulla
+            // fx-CG50; con contenuto di sola testo resta fatto di token (stesso disegno).
+            const bool afterWord = !target.children.empty() && target.children.back()->kind == Kind::Token &&
+                                   alphaWord(target.children.back()->text);
+            if (close != std::string::npos && !afterWord) {
+                auto inner = importRow(s.substr(i + 1, close - i - 1), depth);
+                const bool templated = std::any_of(inner->children.begin(), inner->children.end(), [](const NodePtr& ch) { return ch && ch->kind != Kind::Token; });
+                if (templated) {
+                    // Parentesi implicite di una frazione accostata a un operando (2((1)/(3))):
+                    // tornano la sola frazione, il serializzatore le rimette.
+                    if (inner->children.size() == 1 && inner->children[0]->kind == Kind::Fraction) {
+                        const bool before = !target.children.empty() && ast::detail::operandBefore(*target.children.back());
+                        const bool after = ast::detail::implicitFactorText(s, close + 1);
+                        if (before || after) { target.children.push_back(inner->children[0]); i = close + 1; continue; }
+                    }
+                    auto g = node(Kind::Group);
+                    g->children = {inner};
+                    target.children.push_back(g); i = close + 1; continue;
                 }
             }
             appendToken(target, "("); ++i; continue;
@@ -305,12 +337,16 @@ void importInto(NaturalNode& target, const std::string& s, int depth, bool linea
                 else if (low == "root" && args.size() == 2) {
                     const long idx = std::strtol(args[0].c_str(), nullptr, 10);
                     if (idx >= 2 && idx <= 99 && std::to_string(idx) == args[0]) { box = node(Kind::Radical, args[0]); box->children = {importRow(args[1], depth)}; }
+                    // v1.12.0: indice non letterale (n+1): il modello ˣ√ con l'indice modificabile.
+                    else { box = node(Kind::Call, "root"); box->children = {importRow(args[0], depth), importRow(args[1], depth)}; }
                 } else if (low == "frac" && args.size() == 2) { box = node(Kind::Fraction); box->children = {importRow(args[0], depth), importRow(args[1], depth)}; }
                 else if (low == "mixed" && args.size() == 3) { box = node(Kind::Call, "mixed"); box->children = {importRow(args[0], depth), importRow(args[1], depth), importRow(args[2], depth)}; }
                 else if (low == "abs" && args.size() == 1) { box = node(Kind::Call, "abs"); box->children = {importRow(inner, depth)}; }
                 else if (low == "log" && args.size() == 2) { box = node(Kind::Call, "log"); box->children = {importRow(args[0], depth), importRow(args[1], depth)}; }
                 else if ((low == "integral" || low == "sum" || low == "prod") && args.size() == 3) { box = node(Kind::Calculus, low); box->children = {importRow(args[0], depth), importRow(args[1], depth), importRow(args[2], depth)}; }
-                else if (low == "derivative" && args.size() == 2) { box = node(Kind::Calculus, "derivative"); box->children = {importRow(args[0], depth), importRow(args[1], depth)}; }
+                // v1.12.0: Σ/Π con la variabile e d²/dx² come modelli
+                else if ((low == "sum" || low == "prod") && args.size() == 4) { box = node(Kind::Calculus, low); box->children = {importRow(args[0], depth), importRow(args[1], depth), importRow(args[2], depth), importRow(args[3], depth)}; }
+                else if ((low == "derivative" || low == "derivative2") && args.size() == 2) { box = node(Kind::Calculus, low); box->children = {importRow(args[0], depth), importRow(args[1], depth)}; }
                 if (box) { target.children.push_back(box); i = next; continue; }
             }
             for (char ch : word) appendToken(target, std::string(1, ch));
@@ -322,6 +358,77 @@ void importInto(NaturalNode& target, const std::string& s, int depth, bool linea
     }
 }
 } // namespace
+
+// ---------------------------------------------------------------- testo Line (v1.12.0)
+// Come ast::serialize ma con le sole parentesi necessarie, come la fx-CG50
+// converte l'input Math in Line: (1)/(3) -> 1/3, (x)^(2) -> x^2, e le
+// parentesi implicite di una frazione accostata a un operando: 2(1/3).
+namespace {
+std::string linearOf(const NaturalNode& n);
+bool simpleText(const std::string& t) {
+    if (t.empty()) return false;
+    for (std::size_t i = 0; i < t.size();) {
+        const unsigned char c = static_cast<unsigned char>(t[i]);
+        const std::size_t len = utf8Len(c);
+        const std::string g = t.substr(i, len);
+        const bool ok = std::isalnum(c) || c == '.' || c == '_' || g == "\xCF\x80" || g == "\xCE\xB8";
+        if (!ok) return false;
+        i += len;
+    }
+    return true;
+}
+std::string part(const NaturalNode& n) {
+    const std::string t = linearOf(n);
+    return simpleText(t) ? t : "(" + t + ")";
+}
+std::string linearOf(const NaturalNode& n) {
+    std::string out;
+    auto child = [&](std::size_t i) { return n.children.size() > i && n.children[i] ? linearOf(*n.children[i]) : std::string(); };
+    switch (n.kind) {
+    case Kind::Row:
+        for (std::size_t i = 0; i < n.children.size(); ++i) {
+            if (!n.children[i]) continue;
+            const bool implied = ast::detail::impliedFraction(n, i);
+            const std::string t = linearOf(*n.children[i]);
+            out += implied ? "(" + t + ")" : t;
+        }
+        return out;
+    case Kind::Token: return n.text;
+    case Kind::Fraction: return part(*n.children.at(0)) + "/" + part(*n.children.at(1));
+    case Kind::Power: return part(*n.children.at(0)) + "^" + part(*n.children.at(1));
+    case Kind::Radical: return (n.text.empty() || n.text == "2" ? "sqrt(" : "root(" + n.text + ",") + child(0) + ")";
+    case Kind::Group: return "(" + child(0) + ")";
+    case Kind::Matrix: {
+        const std::size_t cols = ast::matrixColumns(n);
+        out = "[";
+        for (std::size_t i = 0; i < n.children.size(); ++i) {
+            if (cols && i % cols == 0) out += "["; else out += ",";
+            out += child(i);
+            if (cols && i % cols == cols - 1) out += "]";
+        }
+        return out + "]";
+    }
+    case Kind::List:
+        out = "{";
+        for (std::size_t i = 0; i < n.children.size(); ++i) { if (i) out += ","; out += child(i); }
+        return out + "}";
+    case Kind::Call:
+        if (n.text == "period" && n.children.size() == 1) return "_" + child(0);
+        [[fallthrough]];
+    case Kind::Calculus:
+        out = n.text + "(";
+        for (std::size_t i = 0; i < n.children.size(); ++i) { if (i) out += ","; out += child(i); }
+        return out + ")";
+    default: return ast::serialize(n);
+    }
+}
+} // namespace
+std::string NaturalEditor::linearText() const { return linearOf(*root_); }
+std::string NaturalEditor::toLinearText(const std::string& canonical) {
+    NaturalEditor e;
+    e.setExpression(canonical);
+    return e.linearText();
+}
 
 ast::NodePtr cloneTree(const NaturalNode& n) {
     auto out = ast::make(n.kind, n.text);
@@ -470,7 +577,8 @@ void NaturalEditor::insert(char c) {
     // '{' '}' le liste, '@' inizia un riferimento a una funzione di GRAPH; il
     // parser li rifiuta dove non sono validi.
     // '"' delimita il testo del comando grafico Text (v1.11.0).
-    if (!(std::isalnum(static_cast<unsigned char>(c)) || std::strchr(".+-*/%!,()=<>~[]{}@\"", c) != nullptr))
+    // ':' separa le istruzioni di una riga (v1.12.0, manuale 2-9).
+    if (!(std::isalnum(static_cast<unsigned char>(c)) || std::strchr(".+-*/%!,()=<>~[]{}@\":", c) != nullptr))
         throw std::invalid_argument("Carattere non ammesso nell'espressione");
     pushUndo();
     argumentPending_ = false;
@@ -705,8 +813,16 @@ void NaturalEditor::insertTenPower() {
 }
 void NaturalEditor::insertIntegral() { if (linear_) { insertLinear("integral("); return; } auto n = node(Kind::Calculus, "integral"); n->children = {row(), row(), row()}; insertBox(n, 0); }
 void NaturalEditor::insertDerivative() { if (linear_) { insertLinear("derivative("); return; } auto n = node(Kind::Calculus, "derivative"); n->children = {row(), row()}; insertBox(n, 0); }
-void NaturalEditor::insertSummation() { if (linear_) { insertLinear("sum("); return; } auto n = node(Kind::Calculus, "sum"); n->children = {row(), row(), row()}; insertBox(n, 0); }
-void NaturalEditor::insertProduct() { if (linear_) { insertLinear("prod("); return; } auto n = node(Kind::Calculus, "prod"); n->children = {row(), row(), row()}; insertBox(n, 0); }
+// Σ e Π della fx-CG50: espressione, variabile (proposta x), inizio, fine (v1.12.0).
+void NaturalEditor::insertSummation() {
+    if (linear_) { insertLinear("sum("); return; }
+    auto n = node(Kind::Calculus, "sum"); auto var = row(); var->children.push_back(token("x")); n->children = {row(), var, row(), row()}; insertBox(n, 0);
+}
+void NaturalEditor::insertProduct() {
+    if (linear_) { insertLinear("prod("); return; }
+    auto n = node(Kind::Calculus, "prod"); auto var = row(); var->children.push_back(token("x")); n->children = {row(), var, row(), row()}; insertBox(n, 0);
+}
+void NaturalEditor::insertSecondDerivative() { if (linear_) { insertLinear("derivative2("); return; } auto n = node(Kind::Calculus, "derivative2"); n->children = {row(), row()}; insertBox(n, 0); }
 void NaturalEditor::insertMatrix(std::size_t rows, std::size_t cols) {
     if (rows < 1 || rows > 6 || cols < 1 || cols > 6) throw std::invalid_argument("Modello MAT/VCT: da 1x1 a 6x6");
     if (linear_) {
@@ -728,6 +844,8 @@ void NaturalEditor::setLinear(bool linear) {
     if (linear == linear_) return;
     overwrite_ = false; argumentPending_ = false;
     std::string text;
+    // Il testo canonico (con le parentesi implicite: 2((1)/(3))) rende il passaggio
+    // Math <-> Line esatto in entrambe le direzioni; linearText() e' la forma mostrata.
     try { text = toExpression(); } catch (...) { text.clear(); }
     linear_ = linear;
     selecting_ = false; errorMark_ = Range{};

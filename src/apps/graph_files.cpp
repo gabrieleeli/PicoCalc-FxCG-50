@@ -58,6 +58,7 @@ void GraphApp::saveProject(Context& ctx, const std::string& name) {
     p.vmem = ws.graph.vmem;
     p.vmemUsed = ws.graph.vmemUsed;
     p.sketch = ws.graph.sketch;
+    p.commands = ws.graph.commandGraphs;          // v1.12.0: i grafici dei comandi di Run-Matrix nel progetto
     p.overlay = ws.graph.overlay;
     p.tableStart = ws.table.start; p.tableEnd = ws.table.end; p.tableStep = ws.table.step;
     p.tableFromList = ws.table.variable == TableRange::Variable::List; p.tableList = ws.table.list; p.tableFunc = ws.table.funcType;
@@ -95,6 +96,7 @@ void GraphApp::openProject(Context& ctx, const std::string& name) {
     ws.graph.vmem = p.vmem;
     ws.graph.vmemUsed = p.vmemUsed;
     ws.graph.sketch = p.sketch;
+    ws.graph.commandGraphs = p.commands;
     ws.graph.overlay = p.overlay;
     ws.graph.project = name;
     ws.table.start = p.tableStart; ws.table.end = p.tableEnd; ws.table.step = p.tableStep;

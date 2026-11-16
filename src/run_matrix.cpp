@@ -65,41 +65,6 @@ const ast::Node* unwrapGroups(const ast::Node* n) {
     while (n && n->kind == ast::Kind::Group && n->children.size() == 1 && n->children[0]) n = n->children[0].get();
     return n;
 }
-bool integerToken(const ast::Node* n, std::int64_t& v) {
-    n = unwrapGroups(n);
-    if (!n || n->kind != ast::Kind::Token || n->text.empty() || n->text.size() > 15) return false;
-    for (char c : n->text) if (c < '0' || c > '9') return false;
-    v = std::strtoll(n->text.c_str(), nullptr, 10);
-    return true;
-}
-// La frazione come e' stata scritta: a/b, (a)/(b) del modello, a⌟b, a⌟b⌟c, con il segno.
-bool literalFraction(const ast::Node& tree, std::int64_t& num, std::int64_t& den) {
-    const ast::Node* n = unwrapGroups(&tree);
-    bool negative = false;
-    if (n->kind == ast::Kind::Unary && n->text == "-" && n->children.size() == 1 && n->children[0]) { negative = true; n = unwrapGroups(n->children[0].get()); }
-    if (n->kind == ast::Kind::Binary && n->text == "/" && n->children.size() == 2) {
-        if (!integerToken(n->children[0].get(), num) || !integerToken(n->children[1].get(), den) || den == 0) return false;
-    } else if (n->kind == ast::Kind::Token && n->text.find(kFractionMark) != std::string::npos) {
-        std::int64_t part[3] = {}; int count = 0;
-        std::size_t i = 0;
-        while (count < 3) {
-            std::size_t e = i;
-            while (e < n->text.size() && n->text[e] >= '0' && n->text[e] <= '9') ++e;
-            if (e == i || e - i > 12) return false;
-            part[count++] = std::strtoll(n->text.substr(i, e - i).c_str(), nullptr, 10);
-            if (e >= n->text.size()) break;
-            if (n->text.compare(e, 3, kFractionMark) != 0) return false;
-            i = e + 3;
-        }
-        if (count == 2) { num = part[0]; den = part[1]; }
-        else if (count == 3) { num = part[0] * part[2] + part[1]; den = part[2]; }
-        else return false;
-        if (den == 0) return false;
-    } else return false;
-    if (negative) num = -num;
-    if (den < 0) { num = -num; den = -den; }
-    return true;
-}
 // "▶Simp" o "▶Simp n" in coda all'espressione.
 struct SimpRequest { bool active{false}; std::int64_t factor{0}; };
 SimpRequest takeSimp(std::string& expr) {
@@ -123,7 +88,10 @@ std::int64_t gcd64(std::int64_t a, std::int64_t b) { a = a < 0 ? -a : a; b = b <
 // Cosa indica la freccia di memorizzazione: A, A~F, Mat A, Vct A, List 1, un
 // loro elemento, o "Dim Mat A" (una lista {righe, colonne} crea una matrice di zeri).
 struct StoreTarget {
-    enum class Kind : std::uint8_t { None, Variables, Memory, Element, Dim } kind{Kind::None};
+    // v1.12.0: System (Xmin, D Start, n...), String (Str n), FunctionMemory (f1-f20).
+    enum class Kind : std::uint8_t { None, Variables, Memory, Element, Dim, System, String, FunctionMemory } kind{Kind::None};
+    std::string system;                                     // System: nome canonico ("xmax", "tvm_pv")
+    std::string subName;                                    // List "QTY": risolto con il workspace
     char first{}, last{};                                   // Variables
     CollectionResolver::Memory memory{CollectionResolver::Memory::Mat};
     int index{};                                            // 0..25
@@ -144,6 +112,7 @@ bool memoryName(const std::string& text, CollectionResolver::Memory& memory, int
     const std::string word = text.substr(0, space), name = text.substr(space + 1);
     if (word == "Mat") memory = Memory::Mat; else if (word == "Vct") memory = Memory::Vct; else if (word == "List") memory = Memory::List; else return false;
     if (name == "Ans") { index = CollectionResolver::Answer; return true; }
+    if (memory == Memory::List && name.size() >= 2 && name.front() == '"') { index = -2; return true; }   // List "QTY"
     if (memory == Memory::List) { index = std::atoi(name.c_str()) - 1; return index >= 0 && index < CollectionResolver::Slots; }
     if (name.size() != 1 || name[0] < 'A' || name[0] > 'Z') return false;
     index = name[0] - 'A';
@@ -156,6 +125,35 @@ StoreTarget parseTarget(const std::string& text) {
     auto letter = [](char c) { return static_cast<char>(std::toupper(static_cast<unsigned char>(c))); };
     auto alpha = [](char c) { return std::isalpha(static_cast<unsigned char>(c)) != 0; };
     if (compact.size() == 1 && alpha(compact[0])) { t.kind = StoreTarget::Kind::Variables; t.first = t.last = letter(compact[0]); return t; }
+    // v1.12.0: r, θ, la variabile scritta esplicitamente (v_a), Str n, f1-f20, variabili di sistema.
+    if (compact == "r_var" || compact == "theta" || compact == "\xCE\xB8") {
+        t.kind = StoreTarget::Kind::Variables;
+        t.first = t.last = compact == "r_var" ? CalculatorMemory::RSlot : CalculatorMemory::ThetaSlot;
+        return t;
+    }
+    if (compact.size() == 3 && compact[0] == 'v' && compact[1] == '_' && compact[2] >= 'a' && compact[2] <= 'z') {
+        t.kind = StoreTarget::Kind::Variables; t.first = t.last = letter(compact[2]); return t;
+    }
+    auto numbered = [&](const char* prefix, int max, int& index) {
+        const std::size_t n = std::strlen(prefix);
+        if (compact.size() <= n || compact.size() > n + 2 || compact.compare(0, n, prefix) != 0) return false;
+        if (!std::all_of(compact.begin() + static_cast<std::ptrdiff_t>(n), compact.end(), [](char c) { return c >= '0' && c <= '9'; })) return false;
+        index = std::atoi(compact.c_str() + n);
+        return index >= 1 && index <= max && compact[n] != '0';
+    };
+    int numberedIndex = 0;
+    if (compact == "rec_an1") { t.kind = StoreTarget::Kind::String; t.index = -1; t.label = "an+1"; return t; }   // "formula"->an+1
+    if (numbered("str_", static_cast<int>(limits::kStrings), numberedIndex)) { t.kind = StoreTarget::Kind::String; t.index = numberedIndex - 1; t.label = "Str " + std::to_string(numberedIndex); return t; }
+    if (numbered("f_", static_cast<int>(limits::kFunctionMemories), numberedIndex)) { t.kind = StoreTarget::Kind::FunctionMemory; t.index = numberedIndex - 1; t.label = "f" + std::to_string(numberedIndex); return t; }
+    {
+        std::string low = compact;
+        for (char& c : low) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        for (const char* const* n = systemVariableNames(); *n; ++n) {
+            if (low != *n || low.compare(0, 4, "list") == 0 || low.compare(0, 5, "stat_") == 0 || low.compare(0, 4, "reg_") == 0 || low == "xdot") continue;
+            t.kind = StoreTarget::Kind::System; t.system = low; t.label = low;
+            return t;
+        }
+    }
     if (compact.size() == 3 && compact[1] == '~' && alpha(compact[0]) && alpha(compact[2])) {
         t.kind = StoreTarget::Kind::Variables; t.first = letter(compact[0]); t.last = letter(compact[2]);
         if (t.last >= t.first) return t;
@@ -175,7 +173,8 @@ StoreTarget parseTarget(const std::string& text) {
         if (ref->kind == ast::Kind::Token && memoryName(ref->text, t.memory, t.index)) {
             if (t.index == CollectionResolver::Answer) throw SyntaxError("Syntax ERROR: le memorie Ans non si assegnano con ->");
             t.label = ref->text;
-            if (t.memory == CollectionResolver::Memory::List) t.label = "List " + std::to_string(t.index + 1);
+            if (t.index == -2) { t.subName = ref->text.substr(6, ref->text.size() - 7); t.label = ref->text; }
+            else if (t.memory == CollectionResolver::Memory::List) t.label = "List " + std::to_string(t.index + 1);
             if (dim) t.kind = StoreTarget::Kind::Dim;
             else if (element) {
                 t.kind = StoreTarget::Kind::Element;
@@ -206,7 +205,7 @@ void storeElement(Workspace& ws, const StoreTarget& t, Complex value, const Eval
         const std::size_t i = indexValue(t.row, ctx, "l'indice");
         // Come sulla fx-CG50 una lista cresce di una cella alla volta.
         if (i > list.size() + 1) throw DimensionError("Dimension ERROR: indice " + std::to_string(i) + " oltre la fine di " + name);
-        if (value.imag() != 0) throw MathError("Math ERROR: le liste contengono solo numeri reali");
+        if (value.imag() != 0) throw MathError("Complex Number In List: le liste contengono solo numeri reali");
         if (i == list.size() + 1) { list.re.push_back(value.real()); list.rows = static_cast<std::uint16_t>(list.re.size()); }
         else list.re[i - 1] = value.real();
         ws.storeList(static_cast<std::size_t>(t.index), list);
@@ -244,14 +243,15 @@ bool naturalSize(const CalcValue& v) {
     if (v.isList()) return v.size() <= limits::kNaturalListLength;
     return v.rows <= limits::kNaturalMatrixDim && v.cols <= limits::kNaturalMatrixDim;
 }
-// Elementi per cui si tenta la valutazione esatta (che ripete il calcolo).
-constexpr std::size_t kExactElements = 64;
+// Elementi per cui si tenta la valutazione esatta (che ripete il calcolo): dalla
+// v1.12.0 il budget delle forme esatte della scheda, non piu' 64.
+constexpr std::size_t kExactElements = CalcValue::ExactElements;
 
 // Riga che fornisce Ans alla riga `previous` (l'ultima senza errore e numerica).
 const HistoryEntry* answerEntry(const Workspace& ws, std::size_t previous) {
     for (std::size_t k = std::min(previous, ws.history.size()); k-- > 0;) {
         const HistoryEntry& h = ws.history[k];
-        if (h.command || h.collection || (!h.error.empty() && h.error[0] != '=')) continue;
+        if (h.command || h.collection || !h.text.empty() || (!h.error.empty() && h.error[0] != '=')) continue;
         return &h;
     }
     return nullptr;
@@ -260,18 +260,7 @@ void scalarResult(Workspace& ws, const std::string& raw, const ast::Node& tree, 
                   const StoreTarget& target, Complex value, RunOutcome& out, HistoryEntry& entry,
                   const SimpRequest& simp, const HistoryEntry* previous, std::uint8_t baseMode) {
     out.value = value;
-    // Pol / Rec at the top level produce a pair, like the fx-CG50.
-    if (tree.kind == ast::Kind::Call && (tree.text == "pol" || tree.text == "rec") && tree.children.size() == 2) {
-        const double a = evaluateReal(*tree.children[0], ctx), b = evaluateReal(*tree.children[1], ctx);
-        const DisplayFormat f = ws.settings.display;
-        if (tree.text == "pol") {
-            const auto p = rectToPolar(a, b);
-            out.pairText = "r=" + formatReal(p.first, f) + "  \xCE\xB8=" + formatReal(p.second, f);
-        } else {
-            const auto p = polarToRect(a, b);
-            out.pairText = "x=" + formatReal(p.first, f) + "  y=" + formatReal(p.second, f);
-        }
-    }
+    // Pol( / Rec( danno una lista {r,θ} / {x,y} in List Ans (v1.12.0, collectionResult).
     // Exact form, evaluated on the same AST. When it exists it is the value:
     // its floating-point image replaces the rounded one (1/3*3 is exactly 1).
     ExactSlot slot;
@@ -299,10 +288,28 @@ void scalarResult(Workspace& ws, const std::string& raw, const ast::Node& tree, 
             storeElement(ws, target, out.value, ctx, &slot);
             out.storedIn = target.label;
             break;
-        case StoreTarget::Kind::Memory:
         case StoreTarget::Kind::Dim:
-            throw TypeError("Type ERROR: in " + target.label + " si memorizza una " +
+            if (target.memory == CollectionResolver::Memory::List) {
+                // n→Dim List k: una lista di n zeri (manuale 3-7).
+                const double len = out.value.real();
+                if (out.value.imag() != 0 || len != std::floor(len) || len < 1 || len > static_cast<double>(limits::kListMaxLength))
+                    throw DimensionError("Dimension ERROR: la lunghezza di una lista va da 1 a " + std::to_string(limits::kListMaxLength));
+                ws.setList(static_cast<std::size_t>(target.index), std::vector<double>(static_cast<std::size_t>(len), 0.0));
+                out.storedIn = target.label;
+                break;
+            }
+            [[fallthrough]];
+        case StoreTarget::Kind::Memory:
+            throw TypeError("Argument ERROR: in " + target.label + " si memorizza una " +
                             (target.memory == CollectionResolver::Memory::List ? "lista {1,2,3}" : "matrice [[1,2][3,4]]") + ", non un numero");
+        case StoreTarget::Kind::System:
+            if (out.value.imag() != 0) throw MathError("Argument ERROR: le variabili di sistema sono reali");
+            if (!ws.storeSystemVariable(target.system, out.value.real())) throw SyntaxError("Syntax ERROR: " + target.label + " non si assegna");
+            out.storedIn = target.label;
+            break;
+        case StoreTarget::Kind::String:
+            throw TypeError("Argument ERROR: in " + target.label + " si memorizza una stringa \"...\"");
+        case StoreTarget::Kind::FunctionMemory: break;      // gestita prima della valutazione
         }
     });
     // Frazione non ridotta: ▶Simp (con o senza fattore) o Simplify Manual.
@@ -311,26 +318,31 @@ void scalarResult(Workspace& ws, const std::string& raw, const ast::Node& tree, 
     exact::Rational r;
     const bool rational = slot.valid && slot.value.rational(r) && !r.isInteger();
     std::int64_t num = 0, den = 0;
-    const bool literal = literalFraction(tree, num, den);
+    // La frazione come la calcolatrice la scrive con Simplify Manual: quella
+    // digitata o il risultato non ridotto delle operazioni tra frazioni
+    // (m.c.m. dei denominatori per + e −, prodotti per × e ÷).
+    const bool unreducedForm = evaluateUnreducedFraction(tree, num, den) && den > 1 && num % den != 0;
     if (simp.active) {
         if (!rational) throw MathError("Math ERROR: \xE2\x96\xB6Simp richiede una frazione");
         // Ans▶Simp riprende la frazione mostrata dalla riga precedente.
         const ast::Node* t = unwrapGroups(&tree);
         if (t->kind == ast::Kind::Token && (t->text == "Ans" || t->text == "ans") && previous && previous->fracDen != 0) { num = previous->fracNum; den = previous->fracDen; }
-        else if (!literal) { num = r.num; den = r.den; }
+        else if (!unreducedForm) { num = r.num; den = r.den; }
         const std::int64_t g = gcd64(num, den);
         std::int64_t f = 1;
         if (simp.factor != 0) {
             f = simp.factor;
+            // Un divisore che non divide entrambi i termini e' un errore (manuale: "An error occurs").
             if (f < 2 || num % f != 0 || den % f != 0)
                 throw MathError("Math ERROR: " + std::to_string(f) + " non divide numeratore e denominatore");
         } else {
             for (std::int64_t p = 2; p <= g / p; ++p) if (g % p == 0) { f = p; break; }
             if (f == 1 && g > 1) f = g;                       // g primo
         }
-        fracNum = num / f; fracDen = den / f; factor = static_cast<std::uint32_t>(f);
-    } else if (ws.settings.simplifyManual && literal && rational) {
-        fracNum = num; fracDen = den;                      // la frazione resta come e' stata scritta
+        // Frazione irriducibile: resta il valore originale, senza "F=" (manuale).
+        fracNum = num / f; fracDen = den / f; factor = f > 1 ? static_cast<std::uint32_t>(f) : 0;
+    } else if (ws.settings.simplifyManual && unreducedForm && rational && ws.settings.complex == ComplexMode::Real) {
+        fracNum = num; fracDen = den;                      // la frazione resta non ridotta
     }
     if (slot.valid) ws.memory.setAnswerExact(out.value.real(), slot.value, slot.decimal);
     else ws.memory.setAnswer(out.value.real(), out.value.imag());
@@ -345,7 +357,7 @@ void scalarResult(Workspace& ws, const std::string& raw, const ast::Node& tree, 
 }
 
 void collectionResult(Workspace& ws, const std::string& raw, const ast::Node& tree, const EvalContext& ctx,
-                      const StoreTarget& target, CalcValue value, RunOutcome& out, HistoryEntry& entry) {
+                      const StoreTarget& target, CalcValue value, RunOutcome& out, HistoryEntry& entry, std::uint8_t baseMode) {
     using Memory = CollectionResolver::Memory;
     out.type = value.type;
     auto result = std::make_shared<CollectionResult>();
@@ -369,9 +381,13 @@ void collectionResult(Workspace& ws, const std::string& raw, const ast::Node& tr
         switch (target.kind) {
         case StoreTarget::Kind::None: break;
         case StoreTarget::Kind::Variables:
-            throw TypeError(std::string("Type ERROR: una ") + valueTypeName(value.type) + " non si memorizza in una variabile A-Z (usa Mat, Vct o List)");
+            throw TypeError(std::string("Argument ERROR: una ") + valueTypeName(value.type) + " non si memorizza in una variabile A-Z (usa Mat, Vct o List)");
         case StoreTarget::Kind::Element:
-            throw TypeError("Type ERROR: in " + target.label + " si memorizza un numero");
+        case StoreTarget::Kind::System:
+            throw TypeError("Argument ERROR: in " + target.label + " si memorizza un numero");
+        case StoreTarget::Kind::String:
+            throw TypeError("Argument ERROR: in " + target.label + " si memorizza una stringa \"...\"");
+        case StoreTarget::Kind::FunctionMemory: break;
         case StoreTarget::Kind::Memory:
             if (target.memory == Memory::List) ws.storeList(slot, value);
             else if (target.memory == Memory::Mat) ws.storeMatrix(slot, value);
@@ -381,7 +397,7 @@ void collectionResult(Workspace& ws, const std::string& raw, const ast::Node& tr
         case StoreTarget::Kind::Dim: {
             // {righe, colonne} -> Dim Mat A: una nuova matrice piena di zeri.
             if (target.memory == Memory::List || !value.isList() || value.size() != 2 || value.complex())
-                throw TypeError("Type ERROR: {righe,colonne}\xE2\x86\x92" "Dim Mat A crea una matrice di zeri");
+                throw TypeError("Argument ERROR: {righe,colonne}\xE2\x86\x92" "Dim Mat A crea una matrice di zeri");
             const double r = value.re[0], c = value.re[1];
             if (r != std::floor(r) || c != std::floor(c) || r < 1 || c < 1 || r > limits::kMatrixMaxDim || c > limits::kMatrixMaxDim)
                 throw DimensionError("Dimension ERROR: dimensioni non valide per " + target.label);
@@ -394,6 +410,7 @@ void collectionResult(Workspace& ws, const std::string& raw, const ast::Node& tr
     });
     entry = HistoryEntry{};
     entry.expression = raw;
+    entry.base = baseMode;                                 // Base-N: elementi mostrati nella base della riga
     // La cronologia conserva cio' che mostra la vista naturale; i risultati piu'
     // grandi si leggono dalla memoria delle risposte (la riga indica dove sono).
     value.exact.clear();                                   // nella cronologia le forme esatte sono in result->exact
@@ -403,13 +420,129 @@ void collectionResult(Workspace& ws, const std::string& raw, const ast::Node& tr
 }
 } // namespace
 
-RunOutcome evaluateEntry(Workspace& ws, const std::string& raw, HistoryEntry& entry, const EntryOptions& options) {
-    const std::size_t lead = raw.find_first_not_of(" \t");
+namespace {
+const char* const kDisplayMark = "\xE2\x97\xA2";      // ◢ comando di visualizzazione
+// Istruzioni di una riga separate da ':' e '◢' al livello 0 (fuori da
+// parentesi, quadre, graffe e virgolette): testo, posizione, risultato mostrato.
+struct Statement { std::string text; std::size_t start{}; bool display{}; };
+std::vector<Statement> splitStatements(const std::string& raw) {
+    std::vector<Statement> out;
+    int depth = 0;
+    bool quoted = false;
+    std::size_t start = 0;
+    for (std::size_t i = 0; i < raw.size(); ++i) {
+        const char c = raw[i];
+        if (c == '"') { quoted = !quoted; continue; }
+        if (quoted) continue;
+        if (c == '(' || c == '[' || c == '{') ++depth;
+        else if (c == ')' || c == ']' || c == '}') --depth;
+        else if (depth <= 0 && (c == ':' || raw.compare(i, 3, kDisplayMark) == 0)) {
+            const bool display = c != ':';
+            out.push_back({raw.substr(start, i - start), start, display});
+            i += display ? 2 : 0;
+            start = i + 1;
+        }
+    }
+    out.push_back({raw.substr(start), start, false});
+    return out;
+}
+// Stringa "..." scritta da sola (o Str n): il testo, false altrimenti.
+bool stringValue(const Workspace& ws, const std::string& expr, std::string& text) {
+    const std::string t = trim(expr);
+    if (t.size() >= 2 && t.front() == '"' && t.back() == '"' && t.find('"', 1) == t.size() - 1) { text = t.substr(1, t.size() - 2); return true; }
+    if (t.size() >= 5 && t.size() <= 6 && t.compare(0, 4, "str_") == 0 && std::all_of(t.begin() + 4, t.end(), [](char c) { return c >= '0' && c <= '9'; })) {
+        const int n = std::atoi(t.c_str() + 4);
+        if (n < 1 || n > static_cast<int>(limits::kStrings)) return false;
+        text = ws.strings[static_cast<std::size_t>(n - 1)];
+        return true;
+    }
+    return false;
+}
+// Comandi delle righe di una matrice (fx-CG50 Swap, *Row, *Row+, Row+):
+//   Swap A,r1,r2   *Row k,A,r   *Row+ k,A,r1,r2   Row+ A,r1,r2
+bool rowCommand(Workspace& ws, const std::string& expr, HistoryEntry& entry, const std::string& raw) {
+    std::string t = trim(expr);
+    int kind = -1;
+    std::size_t skip = 0;
+    if (t.rfind("Swap", 0) == 0) { kind = 0; skip = 4; }
+    else if (t.rfind("*Row+", 0) == 0) { kind = 2; skip = 5; }
+    else if (t.rfind("*Row", 0) == 0) { kind = 1; skip = 4; }
+    else if (t.rfind("Row+", 0) == 0) { kind = 3; skip = 4; }
+    if (kind < 0 || (skip < t.size() && std::isalpha(static_cast<unsigned char>(t[skip])) && t[skip - 1] != '+')) return false;
+    std::vector<std::string> args;
+    std::string cur;
+    int depth = 0;
+    for (std::size_t i = skip; i < t.size(); ++i) {
+        const char c = t[i];
+        if (c == '(' || c == '[' || c == '{') ++depth;
+        if (c == ')' || c == ']' || c == '}') --depth;
+        if (c == ',' && depth == 0) { args.push_back(trim(cur)); cur.clear(); continue; }
+        cur += c;
+    }
+    args.push_back(trim(cur));
+    static const std::size_t counts[] = {3, 3, 4, 3};
+    static const char* const usage[] = {"Swap A,r1,r2", "*Row k,A,r", "*Row+ k,A,r1,r2", "Row+ A,r1,r2"};
+    if (args.size() != counts[kind]) throw SyntaxError(std::string("Syntax ERROR: uso ") + usage[kind], 0, static_cast<int>(raw.size()));
+    const std::size_t matArg = kind == 0 || kind == 3 ? 0 : 1;
+    std::string name = args[matArg];
+    if (name.rfind("Mat", 0) == 0) name = trim(name.substr(3));
+    if (name.size() != 1 || !std::isalpha(static_cast<unsigned char>(name[0]))) throw SyntaxError("Syntax ERROR: serve una matrice A-Z", 0, static_cast<int>(raw.size()));
+    const std::size_t slot = static_cast<std::size_t>(std::toupper(static_cast<unsigned char>(name[0])) - 'A');
+    CalcValue m = ws.matrices.mat[slot];
+    if (m.empty()) throw DimensionError("Dimension ERROR: Mat " + std::string(1, static_cast<char>('A' + slot)) + " non definita");
+    EvalContext ctx = ws.evalContext();
+    auto number = [&](const std::string& a) { return evaluateValue(*parseExpression(a), ctx); };
+    auto row = [&](const std::string& a) {
+        const double r = number(a).real();
+        if (r != std::floor(r) || r < 1 || r > m.rows) throw DimensionError("Dimension ERROR: riga " + a + " fuori dalla matrice");
+        return static_cast<std::size_t>(r) - 1;
+    };
+    const std::size_t cols = m.cols;
+    auto at = [&](std::size_t r, std::size_t c) { return m.at(r * cols + c); };
+    if (kind == 0) {
+        const std::size_t a = row(args[1]), b = row(args[2]);
+        for (std::size_t c = 0; c < cols; ++c) { const Complex x = at(a, c); m.set(a * cols + c, at(b, c)); m.set(b * cols + c, x); }
+    } else if (kind == 1) {
+        const Complex k = number(args[0]);
+        const std::size_t r = row(args[2]);
+        for (std::size_t c = 0; c < cols; ++c) m.set(r * cols + c, k * at(r, c));
+    } else {
+        const Complex k = kind == 2 ? number(args[0]) : Complex(1, 0);
+        const std::size_t a = row(args[kind == 2 ? 2 : 1]), b = row(args[kind == 2 ? 3 : 2]);
+        for (std::size_t c = 0; c < cols; ++c) m.set(b * cols + c, at(b, c) + k * at(a, c));
+    }
+    m.clearExact();
+    m.normalize();
+    ws.storeMatrix(slot, std::move(m));
+    entry = HistoryEntry{};
+    entry.expression = raw;
+    entry.text = "Done";
+    return true;
+}
+// Fill(v, Mat A / Vct A / List n / List "QTY") cambia anche la memoria (manuale 2-52, 3-8).
+void fillTarget(Workspace& ws, const ast::Node& tree, const CalcValue& value) {
+    const ast::Node* t = unwrapGroups(&tree);
+    if (t->kind != ast::Kind::Call || t->text != "fill" || t->children.size() != 2 || !t->children[1]) return;
+    const ast::Node* ref = unwrapGroups(t->children[1].get());
+    if (ref->kind != ast::Kind::Token) return;
+    CollectionResolver::Memory memory{};
+    int index = 0;
+    if (!memoryName(ref->text, memory, index) || index == CollectionResolver::Answer) return;
+    if (index == -2) index = ws.listByName(ref->text.substr(6, ref->text.size() - 7));
+    if (index < 0) return;
+    const auto slot = static_cast<std::size_t>(index);
+    if (memory == CollectionResolver::Memory::List) ws.storeList(slot, value);
+    else if (memory == CollectionResolver::Memory::Mat) ws.storeMatrix(slot, value);
+    else ws.storeVector(slot, value);
+}
+RunOutcome evaluateStatement(Workspace& ws, const std::string& raw, const std::string& statement, HistoryEntry& entry, const EntryOptions& options) {
+    const std::size_t lead = statement.find_first_not_of(" \t");
     const int offset = lead == std::string::npos ? 0 : static_cast<int>(lead);
-    std::string expr = trim(raw);
+    std::string expr = trim(statement);
     RunOutcome out;
     EvalInfo info;
     try {
+        if (expr.empty()) throw SyntaxError("Syntax ERROR: istruzione vuota", 0, 0);
         // Comando grafico (Plot, F-Line, Graph Y=...): lo esegue l'interprete dei
         // comandi sui dati di GRAPH; la riga mostra "Done".
         if (graphcmd::isCommand(expr)) {
@@ -425,6 +558,7 @@ RunOutcome evaluateEntry(Workspace& ws, const std::string& raw, HistoryEntry& en
         // richiamano insieme (manuale fx-CG50 1-33, nota *4).
         if (expr.find("SimRes") != std::string::npos && expr.find("SimCoef") != std::string::npos)
             throw MathError("Ma ERROR: SimRes e SimCoef non si richiamano nella stessa espressione", static_cast<int>(expr.find("SimCoef")) + offset, 7);
+        if (rowCommand(ws, expr, entry, raw)) return out;
         const SimpRequest simp = takeSimp(expr);
         StoreTarget target;
         std::size_t arrow = expr.rfind(kArrow);
@@ -437,6 +571,30 @@ RunOutcome evaluateEntry(Workspace& ws, const std::string& raw, HistoryEntry& en
             target.where = where;
             expr = expr.substr(0, arrow);
             expr.erase(expr.find_last_not_of(" \t") + 1);       // le posizioni prima della freccia non cambiano
+            if (!target.subName.empty()) {
+                target.index = ws.listByName(target.subName);
+                if (target.index < 0) throw MathError("Argument ERROR: nessuna lista con il nome \"" + target.subName + "\"", where.position, where.length);
+            }
+        }
+        // f1-f20 (FUNCMEM STORE): si memorizza il testo dell'espressione, non il valore.
+        if (target.kind == StoreTarget::Kind::FunctionMemory) {
+            ws.setFunctionMemory(static_cast<std::size_t>(target.index), trim(expr));
+            entry = HistoryEntry{};
+            entry.expression = raw;
+            entry.text = "Done";
+            out.storedIn = target.label;
+            return out;
+        }
+        // Stringhe: "ABC" (anche ->Str n) o Str n da soli.
+        std::string text;
+        if (stringValue(ws, expr, text)) {
+            if (target.kind == StoreTarget::Kind::String && target.index < 0) { ws.setRecursionFormula(text); out.storedIn = target.label; }
+            else if (target.kind == StoreTarget::Kind::String) { ws.setString(static_cast<std::size_t>(target.index), text); out.storedIn = target.label; }
+            else if (target.kind != StoreTarget::Kind::None) throw TypeError("Argument ERROR: una stringa si memorizza in Str 1-20", target.where.position, target.where.length);
+            entry = HistoryEntry{};
+            entry.expression = raw;
+            entry.text = text;
+            return out;
         }
         ws.apply();
         // Base-N: interi a 32 bit nella base del SET UP (o di quando la riga e' stata calcolata).
@@ -451,11 +609,34 @@ RunOutcome evaluateEntry(Workspace& ws, const std::string& raw, HistoryEntry& en
         if (value.isScalar()) scalarResult(ws, raw, *tree, ctx, info, target, value.scalar(), out, entry, simp, previous, base ? baseMode : 0);
         else {
             if (simp.active) throw MathError("Math ERROR: \xE2\x96\xB6Simp richiede una frazione");
-            collectionResult(ws, raw, *tree, ctx, target, std::move(value), out, entry);
+            fillTarget(ws, *tree, value);
+            collectionResult(ws, raw, *tree, ctx, target, std::move(value), out, entry, base ? baseMode : 0);
         }
     }
     catch (SyntaxError& e) { locate(e.where, info, offset); throw; }
     catch (MathError& e) { locate(e.where, info, offset); throw; }
+    return out;
+}
+} // namespace
+
+RunOutcome evaluateEntry(Workspace& ws, const std::string& raw, HistoryEntry& entry, const EntryOptions& options) {
+    const std::vector<Statement> statements = splitStatements(raw);
+    if (statements.size() == 1) return evaluateStatement(ws, raw, raw, entry, options);
+    // Piu' istruzioni (manuale 2-9): si eseguono in ordine; ◢ mostra il risultato
+    // intermedio, la riga mostra l'ultimo. Gli errori indicano la posizione nella riga intera.
+    RunOutcome out;
+    std::vector<std::string> displays;
+    for (std::size_t k = 0; k < statements.size(); ++k) {
+        const Statement& st = statements[k];
+        HistoryEntry part;
+        try {
+            out = evaluateStatement(ws, raw, st.text, part, options);
+        } catch (SyntaxError& e) { if (e.where.known()) e.where.position += static_cast<int>(st.start); else e.where = {static_cast<int>(st.start), static_cast<int>(st.text.size())}; throw; }
+        catch (MathError& e) { if (e.where.known()) e.where.position += static_cast<int>(st.start); else e.where = {static_cast<int>(st.start), static_cast<int>(st.text.size())}; throw; }
+        if (st.display) displays.push_back(resultText(part, ws.settings));
+        if (k + 1 == statements.size()) { entry = std::move(part); entry.expression = raw; }
+    }
+    entry.displays = std::move(displays);
     return out;
 }
 
@@ -478,7 +659,7 @@ std::size_t recalculateHistory(Workspace& ws, std::size_t from, ErrorLocation* f
         for (std::size_t k = count; k-- > 0;) {
             const HistoryEntry& h = hist[k];
             if (!h.error.empty() && h.error[0] != '=') continue;     // failed entries do not change Ans
-            if (h.collection || h.command) continue;
+            if (h.collection || h.command || !h.text.empty()) continue;
             re = h.value.real(); im = h.value.imag(); slot = h.exact;
             return k;
         }
@@ -512,6 +693,7 @@ std::size_t recalculateHistory(Workspace& ws, std::size_t from, ErrorLocation* f
             (void)evaluateEntry(ws, hist[i].expression, fresh, opt);
             fresh.view = static_cast<std::uint8_t>(hist[i].view == ViewDecimal || hist[i].view == ViewExact ? hist[i].view : static_cast<std::uint8_t>(ViewAuto));
             fresh.flipMixed = hist[i].flipMixed;
+            if (hist[i].view == ViewEng) { fresh.view = ViewEng; fresh.engShift = hist[i].engShift; }
         }
         catch (const SyntaxError& e) { failed(e.what(), e.where); }
         catch (const MathError& e) { failed(e.what(), e.where); }
@@ -733,6 +915,7 @@ std::string collectionText(const HistoryEntry& e, const Settings& s) {
 ast::NodePtr cellTree(const HistoryEntry& e, std::size_t i, const Settings& s) {
     if (const exact::Value* x = elementExact(e, i, s)) return exactTree(*x, s.mixedFractions);
     auto row = ast::make(ast::Kind::Row);
+    if (displayedBase(e)) { appendText(*row, elementText(e, i, s)); return row; }
     const Complex z = e.collection->value.at(i);
     if (z.imag() == 0) appendNumber(*row, z.real(), s.display);
     else appendText(*row, formatValue(z, s.complex == ComplexMode::Real ? ComplexMode::Rectangular : s.complex, s.display));
@@ -740,11 +923,45 @@ ast::NodePtr cellTree(const HistoryEntry& e, std::size_t i, const Settings& s) {
 }
 } // namespace
 
+namespace {
+struct EngParts { std::string mantissa; int exponent{0}; };
+// Notazione ingegneristica della riga: esponente multiplo di 3 spostato di engShift passi.
+EngParts engParts(const HistoryEntry& e) {
+    const double v = e.value.real();
+    EngParts p;
+    int base = 0;
+    if (v != 0) base = 3 * static_cast<int>(std::floor(std::log10(std::abs(v)) / 3.0));
+    p.exponent = base + 3 * e.engShift;
+    const double m = v / std::pow(10.0, p.exponent);
+    char buf[48];
+    std::snprintf(buf, sizeof(buf), "%.10g", m);
+    p.mantissa = buf;
+    return p;
+}
+} // namespace
+bool shiftEngineering(HistoryEntry& e, int direction) {
+    if (!e.error.empty() || e.collection || e.command || !e.text.empty() || e.value.imag() != 0 || !std::isfinite(e.value.real())) return false;
+    // Prima pressione: ENG mostra la notazione ingegneristica (1234 -> 1.234E+03),
+    // ENG← l'esponente inferiore (1234E+00); le successive spostano di 3.
+    if (e.view != ViewEng) { e.view = ViewEng; e.engShift = static_cast<std::int8_t>(direction > 0 ? 0 : -1); return true; }
+    const int next = e.engShift + (direction > 0 ? 1 : -1);
+    if (next < -40 || next > 40) return false;
+    e.engShift = static_cast<std::int8_t>(next);
+    return true;
+}
+bool setComplexView(HistoryEntry& e, bool polar) {
+    if (!e.error.empty() || e.collection || e.command || e.value.imag() == 0) return false;
+    e.view = polar ? ViewPolar : ViewRect;
+    return true;
+}
+
 std::string baseNText(double value, unsigned base) {
     if (!std::isfinite(value) || value != std::floor(value) || value < -2147483648.0 || value > 2147483647.0) return "Math ERROR";
     const auto v = static_cast<std::int32_t>(value);
     if (base == 10) return std::to_string(v);
-    std::uint32_t u = static_cast<std::uint32_t>(v);
+    // Bin: 16 bit in complemento a due (manuale 2-39); fuori intervallo Math ERROR.
+    if (base == 2 && (v < -32768 || v > 32767)) return "Math ERROR";
+    std::uint32_t u = base == 2 ? static_cast<std::uint32_t>(static_cast<std::uint16_t>(v)) : static_cast<std::uint32_t>(v);
     if (u == 0) return "0";
     std::string digits;
     while (u) { const unsigned d = u % base; digits.insert(digits.begin(), static_cast<char>(d < 10 ? '0' + d : 'A' + d - 10)); u /= base; }
@@ -784,6 +1001,8 @@ std::string exactLineText(const exact::Value& value, bool mixed) { return lineFr
 
 std::string elementText(const HistoryEntry& e, std::size_t i, const Settings& s) {
     if (!e.collection || i >= e.collection->value.size()) return {};
+    // Base-N (v1.12.0): gli elementi di liste e matrici nella base della riga.
+    if (const unsigned base = displayedBase(e)) return baseNText(e.collection->value.at(i).real(), base);
     if (const exact::Value* x = elementExact(e, i, s)) return exact::toText(*x, s.mixedFractions);
     const Complex z = e.collection->value.at(i);
     return formatValue(z, z.imag() != 0 && s.complex == ComplexMode::Real ? ComplexMode::Rectangular : s.complex, s.display);
@@ -791,6 +1010,7 @@ std::string elementText(const HistoryEntry& e, std::size_t i, const Settings& s)
 
 std::string resultText(const HistoryEntry& e, const Settings& s, bool lineStyle) {
     if (e.command && e.error.empty()) return "Done";
+    if (!e.text.empty() && e.error.empty()) return e.text;
     if (!e.error.empty() && e.error[0] == '=') return e.error.substr(1);
     if (!e.error.empty()) return e.error;
     if (e.collection) {
@@ -816,11 +1036,14 @@ std::string resultText(const HistoryEntry& e, const Settings& s, bool lineStyle)
         if (const unsigned base = displayedBase(e)) return baseNText(e.value.real(), base);
         if (e.view >= ViewHex && e.view <= ViewOct) return baseText(e);
         if (e.view == ViewDms) return dmsText(e, s);
+        if (e.view == ViewEng) { const EngParts p = engParts(e); return p.mantissa + "E" + (p.exponent < 0 ? "-" : "+") + (std::abs(p.exponent) < 10 ? "0" : "") + std::to_string(std::abs(p.exponent)); }
         exact::Rational r;
         if (e.view == ViewPeriodic && rationalOf(e, r)) return periodicText(r);
         if (e.fracDen != 0 && showsExact(e, s)) return simpText(e, lineStyle);
         if (showsExact(e, s)) return lineStyle ? lineFractionText(e.exact.value, showsMixed(e, s)) : exact::toText(e.exact.value, showsMixed(e, s));
     }
+    if (e.value.imag() != 0 && (e.view == ViewPolar || e.view == ViewRect))
+        return formatValue(e.value, e.view == ViewPolar ? ComplexMode::Polar : ComplexMode::Rectangular, s.display);
     return formatValue(e.value, s.complex, s.display);
 }
 
@@ -846,6 +1069,17 @@ ast::NodePtr resultTree(const HistoryEntry& e, const Settings& s) {
         return root;
     }
     if (e.command && e.error.empty()) { appendText(*root, "Done"); return root; }
+    if (!e.text.empty() && e.error.empty()) { appendText(*root, e.text); return root; }
+    if (plainResult(e) && e.view == ViewEng) {
+        // ENG / ENG←: mantissa ×10^n con n multiplo di 3.
+        const EngParts p = engParts(e);
+        appendText(*root, p.mantissa);
+        root->children.push_back(tok("*"));
+        auto pw = ast::make(ast::Kind::Power);
+        pw->children = {rowOf("10"), rowOf(std::to_string(p.exponent))};
+        root->children.push_back(pw);
+        return root;
+    }
     if (plainResult(e) && displayedBase(e)) { appendText(*root, resultText(e, s)); return root; }
     if (plainResult(e) && e.fracDen != 0 && showsExact(e, s)) {
         // Frazione non ridotta (▶Simp, Simplify Manual) con il fattore usato: F=3.

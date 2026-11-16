@@ -124,7 +124,7 @@ l'immissione i tasti funzione diventano: F1 frazione (SHIFT: mista), F2 √
 
 ## 5. Uso dei risultati
 
-- **VARS › EQUATION** in Run-Matrix (VARS, ultima categoria): `SimRes`
+- **VARS › EQUATION** in Run-Matrix (VARS, categoria EQUATION dopo RECURSION, nell'ordine della fx-CG50 dalla v1.13.0): `SimRes`
   (soluzioni n×1, o la **Rref** della matrice completa con No Solution /
   Infinitely Many Solutions), `SimCoef` (n×(n+1)), `PlyRes` (radici mostrate,
   m×1), `PlyCoef` (1×(g+1)). Sono nomi dello stesso parser: `SimRes*6`,

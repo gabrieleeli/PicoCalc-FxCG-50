@@ -13,13 +13,14 @@
 | [TABLE.md](TABLE.md) | TABLE: lista delle relazioni, variabile range/lista, tipi Y=/r=/Param, editing delle righe, LISTMEM, persistenza |
 | [PICO_PLUS_2W.md](PICO_PLUS_2W.md) | Pimoroni Pico Plus 2 W: schede supportate, mappa della memoria, driver PSRAM, pool e limiti, partizioni della flash, grafica, stack, build, diagnostica |
 | [EQUATION.md](EQUATION.md) | guida della modalità EQUATION (SIML, POLY, SOLVER, VARS › EQUATION, differenze dalla fx-CG50) |
+| [HARDWARE_TEST_v1.13.0.md](HARDWARE_TEST_v1.13.0.md) | collaudo delle novità della v1.13.0 sulla PicoCalc fisica (List File, CALC/PROB/CONVERT, PxlTest(, Draw…, StoPict, CAPTURE, CATALOG, ENG, Base-N; HW-140…HW-159) |
 | [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md) | collaudo delle novità della v1.12.0 (EQUATION, editor Math, SET UP, record v8; HW-120…HW-134) |
 | [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md) | collaudo delle novità della v1.11.0 sulla PicoCalc fisica (List 1–26, CSV su microSD e flash interna, MatAns, celle esatte, Line con INS e ⌟, Eng, Simp, Base-N, comandi grafici; HW-100…HW-115) |
 | [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md) | collaudo delle novità della v1.10.0 sulla PicoCalc fisica (MAT/VCT, parentesi colorate, CLIP, cursore sugli errori, Math/Line, limiti delle matrici; HW-90…HW-99) |
 | [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) | collaudo della v1.9.0 sulla PicoCalc fisica (PSRAM, memoria, flash, 3D, guasti; HW-40…HW-82) |
 | [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md) | procedura di collaudo sulla PicoCalc fisica (GRAPH, microSD, TABLE; HW-01…HW-36, da ripetere con la v1.9.0) e dati da inviare |
 | [APPLICATIONS_ARCHITECTURE.md](APPLICATIONS_ARCHITECTURE.md) | registro delle modalità, servizi condivisi, dati scambiati, progetto delle modalità future, test di architettura |
-| [RUN_MATRIX.md](RUN_MATRIX.md) | Run-Matrix: tasti, cronologia, risultati esatti, S⇔D, frazioni miste, periodo, variabili, matrici/vettori/liste ed editor MAT/VCT, MatAns/ListAns, CSV, Math/Line (INS, ⌟), CLIP, parentesi colorate, cursore sugli errori, simboli ingegneristici, Simp, Base-N, comandi grafici |
+| [RUN_MATRIX.md](RUN_MATRIX.md) | Run-Matrix: tasti, cronologia, risultati esatti, S⇔D, frazioni miste, periodo, variabili, matrici/vettori/liste ed editor MAT/VCT, MatAns/ListAns, CSV, Math/Line (INS, ⌟), CLIP, parentesi colorate, cursore sugli errori, simboli ingegneristici, Simp, Base-N, comandi grafici; completamento della v1.13.0 (List File, stringhe, function memory, CALC/PROB/STAT/CONVERT/TVM, CATALOG, CAPTURE) |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | strati, ciclo principale, workspace, memoria, cartelle |
 | [HARDWARE.md](HARDWARE.md) | PicoCalc + Pico Plus 2 W / Pico 2 W: display, tastiera, microSD, flash, collaudo |
 | [GRAPHICS_ENGINE.md](GRAPHICS_ENGINE.md) | canvas, aggiornamento parziale, font, renderer matematico, UI kit |
@@ -30,7 +31,7 @@
 | [ROADMAP.md](ROADMAP.md) | cosa manca e priorità |
 | [CHANGELOG.md](CHANGELOG.md) | cronologia delle versioni |
 | [SYMBOL_CHEATSHEET.md](SYMBOL_CHEATSHEET.md) | simboli e notazione (contenuto dell'app Symbols) |
-| [reports/](reports/) | rapporti di sessione (v1.7.0, GRAPH v1.8.0, collaudo e TABLE v1.8.0), del consolidamento della v1.9.0 ([CONSOLIDAMENTO_v1.9.0.md](reports/CONSOLIDAMENTO_v1.9.0.md)) della v1.10.0 ([ANALISI_FONTI_v1.10.0.md](reports/ANALISI_FONTI_v1.10.0.md), [SVILUPPO_v1.10.0.md](reports/SVILUPPO_v1.10.0.md)) della v1.11.0 ([ANALISI_FONTI_v1.11.0.md](reports/ANALISI_FONTI_v1.11.0.md), [SVILUPPO_v1.11.0.md](reports/SVILUPPO_v1.11.0.md)) e della v1.12.0 ([ANALISI_FONTI_v1.12.0.md](reports/ANALISI_FONTI_v1.12.0.md), [SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md)) |
+| [reports/](reports/) | rapporti di sessione (v1.7.0, GRAPH v1.8.0, collaudo e TABLE v1.8.0), del consolidamento della v1.9.0 ([CONSOLIDAMENTO_v1.9.0.md](reports/CONSOLIDAMENTO_v1.9.0.md)) della v1.10.0 ([ANALISI_FONTI_v1.10.0.md](reports/ANALISI_FONTI_v1.10.0.md), [SVILUPPO_v1.10.0.md](reports/SVILUPPO_v1.10.0.md)) della v1.11.0 ([ANALISI_FONTI_v1.11.0.md](reports/ANALISI_FONTI_v1.11.0.md), [SVILUPPO_v1.11.0.md](reports/SVILUPPO_v1.11.0.md)) della v1.12.0 ([ANALISI_FONTI_v1.12.0.md](reports/ANALISI_FONTI_v1.12.0.md), [SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md), EQUATION) e della v1.13.0 ([ANALISI_FONTI_v1.13.0.md](reports/ANALISI_FONTI_v1.13.0.md), [SVILUPPO_v1.13.0.md](reports/SVILUPPO_v1.13.0.md), con la tabella di parità finale di Run-Matrix) |
 | [releases/](releases/) | note delle GitHub Release (usate dal workflow di pubblicazione) |
 | [../CONTINUE.md](../CONTINUE.md) | stato e istruzioni per riprendere lo sviluppo |
 
@@ -44,8 +45,9 @@ eliminare ([rapporto](reports/CONSOLIDAMENTO_v1.9.0.md#16-branch-e-tag)).
 
 | Branch / tag | Contenuto |
 |---|---|
-| **`main`** (tag `v1.12.0`) | v1.12.0: completamento di EQUATION (SIML, POLY, SOLVER, VARS › EQUATION, record v8) |
-| tag `v1.11.0` | v1.11.0: completamento di Run-Matrix (List 1–26, CSV, MatAns/ListAns, celle esatte e complesse, INS e ⌟ in Line, simboli ingegneristici, Simp, Base-N, comandi grafici) |
+| **`main`** (tag `v1.13.0`) | v1.13.0: completamento totale di Run-Matrix (parità con la fx-CG50: List "nome" e List File, P/E ed ENG, Simplify Manual, Base-N completa, editor senza limite, tutti i comandi grafici, round trip Math/Line, CALC/PROB/STAT/CONVERT/TVM, CATALOG, CAPTURE, record v9) |
+| tag `v1.12.0` (commit `51691de` di `main`) | v1.12.0: completamento di EQUATION (SIML, POLY, SOLVER, VARS › EQUATION, record v8) |
+| tag `v1.11.0` (commit `f6933fd` di `main`) | v1.11.0: completamento di Run-Matrix (List 1–26, CSV, MatAns/ListAns, celle esatte e complesse, INS e ⌟ in Line, simboli ingegneristici, Simp, Base-N, comandi grafici) |
 | tag `v1.10.0` (commit `dfdb08b` di `main`) | v1.10.0: matrici, vettori e liste, editor MAT/VCT, Math/Line, CLIP, parentesi colorate, cursore sugli errori |
 | tag `v1.9.0` (commit `bb2bdee` di `main`) | v1.9.0: v1.8.0 completa + Pimoroni Pico Plus 2 W (PSRAM, flash 16 MB, 3D Graph) |
 | `version/v1.5.4` | codice originale caricato (non compilava per RP2350) |

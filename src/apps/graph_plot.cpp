@@ -304,6 +304,22 @@ std::vector<int> GraphApp::drawablePlots(bool analysable) const {
     return out;
 }
 
+// PxlTest( di Run-Matrix (v1.12.0): la schermata del grafico completa (sfondo,
+// assi, curve, SKETCH) e lo stato del pixel (riga 1..282, colonna 1..320).
+int GraphApp::probePixel(Context& ctx, gfx::Canvas& c, int row, int column) {
+    if (row < 1 || row > Rows || column < 1 || column > Cols || c.width() < L + Cols || c.height() < T + Rows) return 0;
+    built_ = false;
+    finishRendering(ctx);
+    c.resetClip();
+    c.rect(L, T, Cols, Rows, 0xFFFF, true);
+    drawLayers(ctx, c);
+    layerValid_ = false;
+    const int lit = c.getPixel(L + column - 1, T + row - 1) != 0xFFFF ? 1 : 0;
+    // GRAPH non e' attiva: le curve campionate non restano in memoria.
+    curves_.clear(); curves_.shrink_to_fit(); built_ = false;
+    return lit;
+}
+
 // ---------------------------------------------------------------- drawing
 void GraphApp::drawLayers(Context& ctx, gfx::Canvas& c) {
     const graph::Viewport vp(ctx.ws.view);
@@ -457,6 +473,35 @@ void GraphApp::drawLayers(Context& ctx, gfx::Canvas& c) {
             for (std::size_t i = 2; i + 1 < s.path.size(); i += 2) mathSegment(c, vp, s.path[i - 2], s.path[i - 1], s.path[i], s.path[i + 1], pen, col);
             break;
         case SketchItem::Kind::Inverse: break;                  // drawn with the curves
+        case SketchItem::Kind::Integral: {
+            // G∫dx (Run-Matrix, v1.12.0): area tra la curva e l'asse x, e il valore dell'integrale.
+            try {
+                const graph::Plot p = engine_.makePlot(s.text, GraphType::Y, s.color, LineStyle::Normal);
+                const std::uint16_t fill = gfx::Canvas::blend(0xFFFF, col, 110);
+                const int x0 = std::max(L, static_cast<int>(std::lround(vp.screenX(s.x0)))), x1 = std::min(R, static_cast<int>(std::lround(vp.screenX(s.x1))));
+                const int axisY = static_cast<int>(std::lround(vp.screenY(0)));
+                for (int x = x0; x <= x1; ++x) {
+                    double y = 0;
+                    if (!engine_.eval(p, vp.mathX(x), y)) continue;
+                    const int sy = static_cast<int>(std::lround(std::clamp(vp.screenY(y), static_cast<double>(T - 1), static_cast<double>(B + 1))));
+                    const int top = std::max(T, std::min(sy, axisY)), bottom = std::min(B, std::max(sy, axisY));
+                    if (bottom >= top) c.vLine(x, top, bottom - top + 1, fill);
+                }
+                const double value = integrateFunction([&](double xv) { return engine_.evalOrThrow(p, xv); }, s.x0, s.x1);
+                const std::string label = "\xE2\x88\xAB" "dx=" + shortNumber(value);
+                ui::text(c, L + 4, B - 14, label.c_str(), Ink, font::Face::Small);
+            } catch (const std::bad_alloc&) { throw; } catch (const std::exception&) {}
+            break;
+        }
+        case SketchItem::Kind::Data: {
+            // DrawStat / DrawR / DrawFTG (v1.12.0): punti, collegati se y1 = 1.
+            for (std::size_t i = 0; i + 1 < s.path.size(); i += 2) {
+                const int x = static_cast<int>(std::lround(vp.screenX(s.path[i]))), y = static_cast<int>(std::lround(vp.screenY(s.path[i + 1])));
+                if (s.y1 != 0 && i >= 2) mathSegment(c, vp, s.path[i - 2], s.path[i - 1], s.path[i], s.path[i + 1], pen, col);
+                if (s.y1 == 0 || i == 0) stamp(c, x, y, 3, col);
+            }
+            break;
+        }
         }
     }
     // 9) marks placed with EXE (filled: on the graph, hollow: not included)

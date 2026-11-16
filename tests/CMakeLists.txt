@@ -49,7 +49,9 @@ set(FXAI_TESTS
   # v1.11.0: List 1-26 e CSV, calcolo (simboli ingegneristici, Simp, Base-N), Run-Matrix (Line, MatAns, comandi grafici)
   lists_csv_test calc_v111_test run_matrix_v111_test
   # v1.12.0: EQUATION (SIML, POLY, SOLVER, VARS › EQUATION, record v8)
-  equation_v112_test)
+  equation_v112_test
+  # v1.13.0: completamento di Run-Matrix (calcolo, Run-Matrix e workspace v9, comandi grafici, editor)
+  calc_v112_test run_matrix_v112_test graph_cmd_v112_test editor_v112_test)
 foreach(t ${FXAI_TESTS})
   add_executable(${t} ${CMAKE_CURRENT_LIST_DIR}/${t}.cpp)
   target_link_libraries(${t} PRIVATE fxai_core fxai_host_board)

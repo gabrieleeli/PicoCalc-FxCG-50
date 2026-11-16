@@ -252,9 +252,9 @@ int main() {
         // OPTN > SKETCH inserisce il nome del comando
         auto* rm = r.active<app::RunMatrixApp>();
         r.key(pckey::F8);
-        for (int i = 0; i < 3; ++i) r.key(pckey::Up);                  // SKETCH: prima di RISULTATO e BASE-N
+        for (int i = 0; i < 5; ++i) r.key(pckey::Up);                  // SKETCH: prima di RELAZIONI, RISULTATO, BASE-N, CONST (v1.12.0)
         r.key(pckey::Enter);
-        for (int i = 0; i < 6; ++i) r.key(pckey::Down);                // "Plot "
+        for (int i = 0; i < 15; ++i) r.key(pckey::Down);               // "Plot " dopo le disequazioni e G∫dx (v1.12.0)
         r.key(pckey::Enter);
         CHECK(rm && rm->editor().toExpression() == "Plot ");
         r.type("1,1"); r.key(pckey::Enter);

@@ -41,8 +41,9 @@ int main() {
     CHECK(hasText(ne.layout(0, 30, 300), "∫"));
     ne.clear(); ne.insertDerivative(); type(ne, "x^2"); CHECK(ne.moveRight()); CHECK(ne.moveDown()); ne.insert('3');
     CHECK_EQ_STR(ne.toExpression(), "derivative((x)^(2),3)"); CHECK_NEAR(value(ne), 6, 1e-7);
-    ne.clear(); ne.insertSummation(); ne.insert('x'); CHECK(ne.moveDown()); ne.insert('1'); CHECK(ne.moveDown()); ne.insert('5');
-    CHECK_EQ_STR(ne.toExpression(), "sum(x,1,5)"); CHECK(value(ne) == 15);
+    // v1.12.0: Σ della fx-CG50 con il campo della variabile (proposta x): espressione, variabile, inizio, fine.
+    ne.clear(); ne.insertSummation(); ne.insert('x'); CHECK(ne.moveDown()); CHECK(ne.moveDown()); ne.insert('1'); CHECK(ne.moveDown()); ne.insert('5');
+    CHECK_EQ_STR(ne.toExpression(), "sum(x,x,1,5)"); CHECK(value(ne) == 15);
     ne.clear(); type(ne, "alpha"); CHECK(hasText(ne.layout(4, 20, 300), "α")); CHECK_EQ_STR(ne.toExpression(), "alpha");
     ne.clear(); type(ne, "12"); ne.insertPower(); ne.insert('2'); CHECK_EQ_STR(ne.toExpression(), "(12)^(2)"); CHECK(value(ne) == 144);
     // fx-CG50 behaviour: an operand before the fraction key becomes the numerator, cursor goes to the denominator.
@@ -59,7 +60,7 @@ int main() {
     ne.clear(); ne.insertExp(); ne.insert('0'); CHECK_EQ_STR(ne.toExpression(), "(e)^(0)"); CHECK(value(ne) == 1);
     ne.clear(); ne.insertTenPower(); ne.insert('3'); CHECK(value(ne) == 1000);
     ne.clear(); ne.insert('5'); ne.insertSquare(); ne.insert('+'); ne.insert('1'); CHECK_EQ_STR(ne.toExpression(), "(5)^(2)+1");
-    ne.clear(); ne.insertProduct(); ne.insert('x'); ne.moveDown(); ne.insert('1'); ne.moveDown(); ne.insert('4'); CHECK(value(ne) == 24);
+    ne.clear(); ne.insertProduct(); ne.insert('x'); ne.moveDown(); ne.moveDown(); ne.insert('1'); ne.moveDown(); ne.insert('4'); CHECK(value(ne) == 24);   // Π: variabile x proposta
     // x^ without an operand creates an empty base box (CG50 behaviour).
     ne.clear(); ne.insert('1'); ne.insert('+'); ne.insertPower(); ne.insert('2'); ne.moveDown(); ne.insert('3');
     CHECK_EQ_STR(ne.toExpression(), "1+(2)^(3)"); CHECK(value(ne) == 9);

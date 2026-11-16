@@ -1,9 +1,48 @@
-# Build status — v1.12.0 (completamento di EQUATION)
+# Build status — v1.13.0 (completamento totale di Run-Matrix)
 
 Stato delle build per versione; le novità sono in [CHANGELOG.md](CHANGELOG.md).
-Le sezioni dopo "v1.12.0" descrivono le build delle versioni precedenti.
+Le sezioni dopo "v1.13.0" descrivono le build delle versioni precedenti.
 
-## v1.12.0 — `main`
+## v1.13.0 — `main`
+
+Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`)
+sul codice unito con la v1.12.0 (EQUATION), una cartella per scheda, nello
+stesso ambiente delle versioni precedenti (Pico SDK 2.2.0,
+`gcc-arm-none-eabi` 13.2.1). **Nessuna prova su hardware.**
+
+| Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (3 683 840 byte) | `build/pico2w/picocalc_fxai_pico2w.uf2` (3 666 432 byte) |
+| Immagine flash | 1 841 608 byte (`__flash_binary_end` = `0x101C19C8`) = 44 % della partizione firmware da 4 MB; +161 920 byte rispetto alla v1.12.0 (libreria CALC/STAT/TVM/CONVERT, menu, CATALOG, comandi grafici) | 1 832 772 byte (`0x101BF744`) = 87 % della partizione da 2 MB; +161 856 byte |
+| Resto della flash | invariato (diagnostica, LittleFS ≈ 11 MB anche per CSV, Pict e Capture, BTstack, workspace 2 × 512 KB) | invariato (LittleFS ≈ 1,9 MB, workspace 128 KB) |
+| RAM statica | 307 296 byte fino a `__end__` = `0x2004B060` (+5 048 byte rispetto alla v1.12.0: glifi nuovi, tabelle dei nomi e del CATALOG, stato dei menu) | 303 372 byte (`0x2004A10C`, +5 048 byte) |
+| Heap SRAM | 184 224 byte (`__end__` → `0x20078000`) | 188 148 byte |
+| PSRAM | 8 MB come pool TLSF separato (liste di tutti i List File, matrici con le forme esatte, catture, coefficienti di EQUATION) | — |
+| Stack | core 0: 32 KB con guardia MSPLIM; core 1: 4 KB in SCRATCH_X (invariati) | uguale |
+| Frame di stack (`-fstack-usage`) | massimo `SystemApp::enter` 2 016 B (due voci nuove del SET UP; non è sul percorso di una ricorsione), poi `diag::testMemory` e `GraphApp::openProject` 1 712 B; codice nuovo: `evaluateStatement` 800 B, `evaluateEntry` 488 B, `RunMatrixApp::runAction` 480 B, comandi grafici al massimo 400 B, `CollEval::solveN` 392 B, `Workspace::special` 176 B (il motore dei grafici di DrawFTG e TABLE Result è sullo heap); la ricorsione del valutatore resta sotto il budget di 16 KB | uguale |
+| Warning | **nessuno** del compilatore (0 righe `warning:`; resta l'avviso di CMake dell'SDK sulla ricerca di picotool, come nelle versioni precedenti) | nessuno |
+| SHA-256 dell'UF2 locale | `f4eb56b52055cb3ee5ee605227ce31dfba3455991296bb1f8a5d0459b3eae61e` | `82b40c2acfe67eca7a64e1fa2455f18d486cdea61b582dc90f9dbeeb217b0deb` |
+
+Gli UF2 allegati alla GitHub Release sono compilati dal workflow
+`.github/workflows/release.yml` sul commit pubblicato e verificati con
+`sha256sum -c SHA256SUMS`; i loro hash possono differire da quelli locali.
+
+### Test
+
+| Suite | Pico Plus 2 W | Pico 2 W |
+|---|---|---|
+| CTest (`tests/run_host_tests.sh`) | 45/45: 43 suite C++ con **12 081** controlli, `mem_pools_smoke` (≈ 333 000 verifiche) e `sd_interop_test` (41) | 45/45: **12 075** controlli + ≈ 334 000 + 41 |
+| AddressSanitizer + UBSan (`--sanitize`) | 45/45 | 45/45 |
+| ThreadSanitizer (`--tsan`, allocatore su due thread) | superato | superato |
+| Relay AI (Python, `unittest`) | 15/15 | — |
+| Simulatore | screenshot 77–87 nuovi (`tests/sim/run_matrix_v112.txt`), compressi senza perdita; lo script di EQUATION della v1.12.0 (`tests/sim/equation.txt`, adattato al VARS della v1.13.0) ridà gli screenshot 08 e 62–76 identici pixel per pixel | |
+
+Suite della v1.13.0: `calc_v112_test` (207 controlli), `run_matrix_v112_test`
+(152, con le migrazioni v7→v9 e v8→v9), `graph_cmd_v112_test` (56),
+`editor_v112_test` (488); `architecture_test` 1 320. Il dispositivo non è
+stato usato.
+
+## v1.12.0 — EQUATION (tag `v1.12.0`, commit `51691de`)
 
 Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`),
 una cartella per scheda, stesso ambiente della v1.11.0 (Pico SDK 2.2.0,
@@ -34,7 +73,7 @@ possono avere hash diversi da quelli locali.
 | ThreadSanitizer (`--tsan`) | superato | superato |
 | Relay AI (Python, `unittest`) | 15/15 | — |
 
-## v1.11.0 — `main`
+## v1.11.0 — tag `v1.11.0`
 
 Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`),
 una cartella per scheda, nello stesso ambiente della v1.9.0/v1.10.0 (Pico SDK

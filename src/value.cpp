@@ -20,27 +20,31 @@ void CalcValue::set(std::size_t i, Complex z) {
     if (z.imag() != 0.0 && im.empty()) im.assign(re.size(), 0.0);   // puo' lanciare std::bad_alloc
     if (!im.empty()) im[i] = z.imag();
     if (!exact.empty()) {
-        if (z.imag() == 0.0 && integralValue(z.real()) && exact.size() == re.size())
+        if (z.imag() == 0.0 && integralValue(z.real()) && exact.size() == re.size()) {
             exact[i] = exact::Value::fromInteger(static_cast<long long>(z.real()));
-        else { exact.clear(); exact.shrink_to_fit(); }
+            if (i < decimal.size()) decimal[i] = false;
+        }
+        else clearExact();
     }
 }
-void CalcValue::setExact(std::size_t i, const exact::Value& v) {
+void CalcValue::setExact(std::size_t i, const exact::Value& v, bool decimalInput) {
     re[i] = v.toDouble();
     if (!im.empty()) im[i] = 0.0;
-    if (re.size() > ExactElements) { exact.clear(); return; }
+    if (re.size() > ExactElements) { clearExact(); return; }
     if (exact.size() != re.size()) {
         // Le forme degli altri elementi esistono solo se sono interi.
         std::vector<exact::Value> forms(re.size());
         for (std::size_t k = 0; k < re.size(); ++k) {
             if (k == i) continue;
             const double d = re[k];
-            if ((!im.empty() && im[k] != 0.0) || !integralValue(d)) { exact.clear(); return; }
+            if ((!im.empty() && im[k] != 0.0) || !integralValue(d)) { clearExact(); return; }
             forms[k] = exact::Value::fromInteger(static_cast<long long>(d));
         }
         exact = std::move(forms);
     }
     exact[i] = v;
+    if (decimalInput && decimal.size() != re.size()) decimal.assign(re.size(), false);
+    if (i < decimal.size()) decimal[i] = decimalInput;
 }
 void CalcValue::normalize() {
     if (im.empty()) return;

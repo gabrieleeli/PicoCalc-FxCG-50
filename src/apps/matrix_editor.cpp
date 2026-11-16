@@ -44,7 +44,7 @@ CalcValue resized(const CalcValue& v, bool rows, std::size_t at, bool remove) {
             std::size_t sr = r, sc = c;
             if (rows) { if (remove) { if (r >= at) ++sr; } else { if (r == at) continue; if (r > at) --sr; } }
             else { if (remove) { if (c >= at) ++sc; } else { if (c == at) continue; if (c > at) --sc; } }
-            if (v.hasExact()) out.setExact(r * nc + c, v.exact[sr * v.cols + sc]);   // le forme esatte restano
+            if (v.hasExact()) out.setExact(r * nc + c, v.exact[sr * v.cols + sc], v.decimalAt(sr * v.cols + sc));   // forme esatte e decimali restano
             else out.set(r * nc + c, v.at(sr, sc));
         }
     out.normalize();
@@ -53,7 +53,8 @@ CalcValue resized(const CalcValue& v, bool rows, std::size_t at, bool remove) {
 // Testo di una cella: forma esatta quando esiste (1/3, 2√3, π/2), altrimenti
 // il numero (complesso: a+bi anche nel modo Real) nel formato del display.
 std::string cellText(const CalcValue& m, std::size_t i, const Settings& s) {
-    if (m.hasExact()) {
+    // Una cella digitata come decimale resta decimale (0.25, v1.12.0).
+    if (m.hasExact() && !m.decimalAt(i)) {
         const exact::Value& e = m.exact[i];
         exact::Rational r;
         if (!(e.rational(r) && r.isInteger()) && exact::fitsRelaxed(e)) return exact::toText(e, s.mixedFractions);
@@ -67,7 +68,8 @@ std::string cellText(const CalcValue& m, std::size_t i, const Settings& s) {
 // Valore di una cella digitata: un'espressione dello stesso parser (frazioni,
 // radici, π, Mat B[1,2]...) che deve dare un numero; nel modo Real un input con
 // i e' calcolato come complesso, come sulla fx-CG50. La forma esatta, quando
-// esiste, resta nella memoria (fino a CalcValue::ExactElements elementi).
+// esiste, resta nella memoria (budget della scheda, limits::kExactStoreElements);
+// un decimale digitato resta mostrato come decimale (v1.12.0).
 void MatrixEditorView::writeCell(Context& ctx, int r, int c, const std::string& text) {
     if (selected_ == AnsRow) throw MathError(std::string("Math ERROR: ") + (vectors_ ? "Vct" : "Mat") + " Ans si legge soltanto");
     CalcValue* m = current(ctx);
@@ -77,11 +79,12 @@ void MatrixEditorView::writeCell(Context& ctx, int r, int c, const std::string& 
     EvalContext ec = ctx.ws.evalContext();
     if (ec.complexMode == ComplexMode::Real && (text.find('i') != std::string::npos || m->complex())) ec.complexMode = ComplexMode::Rectangular;
     const CalcValue v = evaluateAny(*tree, ec);
-    if (!v.isScalar()) throw TypeError(std::string("Type ERROR: una cella contiene un numero, non una ") + valueTypeName(v.type));
+    if (!v.isScalar()) throw TypeError(std::string("Argument ERROR: una cella contiene un numero, non una ") + valueTypeName(v.type));
     const Complex z = v.scalar();
     const std::size_t index = static_cast<std::size_t>(r) * m->cols + static_cast<std::size_t>(c);
     exact::Value e;
-    if (z.imag() == 0 && evaluateExact(*tree, ec, e) && std::isfinite(e.toDouble())) m->setExact(index, e);
+    bool decimalInput = false;
+    if (z.imag() == 0 && evaluateExact(*tree, ec, e, &decimalInput) && std::isfinite(e.toDouble())) m->setExact(index, e, decimalInput);
     else m->set(index, z);
     m->normalize();
     ctx.markDirty();
@@ -90,7 +93,7 @@ std::string MatrixEditorView::cellEditText(Context& ctx, int r, int c) const {
     const CalcValue* m = current(ctx);
     if (!m || r >= m->rows || c >= m->cols) return {};
     const std::size_t i = static_cast<std::size_t>(r) * m->cols + static_cast<std::size_t>(c);
-    if (m->hasExact()) return exact::toExpression(m->exact[i]);
+    if (m->hasExact() && !m->decimalAt(i)) return exact::toExpression(m->exact[i]);
     const Complex z = m->at(i);
     char buf[80];
     if (z.imag() == 0) std::snprintf(buf, sizeof(buf), "%.15g", z.real());

@@ -12,6 +12,7 @@ const char* complexName(ComplexMode m) { return m == ComplexMode::Real ? "Real" 
 } // namespace
 
 void Context::open(AppId id) { manager_.open(id); }
+const gfx::Canvas* Context::screen() const noexcept { return manager_.canvas_; }
 void Context::home() { manager_.home(); }
 void Context::leaveSetup() {
     const AppId back = manager_.setupReturn_;
@@ -56,6 +57,16 @@ AppManager::AppManager(Workspace& ws, Platform& platform) : ctx_(ws, platform, *
     errorTitle_.reserve(TitleCapacity);
     errorDetail_.reserve(DetailCapacity);
     ctx_.toast_.reserve(ToastCapacity);
+    // PxlTest( (v1.12.0): GRAPH disegna la sua schermata nel framebuffer, come
+    // la VRAM della fx-CG50, e il pixel si legge da li'; la modalita' attiva
+    // ridisegna subito dopo.
+    ws.pixelProbe = [this](int row, int column) {
+        App* graph = find(AppId::Graph);
+        if (!graph || !canvas_) return 0;
+        const int v = graph->probePixel(ctx_, *canvas_, row, column);
+        fullRedraw_ = true;
+        return v > 0 ? 1 : 0;
+    };
 }
 
 void AppManager::add(App& a) {
@@ -91,8 +102,9 @@ void AppManager::showError(const char* what) {
     if (!what) what = "";
     const char* colon = std::strchr(what, ':');
     const char* error = std::strstr(what, "ERROR");
-    // Messaggi della fx-CG50 senza la parola ERROR (tabella degli errori α-2, α-3).
-    static const char* const kTitles[] = {"Can't Solve!", "Time Out", "No Variable", "Underflow", "No Solution", "Infinitely Many Solutions"};
+    // Titoli della fx-CG50 senza la parola ERROR (Appendice α, tabella degli errori α-2, α-3).
+    static const char* const kTitles[] = {"Can't Solve!", "Time Out", "No Variable", "Underflow", "No Solution", "Infinitely Many Solutions",
+                                          "Complex Number In List", "Complex Number In Matrix", "Complex Number In Data"};
     bool known = false;
     if (colon) for (const char* t : kTitles) known = known || (std::strncmp(what, t, std::strlen(t)) == 0 && what + std::strlen(t) == colon);
     if (colon && ((error && error < colon) || known)) {
@@ -147,6 +159,7 @@ bool AppManager::tick() {
     return redraw;
 }
 void AppManager::draw(gfx::Canvas& c) {
+    canvas_ = &c;
     c.resetClip();
     if (active_) {
         try { active_->draw(ctx_, c); }

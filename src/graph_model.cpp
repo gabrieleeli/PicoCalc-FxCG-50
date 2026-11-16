@@ -15,7 +15,8 @@ constexpr TypeName kTypes[GraphTypeCount] = {
 };
 constexpr const char* kStyles[LineStyleCount] = {"Normal", "Thick", "Broken", "Dot", "Thin"};
 constexpr const char* kColors[GraphColorCount] = {"Blue", "Red", "Green", "Magenta", "Black", "Cyan", "Yellow"};
-constexpr const char* kSketchKinds[] = {"Plot", "PlotOff", "Line", "Tangent", "Normal", "Circle", "Vertical", "Horizontal", "Text", "Pen", "Inverse"};
+constexpr const char* kSketchKinds[] = {"Plot", "PlotOff", "Line", "Tangent", "Normal", "Circle", "Vertical", "Horizontal", "Text", "Pen", "Inverse",
+                                        "Integral", "Data"};
 constexpr std::size_t SketchKindCount = sizeof(kSketchKinds) / sizeof(kSketchKinds[0]);
 bool finite(double v) { return std::isfinite(v) && std::abs(v) <= MaxViewMagnitude; }
 } // namespace
@@ -92,8 +93,10 @@ std::string validateSketch(const SketchItem& s) {
     if ((s.kind == SketchItem::Kind::Tangent || s.kind == SketchItem::Kind::Normal) && s.x1 == 0 && s.y1 == 0) return "direzione nulla";
     if (s.kind == SketchItem::Kind::Text && (s.text.empty() || s.text.size() > MaxSketchText)) return "testo vuoto o troppo lungo";
     if (s.kind == SketchItem::Kind::Inverse && (s.text.empty() || s.text.size() > MaxGraphExpression)) return "funzione mancante";
-    if (s.kind == SketchItem::Kind::Pen) {
-        if (s.path.size() < 2 || s.path.size() % 2 || s.path.size() > 2 * MaxPenPoints) return "tracciato non valido";
+    if (s.kind == SketchItem::Kind::Integral && (s.text.empty() || s.text.size() > MaxGraphExpression || !(s.x0 <= s.x1))) return "integrale non valido";
+    if (s.kind == SketchItem::Kind::Pen || s.kind == SketchItem::Kind::Data) {
+        const std::size_t max = s.kind == SketchItem::Kind::Pen ? MaxPenPoints : MaxDataPoints;
+        if (s.path.size() < 2 || s.path.size() % 2 || s.path.size() > 2 * max) return "tracciato non valido";
         for (float f : s.path) if (!std::isfinite(f)) return "tracciato non valido";
     } else if (!s.path.empty()) return "tracciato inatteso";
     return {};

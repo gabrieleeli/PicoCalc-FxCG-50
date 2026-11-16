@@ -9,6 +9,7 @@
 #include "value.hpp"
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -55,6 +56,34 @@ struct Settings {
     // Liste usate da Statistics (SET: 1Var/2Var XList, YList), indici 0..25.
     std::uint8_t statXList{0};
     std::uint8_t statYList{1};
+    // ---- v1.12.0 (record v8)
+    // SET UP "List File": file di liste attivo (0..5 = File 1..6).
+    std::uint8_t listFile{0};
+    // SET UP "Sub Name": l'editor delle liste mostra la riga dei sottonomi.
+    bool subName{true};
+    // Tipo dell'ultima regressione calcolata in Statistics (stats::RegType),
+    // per x̂, ŷ e VARS STAT a..e, r, r²; 0xFF = nessuna.
+    std::uint8_t statRegType{0xFF};
+};
+
+// Un file di liste (fx-CG50 List File 1-6): 26 liste con i sottonomi.
+struct ListFileData {
+    std::array<std::vector<double>, 26> lists{};
+    std::array<std::string, 26> names{};
+    std::size_t elements() const noexcept { std::size_t n = 0; for (const auto& l : lists) n += l.size(); return n; }
+};
+
+// Variabili delle modalita' Dyna Graph, Recursion e Financial che VARS rende
+// disponibili in Run-Matrix (record v8): si leggono e si assegnano con ->.
+struct ModeVariables {
+    double dynaStart{1}, dynaEnd{5}, dynaPitch{1};
+    double recStart{0}, recEnd{10};
+    std::array<double, 9> recInitial{};          // a0 a1 a2 b0 b1 b2 c0 c1 c2
+    std::array<double, 3> recNStart{};           // anStart bnStart cnStart
+    double tvmN{0}, tvmI{0}, tvmPV{0}, tvmPMT{0}, tvmFV{0}, tvmPY{12}, tvmCY{12};
+    // Formula della successione an+1 = f(n, an) (variabili rec_n, rec_an), assegnata
+    // con "formula"->an+1 come nei programmi della fx-CG50; usata da DrawR e DrawWeb.
+    std::string recFormula;
 };
 
 // Risultato di un calcolo che e' una lista, una matrice o un vettore. I
@@ -82,6 +111,10 @@ struct HistoryEntry {
     std::int64_t fracNum{0}, fracDen{0};
     std::uint32_t simpFactor{0};         // fattore usato da ▶Simp (mostrato "F=n"), 0 = nessuno
     bool command{false};                 // comando grafico (Plot, F-Line, Graph Y=...): il risultato e' "Done"
+    // ---- v1.12.0 (record v8)
+    std::int8_t engShift{0};             // ENG / ENG←: spostamento dell'esponente ingegneristico (passi di 3)
+    std::vector<std::string> displays;   // risultati intermedi mostrati da ◢ in una riga a piu' istruzioni
+    std::string text;                    // risultato stringa ("ABC", Str 1) mostrato com'e'
 };
 
 // Mat A-Z, Vct A-Z e le memorie delle risposte MatAns, VctAns, ListAns (record
@@ -155,7 +188,7 @@ struct Graph3DState {
 // Dati condivisi da tutte le applicazioni. Risolve anche le variabili che
 // Run-Matrix legge dalle altre modalita' con VARS (V-Window, intervallo di
 // Table) e le matrici, i vettori e le liste citati in un'espressione.
-struct Workspace final : NameResolver, CollectionResolver {
+struct Workspace final : NameResolver, CollectionResolver, ServiceResolver {
     // Per-board limits of the persistent data (limits.hpp): Pico 2 W 40 history
     // lines and lists of 255 elements (v1.8.0), Pico Plus 2 W 200 lines and
     // lists of 999 elements (fx-CG50) in its 2 x 512 KB record store.
@@ -178,6 +211,17 @@ struct Workspace final : NameResolver, CollectionResolver {
     std::vector<ChatMessage> chat;
     Graph3DState graph3d;
     CollectionMemory matrices;
+    // ---- v1.12.0 (record v8)
+    // List File 1-6: il file attivo e' in lists / listNames; gli altri qui (lo
+    // slot del file attivo resta vuoto). Il budget kListStoreElements vale per
+    // tutti i file insieme.
+    std::array<ListFileData, limits::kListFiles> listFiles{};
+    std::array<std::string, limits::kFunctionMemories> functionMemories{};   // f1-f20 (OPTN › FUNCMEM)
+    std::array<std::string, limits::kStrings> strings{};                    // Str 1-20 (VARS › Str)
+    ModeVariables modeVars;
+    // Servizio di GRAPH per PxlTest( (non salvato): 1 se il pixel della schermata
+    // del grafico e' acceso. Lo registra l'app GRAPH; senza, PxlTest( da' 0.
+    std::function<int(int, int)> pixelProbe;
 
     Workspace();
     void resetAll();
@@ -208,12 +252,32 @@ struct Workspace final : NameResolver, CollectionResolver {
     // Sottonome di List index+1 (fx-CG50: riga SUB dell'editor delle liste).
     const std::string& listName(std::size_t index) const;
     void setListName(std::size_t index, std::string name);    // al piu' 8 caratteri stampabili
+    // v1.12.0: List "QTY" (CollectionResolver), List File 1-6, Str, function memory,
+    // variabili di sistema assegnabili e servizi del valutatore.
+    int listByName(const std::string& subName) const override;
+    bool special(const std::string& lowerName, CalcValue& out) const override;   // VARS EQUATION, TABLE Result
+    void selectListFile(std::size_t file);                    // 0..5; il file attivo passa in lists/listNames
+    // Assegna una variabile di sistema (Xmin, Xfct, TblStart, D Start, R Start,
+    // a0, n, I%, ...): false se il nome non e' assegnabile. Lancia Range ERROR /
+    // Argument ERROR se il valore non e' valido, senza cambiare nulla.
+    bool storeSystemVariable(const std::string& lowerName, double value);
+    void setString(std::size_t index, std::string text);     // Str 1..20 (indice 0..19)
+    void setFunctionMemory(std::size_t index, std::string expression);   // f1..f20 (indice 0..19)
+    void setRecursionFormula(std::string formula);           // an+1 = f(rec_n, rec_an), "" = nessuna
+    int pixelTest(int row, int column) const override;
+    std::string functionMemory(int n) const override;
+    bool statisticVariable(const std::string& lowerName, double& out) const;
     // Memorizza un risultato lista / matrice / vettore in ListAns, o in MatAns
     // (e anche in VctAns quando ha una riga o una colonna, come sulla fx-CG50).
     void storeCollectionAnswer(const CalcValue& value);
     // Copia di tutte le matrici, i vettori e le liste (il ricalcolo della
     // cronologia la ripristina quando la riga modificata non riesce).
-    struct CollectionSnapshot { CollectionMemory matrices; std::array<std::vector<double>, ListCount> lists; };
+    struct CollectionSnapshot {
+        CollectionMemory matrices; std::array<std::vector<double>, ListCount> lists;
+        // v1.12.0: anche Str, function memory e variabili di sistema assegnabili con ->.
+        std::array<std::string, limits::kStrings> strings; std::array<std::string, limits::kFunctionMemories> functionMemories;
+        ModeVariables modeVars; ViewWindow view; double tableStart{}, tableEnd{}, tableStep{}, xFactor{}, yFactor{};
+    };
     std::unique_ptr<CollectionSnapshot> snapshotCollections() const;
     void restoreCollections(CollectionSnapshot& snapshot);
 };

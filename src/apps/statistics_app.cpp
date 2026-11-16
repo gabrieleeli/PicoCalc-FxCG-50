@@ -52,8 +52,19 @@ void StatisticsApp::setupGrid(Context& ctx) {
     grid_.rows = static_cast<int>(std::max<std::size_t>(1, longest));
     grid_.header = [](int c) { return "List " + std::to_string(c + 1); };
     // Riga SUB: sottonomi delle liste (fx-CG50, fino a 8 caratteri).
-    grid_.subHeader = [ws](int c) { return ws->listName(static_cast<std::size_t>(c)); };
-    grid_.setSubHeader = [ws, &ctx](int c, const std::string& name) { ws->setListName(static_cast<std::size_t>(c), name); ctx.markDirty(); };
+    // SET UP "Sub Name" Off (v1.12.0): la riga SUB non si mostra.
+    if (ctx.ws.settings.subName) {
+        grid_.subHeader = [ws](int c) { return ws->listName(static_cast<std::size_t>(c)); };
+        grid_.setSubHeader = [ws, &ctx](int c, const std::string& name) { ws->setListName(static_cast<std::size_t>(c), name); ctx.markDirty(); };
+    } else {
+        grid_.subHeader = nullptr;
+        grid_.setSubHeader = nullptr;
+    }
+    // List File n della fx-CG50: indicato nell'intestazione quando non e' il File 1.
+    if (ctx.ws.settings.listFile != 0) {
+        const int file = ctx.ws.settings.listFile + 1;
+        grid_.header = [file](int c) { return "F" + std::to_string(file) + " List " + std::to_string(c + 1); };
+    }
     grid_.columnLength = [&lists](int c) { return static_cast<int>(lists[static_cast<std::size_t>(c)].size()); };
     grid_.get = [&lists](int r, int c, double& v) { const auto& l = lists[static_cast<std::size_t>(c)]; if (static_cast<std::size_t>(r) >= l.size()) return false; v = l[static_cast<std::size_t>(r)]; return true; };
     grid_.set = [&lists, ws, &ctx](int r, int c, double v) {
@@ -79,7 +90,7 @@ void StatisticsApp::runCalc(Context& ctx, int choice) {
     if (choice == 0) {
         const auto o = stats::oneVariable(X);
         results_.title = "1-Variable (" + listLabel(st.statXList) + ")";
-        results_.add("x\xCC\x84", F(o.mean)); results_.add("\xCE\xA3x", F(o.sum)); results_.add("\xCE\xA3x\xC2\xB2", F(o.sumSq));
+        results_.add("\xEE\x80\x81", F(o.mean)); results_.add("\xCE\xA3x", F(o.sum)); results_.add("\xCE\xA3x\xC2\xB2", F(o.sumSq));
         results_.add("\xCF\x83x", F(o.popSd)); results_.add("sx", F(o.sampleSd)); results_.add("n", F(o.n));
         results_.add("minX", F(o.min)); results_.add("Q1", F(o.q1)); results_.add("Med", F(o.median)); results_.add("Q3", F(o.q3)); results_.add("maxX", F(o.max));
         std::string modes; for (std::size_t i = 0; i < o.modes.size() && i < 4; ++i) { if (i) modes += ", "; modes += F(o.modes[i]); }
@@ -88,13 +99,15 @@ void StatisticsApp::runCalc(Context& ctx, int choice) {
     } else if (choice == 1) {
         const auto t = stats::twoVariable(X, Y);
         results_.title = "2-Variable (" + listLabel(st.statXList) + ", " + listLabel(st.statYList) + ")";
-        results_.add("x\xCC\x84", F(t.meanX)); results_.add("\xCE\xA3x", F(t.sumX)); results_.add("\xCE\xA3x\xC2\xB2", F(t.sumX2)); results_.add("\xCF\x83x", F(t.popSdX)); results_.add("sx", F(t.sampleSdX)); results_.add("n", F(t.n));
-        results_.add("y\xCC\x84", F(t.meanY)); results_.add("\xCE\xA3y", F(t.sumY)); results_.add("\xCE\xA3y\xC2\xB2", F(t.sumY2)); results_.add("\xCF\x83y", F(t.popSdY)); results_.add("sy", F(t.sampleSdY));
+        results_.add("\xEE\x80\x81", F(t.meanX)); results_.add("\xCE\xA3x", F(t.sumX)); results_.add("\xCE\xA3x\xC2\xB2", F(t.sumX2)); results_.add("\xCF\x83x", F(t.popSdX)); results_.add("sx", F(t.sampleSdX)); results_.add("n", F(t.n));
+        results_.add("\xEE\x80\x82", F(t.meanY)); results_.add("\xCE\xA3y", F(t.sumY)); results_.add("\xCE\xA3y\xC2\xB2", F(t.sumY2)); results_.add("\xCF\x83y", F(t.popSdY)); results_.add("sy", F(t.sampleSdY));
         results_.add("\xCE\xA3xy", F(t.sumXY)); results_.add("minX", F(t.minX)); results_.add("maxX", F(t.maxX)); results_.add("minY", F(t.minY)); results_.add("maxY", F(t.maxY));
     } else {
         const auto type = static_cast<RegType>(choice - 2);
         reg_ = stats::regress(type, X, Y);
         hasReg_ = true;
+        // Per x̂, ŷ e VARS STAT di Run-Matrix (v1.12.0): l'ultima regressione calcolata.
+        ctx.ws.settings.statRegType = static_cast<std::uint8_t>(type);
         results_.title = std::string("Regressione ") + stats::regFormula(type);
         static const char* names[] = {"a", "b", "c", "d", "e"};
         for (std::size_t i = 0; i < reg_.coef.size() && i < 5; ++i) results_.add(names[i], F(reg_.coef[i]));
@@ -154,13 +167,13 @@ void StatisticsApp::computeForm(Context& ctx) {
         const auto r = formKind_ == 200 ? stats::zTest1(X, n(1), n(2), t) : stats::tTest1(X, n(1), t);
         results_.add(formKind_ == 200 ? "z" : "t", F(r.statistic)); results_.add("p", F(r.p));
         if (formKind_ == 201) results_.add("df", F(r.df));
-        results_.add("x\xCC\x84", F(r.mean)); results_.add("sx", F(r.sd)); results_.add("n", F(r.n));
+        results_.add("\xEE\x80\x81", F(r.mean)); results_.add("sx", F(r.sd)); results_.add("n", F(r.n));
         break;
     }
     case 202: case 203: {
         const auto& X = ctx.ws.lists[ctx.ws.settings.statXList];
         const auto iv = formKind_ == 202 ? stats::zInterval(X, n(1), n(0)) : stats::tInterval(X, n(0));
-        results_.add("Left", F(iv.lower)); results_.add("Right", F(iv.upper)); results_.add("x\xCC\x84", F(iv.mean)); results_.add("n", F(iv.n));
+        results_.add("Left", F(iv.lower)); results_.add("Right", F(iv.upper)); results_.add("\xEE\x80\x81", F(iv.mean)); results_.add("n", F(iv.n));
         break;
     }
     default: break;
