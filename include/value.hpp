@@ -10,9 +10,12 @@
 //
 // Dalla v1.11.0 un valore puo' portare anche la forma esatta di ogni elemento
 // (`exact`, vuoto quando manca): le celle dell'editor MAT/VCT accettano
-// espressioni come 1/3 o 2√3, e le memorie fino a kExactElements elementi le
-// conservano, cosi' Mat A x 3 resta esatto.
+// espressioni come 1/3 o 2√3, e le memorie le conservano, cosi' Mat A x 3
+// resta esatto. Dalla v1.12.0 senza il limite di 64 elementi (resta il budget
+// della scheda, limits::kExactStoreElements) e con l'indicazione delle celle
+// digitate come decimali (0.25 resta 0.25).
 #include "exact.hpp"
+#include "limits.hpp"
 #include <complex>
 #include <cstddef>
 #include <cstdint>
@@ -32,7 +35,8 @@ struct CalcValue {
     std::vector<double> re;               // rows * cols elementi (vuoto: nessun valore, "None")
     std::vector<double> im;               // vuoto quando tutti gli elementi sono reali
     std::vector<exact::Value> exact;      // vuoto, oppure una forma esatta per elemento (solo valori reali)
-    static constexpr std::size_t ExactElements = 64;   // oltre, le forme esatte non si conservano
+    std::vector<bool> decimal;            // v1.12.0: vuoto, oppure per elemento "digitato come decimale" (stessa lunghezza di exact)
+    static constexpr std::size_t ExactElements = limits::kExactStoreElements;   // oltre, le forme esatte non si conservano
 
     bool empty() const noexcept { return re.empty(); }
     std::size_t size() const noexcept { return re.size(); }
@@ -49,8 +53,12 @@ struct CalcValue {
     void set(std::size_t i, Complex z);
     // Elemento reale con la sua forma esatta (crea le forme degli altri elementi
     // quando sono interi; altrimenti, o oltre ExactElements, le toglie).
-    void setExact(std::size_t i, const exact::Value& v);
+    void setExact(std::size_t i, const exact::Value& v, bool decimalInput = false);
     bool hasExact() const noexcept { return !exact.empty() && exact.size() == re.size(); }
+    // Vero se l'elemento i e' stato digitato come decimale (si mostra in decimale).
+    bool decimalAt(std::size_t i) const noexcept { return i < decimal.size() && decimal[i]; }
+    bool anyDecimal() const noexcept { for (bool d : decimal) if (d) return true; return false; }
+    void clearExact() { exact.clear(); exact.shrink_to_fit(); decimal.clear(); decimal.shrink_to_fit(); }
     Complex scalar() const noexcept { return empty() ? Complex{} : at(0); }
     void normalize();                            // elimina le parti immaginarie quando sono tutte nulle
     bool operator==(const CalcValue& o) const noexcept;

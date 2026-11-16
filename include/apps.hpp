@@ -257,6 +257,7 @@ public:
     void draw(Context& ctx, gfx::Canvas& c) override;
     bool tick(Context& ctx) override;
     bool ownsSetup() const override { return true; }
+    int probePixel(Context& ctx, gfx::Canvas& c, int row, int column) override;
 
     enum class Screen : std::uint8_t { List, Edit, Plot, Window, Setup, Format, Files };
     // Plot screen states: plain graph, Trace (cursor on a curve), free pointer,

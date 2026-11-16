@@ -48,6 +48,16 @@ AppManager::AppManager(Workspace& ws, Platform& platform) : ctx_(ws, platform, *
     errorTitle_.reserve(TitleCapacity);
     errorDetail_.reserve(DetailCapacity);
     ctx_.toast_.reserve(ToastCapacity);
+    // PxlTest( (v1.12.0): GRAPH disegna la sua schermata nel framebuffer, come
+    // la VRAM della fx-CG50, e il pixel si legge da li'; la modalita' attiva
+    // ridisegna subito dopo.
+    ws.pixelProbe = [this](int row, int column) {
+        App* graph = find(AppId::Graph);
+        if (!graph || !canvas_) return 0;
+        const int v = graph->probePixel(ctx_, *canvas_, row, column);
+        fullRedraw_ = true;
+        return v > 0 ? 1 : 0;
+    };
 }
 
 void AppManager::add(App& a) {
@@ -133,6 +143,7 @@ bool AppManager::tick() {
     return redraw;
 }
 void AppManager::draw(gfx::Canvas& c) {
+    canvas_ = &c;
     c.resetClip();
     if (active_) {
         try { active_->draw(ctx_, c); }

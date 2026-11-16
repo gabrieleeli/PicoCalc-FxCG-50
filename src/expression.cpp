@@ -119,7 +119,7 @@ constexpr const char* kSystemNames[] = {"xmin","xmax","xscl","ymin","ymax","yscl
     "reg_a","reg_b","reg_c","reg_d","reg_e","reg_r","reg_r2","reg_mse","stat_q1","stat_q3","stat_med","stat_mod",
     "stat_hstart","stat_hpitch","reg_type","d_start","d_end","d_pitch","r_start","r_end","rec_a0","rec_a1","rec_a2",
     "rec_b0","rec_b1","rec_b2","rec_c0","rec_c1","rec_c2","rec_anstart","rec_bnstart","rec_cnstart",
-    "tvm_n","tvm_i","tvm_pv","tvm_pmt","tvm_fv","tvm_py","tvm_cy",nullptr};
+    "tvm_n","tvm_i","tvm_pv","tvm_pmt","tvm_fv","tvm_py","tvm_cy","rec_n","rec_an",nullptr};
 // Infix operator words (fx-CG50 And/Or/Xor, Int÷ and Rmdr) and their internal op codes.
 struct OpWord { const char* name; char op; };
 constexpr OpWord kOperatorWords[] = {{"and",'&'},{"or",'|'},{"xor",'x'},{"xnor",'X'},{"rmdr",'r'},{"intdiv",'q'}};
@@ -156,8 +156,10 @@ int listNumber(const std::string& lowerName){
     return v>=1&&v<=CollectionResolver::Slots?v:0;
 }
 bool isListName(const std::string& lowerName){return listNumber(lowerName)!=0;}
+constexpr const char* kSpecialCollections[]={"eq_simres","eq_simcoef","eq_plyres","eq_plycoef","tbl_result"};
+bool specialCollection(const std::string& lowerName){for(const char* n:kSpecialCollections)if(lowerName==n)return true;return false;}
 bool isConstantName(const std::string& lowerName){
-    if(explicitVariable(lowerName))return true;
+    if(explicitVariable(lowerName)||specialCollection(lowerName))return true;
     for(const auto& c:kConstants)if(lowerName==c.name)return true;
     for(const char* s:kSpecialNames)if(lowerName==s)return true;
     return isSystemName(lowerName);
@@ -800,7 +802,7 @@ private:
                 return span(call,s);
             }
             auto token=ast::make(ast::Kind::Token,k.text);
-            if(isListName(k.text))token->flags=ast::FlagCollection;
+            if(isListName(k.text)||specialCollection(k.text))token->flags=ast::FlagCollection;
             return span(token,s);
         }
         if(k.type==TT::End)throw error("Syntax ERROR: operando mancante");
@@ -2277,10 +2279,11 @@ struct ExactDomain {
     // Un elemento memorizzato e' esatto quando la memoria conserva la sua forma
     // esatta (celle dell'editor MAT/VCT, risultati esatti memorizzati: v1.11.0)
     // o quando e' intero (un double intero e' esattamente quell'intero).
-    static void load(const CalcValue& src,Coll<Elem>& out,Env&){
+    static void load(const CalcValue& src,Coll<Elem>& out,Env& env){
         if(src.complex())throw NoExactForm{};
         out.rows=src.rows;out.cols=src.cols;
-        if(src.hasExact()){out.v=src.exact;return;}
+        // Celle digitate come decimali (0.25): il risultato si mostra in decimale (v1.12.0).
+        if(src.hasExact()){out.v=src.exact;if(src.anyDecimal())env.decimal=true;return;}
         out.v.resize(src.size());
         for(std::size_t i=0;i<src.size();++i){
             const double d=src.re[i];
@@ -2438,6 +2441,16 @@ private:
         std::string t=n.text;                        // "Mat A", "Vct Ans", "List 12", "list3"
         Memory memory=Memory::List;
         int index=CollectionResolver::Answer;
+        if(specialCollection(t)){
+            // VARS EQUATION / TABLE Result: matrici calcolate dal chiamante (v1.12.0).
+            CalcValue stored;
+            if(!env.ctx.collections||!env.ctx.collections->special(t,stored)||stored.empty())
+                throw DimensionError("Dimension ERROR: "+std::string(calclib::displayName(t)?calclib::displayName(t):t.c_str())+" non disponibile");
+            C out;
+            D::load(stored,out,env);
+            out.type=ValueType::Matrix;
+            return out;
+        }
         if(isListName(t)){
             // Una funzione di GRAPH con una lista si disegna una volta per elemento: li'
             // il nome e' l'elemento del grafico in corso, un numero.
@@ -3520,6 +3533,7 @@ std::string rewriteIdentifiers(const std::string& expression,const std::function
     }
     return out;
 }
+bool isSpecialCollectionName(const std::string& lowerName) noexcept{return specialCollection(lowerName);}
 bool isFunctionReferenceName(const std::string& lowerName) noexcept{
     try{return referenceName(lowerName);}catch(...){return false;}
 }

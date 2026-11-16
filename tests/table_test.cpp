@@ -378,7 +378,7 @@ int main() {
             // v8 appends List File/Sub Name/regression (3 bytes), r and θ (2 x 11 bytes), six
             // list files (26 empty lists and names each), 20 empty function memories and
             // strings, the 24 Dyna/Recursion/TVM variables and no history extras
-            tail += 3 + 2 * 11 + 6 * (26 * 2 + 26 * 2) + 20 * 2 + 20 * 2 + 24 * 8 + 2;
+            tail += 3 + 2 * 11 + 6 * (26 * 2 + 26 * 2) + 20 * 2 + 20 * 2 + 24 * 8 + 2 + 55 + 2;   // + 55 flag dei decimali, formula an+1
             blob.resize(blob.size() - tail);
             blob.erase(at + 24, at + 24 + 6);                         // variable, list, type, generated, row count
             const std::uint16_t three = 3;

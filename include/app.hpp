@@ -84,6 +84,9 @@ public:
     // True when the mode shows its own Setup items for SET UP (GRAPH, TABLE)
     // instead of the global SYSTEM settings.
     virtual bool ownsSetup() const { return false; }
+    // v1.12.0, PxlTest( di Run-Matrix: la modalita' che possiede la schermata del
+    // grafico (GRAPH) la disegna su `canvas` e dice se il pixel e' acceso (-1: no).
+    virtual int probePixel(Context&, gfx::Canvas&, int row, int column) { (void)row; (void)column; return -1; }
 };
 
 // Routes input to the active application, handles the global keys (MENU,
@@ -122,6 +125,7 @@ private:
     AppId activeId_{AppId::MainMenu};
     std::string errorTitle_, errorDetail_;
     bool fullRedraw_{true};
+    gfx::Canvas* canvas_{};          // ultima schermata disegnata (PxlTest( la riusa come VRAM)
     friend class Context;
 public:
     void setLauncher(App& launcher) noexcept { launcher_ = &launcher; }

@@ -88,7 +88,12 @@ public:
     // v1.12.0: indice 0..25 della lista con il sottonome indicato (List "QTY"),
     // -1 se nessuna lista ha quel nome.
     virtual int listByName(const std::string& subName) const { (void)subName; return -1; }
+    // v1.12.0: matrici di VARS calcolate dalle altre modalita' (EQUATION SimRes,
+    // SimCoef, PlyRes, PlyCoef; TABLE Result): nomi "eq_simres", "tbl_result"...
+    virtual bool special(const std::string& lowerName, CalcValue& out) const { (void)lowerName; (void)out; return false; }
 };
+// True per i nomi delle matrici di VARS di special() ("eq_simres", "tbl_result"...).
+bool isSpecialCollectionName(const std::string& lowerName) noexcept;
 
 // v1.12.0: servizi che il valutatore chiede al chiamante per alcune funzioni
 // di Run-Matrix: PxlTest( (stato di un pixel della schermata del grafico) e

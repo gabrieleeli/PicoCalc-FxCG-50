@@ -154,7 +154,7 @@ const MemberSection kMembers[] = {
     {"checkListLength", d::Lists}, {"listFits", d::Lists}, {"listElements", d::Lists},
     // v1.12.0: List "QTY", List File 1-6, Str, function memory, variabili di sistema
     {"listByName", d::Lists}, {"selectListFile", d::Lists}, {"listFiles", d::Lists},
-    {"setString", d::Strings}, {"functionMemories", d::Strings}, {"setFunctionMemory", d::Strings}, {"modeVars", d::Strings},
+    {"setString", d::Strings}, {"functionMemories", d::Strings}, {"setFunctionMemory", d::Strings}, {"modeVars", d::Strings}, {"setRecursionFormula", d::Strings},
     // Una variabile di sistema puo' essere della V-Window, di TABLE, di GRAPH (Xfct) o di Dyna/Recursion/TVM.
     {"storeSystemVariable", d::View | d::Table | d::Graph | d::Strings},
     {"statisticVariable", d::Settings | d::Lists}, {"pixelProbe", d::Graph},

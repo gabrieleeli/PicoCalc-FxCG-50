@@ -142,6 +142,7 @@ StoreTarget parseTarget(const std::string& text) {
         return index >= 1 && index <= max && compact[n] != '0';
     };
     int numberedIndex = 0;
+    if (compact == "rec_an1") { t.kind = StoreTarget::Kind::String; t.index = -1; t.label = "an+1"; return t; }   // "formula"->an+1
     if (numbered("str_", static_cast<int>(limits::kStrings), numberedIndex)) { t.kind = StoreTarget::Kind::String; t.index = numberedIndex - 1; t.label = "Str " + std::to_string(numberedIndex); return t; }
     if (numbered("f_", static_cast<int>(limits::kFunctionMemories), numberedIndex)) { t.kind = StoreTarget::Kind::FunctionMemory; t.index = numberedIndex - 1; t.label = "f" + std::to_string(numberedIndex); return t; }
     {
@@ -242,8 +243,9 @@ bool naturalSize(const CalcValue& v) {
     if (v.isList()) return v.size() <= limits::kNaturalListLength;
     return v.rows <= limits::kNaturalMatrixDim && v.cols <= limits::kNaturalMatrixDim;
 }
-// Elementi per cui si tenta la valutazione esatta (che ripete il calcolo).
-constexpr std::size_t kExactElements = 64;
+// Elementi per cui si tenta la valutazione esatta (che ripete il calcolo): dalla
+// v1.12.0 il budget delle forme esatte della scheda, non piu' 64.
+constexpr std::size_t kExactElements = CalcValue::ExactElements;
 
 // Riga che fornisce Ans alla riga `previous` (l'ultima senza errore e numerica).
 const HistoryEntry* answerEntry(const Workspace& ws, std::size_t previous) {
@@ -509,7 +511,7 @@ bool rowCommand(Workspace& ws, const std::string& expr, HistoryEntry& entry, con
         const std::size_t a = row(args[kind == 2 ? 2 : 1]), b = row(args[kind == 2 ? 3 : 2]);
         for (std::size_t c = 0; c < cols; ++c) m.set(b * cols + c, at(b, c) + k * at(a, c));
     }
-    m.exact.clear();
+    m.clearExact();
     m.normalize();
     ws.storeMatrix(slot, std::move(m));
     entry = HistoryEntry{};
@@ -582,7 +584,8 @@ RunOutcome evaluateStatement(Workspace& ws, const std::string& raw, const std::s
         // Stringhe: "ABC" (anche ->Str n) o Str n da soli.
         std::string text;
         if (stringValue(ws, expr, text)) {
-            if (target.kind == StoreTarget::Kind::String) { ws.setString(static_cast<std::size_t>(target.index), text); out.storedIn = target.label; }
+            if (target.kind == StoreTarget::Kind::String && target.index < 0) { ws.setRecursionFormula(text); out.storedIn = target.label; }
+            else if (target.kind == StoreTarget::Kind::String) { ws.setString(static_cast<std::size_t>(target.index), text); out.storedIn = target.label; }
             else if (target.kind != StoreTarget::Kind::None) throw TypeError("Argument ERROR: una stringa si memorizza in Str 1-20", target.where.position, target.where.length);
             entry = HistoryEntry{};
             entry.expression = raw;

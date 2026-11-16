@@ -52,6 +52,14 @@ inline constexpr std::size_t kMatrixStoreElements = board::config::kIsPicoPlus2W
 // Risultati mostrati in forma naturale nella cronologia (fx-CG50: matrici fino
 // a 6 x 6, vettori fino a 6 elementi, liste fino a 20); i risultati piu' grandi
 // si leggono dalle memorie delle risposte (MatAns, VctAns, ListAns).
+// v1.12.0: forme esatte delle celle (1/3, 2√3, π/4) di tutte le memorie di
+// matrici, vettori e risposte insieme. Nessun limite per singola memoria (la
+// v1.11.0 si fermava a 64 elementi): conta solo la memoria della scheda
+// (~26 byte per forma nel record: 10 KB sul Pico 2 W, 104 KB sulla Plus).
+inline constexpr std::size_t kExactStoreElements = board::config::kIsPicoPlus2W ? 4000 : 400;
+// v1.12.0: punti di DrawStat / DrawR / DrawFTG (elementi SKETCH "Data") di
+// tutta la schermata del grafico (8 byte a punto nel record).
+inline constexpr std::size_t kSketchDataPoints = board::config::kIsPicoPlus2W ? 4000 : 1000;
 inline constexpr std::size_t kNaturalMatrixDim = 6;
 inline constexpr std::size_t kNaturalListLength = 20;
 

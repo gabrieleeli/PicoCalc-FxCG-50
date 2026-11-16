@@ -1,6 +1,9 @@
 #include "workspace.hpp"
 #include "mem_pools.hpp"
+#include "graph_engine.hpp"
+#include "solvers.hpp"
 #include "statistics.hpp"
+#include "table_model.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -58,6 +61,19 @@ void checkBudget(const CollectionMemory& m, std::size_t freed, std::size_t added
         throw MathError("Memory ERROR: memoria di matrici e vettori piena (" + std::to_string(used + added) + " elementi, massimo " +
                         std::to_string(limits::kMatrixStoreElements) + ")");
 }
+// Forme esatte di tutte le memorie insieme (limits::kExactStoreElements, v1.12.0):
+// oltre il budget della scheda la nuova memoria conserva solo i valori.
+std::size_t exactForms(const CollectionMemory& m) noexcept {
+    std::size_t n = m.matAns.exact.size() + m.vctAns.exact.size() + m.listAns.exact.size();
+    for (const CalcValue& v : m.mat) n += v.exact.size();
+    for (const CalcValue& v : m.vct) n += v.exact.size();
+    return n;
+}
+void fitExact(const CollectionMemory& m, CalcValue& value, std::size_t freed) {
+    if (!value.hasExact() || value.complex()) { value.clearExact(); return; }
+    const std::size_t used = exactForms(m) - std::min(freed, exactForms(m));
+    if (used + value.exact.size() > limits::kExactStoreElements) value.clearExact();
+}
 } // namespace
 
 bool Workspace::collection(Memory memory, int index, CalcValue& out) const {
@@ -90,7 +106,7 @@ void Workspace::storeMatrix(std::size_t slot, CalcValue value) {
     checkBudget(matrices, matrices.mat[slot].size(), value.size());
     value.type = ValueType::Matrix;
     value.normalize();
-    if (!value.hasExact() || value.complex() || value.size() > CalcValue::ExactElements) value.exact.clear();
+    fitExact(matrices, value, matrices.mat[slot].exact.size());
     matrices.mat[slot] = std::move(value);
 }
 void Workspace::storeVector(std::size_t slot, CalcValue value) {
@@ -101,7 +117,7 @@ void Workspace::storeVector(std::size_t slot, CalcValue value) {
     checkBudget(matrices, matrices.vct[slot].size(), value.size());
     value.type = ValueType::Vector;
     value.normalize();
-    if (!value.hasExact() || value.complex() || value.size() > CalcValue::ExactElements) value.exact.clear();
+    fitExact(matrices, value, matrices.vct[slot].exact.size());
     matrices.vct[slot] = std::move(value);
 }
 void Workspace::storeList(std::size_t index, const CalcValue& value) {
@@ -126,6 +142,62 @@ std::size_t Workspace::listElements() const noexcept {
     for (const auto& f : listFiles) n += f.elements();        // List File 1-6: budget comune
     return n;
 }
+bool Workspace::special(const std::string& n, CalcValue& out) const {
+    const EquationState& e = equation;
+    if (n == "eq_simcoef" || n == "eq_simres") {
+        const std::size_t u = e.unknowns;
+        if (u < 2 || u > 6) return false;
+        if (n == "eq_simcoef") {
+            out = CalcValue::matrix(u, u + 1);
+            for (std::size_t r = 0; r < u; ++r) for (std::size_t c = 0; c <= u; ++c) out.set(r * (u + 1) + c, {e.simultaneous[r * (u + 1) + c], 0});
+            return true;
+        }
+        std::vector<std::vector<double>> a(u, std::vector<double>(u));
+        std::vector<double> b(u);
+        for (std::size_t r = 0; r < u; ++r) { for (std::size_t c = 0; c < u; ++c) a[r][c] = e.simultaneous[r * (u + 1) + c]; b[r] = e.simultaneous[r * (u + 1) + u]; }
+        const LinearResult res = solveLinearSystem(a, b);
+        if (res.kind != LinearResult::Unique) throw MathError("Math ERROR: il sistema di EQUATION non ha una soluzione unica");
+        out = CalcValue::matrix(u, 1);
+        for (std::size_t r = 0; r < u; ++r) out.set(r, {res.solution[r], 0});
+        return true;
+    }
+    if (n == "eq_plycoef" || n == "eq_plyres") {
+        const std::size_t d = e.degree;
+        if (d < 2 || d > 6) return false;
+        std::vector<double> coef(e.polynomial.begin(), e.polynomial.begin() + static_cast<std::ptrdiff_t>(d + 1));
+        if (n == "eq_plycoef") {
+            out = CalcValue::matrix(1, d + 1);
+            for (std::size_t k = 0; k <= d; ++k) out.set(k, {coef[k], 0});
+            return true;
+        }
+        if (coef[0] == 0) throw MathError("Math ERROR: il coefficiente di grado massimo e' 0");
+        const std::vector<Complex> roots = polynomialRoots(coef);
+        out = CalcValue::matrix(roots.size(), 1);
+        for (std::size_t k = 0; k < roots.size(); ++k) out.set(k, roots[k]);
+        out.normalize();
+        return true;
+    }
+    if (n == "tbl_result") {
+        // La tabella di TABLE: colonna della variabile e una colonna per funzione selezionata.
+        graph::GraphEngine engine;
+        engine.build({&functions, &memory, this, &lists, nullptr});
+        const std::vector<table::Column> cols = table::columns(engine, table.funcType, false);
+        if (cols.empty()) throw MathError("Math ERROR: nessuna funzione selezionata in TABLE");
+        std::vector<double> rows = table.generated && !table.rows.empty() ? table.rows : table::rangeRows(table.start, table.end, table.step);
+        if (rows.empty() || rows.size() * (cols.size() + 1) > limits::kMatrixElements) throw DimensionError("Dimension ERROR: tabella troppo grande per una matrice");
+        out = CalcValue::matrix(rows.size(), cols.size() + 1);
+        for (std::size_t r = 0; r < rows.size(); ++r) {
+            out.set(r * (cols.size() + 1), {rows[r], 0});
+            for (std::size_t c = 0; c < cols.size(); ++c) {
+                double v = 0;
+                if (!table::cell(engine, cols[c], rows[r], v)) throw MathError("Math ERROR: valore della tabella non definito");
+                out.set(r * (cols.size() + 1) + c + 1, {v, 0});
+            }
+        }
+        return true;
+    }
+    return false;
+}
 int Workspace::listByName(const std::string& subName) const {
     if (subName.empty()) return -1;
     for (std::size_t i = 0; i < listNames.size(); ++i) if (listNames[i] == subName) return static_cast<int>(i);
@@ -145,6 +217,11 @@ void Workspace::setString(std::size_t index, std::string text) {
     if (index >= strings.size()) throw MathError("Argument ERROR: Str da 1 a " + std::to_string(strings.size()));
     if (text.size() > limits::kStringLength) throw MathError("Argument ERROR: una stringa ha al massimo " + std::to_string(limits::kStringLength) + " caratteri");
     strings[index] = std::move(text);
+}
+void Workspace::setRecursionFormula(std::string formula) {
+    if (formula.size() > limits::kFunctionMemoryLength) throw MathError("Memory ERROR: formula troppo lunga");
+    if (!formula.empty()) (void)parseExpression(formula);
+    modeVars.recFormula = std::move(formula);
 }
 void Workspace::setFunctionMemory(std::size_t index, std::string expression) {
     if (index >= functionMemories.size()) throw MathError("Argument ERROR: f1-f" + std::to_string(functionMemories.size()));
@@ -223,8 +300,9 @@ void Workspace::setListName(std::size_t index, std::string name) {
 void Workspace::storeCollectionAnswer(const CalcValue& value) {
     mem::PlacementScope heavy(mem::Policy::PREFER_PSRAM);
     if (value.isList()) {
-        matrices.listAns = value; matrices.listAns.normalize();
-        if (!matrices.listAns.hasExact() || matrices.listAns.size() > CalcValue::ExactElements) matrices.listAns.exact.clear();
+        CalcValue l = value; l.normalize();
+        fitExact(matrices, l, matrices.listAns.exact.size());
+        matrices.listAns = std::move(l);
         return;
     }
     if (!value.isMatrixLike()) return;
@@ -233,7 +311,7 @@ void Workspace::storeCollectionAnswer(const CalcValue& value) {
     checkBudget(matrices, matrices.matAns.size() + (vector ? matrices.vctAns.size() : 0), value.size() * (vector ? 2 : 1));
     CalcValue m = value;
     m.type = ValueType::Matrix; m.normalize();
-    if (!m.hasExact() || m.complex() || m.size() > CalcValue::ExactElements) m.exact.clear();
+    fitExact(matrices, m, matrices.matAns.exact.size() + (vector ? matrices.vctAns.exact.size() : 0));
     if (vector) { CalcValue v = m; v.type = ValueType::Vector; matrices.vctAns = std::move(v); }
     matrices.matAns = std::move(m);
 }
@@ -574,6 +652,21 @@ std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws) {
     for (double d : mv.recInitial) w.f64(d);
     for (double d : mv.recNStart) w.f64(d);
     for (double d : {mv.tvmN, mv.tvmI, mv.tvmPV, mv.tvmPMT, mv.tvmFV, mv.tvmPY, mv.tvmCY}) w.f64(d);
+    w.str(mv.recFormula);
+    // Celle digitate come decimali (bit per elemento) delle memorie con forme esatte.
+    auto decimals = [&](const CalcValue& v) {
+        const bool has = v.hasExact() && v.anyDecimal();
+        w.u8(has ? 1 : 0);
+        if (!has) return;
+        for (std::size_t k = 0; k < v.size(); k += 8) {
+            std::uint8_t b = 0;
+            for (std::size_t j = 0; j < 8 && k + j < v.size(); ++j) if (v.decimalAt(k + j)) b = static_cast<std::uint8_t>(b | (1u << j));
+            w.u8(b);
+        }
+    };
+    for (const CalcValue& v : cm.mat) decimals(v);
+    for (const CalcValue& v : cm.vct) decimals(v);
+    decimals(cm.matAns); decimals(cm.vctAns); decimals(cm.listAns);
     auto extra8 = [](const HistoryEntry& h) { return h.engShift != 0 || !h.displays.empty() || !h.text.empty(); };
     std::uint16_t extras8 = 0;
     for (const auto& h : ws.history) if (extra8(h)) ++extras8;
@@ -814,7 +907,7 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
             const auto type = r.u8(); cg.expr = r.str(); cg.expr2 = r.str(); cg.color = r.u8(); const auto style = r.u8();
             if (type >= GraphTypeCount || cg.color >= GraphColorCount || style >= LineStyleCount) return false;
             cg.type = static_cast<GraphType>(type); cg.style = static_cast<LineStyle>(style);
-            if (cg.type != GraphType::Y && cg.type != GraphType::Polar && cg.type != GraphType::X && cg.type != GraphType::Param) return false;
+            // v1.12.0: anche le disequazioni (Graph Y>, Graph X<= ...); ogni tipo valido si accetta.
             if (cg.expr.empty() || cg.expr.size() > MaxGraphExpression || cg.expr2.size() > MaxGraphExpression) return false;
             ws.graph.commandGraphs.push_back(std::move(cg));
         }
@@ -850,7 +943,24 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
         for (double& d : mv.recInitial) d = r.f64();
         for (double& d : mv.recNStart) d = r.f64();
         for (double* d : {&mv.tvmN, &mv.tvmI, &mv.tvmPV, &mv.tvmPMT, &mv.tvmFV, &mv.tvmPY, &mv.tvmCY}) *d = r.f64();
+        mv.recFormula = r.str();
+        if (mv.recFormula.size() > limits::kFunctionMemoryLength) return false;
         if (!r.ok || !std::isfinite(mv.dynaStart) || !std::isfinite(mv.tvmPY) || mv.tvmPY <= 0 || mv.tvmCY <= 0) return false;
+        auto decimals = [&](CalcValue& v) {
+            const auto has = r.u8();
+            if (has > 1 || (has && !v.hasExact())) return false;
+            if (!has) return true;
+            v.decimal.assign(v.size(), false);
+            for (std::size_t k = 0; k < v.size(); k += 8) {
+                const std::uint8_t b = r.u8();
+                for (std::size_t j = 0; j < 8 && k + j < v.size(); ++j) v.decimal[k + j] = (b >> j) & 1u;
+            }
+            return r.ok;
+        };
+        CollectionMemory& cm8 = ws.matrices;
+        for (CalcValue& v : cm8.mat) if (!decimals(v)) return false;
+        for (CalcValue& v : cm8.vct) if (!decimals(v)) return false;
+        if (!decimals(cm8.matAns) || !decimals(cm8.vctAns) || !decimals(cm8.listAns)) return false;
         const auto extras8 = r.u16(); if (extras8 > ws.history.size()) return false;
         std::size_t next8 = 0;
         for (std::uint16_t k = 0; k < extras8 && r.ok; ++k) {

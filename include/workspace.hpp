@@ -80,6 +80,9 @@ struct ModeVariables {
     std::array<double, 9> recInitial{};          // a0 a1 a2 b0 b1 b2 c0 c1 c2
     std::array<double, 3> recNStart{};           // anStart bnStart cnStart
     double tvmN{0}, tvmI{0}, tvmPV{0}, tvmPMT{0}, tvmFV{0}, tvmPY{12}, tvmCY{12};
+    // Formula della successione an+1 = f(n, an) (variabili rec_n, rec_an), assegnata
+    // con "formula"->an+1 come nei programmi della fx-CG50; usata da DrawR e DrawWeb.
+    std::string recFormula;
 };
 
 // Risultato di un calcolo che e' una lista, una matrice o un vettore. I
@@ -234,6 +237,7 @@ struct Workspace final : NameResolver, CollectionResolver, ServiceResolver {
     // v1.12.0: List "QTY" (CollectionResolver), List File 1-6, Str, function memory,
     // variabili di sistema assegnabili e servizi del valutatore.
     int listByName(const std::string& subName) const override;
+    bool special(const std::string& lowerName, CalcValue& out) const override;   // VARS EQUATION, TABLE Result
     void selectListFile(std::size_t file);                    // 0..5; il file attivo passa in lists/listNames
     // Assegna una variabile di sistema (Xmin, Xfct, TblStart, D Start, R Start,
     // a0, n, I%, ...): false se il nome non e' assegnabile. Lancia Range ERROR /
@@ -241,6 +245,7 @@ struct Workspace final : NameResolver, CollectionResolver, ServiceResolver {
     bool storeSystemVariable(const std::string& lowerName, double value);
     void setString(std::size_t index, std::string text);     // Str 1..20 (indice 0..19)
     void setFunctionMemory(std::size_t index, std::string expression);   // f1..f20 (indice 0..19)
+    void setRecursionFormula(std::string formula);           // an+1 = f(rec_n, rec_an), "" = nessuna
     int pixelTest(int row, int column) const override;
     std::string functionMemory(int n) const override;
     bool statisticVariable(const std::string& lowerName, double& out) const;
