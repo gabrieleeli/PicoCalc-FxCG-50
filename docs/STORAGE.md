@@ -1,4 +1,4 @@
-# Memorizzazione: flash interna e microSD (v1.9.0, v1.11.0)
+# Memorizzazione: flash interna e microSD (v1.9.0, v1.11.0, v1.12.0, v1.13.0)
 
 Il firmware usa tre memorie con ruoli diversi.
 
@@ -68,12 +68,13 @@ restano intatti. Un ID non riconosciuto lascia la mappa della build.
 Due slot con CRC-32 e numero di sequenza: si scrive sempre lo slot più
 vecchio, quindi un'interruzione durante la scrittura lascia valido l'altro
 (test di interruzione in ogni punto in `storage_test`). Il record è alla
-**versione 8** (v1.12.0): aggiunge in coda List File, Sub Name e tipo
+**versione 9** (v1.13.0): aggiunge in coda List File, Sub Name e tipo
 dell'ultima regressione, le variabili r e θ, le liste degli altri List File,
 function memory, Str, le variabili di Dyna/Recursion/TVM e la formula an+1,
 le celle decimali delle memorie e, per le righe della cronologia, ENG, i
-risultati di ◢ e i risultati stringa (formato sotto). La **versione 7**
-(v1.11.0) aggiunge in coda Base-N, Simplify, formato CSV,
+risultati di ◢ e i risultati stringa (formato sotto). La **versione 8**
+(v1.12.0) porta i dati di EQUATION in coda con le forme esatte (formato sotto)
+e il blocco di EQUATION delle versioni 1–7 non viene più scritto. La **versione 7** (v1.11.0) aggiunge in coda Base-N, Simplify, formato CSV,
 liste di Statistics, List 7–26 e i sottonomi, le forme esatte delle memorie,
 base e frazione ▶Simp delle righe della cronologia e i grafici dei comandi
 (formato sotto). La **versione 6** (v1.10.0) aggiunge la modalità
@@ -89,9 +90,11 @@ record v4 generato dai sorgenti della v1.8.0, un record v5 generato dai
 sorgenti della v1.9.0 e un record v6 generato dai sorgenti della v1.10.0
 sono nei test (`tests/fixtures/workspace_v1_8_0.inc`,
 `tests/fixtures/workspace_v1_9_0.inc`, `tests/fixtures/workspace_v1_10_0.inc`:
-la migrazione v6→v7 è provata da `lists_csv_test`), come il record v7
-generato dai sorgenti della v1.11.0 (`tests/fixtures/workspace_v1_11_0.inc`:
-migrazione v7→v8 in `run_matrix_v112_test`);
+la migrazione v6→v7 è provata da `lists_csv_test`), come il record v7 generato
+dai sorgenti della v1.11.0 (`tests/fixtures/workspace_v1_11_0.inc`, migrazione
+v7→v8 in `equation_v112_test`; `tests/fixtures/workspace_v1_11_0_run_matrix.inc`,
+v7→v9 in `run_matrix_v112_test`) e il record v9 generato dai sorgenti della v1.13.0
+(`tests/fixtures/workspace_v1_12_0.inc`, migrazione v8→v9 in `run_matrix_v112_test`);
 le 6 funzioni della v1.6.0 diventano Y1–Y6 e la griglia booleana diventa Grid
 On/Off; una V-Window che non supera i controlli viene corretta o sostituita da
 quella iniziale, senza scartare il resto dei dati.
@@ -100,11 +103,12 @@ quella iniziale, senza scartare il resto dei dati.
 |---|---|---|
 | Capacità di un salvataggio | 59,75 KB | 511,75 KB |
 | Cronologia Run-Matrix | 40 righe | 200 righe |
-| Liste (List 1–26 in List File 1–6, v1.12.0) | 255 per lista, 1 530 in tutti i file (≈ 12 KB) | 999 per lista (fx-CG50), 20 000 in tutti i file (≈ 156 KB) |
-| Forme esatte delle memorie di matrici (v1.12.0) | 400 (≈ 10 KB) | 4 000 (≈ 104 KB) |
+| Liste (List 1–26 in List File 1–6, v1.13.0) | 255 per lista, 1 530 in tutti i file (≈ 12 KB) | 999 per lista (fx-CG50), 20 000 in tutti i file (≈ 156 KB) |
+| Forme esatte delle memorie di matrici (v1.13.0) | 400 (≈ 10 KB) | 4 000 (≈ 104 KB) |
 | Str 1–20, function memory f1–f20 | 20 × 255 + 20 × 255 caratteri | come Pico 2 W |
 | Sottonomi delle liste | 26 × 8 caratteri | 26 × 8 caratteri |
 | Grafici dei comandi di Run-Matrix | 10 | 10 |
+| EQUATION (v1.12.0): 6×7 + 7 + 7 coefficienti con forma esatta, equazione ≤ 255 caratteri, soluzioni ≤ 6×7 | ≈ 1,2–4 KB | ≈ 1,2–4 KB |
 | Matrici e vettori (Mat/Vct A–Z, MatAns, VctAns) | 1 200 elementi in tutto (≈ 9,4 KB reali, 18,8 KB complessi), 400 per matrice, lato ≤ 40 | 20 000 elementi (≈ 156 KB reali, 312 KB complessi), 10 000 per matrice, lato ≤ 999 |
 | Conversazione AI | 30 messaggi | 30 messaggi |
 
@@ -147,9 +151,9 @@ La lettura controlla ogni campo (valori ammessi, separatore ≠ decimale,
 forme esatte coerenti con i valori memorizzati, budget di tutte le liste,
 indici crescenti): un record non valido viene rifiutato per intero.
 
-### Blocco della versione 8 (v1.12.0)
+### Blocco della versione 9 (v1.13.0)
 
-In coda al blocco della versione 7, in little endian.
+In coda al blocco della versione 8 (EQUATION, sotto), in little endian.
 
 | Campo | Contenuto |
 |---|---|
@@ -164,7 +168,7 @@ In coda al blocco della versione 7, in little endian.
 | `u16` n, n × (`u16` indice, `i8` ENG, `u8` k, k × stringa, stringa) | righe della cronologia con lo spostamento ENG, i risultati di ◢ e il risultato stringa |
 
 La vista di una riga (`u8` del blocco della versione 2) ammette dalla
-versione 8 i valori 8 (ENG), 9 (►r∠θ) e 10 (►a+bi). La lettura controlla
+versione 9 i valori 8 (ENG), 9 (►r∠θ) e 10 (►a+bi). La lettura controlla
 ogni campo e il budget di tutte le liste di tutti i file: un record non
 valido viene rifiutato per intero (`run_matrix_v112_test`, record troncati).
 
@@ -362,3 +366,31 @@ mostrata sullo schermo e stampata sulla seriale USB come `[DIAG] OK|FAIL ...`.
 | `sd_fatfs_test` | protocollo SD con schede simulate SDHC, SDv2 e SDv1 (CSD v1/v2, token, busy), formattazione FAT, nomi lunghi, salvataggio atomico, estrazione e reinserimento, scheda assente; scheda non formattata, scheda spenta e riaccesa tra due operazioni, errori di lettura permanenti e transitori, scritture rifiutate; dimensioni 0…300 000 byte ai bordi di settore e cluster, cartelle annidate, 150 file in una cartella, rinomina di sole maiuscole, nomi non validi, scheda piena con il file precedente intatto (302 controlli) |
 | `graph_app_test` | progetti dal file manager: NEW, OPEN, SAVE, SAVE AS, RENAME, DELETE, scheda assente, scheda piena, ciclo completo 12.4 su `RamFileSystem` e sull'intera pila GraphApp → FatFs → protocollo SD → scheda simulata (con riavvio del firmware e scheda spenta/riaccesa), scheda non formattata, SYSTEM > DIAG |
 | `sd_interop_test` | il codice del firmware scrive immagini FAT16, FAT32 ed exFAT create da `mkfs.fat`/`mkfs.exfat`; `fsck.fat`/`fsck.exfat` le trovano pulite; `mtools` rilegge i file byte per byte e scrive file (anche con nomi lunghi) che il firmware legge (41 controlli; saltato se gli strumenti non sono installati) |
+
+### Blocco della versione 8 (v1.12.0)
+
+In coda al blocco della versione 7, in little endian. Il blocco di EQUATION
+delle versioni 1–7 (in mezzo al record, coefficienti `f64`) non c'è più.
+
+| Campo | Contenuto |
+|---|---|
+| `u8` | numero di incognite (2–6) |
+| 42 × numero | coefficienti SIML, griglia 6×7 per righe (riga r, colonna c all'indice r·7+c) |
+| `u8`, 7 × numero | grado (2–6) e coefficienti POLY dal grado più alto |
+| stringa, 2 × `f64`, `u8` | equazione del Solver (≤ 255 caratteri), Lower, Upper (Lower < Upper), ultima variabile risolta (0 o `A`…`Z`) |
+| 2 × `u8`, 7 × numero | grado (1–6) e relazione (0 >, 1 <, 2 ≥, 3 ≤) e coefficienti delle disequazioni |
+| valore, `u8` presente, forme esatte | SimRes (matrice ≤ 6×7, vuota se non calcolata) con le forme esatte facoltative |
+| valore, `u8` presente, forme esatte | PlyRes (matrice ≤ 6×1) |
+
+Un *numero* è `u8` indicatori (1 = forma esatta, 2 = da input decimale),
+`f64` parte reale, `f64` parte immaginaria e, se c'è la forma esatta, due campi
+esatti (parte reale e immaginaria) nel formato di A–Z; la forma esatta deve
+corrispondere al valore (tolleranza relativa 10⁻¹²), altrimenti il record è
+rifiutato.
+
+Migrazione dai record 1–7: ogni `f64` diventa un numero con la forma esatta
+del decimale più corto che riproduce lo stesso double (nessuna perdita; non
+interi segnati come decimali); le celle del sistema attivo n×(n+1) tornano
+alla loro riga e colonna, le altre 42 − n(n+1) celle occupano nell'ordine le
+posizioni libere della griglia; il valore iniziale del Solver (sempre per X)
+diventa il valore della variabile X se X non era stata usata.

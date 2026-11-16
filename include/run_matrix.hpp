@@ -120,6 +120,17 @@ inline bool isCollection(const HistoryEntry& entry) noexcept { return entry.coll
 std::string elementText(const HistoryEntry& entry, std::size_t index, const Settings& settings);
 // 2D tree used to draw the result (stacked fraction, radicals, ×10^n, overline).
 ast::NodePtr resultTree(const HistoryEntry& entry, const Settings& settings);
+// Modelli 2D condivisi con EQUATION (v1.12.0): gli stessi alberi dei
+// risultati di Run-Matrix, disegnati da math_renderer.
+//  * exactValueTree: forma esatta (frazione sovrapposta, mista, radicali, π);
+//  * appendNumberTree: un decimale nel formato del display (mantissa e ×10^n,
+//    simbolo Eng);
+//  * appendTextTokens: testo come token (un carattere UTF-8 ciascuno);
+//  * exactLineText: forma esatta dell'output Line (frazioni con ⌟).
+ast::NodePtr exactValueTree(const exact::Value& value, bool mixed);
+void appendNumberTree(ast::Node& row, double value, DisplayFormat format);
+void appendTextTokens(ast::Node& row, const std::string& text);
+std::string exactLineText(const exact::Value& value, bool mixed);
 // Expression that reproduces the stored value exactly when possible (exact
 // form, else 15 significant digits); used to reuse a result in a new input.
 std::string resultExpression(const HistoryEntry& entry);

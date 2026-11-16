@@ -1,4 +1,4 @@
-# Motore matematico — v1.12.0
+# Motore matematico — v1.13.0
 
 Riferimenti storici: `archive/VPAM_SHARED_AST.md`, `archive/RUN_MATRIX_PHASE*.md` e
 `archive/math_engine_original.py` descrivono le versioni precedenti (vedi [README.md](README.md)).
@@ -28,7 +28,7 @@ Run-Matrix, Graph, Table, Equation, Statistics e i test usano lo stesso codice
 (`include/expression.hpp`). `CompiledExpression` analizza una volta e valuta molte
 volte (grafici, tabelle, solver).
 
-## Novità della v1.12.0
+## Novità della v1.13.0 (Run-Matrix)
 
 Tutto resta nel **parser, AST e valutatore unici**; il nuovo modulo
 `calc_library` (puro calcolo, senza workspace né parser) fornisce unità,
@@ -46,7 +46,7 @@ distribuzioni, funzioni TVM, nomi mostrati e CATALOG.
 | ESYM | `#P`, `#E` | fattori 10¹⁵ e 10¹⁸; display Eng con P ed E |
 | Overflow | | `checkFinite`: \|x\| ≥ 10¹⁰⁰ è Math ERROR a ogni passaggio |
 | Variabili | `v_a`…`v_z`, `r_var`, `theta`, `f_1`…`f_20`, `str_1`…`str_20` | memoria (A–Z, r, θ), `ServiceResolver::functionMemory` |
-| VARS | `xfct`, `stat_n`…, `reg_a`…, `d_start`…, `r_start`, `rec_a0`…, `tvm_n`…, `eq_simres`…, `tbl_result` | `NameResolver` / `CollectionResolver::special` |
+| VARS | `xfct`, `stat_n`…, `reg_a`…, `d_start`…, `r_start`, `rec_a0`…, `tvm_n`…, `SimRes`…, `tbl_result` | `NameResolver` / `CollectionResolver::special` |
 | Liste | `List "QTY"` | `CollectionResolver::listByName` |
 | Stringhe | `"testo"` | token stringa: argomenti di InvNormCD e List, Str, risultati stringa |
 | Simplify Manual | | `evaluateUnreducedFraction`: dominio delle frazioni non ridotte sullo stesso AST (m.c.m. per + −, prodotti per × ÷, potenze intere) |
@@ -57,6 +57,51 @@ Il testo canonico usa nomi con `_` per i comandi nuovi: un solo token, che non
 si forma digitando lettere; editor e renderer li mostrano con il nome della
 calcolatrice (`calclib::displayName`). Le parentesi implicite di una frazione
 accostata a un operando sono scritte nel testo canonico (`2((1)/(3))`).
+
+## Novità della v1.12.0 (EQUATION)
+
+Il motore di EQUATION (`include/equation.hpp`, `src/equation.cpp`, nessuna
+interfaccia) usa **lo stesso parser e lo stesso valutatore**: ogni
+coefficiente si legge con `parseExpression` e si valuta con `evaluateAny` e
+`evaluateExact`. Novità:
+
+- **Numeri complessi esatti** (`eq::ExactComplex`): parte reale e immaginaria
+  `exact::Value`, con somma, differenza, prodotto e quoziente esatti (o
+  `false`). La forma esatta di un coefficiente complesso si ottiene con
+  l'unico valutatore esatto: `i` è sostituita da un intero t = 0…4,
+  `evaluateExact` dà f(t), le differenze finite danno il polinomio in t
+  (grado ≤ 3, verificato dalla quarta differenza) e i² = −1 lo riduce a
+  A + Bi; il risultato è accettato solo se coincide con il valore complesso.
+  Così `(1+√3 i)/2`, `(1+i)²` sono esatti; `1/(1+i)` resta decimale.
+- **SIML**: Gauss-Jordan esatto sulla matrice completa n×(n+1) (Rref, anche
+  per `SimRes`), con l'indicazione per elemento dei valori che dipendono da
+  decimali digitati; in virgola mobile con equilibratura delle righe e
+  pivoting parziale (soglia relativa per colonna). Rank e pivot danno
+  Unique / No Solution / Infinitely Many Solutions con la formula
+  parametrica.
+- **POLY**: con coefficienti razionali scomposizione senza quadrati di Yun
+  su `exact::Rational` (molteplicità esatte), radici razionali (teorema delle
+  radici razionali, con limiti sui divisori), fattori di grado 1–2 con la
+  formula esatta (radicali e complessi), biquadratiche e quartiche pari
+  scomponibili in due quadratiche; gli altri fattori e i coefficienti non
+  razionali con Aberth-Ehrlich (anche complesso), rifinitura di Newton,
+  coppie coniugate e raggruppamento delle radici multiple confermato dalle
+  derivate. Ordine della fx-CG50; Underflow e Ma ERROR fuori da 1E-99…1E+100.
+- **SOLVER** (`eq::solveFor`): qualsiasi variabile A–Z (copia delle memorie
+  sull'heap), Newton con differenze centrali dal valore attuale, poi ricerca
+  di un cambio di segno entro Lower/Upper e bisezione; Retry, Can't Solve!,
+  Time Out (anche oltre `limits::kSolverEvaluations` valutazioni), No Variable.
+- **Visualizzazione** (`eq::numberText`, `eq::numberTree`): gli stessi alberi
+  2D di Run-Matrix (`exactValueTree`, `appendNumberTree`, ora pubblici in
+  `run_matrix.hpp`), complessi su denominatore comune (`(−3+√11 i)/2`),
+  forma polare esatta (modulo radicale, argomento multiplo di π/12 o in gradi
+  e gradianti riconosciuto dalla tangente esatta).
+- **Lexer**: `SimRes`, `SimCoef`, `PlyRes`, `PlyCoef` sono nomi di matrice
+  (`CollectionResolver::Memory::Equation`), risolti dal workspace.
+- **Testo lineare dell'editor**: un modello di frazione seguito da un fattore
+  implicito è scritto `((a)/(b))X` (nel testo lineare la moltiplicazione
+  implicita precede la divisione, come sulla fx-CG50); l'operando di x² e ^
+  è il numero o la sola variabile prima del cursore.
 
 ## Novità della v1.11.0
 
@@ -198,10 +243,10 @@ per sostituire i coefficienti con i loro valori).
 | Radici, estremi, intersezioni di GRAPH | Brent–Dekker e minimizzazione di Brent | in `graph_solve.cpp`, vedi [GRAPH_ENGINE.md](GRAPH_ENGINE.md#g-solve) |
 | SOLVE | Newton con derivata di Ridders | 100 iterazioni, controllo di convergenza |
 | Σ, Π | somma/prodotto su indici interi | max 100 001 termini |
-| Polinomi (Equation) | Aberth–Ehrlich | radici complesse, grado 2–6 |
-| Sistemi lineari | eliminazione di Gauss con pivot parziale | 2–6 incognite |
+| Polinomi (Equation) | Yun + radici razionali + formula quadratica esatta; Aberth–Ehrlich | radici esatte e complesse con molteplicità, grado 2–6 (v1.12.0) |
+| Sistemi lineari | Gauss-Jordan esatto; in virgola mobile con equilibratura e pivot parziale | 2–6 incognite, Rref, formula delle infinite soluzioni (v1.12.0) |
 | Disequazioni | radici reali + segno tra le radici | grado 1–6, unione di intervalli |
-| Solver f(x)=g(x) | Newton con derivata numerica e protezione dalla divergenza | |
+| Solver di EQUATION | Newton con differenze centrali, cambio di segno e bisezione entro Lower/Upper | qualsiasi variabile, Retry, al più 4 000 valutazioni (v1.12.0) |
 | Distribuzioni | beta e gamma regolarizzate | normale, binomiale (log-gamma), Poisson, t, χ², F |
 
 ## Formati di visualizzazione
@@ -332,12 +377,12 @@ sull'heap (PSRAM sulla Plus), mai sullo stack.
 | `statistics.hpp/.cpp` | statistiche, regressioni, distribuzioni, test |
 | `exact.hpp/.cpp` | razionali, radicali, multipli di π, letterali periodici, regole di visualizzazione |
 | `run_matrix.hpp/.cpp` | riga di Run-Matrix (→ verso variabili, memorie, Str, f1–f20, variabili di sistema; `:` e `◢`; Swap/\*Row), cronologia con ricalcolo, viste dei risultati (ENG, ►r∠θ) |
-| `calc_library.hpp/.cpp` | v1.12.0: unità di CONVERT, distribuzioni, TVM, nomi mostrati, CATALOG (puro calcolo) |
+| `calc_library.hpp/.cpp` | v1.13.0: unità di CONVERT, distribuzioni, TVM, nomi mostrati, CATALOG (puro calcolo) |
 | `graph_engine.hpp/.cpp`, `graph_solve.hpp/.cpp` | motore dei grafici e G-Solve sullo stesso valutatore ([GRAPH_ENGINE.md](GRAPH_ENGINE.md)) |
 
 ## Non ancora disponibile
 
-(Aggiornato alla v1.12.0.) Derivate e integrali simbolici e limiti non
+(Aggiornato alla v1.13.0.) Derivate e integrali simbolici e limiti non
 esistono sulla fx-CG50 (niente CAS): restano numerici come sulla
 calcolatrice. Le regressioni sinusoidale e logistica (modalità Statistics)
 non sono realizzate; Run-Matrix è completo ([RUN_MATRIX.md](RUN_MATRIX.md)).

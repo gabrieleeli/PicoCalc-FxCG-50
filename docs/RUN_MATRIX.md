@@ -1,4 +1,4 @@
-# Run-Matrix — v1.12.0
+# Run-Matrix — v1.13.0
 
 Run-Matrix mostra **calcoli e risultati**; grafici, statistiche, tabelle e
 conversioni sono nelle rispettive modalità (i comandi grafici eseguiti qui li
@@ -6,8 +6,8 @@ disegna GRAPH). Riferimento di comportamento: manuale fx-CG50, capitoli 1-3…1-
 2-1…2-63 (matrici e vettori 2-42…2-63), 3-7…3-20 (liste e CSV), 5 (SKETCH) e 8
 (comandi). Stato per voce: [FEATURE_MATRIX.md](FEATURE_MATRIX.md).
 
-Novità della v1.12.0 (completamento di Run-Matrix, sezione
-[v1.12.0](#completamento-della-v1120) sotto): **CALC** completo (Solve con
+Novità della v1.13.0 (completamento di Run-Matrix, sezione
+[v1.13.0](#completamento-della-v1120) sotto): **CALC** completo (Solve con
 limiti, SolveN, FMin, FMax, Σ con variabile e passo, d²/dx² anche come
 modello), **PROB** (Ran# n, RanList#, RanSamp#, P( Q( R( t( ), **STAT** (x̂ ŷ,
 24 distribuzioni, S-Dev, Var), **TVM**, **CONVERT**, **ʳ ᵍ ° ′ ″**, **∠** e
@@ -19,9 +19,9 @@ File 1–6**, matrici esatte senza limite di 64 elementi, **tutti i comandi
 grafici** (PxlTest(, disequazioni, G∫dx, stili, Pict, Draw…), **CATALOG**,
 **CAPTURE**, OPTN nell'ordine della fx-CG50 e VARS completo.
 
-![SolveN e FMin](screenshots/62_calc_solven.png) ![OPTN](screenshots/63_optn.png) ![CATALOG](screenshots/64_catalog.png) ![Distribuzioni](screenshots/65_distributions.png) ![CONVERT](screenshots/66_convert.png)
+![SolveN e FMin](screenshots/77_calc_solven.png) ![OPTN](screenshots/78_optn.png) ![CATALOG](screenshots/79_catalog.png) ![Distribuzioni](screenshots/80_distributions.png) ![CONVERT](screenshots/81_convert.png)
 
-![Modelli d²/dx² e Σ](screenshots/67_templates.png) ![Istruzioni multiple](screenshots/68_multistatement.png) ![VARS STAT](screenshots/69_vars_stat.png) ![Graph Y>](screenshots/70_graph_inequality.png) ![G∫dx](screenshots/71_graph_integral.png) ![ENG](screenshots/72_eng.png)
+![Modelli d²/dx² e Σ](screenshots/82_templates.png) ![Istruzioni multiple](screenshots/83_multistatement.png) ![VARS STAT](screenshots/84_vars_stat.png) ![Graph Y>](screenshots/85_graph_inequality.png) ![G∫dx](screenshots/86_graph_integral.png) ![ENG](screenshots/87_eng.png)
 
 Novità della v1.11.0 (dettagli nelle sezioni sotto): **List 1–26** con i
 sottonomi, **file CSV** di liste e matrici, schermate **MatAns/ListAns**,
@@ -55,16 +55,16 @@ sulla causa di un errore**.
 | F4 | menu MATH | `→` (memorizza) |
 | F5 | **S⇔D** sull'ultimo risultato | **a b/c ⇔ d/c** |
 | F6 | `Ans` | θ |
-| OPTN (F8) | v1.12.0, ordine della fx-CG50: **LIST, MAT/VCT, COMPLEX, CALC, STAT, CONVERT, HYPERBL, PROB, NUMERIC, ANGLE, ESYM, PICTURE, FUNCMEM, LOGIC, CAPTURE, TVM**, poi SKETCH (comandi grafici, SHIFT F4 sulla calcolatrice), RELAZIONI (anche `:` e `◢`), RISULTATO (S⇔D, ab/c, periodo, basi, DMS, ENG, ►r∠θ), BASE-N, CONST | |
+| OPTN (F8) | v1.13.0, ordine della fx-CG50: **LIST, MAT/VCT, COMPLEX, CALC, STAT, CONVERT, HYPERBL, PROB, NUMERIC, ANGLE, ESYM, PICTURE, FUNCMEM, LOGIC, CAPTURE, TVM**, poi SKETCH (comandi grafici, SHIFT F4 sulla calcolatrice), RELAZIONI (anche `:` e `◢`), RISULTATO (S⇔D, ab/c, periodo, basi, DMS, ENG, ►r∠θ), BASE-N, CONST | |
 | DEL | cancella a sinistra | **INS**: in Line alterna sovrascrittura/inserimento (barra di stato `OVR`), in Math il prossimo modello prende come argomento il valore a destra del cursore |
-| VARS (F9) | A~Z, r, θ (con il valore esatto), Ans/PreAns, **V-WIN, FACTOR, STAT, GRAPH, DYNA, TABLE (anche Result), RECURSION, EQUATION, TVM, Str** (v1.12.0) | |
+| VARS (F9) | A~Z, r, θ (con il valore esatto), Ans/PreAns, **V-WIN, FACTOR, STAT, GRAPH, DYNA, TABLE (anche Result), RECURSION, TVM, Str** (v1.13.0), EQUATION (SimRes, SimCoef, PlyRes, PlyCoef: matrici di EQUATION, v1.12.0, [EQUATION.md](EQUATION.md#5-uso-dei-risultati)) | |
 | ↑ | entra nella cronologia (con il cursore fuori dai modelli) | |
 | EXE | calcola; su riga vuota ripete l'ultimo calcolo | |
 | EXIT | cancella l'input; su input vuoto torna al menu | |
 | AC (Shift+Esc) | cancella l'input; su input vuoto cancella la cronologia | |
 | SHIFT `3` | | **editor MAT/VCT** (fx-CG50 SHIFT 3 'MAT/VCT') |
-| SHIFT `4` | | **CATALOG**: tutti i comandi in ordine alfabetico (v1.12.0) |
-| SHIFT `7` | | **CAPTURE**: la schermata in Capture 1–20 (v1.12.0) |
+| SHIFT `4` | | **CATALOG**: tutti i comandi in ordine alfabetico (v1.13.0) |
+| SHIFT `7` | | **CAPTURE**: la schermata in Capture 1–20 (v1.13.0) |
 | SHIFT `8` | | **CLIP**: inizia la selezione |
 | SHIFT `9` | | **PASTE**: incolla gli appunti |
 | Ctrl+C/X/V/Z/Y | copia, taglia, incolla, annulla, ripeti (con una selezione CLIP attiva: copia/taglia la selezione) | |
@@ -467,10 +467,10 @@ cronologia e per gli errori dopo la freccia (segnalati sulla freccia).
 | `include/graph_commands.hpp`, `src/graph_commands.cpp` | interprete dei comandi grafici (v1.11.0): argomenti valutati dal parser unico, risultato nei dati di GRAPH |
 | `include/csv_io.hpp`, `src/csv_io.cpp` | file CSV di liste e matrici (v1.11.0) |
 
-## Completamento della v1.12.0
+## Completamento della v1.13.0
 
-Perimetro e stato voce per voce: [reports/ANALISI_FONTI_v1.12.0.md](reports/ANALISI_FONTI_v1.12.0.md)
-(tabella di parità iniziale) e [reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md)
+Perimetro e stato voce per voce: [reports/ANALISI_FONTI_v1.13.0.md](reports/ANALISI_FONTI_v1.13.0.md)
+(tabella di parità iniziale) e [reports/SVILUPPO_v1.13.0.md](reports/SVILUPPO_v1.13.0.md)
 (tabella finale). Nel testo canonico i comandi nuovi hanno un nome con `_`
 (un solo token, che non si forma digitando lettere) e si mostrano con il nome
 della calcolatrice.
@@ -597,10 +597,10 @@ GRAPH la disegna come la VRAM della calcolatrice), `Graph Y> Y< Y≥ Y≤ X> X< 
 
 ## Limiti noti
 
-- Nessuna prova su hardware PicoCalc: [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md).
+- Nessuna prova su hardware PicoCalc: [HARDWARE_TEST_v1.13.0.md](HARDWARE_TEST_v1.13.0.md).
 - Differenze inevitabili (schermo 320×320, tastiera senza ALPHA, generatore
   di Ran# diverso da quello Casio, CONVERT integrato): tabella in
-  [reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md#6-differenze-inevitabili-e-scelte).
+  [reports/SVILUPPO_v1.13.0.md](reports/SVILUPPO_v1.13.0.md#6-differenze-inevitabili-e-scelte).
 - Comportamenti non descritti per intero dal manuale e scelti dal progetto:
   intervallo di ricerca di SolveN senza limiti (±10¹⁰), ripartizione tra
   `Can't Solve!` e `Iteration ERROR`, DrawStat sullo StatGraph1 predefinito,

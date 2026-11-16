@@ -3,8 +3,8 @@
 // sistema assegnabili (V-Window, FACTOR, TABLE, DYNA, RECURSION, TVM), List
 // "nome", List File 1-6 con il budget comune, n->Dim List, Fill sulle memorie,
 // Swap/*Row/*Row+/Row+, forme esatte delle matrici oltre 64 elementi e celle
-// decimali, VARS EQUATION/TABLE, migrazione del record v7 (fixture della
-// v1.11.0) e interfaccia (OPTN nell'ordine della fx-CG50, VARS, CATALOG,
+// decimali, VARS EQUATION/TABLE, migrazione dei record v8 (fixture della
+// v1.12.0) e v7 (fixture della v1.11.0) e interfaccia (OPTN nell'ordine della fx-CG50, VARS, CATALOG,
 // FUNCMEM, CONVERT, CAPTURE, ENG).
 #include "app_rig.hpp"
 #include "run_matrix.hpp"
@@ -16,7 +16,11 @@ using namespace fx;
 
 namespace {
 const std::uint8_t kV1110Record[] = {
-#include "fixtures/workspace_v1_11_0.inc"
+#include "fixtures/workspace_v1_11_0_run_matrix.inc"
+};
+// Record v8 della v1.12.0 (rilascio di EQUATION su main), generato con quei sorgenti.
+const std::uint8_t kV1120Record[] = {
+#include "fixtures/workspace_v1_12_0.inc"
 };
 const std::string kArrow = "\xE2\x86\x92";
 const std::string kDisp = "\xE2\x97\xA2";
@@ -162,7 +166,7 @@ int main() {
         CHECK(b.decimalAt(0) && !b.decimalAt(1));
         const auto blob = serializeWorkspace(w);
         Workspace back;
-        CHECK(blob[4] == 8 && deserializeWorkspace(blob.data(), blob.size(), back));
+        CHECK(blob[4] == 9 && deserializeWorkspace(blob.data(), blob.size(), back));
         CHECK(back.matrices.mat[1].decimalAt(0) && !back.matrices.mat[1].decimalAt(1));
         CHECK(back.matrices.mat[0].hasExact() && back.matrices.mat[0].size() == 81);
         CHECK_EQ_STR(calc(back, "Mat B[1,1]\xC3\x97" "4"), "1");
@@ -172,20 +176,40 @@ int main() {
     // ================================================================ VARS EQUATION e TABLE Result
     {
         Workspace w;
-        w.equation.unknowns = 2;
-        const double sys[] = {1, 1, 3, 1, -1, 1};                                     // x+y=3, x-y=1
-        for (std::size_t i = 0; i < 6; ++i) w.equation.simultaneous[i] = sys[i];
-        CHECK_EQ_STR(calc(w, "eq_simres"), "[[2][1]]");
-        CHECK_EQ_STR(calc(w, "eq_simcoef"), "[[1,1,3][1,-1,1]]");
-        w.equation.degree = 2;
-        w.equation.polynomial[0] = 1; w.equation.polynomial[1] = 0; w.equation.polynomial[2] = -4;
-        CHECK_EQ_STR(calc(w, "eq_plycoef"), "[[1,0,-4]]");
-        runCalculation(w, "eq_plyres");
-        CHECK(w.matrices.matAns.size() == 2 && std::abs(std::abs(w.matrices.matAns.re[0]) - 2) < 1e-9);
+        // VARS › EQUATION dal menu di Run-Matrix (i valori li verifica equation_v112_test):
+        // senza coefficienti la fx-CG50 da' un errore; il token e' quello di EQUATION.
+        CHECK(fails<MathError>(w, "SimCoef"));
+        CHECK(fails<MathError>(w, "PlyRes"));
+        CHECK(std::string(equationMatrixName(0)) == "SimRes");
         w.functions[0].expr = "x^2"; w.functions[0].type = GraphType::Y; w.functions[0].selected = true;
         for (std::size_t i = 1; i < w.functions.size(); ++i) w.functions[i].selected = false;
         w.table.start = 1; w.table.end = 3; w.table.step = 1;
         CHECK_EQ_STR(calc(w, "tbl_result"), "[[1,1][2,4][3,9]]");
+    }
+    // ================================================================ migrazione del record v8 (v1.12.0)
+    {
+        Workspace w;
+        CHECK(kV1120Record[4] == 8);
+        CHECK(deserializeWorkspace(kV1120Record, sizeof(kV1120Record), w));
+        CHECK(w.settings.angle == AngleMode::Degrees);
+        exact::Value a; bool dec = false;
+        CHECK(w.memory.exactRecall('A', a, dec) && a == exact::Value::fromRational({1, 3}));
+        CHECK(w.matrices.mat[0].rows == 2 && w.matrices.mat[0].re[3] == 4);
+        CHECK(w.lists[2] == std::vector<double>({1, 2, 3}) && w.listName(2) == "QTY");
+        CHECK(w.history.size() == 5 && w.functions[0].expr == "x^2-1");
+        CHECK(w.equation.unknowns == 2 && w.equation.degree == 2 && w.equation.solverExpr == "x^2=2");
+        // VARS › EQUATION dal record migrato
+        CHECK_EQ_STR(calc(w, "SimRes"), "[[2][1]]");
+        CHECK_EQ_STR(calc(w, "SimCoef"), "[[1,1,3][1,-1,1]]");
+        CHECK_EQ_STR(calc(w, "PlyCoef"), "[[1,0,-4]]");
+        // I dati nuovi della v1.13.0 hanno i valori iniziali
+        CHECK(w.settings.listFile == 0 && w.strings[0].empty() && w.functionMemories[0].empty());
+        CHECK(w.listFiles[1].elements() == 0 && w.modeVars.tvmPY == 12 && w.modeVars.tvmCY == 12);
+        // Salvato di nuovo: versione 9, si rilegge con gli stessi dati
+        const auto blob = serializeWorkspace(w);
+        Workspace again;
+        CHECK(blob[4] == 9 && deserializeWorkspace(blob.data(), blob.size(), again));
+        CHECK(again.equation.simResult.size() == 2 && again.lists[2].size() == 3 && again.history.size() == w.history.size());
     }
     // ================================================================ migrazione del record v7 (v1.11.0)
     {
@@ -210,7 +234,7 @@ int main() {
         // Riscritto come v8 e riletto senza perdite
         const auto blob = serializeWorkspace(w);
         Workspace again;
-        CHECK(blob[4] == 8 && deserializeWorkspace(blob.data(), blob.size(), again));
+        CHECK(blob[4] == 9 && deserializeWorkspace(blob.data(), blob.size(), again));
         CHECK(serializeWorkspace(again) == blob);
     }
     // ================================================================ record v8: tutti i campi nuovi
@@ -245,7 +269,7 @@ int main() {
         CHECK_EQ_STR(resultText(back.history[8], back.settings), "1.234E+03");
         CHECK(back.listFiles[4].lists[1] == std::vector<double>({4, 4}) && back.listFiles[4].names[1] == "F5");
         // Record corrotti: file attivo con dati nello slot, versione futura
-        auto bad = blob; bad[4] = 9;
+        auto bad = blob; bad[4] = 10;
         CHECK(!deserializeWorkspace(bad.data(), bad.size(), back));
         for (std::size_t cut : {blob.size() - 1, blob.size() - 40, blob.size() / 2}) {
             Workspace t;

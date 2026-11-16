@@ -1,202 +1,273 @@
-# Rapporto di sviluppo — v1.12.0 (completamento totale di Run-Matrix)
+# Sviluppo della v1.12.0 — rapporto (completamento di EQUATION)
 
-Base: `main` = tag `v1.11.0` = commit `f6933fd` (verificato prima di iniziare:
-nessun commit successivo al tag). Analisi preliminare e perimetro:
-[ANALISI_FONTI_v1.12.0.md](ANALISI_FONTI_v1.12.0.md). Riferimento di
-comportamento: manuale software fx-CG50 (cap. 1, 2, 3, 5, 6, 7, 8) e, per
-Simplify, i manuali fx-7400G e fx-9750GII della stessa famiglia; nessun
-codice, ROM, font o grafica Casio.
+Data: 16 novembre 2026. Branch di destinazione: **`main`**; tag `v1.12.0`;
+GitHub Release "PicoCalc FxCG-50 v1.12.0". Guida della modalità:
+[../EQUATION.md](../EQUATION.md).
 
-## 1. Cosa è stato fatto
+## 1. Punto di partenza
 
-| Gruppo (§4) | Contenuto |
+- `git fetch origin main --tags`: `origin/main` = tag annotato `v1.11.0` =
+  commit `f6933fd7f2c527906992d8bc58d496425983fddd`; il branch di sessione
+  coincideva: **nessun commit successivo** da conservare. Versione: la minor
+  successiva, **1.12.0**.
+- Test host del profilo Pico Plus 2 W sulla base, prima di ogni modifica:
+  40/40 superati.
+- Prima di modificare il codice è stato generato, con i sorgenti della
+  v1.11.0, il record v7 `tests/fixtures/workspace_v1_11_0.inc` (sistema del
+  manuale 4-2, celle fuori dal sistema attivo con 0.1 e 1/3, POLY di grado 4
+  con decimali, equazione del Solver con valore iniziale, disequazione)
+  usato dalla prova di migrazione v7→v8.
+- Lavoro parallelo: prima della pubblicazione `main` è stato ricontrollato
+  (§8).
+
+## 2. Fonti e analisi
+
+Rapporto scritto prima del codice, con la tabella di parità che è il
+perimetro del lavoro: [ANALISI_FONTI_v1.12.0.md](ANALISI_FONTI_v1.12.0.md).
+Fonte principale: il **manuale software ufficiale fx-CG50 v3.60** (PDF Casio,
+678 pagine; nelle versioni precedenti del progetto non era scaricabile),
+capitolo 4 letto per intero e pagine 4-1…4-5, 1-29 e 1-36 lette anche come
+immagini per i tasti funzione, i formati e i messaggi; confronto con il
+manuale fx-9860GIII v3.40. Nessun codice, ROM, font o grafica Casio.
+
+## 3. Vincoli
+
+| Vincolo | Come è stato rispettato |
 |---|---|
-| 4.1 Liste | `List "QTY"` nei calcoli e come destinazione; **List File 1–6** (SET UP, budget comune per scheda); `n→Dim List k`; `Fill(v, List n)` modifica la lista; Min/Max di due liste; Mean/Median con frequenze; S-Dev(, Var(; SET UP **Sub Name** |
-| 4.2 Simboli | ESYM **P** (10¹⁵) ed **E** (10¹⁸), anche nel display Eng; **ENG / ENG←** come viste del risultato |
-| 4.3 Simplify Manual | frazioni non ridotte per tutte le operazioni (+ − sul m.c.m. dei denominatori, × ÷ sui prodotti, potenze intere), solo nel modo Real; ▶Simp su una frazione irriducibile restituisce il valore senza «F=», un divisore non valido è un errore |
-| 4.4 Base-N | **Bin a 16 bit** (Dec/Oct/Hex 32 bit); variabili A–F in Hex distinte dalle cifre (`v_a`, VARS o Alt, mostrate sottolineate); liste e matrici mostrate nella base della riga; messaggi e limiti verificati per le quattro basi |
-| 4.5 MAT/VCT | forme esatte **senza il limite di 64 elementi** (budget per scheda `limits::kExactStoreElements`: 400 / 4 000 forme); una cella digitata come decimale resta decimale; Fill(v, Mat A); comandi **Swap, \*Row, \*Row+, Row+** |
-| 4.6 Comandi grafici | **PxlTest(**, **Graph Y> Y< Y≥ Y≤ X> X< X≥ X≤**, **G∫dx**, prefissi **SketchNormal/Thick/Broken/Dot/Thin**, **StoPict / RclPict / BG-Pict / RclCapt**, **DrawGraph, DrawStat, DrawDyna, DrawR-Con/Plt, DrawWeb, DrawFTG-Con/Plt**, **G-SelOn/Off**; disegnati dal motore e dal renderer di GRAPH; **decisione: i grafici dei comandi vanno nei progetti `.pcgraph`** (righe `c=`) |
-| 4.7 Math/Line | conversione testo ↔ albero esatta nelle due direzioni (gruppi con modelli, radice con indice qualsiasi, d²/dx², Σ/Π con la variabile, nuovi token) con un corpus di test; **parentesi implicite** di una frazione accostata a un operando (`2[1/3]` → `2((1)/(3))`: `6÷2[1/3]` = 9 come sulla calcolatrice); testo Line con le parentesi minime (`2(1/3)`, `x^2`); nuovi modelli **d²/dx²** e **Σ/Π con il campo della variabile** |
-| 4.8 Funzioni | CALC: **Solve con limiti** e forma `a=b`, **SolveN**, **FMin**, **FMax**, **Σ(f,k,a,b[,n])**, ∫ con tolleranza, divieto delle funzioni annidate (2-28); PROB: **Ran# n**, RanInt#/RanNorm#/RanBin# con n, **RanList#**, **RanSamp#**, **P( Q( R( t(**; NUMERIC **Rnd**; ANGLE **ʳ ᵍ**, **° ′ ″**, **Pol/Rec in List Ans**; COMPLEX **∠**, **►r∠θ / ►a+bi**; STAT **x̂ ŷ** e le 24 **distribuzioni**; **TVM** (22 funzioni); **CONVERT** (11 categorie, 103 unità); overflow |x| ≥ 10¹⁰⁰ |
-| 4.9 Cronologia ed errori | istruzioni multiple **`:`** e **`◢`** (risultati intermedi in cronologia); **stringhe** e **Str 1–20**; **function memory f1–f20** (FUNCMEM STORE/RECALL/fn/SEE); variabili **r e θ**; **variabili di sistema assegnabili** (V-Window, FACTOR, TABLE, DYNA, RECURSION, TVM); VARS **FACTOR, STAT, GRAPH, DYNA, TABLE Result, RECURSION, EQUATION, TVM, Str**; **CATALOG** (SHIFT 4); **CAPTURE** (SHIFT 7) e RclCapt; messaggi dell'Appendice α (niente «Type ERROR», `Complex Number In List/Matrix`, `Can't Solve!`, `Iteration ERROR`, `Range ERROR`) |
-| OPTN | riordinato come la fx-CG50: LIST, MAT/VCT, COMPLEX, CALC, STAT, CONVERT, HYPERBL, PROB, NUMERIC, ANGLE, ESYM, PICTURE, FUNCMEM, LOGIC, CAPTURE, TVM (poi SKETCH, relazioni, viste del risultato, Base-N, costanti) |
-| Workspace | **record v8** in coda al v7; v1–v7 letti senza perdite; fixture generata con i sorgenti della v1.11.0 (`tests/fixtures/workspace_v1_11_0.inc`) |
-| Font | glifi disegnati dal progetto: ◢, ʳ, ᵍ, ′, ″, ŷ, x̂, x̄, ȳ, Å (`tools/gen_fonts.py`, MANUAL_GLYPHS) |
+| Un solo parser, un solo AST, un solo valutatore | coefficienti ed equazioni con `parseExpression` + `evaluateAny`/`evaluateExact`/`evaluateReal`; la forma esatta dei complessi si ottiene dallo stesso `evaluateExact` (sostituzione di `i` con interi e differenze finite); `SimRes`… sono token dello stesso lexer risolti da `CollectionResolver`; `architecture_test` vieta ogni lettura propria dei numeri nei sorgenti di Equation (`strtod`, `atof`, `stod`, `sscanf`, `istringstream`, `evalNumber`) e i vecchi percorsi in `double` |
+| Dati solo nel workspace, tramite interfacce | `EquationState` (record v8); Run-Matrix legge le matrici di EQUATION solo come `Memory::Equation` (vietati `ws.equation`, `eq::`, `equation.hpp`); servizio `EquationCore` dichiarato solo da Equation; test di architettura più severo, nessuna regola tolta |
+| Memoria embedded | coefficienti e soluzioni in `std::vector` sull'heap (PSRAM sulla Plus), copia delle memorie del Solver sull'heap, nessuna matrice di lavoro sullo stack; limiti in `limits.hpp` (`kEquationUnknowns`, `kEquationDegree`, `kEquationExpression`, `kSolverEvaluations`), uguali sulle due schede come sulla fx-CG50 |
+| Compatibilità | record **v8**; v1–v7 letti senza perdite (decimale più corto che riproduce il double; celle del sistema attivo alla loro riga e colonna; valore iniziale del Solver in X); fixture generata con i sorgenti della v1.11.0 |
+| Niente CAS | forme esatte solo razionali, radicali quadratici, multipli di π e complessi con queste parti; il resto in virgola mobile come la fx-CG50 |
 
-## 2. Architettura
+## 4. Tabella di parità finale
 
-- **Un solo parser, un solo AST, un solo valutatore.** Tutti i comandi nuovi
-  sono nodi `Call` dello stesso parser (`src/expression.cpp`); unità
-  (`10[cm]▶[in]`), `∠`, `ʳ`, `ᵍ`, `° ′ ″`, stringhe `"…"`, `v_a`, `r_var`,
-  `theta`, `f_1`… sono token dello stesso lexer; SolveN/FMin/FMax/Pol/Rec e le
-  liste casuali sono metodi di `CollEval`; le frazioni non ridotte
-  (`evaluateUnreducedFraction`) sono un secondo dominio sullo stesso AST, come
-  `evaluateExact`. `:` e `◢` separano le istruzioni prima del parser e ognuna
-  passa dal parser unico.
-- **`calc_library`** (nuovo, motore puro): unità di CONVERT, distribuzioni,
-  TVM, nomi mostrati e CATALOG; il test di architettura verifica che non usi
-  workspace né parser.
-- **Dati solo nel workspace** tramite interfacce: `CollectionResolver::listByName`
-  e `special` (EQUATION, TABLE Result), `ServiceResolver` (PxlTest, function
-  memory), `NameResolver` per le variabili di VARS; nuova sezione dati
-  `Strings` nel registro delle app.
-- **PxlTest(**: l'AppManager collega `Workspace::pixelProbe` a
-  `GraphApp::probePixel`, che disegna la schermata del grafico nel framebuffer
-  (la «VRAM») e legge il pixel; Run-Matrix si ridisegna subito dopo.
-- **`architecture_test` più severo**: nessun altro sorgente definisce lexer,
-  parser o istanze del valutatore; `calc_library` puro; Run-Matrix non tocca
-  `ws.listFiles`, `ws.listNames`, `ws.modeVars`, `ws.functionMemories`,
-  `pixelProbe`, `selectListFile`, `statistics.hpp`, `solvers.hpp`,
-  `table_model.hpp`; i comandi grafici usano il parser unico.
+Stato v1.12.0: **presente**, oppure **inevitabile** (differenza inevitabile
+documentata, §4.8). Gli ID sono quelli dell'analisi delle fonti; "Prova" è
+il test o lo screenshot che lo verifica (`eq` = `equation_v112_test`,
+`flow` = `apps_flow_test`, `arch` = `architecture_test`).
 
-## 3. Memoria per scheda (`limits.hpp`)
+### 4.1 Menu, navigazione, impostazioni
 
-| Limite | Pico 2 W | Pico Plus 2 W |
+| ID | Voce | Stato | Prova |
+|---|---|---|---|
+| E1 | Icona Equation, tasto diretto | presente | arch |
+| E2 | Select Type, SIMUL POLY SOLVER (INEQ estensione) | presente | eq, screenshot 62 |
+| E3 | Barra di stato | presente | screenshot 62–76 |
+| E4 | Number of Unknowns? / Degree? F1(2)…F5(6) | presente | eq, flow |
+| E5 | EXIT torna indietro di una schermata | presente | eq, flow |
+| E6 | REPEAT conserva i coefficienti | presente | eq |
+| E7 | SET UP dalla modalità con ritorno alla modalità | presente (EXIT torna a EQUATION, soluzioni ricalcolate) | eq |
+| E8 | Dati conservati spegnendo | presente (record v8) | eq, storage_test |
+
+### 4.2 SIML
+
+| ID | Voce | Stato | Prova |
+|---|---|---|---|
+| S1 | 2…6 incognite | presente | eq |
+| S2 | Intestazione `aₙX+bₙY+cₙZ=dₙ` | presente; 4–6 incognite `X1…X6`: **inevitabile** (manuale senza esempio) | screenshot 63 |
+| S3 | Griglia `a b c d`, righe numerate, parentesi, cella evidenziata, valore in basso a destra | presente (4 colonne visibili con scorrimento: **inevitabile**, 320×320) | screenshot 63 |
+| S4 | EXE e ordine a1→b1→c1… | presente | eq, flow |
+| S5 | Frazioni e variabili come coefficienti (forma esatta) | presente | eq |
+| S6 | EXIT annulla l'immissione | presente | eq |
+| S7 | Modifica spostandosi sulla cella | presente | eq |
+| S8 | F3 CLEAR | presente | eq |
+| S9 | F2 DELETE | presente | eq |
+| S10 | F4 EDIT | presente | eq, screenshot 65 |
+| S11 | F1 SOLVE | presente | eq |
+| S12 | Schermata delle soluzioni | presente | screenshot 64, 66 |
+| S13 | Soluzioni esatte in Math | presente | eq |
+| S14 | Decimali in Line | presente | eq |
+| S15 | No Solution | presente | eq, screenshot 67 |
+| S16 | Infinitely Many Solutions con la formula | presente (esempio del manuale identico) | eq, screenshot 68 |
+| S17 | Ma ERROR fuori intervallo (e Underflow) | presente | eq |
+| S18 | Coefficienti e soluzioni complessi | presente | eq |
+| S19 | Complex Mode a+bi / r∠θ | presente | eq |
+| S20 | Inversione/eliminazione con 15 cifre interne, 10 mostrate | presente | eq (Hilbert 6×6, coefficienti 1E50) |
+
+### 4.3 POLY
+
+| ID | Voce | Stato | Prova |
+|---|---|---|---|
+| P1 | Grado 2…6 | presente | eq |
+| P2 | Intestazione `aX³+bX²+cX+d=0` | presente | screenshot 08 |
+| P3 | Celle su una riga | presente | screenshot 69 |
+| P4 | Frazioni e variabili | presente | eq |
+| P5 | EXE / EXIT / modifica / CLEAR | presente | eq |
+| P6 | DELETE, EDIT | presente | eq |
+| P7 | a ≠ 0 (Ma ERROR) | presente | eq |
+| P8 | Soluzioni X1…Xn | presente | screenshot 08 |
+| P9 | Ordine del manuale | presente | eq, flow |
+| P10 | ×k | presente | eq, screenshot 69 |
+| P11 | Real: solo radici reali | presente; nessuna radice reale → "No Solution": **inevitabile** (il manuale non lo mostra; messaggio della tabella α-3) | eq |
+| P12 | a+bi | presente | eq |
+| P13 | r∠θ, esatto `1∠π` | presente | eq, screenshot 71 |
+| P14 | Radici esatte, `(−3+√11 i)/2` | presente | eq, screenshot 70 |
+| P15 | Errore senza soluzione, Underflow | presente | eq |
+| P16 | Coefficienti complessi | presente | eq |
+
+### 4.4 SOLVER
+
+| ID | Voce | Stato | Prova |
+|---|---|---|---|
+| V1 | Input naturale | presente | screenshot 72 |
+| V2 | x = X | presente | eq |
+| V3 | Senza "=": = 0 | presente | eq |
+| V4 | Più di un "=": errore | presente | eq |
+| V5 | Tabella delle variabili | presente (A–Z; r = memoria R, θ non variabile: **inevitabile**, modello delle variabili del firmware) | eq, screenshot 73 |
+| V6 | Lower / Upper | presente | eq |
+| V7 | Variabile scelta + F6 SOLVE | presente | eq |
+| V8 | F1 RECALL, F2 DELETE | presente; significato interpretato: **inevitabile** (il manuale non li descrive) | eq |
+| V9 | `Eq:`, `V=`, `Lft=`, `Rgt=`, REPEAT | presente | eq, screenshot 74 |
+| V10 | Newton dal valore della variabile | presente | eq |
+| V11 | Retry | presente | eq |
+| V12 | Can't Solve! | presente | eq |
+| V13 | Time Out | presente | eq |
+| V14 | No Variable | presente | eq |
+| V15 | Variabile risolta memorizzata | presente | eq |
+| V16 | Esempio H=VT−½GT² → 16.8, 14, 14 | presente | eq, screenshot 74 |
+| V17 | Una sola soluzione | presente | eq |
+| — | Interruzione con AC durante il calcolo | **inevitabile**: il calcolo è limitato (`kSolverEvaluations`) e termina con Time Out | eq |
+
+### 4.5 Visualizzazione e uso dei risultati
+
+| ID | Voce | Stato | Prova |
+|---|---|---|---|
+| D1 | Forme naturali con i modelli di Run-Matrix | presente | eq |
+| D2 | Frac Result d/c, ab/c | presente | eq |
+| D3 | Norm / Fix / Sci / Eng | presente | eq |
+| D4 | Risultati lunghi scorrevoli | presente | eq |
+| D5 | S⇔D | presente (su F5: **inevitabile**, nessun tasto S⇔D sulla PicoCalc) | eq |
+| D6 | VARS › SimRes, SimCoef, PlyRes, PlyCoef in MatAns | presente | eq, screenshot 75 |
+| D7 | Rref con No/Infinite | presente | eq |
+| D8 | Errore senza coefficienti o soluzioni | presente | eq |
+| D9 | SimRes e SimCoef non insieme | presente | eq |
+
+### 4.6 Messaggi
+
+| ID | Messaggio | Stato |
 |---|---|---|
-| Elementi di tutte le liste di tutti i List File | 1 530 | 20 000 |
-| Forme esatte di tutte le memorie di matrici/vettori/risposte | 400 | 4 000 |
-| Punti di DrawStat / DrawR / DrawFTG nella schermata | 1 000 | 4 000 |
-| Function memory, Str | 20 × 255 caratteri | 20 × 255 caratteri |
+| M1 | Syntax ERROR | presente |
+| M2 | Ma ERROR | presente |
+| M3 | Stack ERROR | presente (motore condiviso) |
+| M4 | Non-Real ERROR | presente |
+| M5 | Can't Solve! | presente (titolo della finestra di errore) |
+| M6 | Time Out | presente |
+| M7 | Underflow | presente |
+| M8 | Infinitely Many Solutions / No Solution / No Variable | presente |
+| M9 | Retry | presente |
 
-Nuovi oggetti grandi: nessuno sullo stack (gli argomenti delle funzioni sono un
-array fisso di 8; SolveN e FMin campionano senza vettori temporanei grandi).
+### 4.7 Estensioni
 
-## 4. Test eseguiti
+| ID | Funzione | Stato |
+|---|---|---|
+| X1 | Disequazioni polinomiali 1…6 | mantenuta (F4 INEQ, segnata come estensione; screenshot 76) |
+| X2 | `solveInequalitySystem` | API di libreria, segnata come estensione (eq) |
 
-| Prova | Esito |
+### 4.8 Differenze inevitabili
+
+Schermo 320×320 (griglia di 4 colonne scorrevole, valore corrente su una riga
+dedicata); tastiera della PicoCalc (modelli su F1–F6 durante l'immissione,
+S⇔D su F5, SET UP su F10); nomi `X1…X6` da 4 incognite; "No Solution" per
+POLY senza radici reali nel modo Real; RECALL/DELETE del Solver interpretati;
+variabili del Solver A–Z; nessuna interruzione con AC (calcolo limitato). Le
+strip di eActivity e i comandi di programma `Sim Coef`… sono fuori perimetro
+(eActivity e Program non sono realizzati).
+
+## 5. Funzionalità e file
+
+| Requisito | Realizzazione | File |
+|---|---|---|
+| 4.1 Menu e schermate | `EquationApp` riscritta: Select Type, scelta, coefficienti, soluzioni, tabella e risultato del Solver | `src/apps/equation_app.cpp`, `include/apps.hpp` |
+| 4.2 Coefficienti | `eq::Number` (valore + `ExactComplex`), `evaluateNumber`, `editText`; editor `MathField` | `include/equation.hpp`, `src/equation.cpp`, `src/apps/math_field.cpp` |
+| 4.3 SIML | `solveSimultaneous`: Rref esatta o in virgola mobile, formula delle infinite soluzioni, decimali per elemento | `src/equation.cpp` |
+| 4.4 POLY | `solvePolynomial`: Yun, radici razionali, quadratiche e biquadratiche esatte, Aberth complesso, molteplicità, ordine | `src/equation.cpp` |
+| 4.5 SOLVER | `solverVariables`, `solveFor` (Newton + bisezione, Lower/Upper, messaggi) | `src/equation.cpp` |
+| 4.6 Uso dei risultati | `CollectionResolver::Memory::Equation`, nomi nel lexer e nell'editor, VARS di Run-Matrix, regola SimRes/SimCoef | `include/expression.hpp`, `src/expression.cpp`, `src/natural_editor.cpp`, `src/workspace.cpp`, `src/run_matrix.cpp`, `src/apps/run_matrix_app.cpp` |
+| 4.7 Visualizzazione | `numberText`, `numberTree`, `formulaTree`; alberi di Run-Matrix resi pubblici | `src/equation.cpp`, `include/run_matrix.hpp`, `src/run_matrix.cpp` |
+| 4.8 Estensioni | INEQ mantenuta, `solveInequalitySystem` documentata | `src/apps/equation_app.cpp` |
+| Comune | SET UP con ritorno alla modalità, titoli degli errori della fx-CG50, servizio EquationCore | `src/app_manager.cpp`, `include/app.hpp`, `src/apps/system_app.cpp`, `src/app_registry.cpp`, `include/app_registry.hpp` |
+| Dati | record v8, `limits.hpp` | `include/workspace.hpp`, `src/workspace.cpp`, `include/limits.hpp` |
+
+**Difetti preesistenti trovati e corretti** (dal simulatore, durante la
+prova del Solver): nell'editor Math un modello di frazione seguito da un
+fattore implicito (`½X`, `½GT²`) veniva serializzato `(1)/(2)X` e letto come
+1/(2X) in tutte le modalità; ora `((1)/(2))X`, reimportato come frazione. Il
+modello x²/^ prendeva come operando tutte le lettere precedenti (`GT²` =
+(GT)²); ora il numero o la sola variabile prima del cursore (con `Mat A`,
+`List 12` interi). Le espressioni salvate prima conservano il loro testo.
+
+Comportamenti cambiati volutamente (test adattati): schermate e nomi di
+EQUATION; radici in ordine decrescente; nel modo Real solo le radici reali;
+F5 REL per le disequazioni; SOLVER senza valore iniziale separato; il SET UP
+aperto da una modalità torna alla modalità; record alla versione 8.
+
+## 6. Test
+
+| Verifica | Risultato |
 |---|---|
-| `tests/run_host_tests.sh` (profili Plus e Pico 2 W) | 44/44 per profilo: 43 suite C++ (10 484 controlli sulla Plus, 11 445 sul Pico 2 W, più ≈ 334 000 verifiche dello stress dell'allocatore) e l'interoperabilità FAT/exFAT |
-| `--sanitize --tsan` | vedi [BUILD_STATUS.md](../BUILD_STATUS.md) |
+| Test host, profilo Pimoroni Pico Plus 2 W | 41/41 test, **10 316** controlli nelle 39 suite C++ + ≈ 333 000 dello stress dell'allocatore + 41 dello script FAT/exFAT, 0 errori |
+| Test host, profilo Raspberry Pi Pico 2 W | 41/41 test, **10 310** controlli + ≈ 334 000 + 41, 0 errori |
+| AddressSanitizer + UBSan (entrambi i profili) | 41/41 su entrambi i profili, 0 errori |
+| ThreadSanitizer (allocatore su due thread, entrambi i profili) | 0 errori |
 | Relay AI | 15/15 |
-| Nuove suite | `calc_v112_test` (gruppi 4.2–4.4, 4.8), `run_matrix_v112_test` (4.1, 4.5, 4.9, record v8 e migrazione v7→v8, interfaccia), `graph_cmd_v112_test` (4.6, PxlTest, `.pcgraph`), `editor_v112_test` (4.7, corpus di round-trip, glifi) |
-| Simulatore | `tests/sim/run_matrix_v112.txt`, screenshot 62–72 (PNG a palette, compressione senza perdita verificata pixel per pixel) |
-| Build firmware | vedi [BUILD_STATUS.md](../BUILD_STATUS.md) |
+| Simulatore | nuovo script `tests/sim/equation.txt`, screenshot 08 (rigenerato) e 62–76, compressi senza perdita (palette PNG, `compress_level` 9, pixel verificati: 36 KB) |
+| **Hardware fisico** | **non eseguito**: nessuna PicoCalc disponibile in questa sessione; procedura [HARDWARE_TEST_v1.12.0.md](../HARDWARE_TEST_v1.12.0.md) (HW-120…HW-134) |
 
-Nessuna prova su hardware: procedure in
-[HARDWARE_TEST_v1.12.0.md](../HARDWARE_TEST_v1.12.0.md).
+Nuova suite `equation_v112_test` (244 controlli): un gruppo per ogni
+punto del §4 della richiesta — coefficienti (frazioni, radicali, π, A–Z, Ans,
+complessi esatti, Non-Real, Type, EDIT, conversione dei double), SIML
+(esempio del manuale, frazioni, radicali e π, Hilbert 6×6 esatta e decimale,
+2–6 incognite, coefficienti 1E50, No Solution, Infinitely Many Solutions
+anche con l'esempio complesso del manuale, r∠θ, Ma ERROR/Underflow, Fix/Sci/Eng,
+S⇔D, frazioni miste), POLY (esempi del manuale 4-3, 4-4, 1-29, ordine, ×k,
+radicali, biquadratiche, grado 6, x⁶−1, decimali, irriducibili, radice doppia
+irrazionale, radici vicine distinte, coefficienti complessi, costanti 10⁹,
+a = 0, Underflow), SOLVER (esempio del manuale per V e per T, x = X, senza
+"=", Lower/Upper, Can't Solve!, Time Out, No Variable, Syntax ERROR, polo,
+Retry), schermate e tasti sul firmware (menu, EXE/EXIT, EDIT, SOLVE, REPEAT,
+CLEAR, frazione F1, S⇔D, Syntax ERROR con l'immissione aperta, Line, ×3,
+Complex Mode dal SET UP con ritorno, No Solution, Ma ERROR, Solver completo
+con RECALL, Lower/Upper, DELETE, No Variable), VARS › EQUATION (errori,
+SimRes esatto, MatAns, SimRes×6, SimRes+SimCoef, Rref, PlyRes, PlyCoef,
+Trn), record v8 (round trip, troncamenti, indicatori non validi) e
+migrazione v7→v8 dal fixture, correzioni dell'editor, estensioni.
+`architecture_test` più severo (§3); `apps_flow_test`, `storage_test`,
+`table_test`, `matrix_test`, `lists_csv_test`, `board_profile_test` adattati
+solo ai cambiamenti voluti (versione 8 del record, nuove schermate).
 
-## 5. Tabella di parità finale
+## 7. Compilazione del firmware
 
-**P** presente, **I** differenza inevitabile documentata (§6). Le voci sono
-quelle dell'[analisi](ANALISI_FONTI_v1.12.0.md#2-tabella-di-parità-perimetro-del-lavoro).
-
-| # | Voce | v1.11.0 | v1.12.0 | Note |
-|---|---|---|---|---|
-| B1–B2 | aritmetica, priorità, Fix/Sci/Norm/Eng | P | P | |
-| B3 | overflow ≥ 10¹⁰⁰ | D | P | ogni passaggio del valutatore |
-| B4 | variabili r e θ | D | P | `r` da VARS (token `r_var`, mostrato «r»): **I** per il modo di digitarla |
-| B5–B6 | →, A~F, Ans | P | P | |
-| B7–B8 | `:` e `◢` | M | P | |
-| B9 | function memory f1–f20 | M | P | |
-| B10–B11 | ripetizione, cronologia, CLIP | P | P | |
-| S1–S6 | SET UP Input/Output, Mode, Frac Result, Angle, Complex, Display | P | P | |
-| S7 | Simplify | D | P | regola §6 |
-| S8 | List File | M | P | |
-| S9 | Sub Name | M | P | |
-| S10–S11 | Sketch Line e voci di GRAPH | P | P | |
-| F1–F4, F7, F9, F15, F17, F18, F21, F22 | funzioni già presenti | P | P | |
-| F5 | ʳ ᵍ | M | P | |
-| F6 | ° ′ ″ in input | D | P | |
-| F8 | Pol/Rec in List Ans | D | P | |
-| F10 | Ran# n | M | P | valori delle sequenze: **I** (generatore Casio non pubblico) |
-| F11–F12 | RanInt#/RanNorm#/RanBin# con n | D | P | |
-| F13–F14 | RanList#, RanSamp# | M | P | |
-| F16 | P( Q( R( t( | M | P | |
-| F19 | ESYM P, E | M | P | |
-| F20 | ENG / ENG← | M | P | |
-| F23 | Rnd | D | P | |
-| C1–C2, C4 | Int÷ Rmdr Simp d/dx | P | P | |
-| C3 | Solve con limiti ed equazione | D | P | |
-| C5 | d²/dx² modello | D | P | |
-| C6 | ∫ con tolleranza | D | P | |
-| C7 | SolveN | M | P | senza limiti cerca tra ±10¹⁰ **(scelta)** |
-| C8 | FMin / FMax | M | P | |
-| C9 | Σ con variabile e passo, modello | D | P | |
-| C10 | funzioni vietate in Solve… | D | P | Syntax ERROR |
-| X1 | i Abs Arg Conjg ReP ImP | P | P | |
-| X2–X3 | ►r∠θ ►a+bi, input ∠ | M | P | |
-| X4 | Arg sugli elementi | D | P | |
-| R1, R3 | Simplify Auto, ▶Simp | P | P | |
-| R2 | Simplify Manual | D | P | |
-| N1, N3 | Base-N 32 bit, prefissi, operatori | P | P | |
-| N2 | Bin 16 bit | D | P | |
-| N4 | variabili A–F in Hex | D | P | inserimento da VARS/Alt: **I** (manca ALPHA) |
-| N5 | liste e matrici in Base-N | D | P | |
-| N6 | messaggi Base-N | P | P | |
-| T1, T4, T7, T8 | editor e funzioni MAT/VCT | P | P | |
-| T2 | forme esatte senza 64 | D | P | budget per scheda |
-| T3 | decimale digitato | D | P | |
-| T5 | Fill su Mat | D | P | |
-| T6 | Swap, \*Row, \*Row+, Row+ | M | P | |
-| L1, L6, L9, L10 | liste già presenti | P | P | |
-| L2 | List "QTY" | M | P | |
-| L3 | List File | M | P | |
-| L4 | n→Dim List | D | P | |
-| L5 | Fill su List | D | P | |
-| L7 | Min/Max di due liste | M | P | (funzionava già elemento per elemento; ora verificato) |
-| L8 | Mean/Median con frequenze | M | P | |
-| L11 | 999 elementi | P / I | P / I | 255 sul Pico 2 W |
-| D1 | x̂ ŷ | M | P | regressione dell'ultimo calcolo di Statistics |
-| D2 | distribuzioni | M | P | |
-| D3 | S-Dev, Var | M | P | |
-| U1 | CONVERT | M | P | integrato (sulla calcolatrice è un add-in) |
-| O1 | PICTURE | M | P | |
-| O2 | FUNCMEM | M | P | |
-| O3 | CAPTURE / RclCapt | M | P | catture come file PICOCALC/CAPT |
-| O4 | TVM | M | P | anno di 365 giorni, pagamento a fine periodo (predefiniti di Financial) |
-| V1, V5 | V-WIN, GRAPH | P | P | |
-| V2 | V-WIN in scrittura | M | P | Range ERROR |
-| V3–V4, V6, V8–V11 | FACTOR, STAT, DYNA, RECURSION, EQUATION, TVM, Str | M | P | |
-| V7 | TABLE in scrittura e Result | D | P | |
-| G1 | comandi della v1.11.0 | P | P | |
-| G2 | PxlTest( | M | P | righe 1–282, colonne 1–320: **I** |
-| G3 | disequazioni | M | P | |
-| G4 | G∫dx | M | P | |
-| G5 | stili Sketch… | M | P | |
-| G6 | StoPict / RclPict / BG-Pict | M | P | |
-| G7 | DrawStat | M | P | StatGraph1 predefinito (Scatter di XList/YList) **(scelta)** |
-| G8 | DrawGraph, DrawDyna, DrawR, DrawWeb, DrawFTG | M | P | Dyna: Y1 con il coefficiente A **(scelta)**; Recursion: formula an+1 da `"…"→an+1` |
-| G9 | G-SelOn/Off | M | P | |
-| G10 | comandi solo dei programmi | — | — | fuori perimetro (non accettati in Run-Matrix) |
-| G11 | comandi nei `.pcgraph` | D | P | decisione: sì |
-| E1, E6 | modelli e INS/CLIP | P | P | |
-| E2–E3 | d²/dx², Σ con variabile | M/D | P | |
-| E4 | round-trip esatto | D | P | corpus di 68 testi + 13 alberi di modelli |
-| E5 | × prima di una frazione, parentesi implicite | M | P | |
-| E7 | CATALOG | M | P | |
-| ER1, ER6 | messaggi e cursore | P | P | |
-| ER2 | niente Type ERROR | D | P | Argument ERROR |
-| ER3 | Complex Number In List/Matrix | D | P | |
-| ER4 | Can't Solve! / Iteration ERROR | D | P | **(scelta)** sulla ripartizione tra i due |
-| ER5 | Range ERROR | D | P | |
-
-Voci rimaste «diverse»: **nessuna**. Le scelte segnate **(scelta)** sono
-comportamenti che il manuale non descrive per intero; le differenze
-inevitabili sono in §6.
-
-## 6. Differenze inevitabili e scelte
-
-| Voce | Differenza | Motivo |
+| | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
 |---|---|---|
-| Schermo | area grafica 320×282 (PxlOn/PxlTest/Text: riga 1–282, colonna 1–320) | display PicoCalc 320×320 |
-| Tastiera | SHIFT = F7, OPTN = F8, VARS = F9, SET UP = F10, CATALOG = SHIFT 4, CAPTURE = SHIFT 7, INS = SHIFT DEL | tastiera PicoCalc |
-| Variabili A–F in Hex, r | inserite da VARS (o Alt+lettera), mostrate sottolineate / «r» | senza ALPHA le lettere digitate sono cifre (Hex) o la variabile R |
-| Ran# n | sequenze riproducibili ma con valori diversi da quelli della calcolatrice | generatore Casio non pubblico |
-| CONVERT | integrato | sulla fx-CG50 è un add-in |
-| Simplify Manual | denominatore = m.c.m. per + e −, prodotti per × e ÷ | regola dei manuali fx-7400G («least common multiple») e fx-9750GII; il manuale fx-CG50 non dà esempi completi |
-| SolveN senza limiti | ricerca tra −10¹⁰ e 10¹⁰ | intervallo predefinito non documentato |
-| DrawStat / DrawDyna | StatGraph1 Scatter; Y1 con il coefficiente A | le modalità Statistics (impostazioni StatGraph) e Dyna Graph del progetto non hanno quei dati |
-| Liste sul Pico 2 W | 255 elementi, 1 530 in tutti i file | 520 KB di SRAM, record da 59,75 KB |
-| Font e grafica | glifi e grafica propri | proprietà Casio |
+| Esito | compilato, 0 warning | compilato, 0 warning |
+| Immagine flash | 1 679 688 byte (40 % di 4 MB; +84 732 rispetto alla v1.11.0) | 1 670 916 byte (79 % di 2 MB; +84 748) |
+| RAM statica | 302 248 byte (−308); heap SRAM 191 320 byte | 298 324 byte (−308); heap SRAM 195 244 byte |
+| SHA-256 dell'UF2 locale | `6f28c35d3744fc1d6b61a3634bf2308c5e0cf9bc055043b1a208bae8a48d1125` | `67fee0302167ee2d1fe98bfcd0fc661cc2d371966d5fa8ff4d4bd6fb608a1590` |
 
-## 7. Problemi rimasti
+Pico SDK 2.2.0, `gcc-arm-none-eabi` 13.2.1, `-O2`, build pulite
+(`scripts/build.sh --clean`); la versione `1.12.0 (pico_plus_2w)` / `1.12.0 (pico2w)` è nel binario (`picotool` non è installato in questo ambiente). Frame di stack (`-fstack-usage`): il massimo resta `SystemApp::enter` 1 840 B; codice nuovo: forma esatta dei complessi 784 B (tabelle sull'heap; inline erano 1 928 B in `evaluateNumber`), `solveSimultaneous` 776 B, `solvePolynomial` 760 B, `numericPolynomial` 712 B; nessuna ricorsione nuova. Nessun pin, driver, partizione o script del
+linker cambiato; EQUATION ha gli stessi limiti sulle due schede; il blocco v8
+occupa da ≈ 1,2 KB (coefficienti nulli) a ≈ 4 KB nel record (59,75 KB sul
+Pico 2 W, 511,75 KB sulla Plus). Gli UF2 della release sono quelli compilati
+dal workflow sul commit pubblicato.
 
-- Nessuna prova su hardware PicoCalc (HW-120…HW-139 in
-  [HARDWARE_TEST_v1.12.0.md](../HARDWARE_TEST_v1.12.0.md)).
-- PxlTest( ridisegna la schermata di GRAPH nel framebuffer a ogni chiamata:
-  in un ciclo lungo è lento (sul Cortex-M33 da misurare con DIAG).
-- Gli screenshot 01–61 non sono stati rigenerati: mostrano i menu OPTN della
-  v1.11.0 dove compaiono.
-- Modalità Program, Dyna Graph, Recursion, Financial non realizzate: i loro
-  dati usati da Run-Matrix (VARS) sono nel workspace, le schermate no.
+## 8. Pubblicazione
+
+- Prima della pubblicazione `main` è stato ricontrollato: `origin/main` era ancora `f6933fd` (tag `v1.11.0`): nessun lavoro parallelo da integrare, nessuna rinumerazione necessaria.
+- Un solo commit della v1.12.0 su `main` (fast-forward); i commit intermedi
+  restano sul branch di sessione `ccr-bbf29b2b-0ipbnx`. Nessun force push.
+- Tag e release dal workflow `Build, test e release` avviato a mano su
+  `main` con *publish* = true (*tag_v190* = false): tag annotato `v1.12.0`,
+  release stabile con le note di [../releases/v1.12.0.md](../releases/v1.12.0.md),
+  UF2 delle due schede, zip dei sorgenti e `SHA256SUMS`.
+
+## 9. Limitazioni note
+
+- **Nessuna prova su hardware fisico** (HW-120…HW-134).
+- Forme esatte complesse solo per espressioni polinomiali in `i`
+  (`1/(1+i)` resta decimale); radici cubiche e fattori irriducibili di grado
+  ≥ 3 in virgola mobile; quartiche non pari non scomposte in forma esatta.
+- Variabili del Solver A–Z (niente r e θ separati); nessuna interruzione con
+  AC.
+- Interfaccia per i sistemi di disequazioni non realizzata (estensione).

@@ -1,5 +1,6 @@
 #pragma once
 #include "app_models.hpp"
+#include "equation.hpp"
 #include "expression.hpp"
 #include "graph_model.hpp"
 #include "math_engine.hpp"
@@ -147,18 +148,34 @@ struct TableRange {
     bool generated{false};                   // false: TABLE shows the relation list (no table)
 };
 
+// Dati della modalita' EQUATION (record v8). I coefficienti sono numeri con la
+// loro forma esatta (eq::Number): SIML in una griglia fissa 6 x 7 (riga r,
+// colonna c all'indice r*7+c: cambiando il numero di incognite i valori
+// restano al loro posto), POLY e le disequazioni dal grado piu' alto.
 struct EquationState {
+    static constexpr std::size_t MaxUnknowns = limits::kEquationUnknowns;
+    static constexpr std::size_t MaxDegree = limits::kEquationDegree;
+    static constexpr std::size_t SimStride = MaxUnknowns + 1;
+    static constexpr double DefaultLower = -9e99, DefaultUpper = 9e99;   // Lower / Upper (manuale 4-5)
     std::uint8_t unknowns{2};
-    std::array<double, 6 * 7> simultaneous{};    // row-major n x (n+1)
+    std::vector<eq::Number> simultaneous;     // MaxUnknowns x SimStride
     std::uint8_t degree{2};
-    std::array<double, 7> polynomial{};           // highest power first
-    std::string solverExpr{"x^2-2=0"};
-    double solverGuess{1};
+    std::vector<eq::Number> polynomial;       // MaxDegree + 1, dal grado piu' alto
+    std::string solverExpr;                   // equazione del Solver (testo lineare canonico)
+    double solverLower{DefaultLower}, solverUpper{DefaultUpper};
+    char solverVariable{0};                   // ultima variabile risolta ('A'..'Z', 0 = nessuna)
     std::uint8_t ineqDegree{2};
-    std::uint8_t ineqRelation{0};                 // 0 >, 1 <, 2 >=, 3 <=
-    std::array<double, 7> inequality{};
+    std::uint8_t ineqRelation{0};             // 0 >, 1 <, 2 >=, 3 <=  (estensione)
+    std::vector<eq::Number> inequality;       // MaxDegree + 1
+    // Ultime soluzioni (VARS › EQUATION: SimRes, PlyRes); vuote: nessuna.
+    CalcValue simResult, polyResult;
+    EquationState();
+    eq::Number& sim(std::size_t r, std::size_t c) { return simultaneous[r * SimStride + c]; }
+    const eq::Number& sim(std::size_t r, std::size_t c) const { return simultaneous[r * SimStride + c]; }
+    // Coefficienti attivi per righe: unknowns x (unknowns + 1).
+    std::vector<eq::Number> simCoefficients() const;
+    std::vector<eq::Number> polyCoefficients() const;     // degree + 1
 };
-
 struct ChatMessage { bool fromUser{}; std::string text; };
 
 // 3D Graph mode (record v5): functions Z1..Z3, 3D V-Window, grid and view.
@@ -214,8 +231,9 @@ struct Workspace final : NameResolver, CollectionResolver, ServiceResolver {
     void addHistory(HistoryEntry entry);
     bool resolve(const std::string& lowerName, double& out) const override;
 
-    // CollectionResolver: Mat A-Z, Vct A-Z, List 1-6 (le liste di Statistics) e
-    // le memorie delle risposte.
+    // CollectionResolver: Mat A-Z, Vct A-Z, List 1-26 (le liste di Statistics),
+    // le memorie delle risposte e le matrici di EQUATION (SimRes, SimCoef,
+    // PlyRes, PlyCoef: v1.12.0, in sola lettura).
     bool collection(Memory memory, int index, CalcValue& out) const override;
     // Assegnazioni (-> Mat A, -> Vct A, -> List 1). Controllano tipo, forma e
     // limiti della scheda e lanciano TypeError / DimensionError / MathError

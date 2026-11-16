@@ -85,9 +85,9 @@ in [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md) e diagnostica SYSTEM → F
 - Le regioni non si sovrappongono mai all'immagine del firmware e vengono
   limitate alla capacità reale del chip (JEDEC ID letto all'avvio).
 
-## Differenze tra le schede che riguardano la v1.12.0
+## Differenze tra le schede che riguardano la v1.13.0
 
-Le novità della v1.12.0 (completamento di Run-Matrix: List File, stringhe,
+Le novità della v1.13.0 (completamento di Run-Matrix: List File, stringhe,
 function memory, CALC/PROB/STAT/CONVERT/TVM, Base-N completa, editor senza
 limite, comandi grafici Draw…/Pict/PxlTest(, CATALOG, CAPTURE) sono **solo
 software**: pin, driver, periferiche, mappa della flash e script del linker
@@ -106,10 +106,20 @@ Le differenze sono nei limiti (`include/limits.hpp`):
 | Str 1–20, f1–f20 | 255 caratteri ciascuna | uguale |
 | Motore dei grafici di DrawFTG e TABLE Result | sullo heap (frame di stack ≤ 400 B) | uguale |
 
-Immagine del firmware v1.12.0: +165 KB circa rispetto alla v1.11.0 su
-entrambe le schede (1 759 736 byte = 42 % della partizione da 4 MB sulla
-Plus, 1 750 924 byte = 83 % della partizione da 2 MB sul Pico 2 W); RAM
-statica +5 008 byte. Valori esatti in [BUILD_STATUS.md](BUILD_STATUS.md).
+Immagine del firmware v1.13.0: +162 KB circa rispetto alla v1.12.0 su
+entrambe le schede (1 841 608 byte = 44 % della partizione da 4 MB sulla
+Plus, 1 832 772 byte = 87 % della partizione da 2 MB sul Pico 2 W); RAM
+statica +5 048 byte. Valori esatti in [BUILD_STATUS.md](BUILD_STATUS.md).
+
+## Differenze tra le schede che riguardano la v1.12.0
+
+EQUATION (v1.12.0) ha gli stessi limiti sulle due schede, come la fx-CG50: 6
+incognite, grado 6, equazione del Solver di 255 caratteri, al più 4 000
+valutazioni per un SOLVE (`limits.hpp`). I coefficienti con la forma esatta
+(≈ 7,6 KB) stanno sull'heap (PSRAM sulla Plus); il blocco v8 del record
+occupa da ≈ 1,2 a ≈ 4 KB (59,75 KB disponibili sul Pico 2 W, 511,75 KB sulla
+Plus). Nessun pin, driver, partizione o script del linker cambiato. Collaudo:
+[HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md) (HW-120…HW-134).
 
 ## Differenze tra le schede che riguardano la v1.11.0
 
@@ -189,9 +199,9 @@ le schede (1 515 272 byte = 36 % della partizione da 4 MB sulla Plus,
    novità della v1.11.0 (List 1–26, CSV su microSD e flash interna, MatAns,
    INS e ⌟, Eng, Simp, Base-N, comandi grafici):
    [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md) (HW-100…HW-115);
-   novità della v1.12.0 (List File, CALC/PROB/CONVERT, PxlTest(, Draw…,
+   novità della v1.13.0 (List File, CALC/PROB/CONVERT, PxlTest(, Draw…,
    StoPict, CAPTURE, CATALOG, ENG, Base-N):
-   [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md) (HW-120…HW-139).
+   [HARDWARE_TEST_v1.13.0.md](HARDWARE_TEST_v1.13.0.md) (HW-140…HW-159).
 8. microSD e TABLE: seguire [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md)
    (diagnostica SYSTEM → DIAG con log `[DIAG]` sulla seriale USB). In sintesi:
    FILE > SAVE AS, estrarre e reinserire la scheda,

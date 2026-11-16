@@ -301,13 +301,13 @@ come sulla CG50 (TESTED ON HOST).
 Screenshot: `docs/screenshots/06`, `07`, `20`–`37`, prodotti dallo script
 `tests/sim/graph.txt` con lo stesso codice del firmware.
 
-## Comandi grafici da Run-Matrix (v1.11.0, completati nella v1.12.0)
+## Comandi grafici da Run-Matrix (v1.11.0, completati nella v1.13.0)
 
 | Voce fx-CG50 | Stato | Dove | Test |
 |---|---|---|---|
 | Cls, ViewWindow, Graph Y=/r=/X=/(X,Y)=, Plot/PlotOn/PlotOff/PlotChg, Line, F-Line, Circle, Vertical, Horizontal, Text, PxlOn/PxlOff/PxlChg, Tangent, Normal, Inverse eseguiti in Run-Matrix | TESTED ON SIMULATOR | `graph_commands.cpp` (interprete), disegno di GRAPH (`GraphSource::commands`, SKETCH) | run_matrix_v111_test, screenshot 61 |
-| Graph Y>/Y</Y≥/Y≤ e X>/X</X≥/X≤ (disequazioni) | TESTED ON SIMULATOR | `CommandGraph` con i tipi di disequazione, riempimento di GRAPH | graph_cmd_v112_test, screenshot 70 |
-| G∫dx f, a, b | TESTED ON SIMULATOR | SKETCH `Integral` (area colorata tra a e b) | graph_cmd_v112_test, screenshot 71 |
+| Graph Y>/Y</Y≥/Y≤ e X>/X</X≥/X≤ (disequazioni) | TESTED ON SIMULATOR | `CommandGraph` con i tipi di disequazione, riempimento di GRAPH | graph_cmd_v112_test, screenshot 85 |
+| G∫dx f, a, b | TESTED ON SIMULATOR | SKETCH `Integral` (area colorata tra a e b) | graph_cmd_v112_test, screenshot 86 |
 | SketchNormal/Thick/Broken/Dot/Thin (prefissi e impostazione Sketch Line) | TESTED ON SIMULATOR | stile dell'elemento SKETCH o del grafico | graph_cmd_v112_test |
 | StoPict n, RclPict n, BG-Pict n, RclCapt n | TESTED ON SIMULATOR | memorie PICT 1–20 di GRAPH, `PICOCALC/CAPT` | graph_cmd_v112_test |
 | G-SelOn/G-SelOff n, DrawGraph | TESTED ON SIMULATOR | selezione di Y1–Y20 | graph_cmd_v112_test |

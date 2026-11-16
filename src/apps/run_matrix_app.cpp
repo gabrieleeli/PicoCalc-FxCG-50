@@ -200,7 +200,16 @@ MenuList varsSub(Context& ctx, const std::string& name) {
         out.push_back({"n  (nella formula)", "sym:rec_n"});
         add({"r_start", "r_end", "rec_a0", "rec_a1", "rec_a2", "rec_b0", "rec_b1", "rec_b2", "rec_c0", "rec_c1", "rec_c2",
              "rec_anstart", "rec_bnstart", "rec_cnstart"});
-    } else if (name == "VEQ") out = {{"SimRes", "sym:eq_simres"}, {"SimCoef", "sym:eq_simcoef"}, {"PlyRes", "sym:eq_plyres"}, {"PlyCoef", "sym:eq_plycoef"}};
+    } else if (name == "VEQ") {
+        // VARS › EQUATION (manuale 1-33): matrici di soluzioni e coefficienti, lette
+        // dal workspace con CollectionResolver (il risultato va in MatAns).
+        for (int k = 0; k < 4; ++k) {
+            CalcValue v;
+            const bool defined = ctx.ws.collection(CollectionResolver::Memory::Equation, k, v) && !v.empty();
+            out.push_back({std::string(equationMatrixName(k)) + (defined ? "  " + dimensionText(v) : "  (vuota)"),
+                           std::string("sym:") + equationMatrixName(k)});
+        }
+    }
     else if (name == "VTVM") add({"tvm_n", "tvm_i", "tvm_pv", "tvm_pmt", "tvm_fv", "tvm_py", "tvm_cy"});
     else if (name == "VSTR") {
         for (int k = 1; k <= 20; ++k) {

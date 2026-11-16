@@ -14,6 +14,14 @@ const char* complexName(ComplexMode m) { return m == ComplexMode::Real ? "Real" 
 void Context::open(AppId id) { manager_.open(id); }
 const gfx::Canvas* Context::screen() const noexcept { return manager_.canvas_; }
 void Context::home() { manager_.home(); }
+void Context::leaveSetup() {
+    const AppId back = manager_.setupReturn_;
+    manager_.setupReturn_ = AppId::MainMenu;
+    if (back == AppId::MainMenu || back == AppId::System) { manager_.home(); return; }
+    resuming_ = true;
+    try { manager_.open(back); } catch (...) { resuming_ = false; throw; }
+    resuming_ = false;
+}
 namespace {
 // Copies into the capacity already reserved: never allocates (the text is cut).
 void assignReserved(std::string& dst, const char* s, std::size_t n) noexcept {
@@ -75,6 +83,7 @@ void AppManager::switchTo(App* next, AppId id) {
     }
     active_ = next; activeId_ = id; fullRedraw_ = true;
     ctx_.shift_ = false;
+    if (id != AppId::System) setupReturn_ = AppId::MainMenu;   // il ritorno vale solo per il SET UP appena aperto
     if (active_) {
         try { active_->enter(ctx_); } catch (const std::exception& e) { showError(e.what()); }
     }
@@ -93,11 +102,12 @@ void AppManager::showError(const char* what) {
     if (!what) what = "";
     const char* colon = std::strchr(what, ':');
     const char* error = std::strstr(what, "ERROR");
-    // Titoli della calcolatrice senza la parola ERROR (Appendice α, v1.12.0).
-    bool casioTitle = false;
-    for (const char* t : {"Can't Solve!", "Complex Number In List", "Complex Number In Matrix", "Complex Number In Data", "No Variable"})
-        if (colon && std::strncmp(what, t, std::strlen(t)) == 0 && what + std::strlen(t) == colon) casioTitle = true;
-    if (colon && ((error && error < colon) || casioTitle)) {
+    // Titoli della fx-CG50 senza la parola ERROR (Appendice α, tabella degli errori α-2, α-3).
+    static const char* const kTitles[] = {"Can't Solve!", "Time Out", "No Variable", "Underflow", "No Solution", "Infinitely Many Solutions",
+                                          "Complex Number In List", "Complex Number In Matrix", "Complex Number In Data"};
+    bool known = false;
+    if (colon) for (const char* t : kTitles) known = known || (std::strncmp(what, t, std::strlen(t)) == 0 && what + std::strlen(t) == colon);
+    if (colon && ((error && error < colon) || known)) {
         assignReserved(errorTitle_, what, static_cast<std::size_t>(colon - what));
         const char* d = colon + 1;
         while (*d == ' ') ++d;
@@ -115,7 +125,12 @@ void AppManager::key(const KeyEvent& ev) {
     }
     if (ev.is(Key::Menu) || (ev.is(Key::Exit) && ev.longPress)) { home(); return; }
     if (ev.is(Key::Shift)) { ctx_.shift_ = !ctx_.shift_; return; }
-    if (ev.is(Key::Setup) && activeId_ != AppId::System && !(active_ && active_->ownsSetup())) { open(AppId::System); return; }
+    if (ev.is(Key::Setup) && activeId_ != AppId::System && !(active_ && active_->ownsSetup())) {
+        const AppId from = activeId_;
+        open(AppId::System);
+        setupReturn_ = from;
+        return;
+    }
     if (!active_) return;
     const bool shiftBefore = ctx_.shift_;
     try {

@@ -357,7 +357,7 @@ const Name kNames[] = {
     {"xfct", "Xfct"}, {"yfct", "Yfct"}, {"d_start", "D Start"}, {"d_end", "D End"}, {"d_pitch", "D pitch"},
     {"r_start", "R Start"}, {"r_end", "R End"}, {"rec_a0", "a0"}, {"rec_a1", "a1"}, {"rec_a2", "a2"}, {"rec_b0", "b0"}, {"rec_b1", "b1"},
     {"rec_b2", "b2"}, {"rec_c0", "c0"}, {"rec_c1", "c1"}, {"rec_c2", "c2"}, {"rec_anstart", "anStart"}, {"rec_bnstart", "bnStart"},
-    {"rec_cnstart", "cnStart"}, {"rec_an1", "an+1"}, {"eq_simres", "SimRes"}, {"eq_simcoef", "SimCoef"}, {"eq_plyres", "PlyRes"}, {"eq_plycoef", "PlyCoef"}, {"tbl_result", "Result"}, {"rec_an", "an"}, {"rec_n", "n"},
+    {"rec_cnstart", "cnStart"}, {"rec_an1", "an+1"}, {"tbl_result", "Result"}, {"rec_an", "an"}, {"rec_n", "n"},
     {"tvm_n", "n"}, {"tvm_i", "I%"}, {"tvm_pv", "PV"}, {"tvm_pmt", "PMT"}, {"tvm_fv", "FV"}, {"tvm_py", "P/Y"}, {"tvm_cy", "C/Y"},
     {"stat_n", "n"}, {"stat_meanx", "\xEE\x80\x81"}, {"stat_sumx", "\xCE\xA3x"}, {"stat_sumx2", "\xCE\xA3x\xC2\xB2"}, {"stat_popsdx", "\xCF\x83x"},
     {"stat_sdx", "sx"}, {"stat_minx", "minX"}, {"stat_maxx", "maxX"}, {"stat_meany", "\xEE\x80\x82"}, {"stat_sumy", "\xCE\xA3y"},

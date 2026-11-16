@@ -1,9 +1,9 @@
-# Installazione — v1.12.0
+# Installazione — v1.13.0
 
 > Il firmware non è ancora stato provato su una PicoCalc fisica (né con il
 > Pimoroni Pico Plus 2 W né con il Pico 2 W). Prima di usarlo, conservare una
 > copia del firmware attuale della propria scheda (se presente) e seguire il
-> collaudo in [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md),
+> collaudo in [HARDWARE_TEST_v1.13.0.md](HARDWARE_TEST_v1.13.0.md),
 > [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md),
 > [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md) e
 > [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md).
@@ -23,8 +23,8 @@
 
 | Modulo | File compilato | File della release |
 |---|---|---|
-| Pimoroni Pico Plus 2 W | `picocalc_fxai_pico_plus_2w.uf2` | `picocalc_fxai_pico_plus_2w-v1.12.0.uf2` |
-| Raspberry Pi Pico 2 W | `picocalc_fxai_pico2w.uf2` | `picocalc_fxai_pico2w-v1.12.0.uf2` |
+| Pimoroni Pico Plus 2 W | `picocalc_fxai_pico_plus_2w.uf2` | `picocalc_fxai_pico_plus_2w-v1.13.0.uf2` |
+| Raspberry Pi Pico 2 W | `picocalc_fxai_pico2w.uf2` | `picocalc_fxai_pico2w-v1.13.0.uf2` |
 
 La GitHub Release contiene anche lo zip dei sorgenti e `SHA256SUMS`; i file
 sono compilati e verificati dal workflow `.github/workflows/release.yml`
@@ -46,16 +46,16 @@ di flash del Pico 2 W: configurazione non consigliata e non provata.
 Controllo dell'immagine prima della copia:
 
 ```bash
-picotool info -a picocalc_fxai_pico_plus_2w-v1.12.0.uf2   # "PicoCalc FX-CG50 AI", versione 1.12.0 (pico_plus_2w)
+picotool info -a picocalc_fxai_pico_plus_2w-v1.13.0.uf2   # "PicoCalc FX-CG50 AI", versione 1.13.0 (pico_plus_2w)
 sha256sum -c SHA256SUMS                            # se si usa il pacchetto di release
 ```
 
 Il workspace (impostazioni, variabili, liste, matrici e vettori, storia,
 grafici, 3D, conversazioni AI) è in un'area della flash che l'aggiornamento non
-tocca; i dati salvati da una v1.6.0–v1.11.0 vengono letti dalla v1.12.0 (record
-v8, con i valori predefiniti per le novità: modalità Math, Mode Comp,
+tocca; i dati salvati da una v1.6.0–v1.12.0 vengono letti dalla v1.13.0 (record
+v9, con i valori predefiniti per le novità: modalità Math, Mode Comp,
 Simplify Auto, CSV `,`/`.`, List 7–26 vuote, nessun sottonome, nessuna
-matrice nei record precedenti alla v1.10.0; dalla v1.11.0 in giù: List File 1
+matrice nei record precedenti alla v1.10.0; dalla v1.12.0 in giù: List File 1
 con le liste esistenti, File 2–6 vuoti, Str 1–20 e f1–f20 vuote, variabili di
 modo ai valori iniziali):
 

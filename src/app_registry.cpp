@@ -17,7 +17,7 @@ const char* const kRunMatrixSrc[] = {"src/apps/run_matrix_app.cpp", "src/apps/ma
 const char* const kStatisticsSrc[] = {"src/apps/statistics_app.cpp", nullptr};
 const char* const kGraphSrc[] = {"src/apps/graph_app.cpp", "src/apps/graph_plot.cpp", "src/apps/graph_files.cpp", nullptr};
 const char* const kTableSrc[] = {"src/apps/table_app.cpp", nullptr};
-const char* const kEquationSrc[] = {"src/apps/equation_app.cpp", nullptr};
+const char* const kEquationSrc[] = {"src/apps/equation_app.cpp", "src/apps/math_field.cpp", "src/equation.cpp", nullptr};
 const char* const kMemorySrc[] = {"src/apps/memory_app.cpp", nullptr};
 const char* const kSystemSrc[] = {"src/apps/system_app.cpp", nullptr};
 const char* const kConversionSrc[] = {"src/apps/conversion_app.cpp", nullptr};
@@ -66,8 +66,9 @@ const AppInfo kApps[AppCount] = {
      "Grafici di coniche non ancora implementati.",
      s::Expression | Ui | s::Solvers | s::Storage | s::Models, d::Settings | d::View, 0, nullptr},
     {AppId::Equation, "Equation", "A", rgb888To565(240, 140, 20), AppStatus::Available,
-     "Sistemi lineari, polinomi di grado 2..6, solver f(x)=g(x), disequazioni",
-     nullptr, s::Expression | Ui | s::Solvers | s::Storage, d::Settings | d::Memory | d::Equation, 0, kEquationSrc},
+     "SIML (2-6 incognite) e POLY (grado 2-6) con coefficienti esatti e complessi, soluzioni esatte, molteplicita' e Infinitely Many Solutions; SOLVER su qualsiasi variabile con Lower/Upper; disequazioni (estensione)",
+     nullptr, s::Expression | s::Exact | Ui | s::MathRender | s::RunCore | s::Solvers | s::Storage | s::EquationCore,
+     d::Settings | d::Memory | d::Equation, 0, kEquationSrc},
     {AppId::Program, "Program", "B", rgb888To565(170, 160, 20), AppStatus::Planned,
      "Programmi con un linguaggio proprio (non il codice Casio) che usano il motore e il workspace",
      "Linguaggio di programmazione non ancora implementato.",
@@ -136,6 +137,7 @@ const char* const kHFiles[] = {"file_store.hpp", "graph_file.hpp", "pict.hpp", "
 const char* const kHDiag[] = {"diagnostics.hpp", nullptr};
 const char* const kHGraph3D[] = {"graph3d.hpp", "limits.hpp", nullptr};
 const char* const kHGraphCmd[] = {"graph_commands.hpp", nullptr};
+const char* const kHEquation[] = {"equation.hpp", nullptr};
 const char* const kHHardware[] = {"board_config.hpp", "mem_pools.hpp", "psram.hpp", "limits.hpp", "system_info.hpp", "system_runtime.hpp", nullptr};
 const ServiceInfo kServices[service::Count] = {
     {s::Expression, "Expression", kHExpression}, {s::Exact, "Exact", kHExact}, {s::Editor, "Editor", kHEditor},
@@ -145,6 +147,7 @@ const ServiceInfo kServices[service::Count] = {
     {s::Help, "Help", kHHelp}, {s::RunCore, "RunCore", kHRunCore}, {s::Models, "Models", kHModels},
     {s::GraphCore, "GraphCore", kHGraphCore}, {s::Files, "Files", kHFiles}, {s::Diag, "Diag", kHDiag},
     {s::Graph3D, "Graph3D", kHGraph3D}, {s::Hardware, "Hardware", kHHardware}, {s::GraphCmd, "GraphCmd", kHGraphCmd},
+    {s::EquationCore, "EquationCore", kHEquation},
 };
 const char* const kDataNames[data::Count] = {"settings", "memory", "history", "functions", "view", "table", "lists", "equation", "chat", "graph", "graph3d", "matrices", "strings"};
 // Membri e metodi del workspace che non hanno il nome di una sezione (v1.11.0).

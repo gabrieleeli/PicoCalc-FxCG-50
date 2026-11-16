@@ -1,11 +1,11 @@
 # Changelog
 
-## v1.12.0 — completamento totale di Run-Matrix (parità con la fx-CG50)
+## v1.13.0 — completamento totale di Run-Matrix (parità con la fx-CG50)
 
-Base: tag `v1.11.0` (commit `f6933fd`, uguale a `origin/main`). Analisi delle
-fonti e tabella di parità iniziale: [reports/ANALISI_FONTI_v1.12.0.md](reports/ANALISI_FONTI_v1.12.0.md);
-rapporto con la tabella finale: [reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md).
-**Nessuna prova su hardware fisico**: procedura [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md).
+Base: tag `v1.11.0` (commit `f6933fd`), unito con la v1.12.0 di EQUATION (commit `51691de` di `main`). Analisi delle
+fonti e tabella di parità iniziale: [reports/ANALISI_FONTI_v1.13.0.md](reports/ANALISI_FONTI_v1.13.0.md);
+rapporto con la tabella finale: [reports/SVILUPPO_v1.13.0.md](reports/SVILUPPO_v1.13.0.md).
+**Nessuna prova su hardware fisico**: procedura [HARDWARE_TEST_v1.13.0.md](HARDWARE_TEST_v1.13.0.md).
 
 ### Calcolo (stesso parser, stesso AST, stesso valutatore)
 - **CALC**: Solve con limiti e forma `a=b`, **SolveN** (fino a 10 soluzioni in
@@ -39,7 +39,7 @@ rapporto con la tabella finale: [reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v
 - Matrici: forme esatte **senza il limite di 64 elementi** (budget per
   scheda), celle decimali conservate, **Swap / \*Row / \*Row+ / Row+**.
 - VARS completo: V-WIN (anche in scrittura), FACTOR, STAT, GRAPH, DYNA, TABLE
-  (Result), RECURSION, EQUATION (SimRes, SimCoef, PlyRes, PlyCoef), TVM, Str.
+  (Result), RECURSION, EQUATION (SimRes, SimCoef, PlyRes, PlyCoef della v1.12.0), TVM, Str.
 - **OPTN nell'ordine della fx-CG50**; **CATALOG** (SHIFT 4); **CAPTURE**
   (SHIFT 7) con RclCapt.
 - Messaggi dell'Appendice α: `Argument ERROR` al posto di «Type ERROR»,
@@ -62,23 +62,91 @@ rapporto con la tabella finale: [reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v
 - Font: glifi ◢ ʳ ᵍ ′ ″ ŷ x̂ x̄ ȳ Å disegnati dal progetto.
 
 ### Workspace
-- **Record v8** in coda al v7 (List File, Sub Name, regressione, r e θ, Str,
+- **Record v9** in coda al v7 (List File, Sub Name, regressione, r e θ, Str,
   function memory, variabili di Dyna/Recursion/TVM, formula an+1, celle
-  decimali, ENG, ◢ e risultati stringa della cronologia); v1–v7 letti senza
-  perdite; fixture della v1.11.0.
+  decimali, ENG, ◢ e risultati stringa della cronologia); v1–v8 letti senza
+  perdite; fixture della v1.11.0 e della v1.12.0 (migrazioni v7→v9 e v8→v9).
 
 ### Test
 - Nuove suite `calc_v112_test`, `run_matrix_v112_test`, `graph_cmd_v112_test`,
   `editor_v112_test`; `architecture_test` più severo (parser unico,
   `calc_library` puro, separazione di Run-Matrix ampliata); script del
-  simulatore `tests/sim/run_matrix_v112.txt` (screenshot 62–72).
+  simulatore `tests/sim/run_matrix_v112.txt` (screenshot 77–87).
 
 ### Firmware
 - Il motore dei grafici usato da DrawFTG e da TABLE Result (VARS) è allocato
-  sullo heap: i frame di `graphcmd::Runner::run` e `Workspace::special` sono
-  scesi a 400 e 224 byte (`-fstack-usage`) sullo stack da 32 KB.
-- Build delle due schede senza warning: immagine di 1 759 736 byte sulla Plus
-  (42 % di 4 MB) e di 1 750 924 byte sul Pico 2 W (83 % di 2 MB).
+  sullo heap: i frame dei comandi grafici e di `Workspace::special` sono
+  al massimo 400 e 176 byte (`-fstack-usage`) sullo stack da 32 KB.
+- Build delle due schede senza warning: immagine di 1 841 608 byte sulla Plus
+  (44 % di 4 MB) e di 1 832 772 byte sul Pico 2 W (87 % di 2 MB).
+
+## v1.12.0 — completamento di EQUATION: SIML, POLY e SOLVER come la fx-CG50
+
+Base: tag `v1.11.0` (commit `f6933fd`, uguale a `origin/main`). Analisi delle
+fonti con la tabella di parità: [reports/ANALISI_FONTI_v1.12.0.md](reports/ANALISI_FONTI_v1.12.0.md);
+rapporto: [reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md); guida:
+[EQUATION.md](EQUATION.md). **Nessuna prova su hardware fisico**: procedura
+[HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md).
+
+### EQUATION (manuale fx-CG50 4-1…4-5, 1-29, 1-33)
+- Schermate del manuale: "Select Type" (SIMUL, POLY, SOLVER; INEQ come
+  estensione), "Number of Unknowns?" / "Degree?", griglia dei coefficienti con
+  intestazione `aₙX+bₙY=cₙ`, parentesi di matrice, cella corrente e valore in
+  forma naturale in basso a destra; tasti **SOLVE DELETE CLEAR EDIT**, EXE
+  verso la cella successiva, EXIT che annulla l'immissione, **REPEAT**.
+- **Coefficienti come espressioni** dello stesso parser di Run-Matrix
+  (frazioni, radici, π, A–Z, Ans, complessi) conservati **in forma esatta**
+  (anche complessa) e modificabili con EDIT; editor Math/Line di Run-Matrix
+  (nuovo widget `MathField`).
+- **SIML** 2–6 incognite: Gauss-Jordan esatto (frazioni, radicali, π,
+  complessi) o in virgola mobile con equilibratura e pivoting; soluzioni in
+  colonna con la forma naturale; **No Solution**; **Infinitely Many
+  Solutions con la formula** (`X=−½i`, `Y=1.4−1.8i−(2+i)Z`, `Z=Z`); decimali
+  solo per i risultati che dipendono da decimali digitati.
+- **POLY** grado 2–6: reali in ordine decrescente poi complesse, radici
+  multiple una volta con **×k**, Complex Mode **Real / a+bi / r∠θ** (anche
+  esatto: `1∠π`), radici esatte (`(1+√5)/2`, `(−3+√11 i)/2`, `√2`, radici
+  razionali) con scomposizione senza quadrati (Yun), Underflow / Ma ERROR
+  dell'intervallo di calcolo.
+- **SOLVER**: equazione in input naturale, tabella delle variabili (A–Z
+  nell'ordine dell'equazione), **Lower/Upper**, scelta dell'incognita, F6
+  SOLVE, RECALL, DELETE; risultato `V=…`, **Lft**, **Rgt**, **Retry**;
+  messaggi **No Variable**, **Can't Solve!**, **Time Out**; la variabile
+  risolta resta memorizzata.
+- **S⇔D** (F5) sulle soluzioni; formati Norm/Fix/Sci/Eng anche in 2D;
+  risultati lunghi scorrevoli con ◀ ▶.
+- **VARS › EQUATION** in Run-Matrix: `SimRes`, `SimCoef`, `PlyRes`, `PlyCoef`
+  (nomi dello stesso lexer, risolti dal workspace con `CollectionResolver`,
+  risultato in MatAns; la Rref con No Solution / Infinitely Many Solutions).
+
+### Comune
+- **SET UP** aperto da una modalità: EXIT torna a quella modalità (prima al
+  menu principale); EQUATION riprende dalla stessa schermata.
+- Titoli degli errori senza "ERROR" della fx-CG50 (Can't Solve!, Time Out,
+  No Variable, Underflow) nella finestra di errore.
+- **Correzione dell'editor Math** (tutte le modalità): un modello di frazione
+  seguito da un fattore implicito (`½X`) era letto come `1/(2X)`; ora il testo
+  lineare è `((1)/(2))X` e si reimporta come frazione. `GT²` eleva al quadrato
+  solo `T` (prima `(GT)²`), come sulla fx-CG50. Le espressioni già salvate
+  conservano il loro testo.
+
+### Dati
+- Record del workspace **v8**: EQUATION in coda (coefficienti `eq::Number`
+  con forma esatta, griglia SIML fissa 6×7, equazione, Lower/Upper, variabile
+  del Solver, ultime soluzioni). I record v1–v7 si leggono senza perdite:
+  coefficienti convertiti con il decimale più corto, celle del sistema attivo
+  alla loro riga e colonna, valore iniziale del Solver nella variabile X.
+  Fixture della v1.11.0 (`tests/fixtures/workspace_v1_11_0.inc`).
+- `limits.hpp`: `kEquationUnknowns`, `kEquationDegree`,
+  `kEquationExpression`, `kSolverEvaluations`.
+
+### Test
+- Nuova suite `equation_v112_test` (esempi del manuale, casi numerici
+  difficili, migrazione v7→v8, VARS, editor); `architecture_test` più severo
+  (servizio EquationCore, nessuna lettura propria dei numeri, nessun percorso
+  numerico separato, Run-Matrix solo tramite `CollectionResolver`);
+  `apps_flow_test` adattato alle nuove schermate. Script
+  `tests/sim/equation.txt`, screenshot 08 e 62–76.
 
 ## v1.11.0 — completamento di Run-Matrix: List 1–26, CSV, MatAns/ListAns, Line (INS, ⌟), simboli ingegneristici, Simp, Base-N, comandi grafici
 

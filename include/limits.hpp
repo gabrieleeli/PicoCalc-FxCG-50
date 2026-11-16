@@ -63,6 +63,17 @@ inline constexpr std::size_t kSketchDataPoints = board::config::kIsPicoPlus2W ? 
 inline constexpr std::size_t kNaturalMatrixDim = 6;
 inline constexpr std::size_t kNaturalListLength = 20;
 
+// EQUATION (v1.12.0, record v8): sistemi fino a 6 incognite e polinomi fino al
+// grado 6, come la fx-CG50, su entrambe le schede. I coefficienti sono numeri
+// con la forma esatta (eq::Number, ~136 byte): 6 x 7 + 7 + 7 = 56 celle, circa
+// 7,6 KB sull'heap (PSRAM sulla Pico Plus 2 W) e al piu' ~4 KB nel record.
+inline constexpr std::size_t kEquationUnknowns = 6;
+inline constexpr std::size_t kEquationDegree = 6;
+inline constexpr std::size_t kEquationExpression = 255;     // equazione del Solver (caratteri del testo lineare)
+// Solver: valutazioni dell'equazione per una soluzione (Newton + ricerca del
+// cambio di segno + bisezione); oltre: "Time Out".
+inline constexpr std::size_t kSolverEvaluations = 4000;
+
 // ---- RAM limits -------------------------------------------------------------------
 struct RamProfile {
     const char* name;

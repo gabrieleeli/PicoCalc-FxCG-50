@@ -80,19 +80,22 @@ bool isFunctionReferenceName(const std::string& lowerName) noexcept;
 class CollectionResolver {
 public:
     virtual ~CollectionResolver() = default;
-    enum class Memory : std::uint8_t { Mat = 0, Vct = 1, List = 2 };
+    enum class Memory : std::uint8_t { Mat = 0, Vct = 1, List = 2, Equation = 3 };
     static constexpr int Answer = -1;            // indice di MatAns / VctAns / ListAns
+    // Memory::Equation (v1.12.0, VARS › EQUATION della fx-CG50): matrici dei
+    // risultati e dei coefficienti di EQUATION, in sola lettura.
+    enum EquationMatrix : int { SimRes = 0, SimCoef = 1, PlyRes = 2, PlyCoef = 3 };
     static constexpr int Slots = 26;             // A..Z, List 1..26 (indice 0..25)
     // Copia il valore memorizzato; false quando la memoria non e' definita ("None").
     virtual bool collection(Memory memory, int index, CalcValue& out) const = 0;
     // v1.12.0: indice 0..25 della lista con il sottonome indicato (List "QTY"),
     // -1 se nessuna lista ha quel nome.
     virtual int listByName(const std::string& subName) const { (void)subName; return -1; }
-    // v1.12.0: matrici di VARS calcolate dalle altre modalita' (EQUATION SimRes,
-    // SimCoef, PlyRes, PlyCoef; TABLE Result): nomi "eq_simres", "tbl_result"...
+    // v1.13.0: matrici di VARS calcolate da un'altra modalita' (TABLE Result,
+    // nome "tbl_result"; VARS › EQUATION passa da collection(Memory::Equation)).
     virtual bool special(const std::string& lowerName, CalcValue& out) const { (void)lowerName; (void)out; return false; }
 };
-// True per i nomi delle matrici di VARS di special() ("eq_simres", "tbl_result"...).
+// True per i nomi delle matrici di VARS di special() ("tbl_result").
 bool isSpecialCollectionName(const std::string& lowerName) noexcept;
 
 // v1.12.0: servizi che il valutatore chiede al chiamante per alcune funzioni
@@ -134,6 +137,12 @@ struct EvalContext {
     const ServiceResolver* services{};
     EvalContext& bind(const char* name, double value);
 };
+
+// Nomi VARS › EQUATION (v1.12.0): "SimRes", "SimCoef", "PlyRes", "PlyCoef"
+// (con queste maiuscole, come li inserisce il menu VARS) -> indice
+// CollectionResolver::EquationMatrix, -1 per gli altri testi.
+int equationMatrixIndex(const std::string& name) noexcept;
+const char* equationMatrixName(int index) noexcept;
 
 // Shared variable names resolved through EvalContext::names
 // ("xmin", "xmax", "xdot", ..., "tblstart", "list1".."list6"); nullptr-terminated.

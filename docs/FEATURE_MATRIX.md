@@ -1,8 +1,11 @@
-# Feature matrix — v1.12.0
+# Feature matrix — v1.13.0
 
-La v1.12.0 porta Run-Matrix alla parità con la fx-CG50: ogni voce della
+La v1.13.0 porta Run-Matrix alla parità con la fx-CG50: ogni voce della
 tabella di parità è presente o è una differenza inevitabile documentata
-([reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md#5-tabella-di-parità-finale)).
+([reports/SVILUPPO_v1.13.0.md](reports/SVILUPPO_v1.13.0.md#5-tabella-di-parità-finale)).
+La v1.12.0 aggiunge il completamento di **EQUATION** (SIML, POLY e SOLVER come
+il capitolo 4 del manuale fx-CG50, VARS › EQUATION, record v8;
+[EQUATION.md](EQUATION.md), [reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md)).
 La v1.11.0 contiene tutte le funzioni della v1.10.0 più il completamento di
 Run-Matrix: List 1–26 con i sottonomi, file CSV di liste e matrici,
 schermate MatAns/ListAns, celle esatte e complesse nell'editor MAT/VCT,
@@ -117,7 +120,7 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Variabili di altre modalità via workspace (VARS: V-WIN, TABLE) | TESTED ON SIMULATOR |
 | Costanti matematiche e fisiche | TESTED ON HOST |
 | Numeri complessi nel parser (a+bi, r∠θ, arg, conj, re, im) | TESTED ON HOST |
-| Formati Norm1/Norm2/Fix/Sci/Eng (10 cifre; Eng con i simboli f…T dalla v1.11.0, P ed E dalla v1.12.0) | TESTED ON SIMULATOR |
+| Formati Norm1/Norm2/Fix/Sci/Eng (10 cifre; Eng con i simboli f…T dalla v1.11.0, P ed E dalla v1.13.0) | TESTED ON SIMULATOR |
 | Aritmetica esatta: razionali, radicali a√b/c (≤ 2 termini), multipli di π | TESTED ON HOST |
 | Valutazione esatta sullo stesso AST (trigonometria ai multipli di 30°/45°, radici, log esatti, n!, nCr…) | TESTED ON HOST |
 | S⇔D con valore interno preservato; regole di visualizzazione CG50 (10 caratteri, limiti radicali e π) | TESTED ON SIMULATOR |
@@ -126,15 +129,15 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Arrotondamento di visualizzazione come la calcolatrice (mantissa 15 cifre, per eccesso a metà) | TESTED ON HOST |
 | Operatori relazionali e logici (= ≠ < > ≤ ≥, And, Or, Xor, Not) | TESTED ON HOST |
 | Int÷, Rmdr, MOD_Exp, RndFix, RanNorm#, RanBin# | TESTED ON HOST |
-| Simboli ingegneristici in input (m µ n p f k M G T, OPTN › ESYM; P ed E dalla v1.12.0) | TESTED ON SIMULATOR (v1.11.0) |
-| CALC: Solve con limiti ed equazione, SolveN, FMin, FMax, Σ/Π con variabile e passo, ∫ con tolleranza, d²/dx² (anche modello), funzioni vietate negli argomenti | TESTED ON SIMULATOR (v1.12.0) |
-| PROB: Ran# n, RanInt#/RanNorm#/RanBin# con n, RanList#, RanSamp#, P( Q( R( t( | TESTED ON HOST (v1.12.0) |
-| NUMERIC Rnd; ANGLE ʳ ᵍ ° ′ ″; Pol/Rec in List Ans; COMPLEX ∠, ►r∠θ, ►a+bi | TESTED ON HOST (v1.12.0) |
-| STAT in Run-Matrix: x̂ ŷ, 24 distribuzioni, S-Dev, Var, Mean/Median con frequenze, Min/Max di due liste | TESTED ON SIMULATOR (v1.12.0) |
-| TVM (22 funzioni) e CONVERT (103 unità) | TESTED ON SIMULATOR (v1.12.0) |
-| ENG / ENG←, overflow ≥ 10¹⁰⁰ | TESTED ON SIMULATOR (v1.12.0) |
-| Simplify Manual con la regola del m.c.m. per tutte le operazioni tra frazioni | TESTED ON HOST (v1.12.0) |
-| Base-N: Bin a 16 bit, variabili A–F in Hex, liste e matrici nella base | TESTED ON HOST (v1.12.0) |
+| Simboli ingegneristici in input (m µ n p f k M G T, OPTN › ESYM; P ed E dalla v1.13.0) | TESTED ON SIMULATOR (v1.11.0) |
+| CALC: Solve con limiti ed equazione, SolveN, FMin, FMax, Σ/Π con variabile e passo, ∫ con tolleranza, d²/dx² (anche modello), funzioni vietate negli argomenti | TESTED ON SIMULATOR (v1.13.0) |
+| PROB: Ran# n, RanInt#/RanNorm#/RanBin# con n, RanList#, RanSamp#, P( Q( R( t( | TESTED ON HOST (v1.13.0) |
+| NUMERIC Rnd; ANGLE ʳ ᵍ ° ′ ″; Pol/Rec in List Ans; COMPLEX ∠, ►r∠θ, ►a+bi | TESTED ON HOST (v1.13.0) |
+| STAT in Run-Matrix: x̂ ŷ, 24 distribuzioni, S-Dev, Var, Mean/Median con frequenze, Min/Max di due liste | TESTED ON SIMULATOR (v1.13.0) |
+| TVM (22 funzioni) e CONVERT (103 unità) | TESTED ON SIMULATOR (v1.13.0) |
+| ENG / ENG←, overflow ≥ 10¹⁰⁰ | TESTED ON SIMULATOR (v1.13.0) |
+| Simplify Manual con la regola del m.c.m. per tutte le operazioni tra frazioni | TESTED ON HOST (v1.13.0) |
+| Base-N: Bin a 16 bit, variabili A–F in Hex, liste e matrici nella base | TESTED ON HOST (v1.13.0) |
 | ▶Simp con e senza fattore (F=n), Simplify Auto/Manual | TESTED ON SIMULATOR (v1.11.0) |
 | Simboli P, E e conversioni ►ENG/►ENG← | NOT STARTED |
 | Base-N (letterali 0x/0b/0o, visualizzazione Hex/Bin/Oct) | TESTED ON HOST |
@@ -148,7 +151,7 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Matrici come valori nel parser: + − × ^, inversa, Det, Trn, Identity, Dim, Augment, Fill, Ref, Rref, Mat→List, List→Mat, Norm, elementi `Mat A[r,c]`, forme esatte, complessi | TESTED ON HOST (v1.10.0) |
 | Vettori come valori nel parser: DotP, CrossP, Angle, UnitV, Norm, `Vct A[n]` | TESTED ON HOST (v1.10.0) |
 | Liste come valori nel parser: aritmetica elemento per elemento, Sum, Prod, Min, Max, Mean, Median, Cuml, Percent, ΔList, SortA/D, Seq, Augment, `List 1[n]` | TESTED ON HOST (v1.10.0; List 1–26 dalla v1.11.0) |
-| Forme esatte conservate nelle memorie Mat/Vct (fino a 64 elementi nella v1.11.0; dalla v1.12.0 senza limite per memoria, budget della scheda, celle decimali conservate) | TESTED ON HOST (v1.12.0) |
+| Forme esatte conservate nelle memorie Mat/Vct (fino a 64 elementi nella v1.11.0; dalla v1.13.0 senza limite per memoria, budget della scheda, celle decimali conservate) | TESTED ON HOST (v1.13.0) |
 | Errori Dimension ERROR / Type ERROR con posizione | TESTED ON HOST (v1.10.0) |
 | Vettori: somma, prodotto scalare/vettoriale, norma, angolo (API C++) | TESTED ON HOST |
 | Conversioni metriche (10 grandezze, prefissi SI) | TESTED ON HOST |
@@ -164,11 +167,11 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Run-Matrix: editor MAT/VCT (DIM, celle, ROW-OP, ROW, COLUMN, DELETE, DEL-ALL, M⇔V) | TESTED ON SIMULATOR | v1.10.0; dalla v1.11.0 celle con espressioni esatte e complesse, colonne scorrevoli con la cella corrente, CSV LOAD/SAVE·AS |
 | Run-Matrix: schermate MatAns / VctAns / ListAns oltre 6×6 o 20 elementi | TESTED ON SIMULATOR | v1.11.0 |
 | Run-Matrix: comandi grafici (Cls, ViewWindow, Graph Y=/r=/X=/(X,Y)=, Plot…, Line, F-Line, Circle, Vertical, Horizontal, Text, Pxl…, Tangent, Normal, Inverse) disegnati da GRAPH | TESTED ON SIMULATOR | v1.11.0 |
-| Run-Matrix: PxlTest(, Graph Y>/Y</Y≥/Y≤ e X…, G∫dx, Sketch…, StoPict/RclPict/BG-Pict/RclCapt, DrawGraph, DrawStat, DrawDyna, DrawR, DrawWeb, DrawFTG, G-SelOn/Off; grafici dei comandi nei `.pcgraph` | TESTED ON SIMULATOR | v1.12.0 |
-| Run-Matrix: istruzioni multiple `:` e `◢`, Str 1–20, function memory f1–f20, r e θ, variabili di sistema assegnabili | TESTED ON HOST | v1.12.0 |
-| Run-Matrix: List "nome", List File 1–6, Sub Name, n→Dim List, Fill sulle memorie, Swap/\*Row/\*Row+/Row+ | TESTED ON HOST | v1.12.0 |
+| Run-Matrix: PxlTest(, Graph Y>/Y</Y≥/Y≤ e X…, G∫dx, Sketch…, StoPict/RclPict/BG-Pict/RclCapt, DrawGraph, DrawStat, DrawDyna, DrawR, DrawWeb, DrawFTG, G-SelOn/Off; grafici dei comandi nei `.pcgraph` | TESTED ON SIMULATOR | v1.13.0 |
+| Run-Matrix: istruzioni multiple `:` e `◢`, Str 1–20, function memory f1–f20, r e θ, variabili di sistema assegnabili | TESTED ON HOST | v1.13.0 |
+| Run-Matrix: List "nome", List File 1–6, Sub Name, n→Dim List, Fill sulle memorie, Swap/\*Row/\*Row+/Row+ | TESTED ON HOST | v1.13.0 |
 | Run-Matrix: OPTN nell'ordine della fx-CG50, VARS completo (FACTOR, STAT, GRAPH, DYNA, TABLE Result, RECURSION, EQUATION, TVM, Str), CATALOG (SHIFT 4), CAPTURE (SHIFT 7) | TESTED ON SIMULATOR | v1.12.0 |
-| Editor: round-trip testo ↔ albero esatto (corpus), parentesi implicite delle frazioni, testo Line minimo | TESTED ON HOST | v1.12.0 |
+| Editor: round-trip testo ↔ albero esatto (corpus), parentesi implicite delle frazioni, testo Line minimo | TESTED ON HOST | v1.13.0 |
 | Statistics | TESTED ON SIMULATOR | List 1–26 con sottonomi (v1.11.0), SET XList/YList, CSV LOAD/SAVE·AS, 1/2-Var, 9 regressioni, grafici, DIST, test Z/t, intervalli |
 | Liste: file CSV su microSD e flash interna (separatore e decimale configurabili, scrittura atomica) | TESTED ON HOST | v1.11.0, anche con interruzione di alimentazione sulla flash interna |
 | Liste: List File 1–6 e riferimento per sottonome (`List "QTY"`) | NOT STARTED | |
@@ -186,9 +189,15 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Table: lista delle relazioni, Y=/r=/Param, SET, Variable Range/List, derivate, celle di 6 caratteri | TESTED ON SIMULATOR | [TABLE.md](TABLE.md), screenshot 32, 35–37 |
 | Table: EDIT, ROW DELETE/INSERT/ADD, DELETE, LISTMEM, GPH-CON/GPH-PLT dalle righe | TESTED ON HOST | `table_test` |
 | Table: Dual Screen T+G | NOT STARTED | sessione v1.9.0 |
-| Equation: sistemi 2–6, polinomi 2–6, solver | TESTED ON HOST | |
-| Disequazioni polinomiali 1–6 | TESTED ON HOST | |
-| Sistemi di disequazioni (interfaccia) | NOT STARTED | API `solveInequalitySystem` (grado ≤ 2) TESTED ON HOST |
+| Equation: schermate e tasti del manuale (Select Type, Number of Unknowns/Degree, SOLVE DELETE CLEAR EDIT, REPEAT, EXE/EXIT) | TESTED ON SIMULATOR | v1.12.0; screenshot 08, 62–76 (`tests/sim/equation.txt`) |
+| Equation: coefficienti come espressioni esatte e complesse, editor Math/Line, EDIT | TESTED ON SIMULATOR | v1.12.0 |
+| Equation SIML 2–6: soluzioni esatte/decimali, No Solution, Infinitely Many Solutions con la formula, complessi, S⇔D | TESTED ON SIMULATOR | v1.12.0 (`equation_v112_test`) |
+| Equation POLY 2–6: radici esatte, ordine del manuale, ×k, Complex Mode Real/a+bi/r∠θ, Underflow / Ma ERROR | TESTED ON SIMULATOR | v1.12.0 |
+| Equation SOLVER: qualsiasi variabile, tabella, Lower/Upper, Lft/Rgt, RECALL/DELETE, Retry, No Variable, Can't Solve!, Time Out | TESTED ON SIMULATOR | v1.12.0 |
+| VARS › EQUATION in Run-Matrix (SimRes, SimCoef, PlyRes, PlyCoef → MatAns) | TESTED ON SIMULATOR | v1.12.0 |
+| SET UP aperto da una modalità: EXIT torna alla modalità | TESTED ON HOST | v1.12.0 |
+| Disequazioni polinomiali 1–6 (estensione, F4 INEQ) | TESTED ON SIMULATOR | |
+| Sistemi di disequazioni (interfaccia) | NOT STARTED | estensione non presente sulla fx-CG50; API `solveInequalitySystem` (grado ≤ 2) TESTED ON HOST |
 | System / Set Up | TESTED ON HOST | |
 | Memory | TESTED ON HOST | |
 | Conversion | TESTED ON HOST | |
@@ -216,13 +225,14 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Lettura dei record v1.7.0 (versione 2) e correzione delle V-Window legacy | TESTED ON HOST |
 | Progetti `.pcgraph` e immagini `.pcpict`/BMP sulla microSD, scrittura atomica e recupero | TESTED ON HOST (scheda simulata, pila completa GraphApp → FatFs → SD) |
 | Progetti e immagini sulla flash interna (LittleFS), scelta in SYSTEM | TESTED ON HOST |
-| Coefficienti Equation | TESTED ON HOST |
+| Coefficienti Equation (record v8: forme esatte e complesse, equazione, Lower/Upper, soluzioni) | TESTED ON HOST |
 | Conversazioni AI (cancellabili da AI Chat e Memory) | TESTED ON HOST |
 | Programmi, file Python, documenti | NOT STARTED |
 | Matrici e vettori salvati nel workspace (record v6) | TESTED ON HOST (v1.10.0) |
 | Matrici e liste come file CSV (manuale 2-48, 3-18) | TESTED ON HOST (v1.11.0) |
-| Record v8 (v1.12.0): List File, Sub Name, r e θ, Str, function memory, variabili Dyna/Recursion/TVM, celle decimali, ENG/◢/stringhe della cronologia; lettura dei record v7 della v1.11.0 (fixture) | TESTED ON HOST |
+| Record v9 (v1.13.0): List File, Sub Name, r e θ, Str, function memory, variabili Dyna/Recursion/TVM, celle decimali, ENG/◢/stringhe della cronologia; lettura dei record v7 della v1.11.0 (fixture) | TESTED ON HOST |
 | Record v7 (v1.11.0): Base-N, Simplify, CSV, List 7–26, sottonomi, forme esatte delle memorie, ▶Simp e base della cronologia, grafici dei comandi; lettura dei record v6 della v1.10.0 | TESTED ON HOST |
+| Record v8 (v1.12.0): dati di EQUATION in coda; lettura senza perdite dei record v7 della v1.11.0 (fixture) | TESTED ON HOST |
 
 ## Relay AI
 
