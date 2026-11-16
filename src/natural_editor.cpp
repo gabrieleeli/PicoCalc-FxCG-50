@@ -193,6 +193,15 @@ void importInto(NaturalNode& target, const std::string& s, int depth, bool linea
             }
             if (done) continue;
         }
+        // v1.12.0: i comandi del testo canonico con "_" (solve_n, norm_pd, v_a, f_1,
+        // str_1...) sono un solo token, mostrato con il nome della calcolatrice.
+        if (std::isalpha(c)) {
+            std::size_t e = i; while (e < s.size() && (std::isalnum(static_cast<unsigned char>(s[e])) || s[e] == '_')) ++e;
+            const std::string word = s.substr(i, e - i);
+            if (word.find('_') != std::string::npos && isReservedWord(lowerCopy(word))) {
+                target.children.push_back(token(lowerCopy(word))); i = e; continue;
+            }
+        }
         if (linear) {
             if (c == '@') {
                 std::size_t e = i + 1;

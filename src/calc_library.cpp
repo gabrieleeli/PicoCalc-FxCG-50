@@ -37,7 +37,7 @@ const UnitInfo kUnits[] = {
     {"oz", 6, 0.028349523125, 0}, {"lb", 6, 0.45359237, 0}, {"slug", 6, 14.593902937206, 0}, {"ton(short)", 6, 907.18474, 0},
     {"ton(long)", 6, 1016.0469088, 0},
     {"N", 7, 1, 0}, {"lbf", 7, 4.4482216152605, 0}, {"tonf", 7, 9964.01641818352, 0}, {"dyne", 7, 1e-5, 0}, {"kgf", 7, 9.80665, 0},
-    {"Pa", 8, 1, 0}, {"kPa", 8, 1e3, 0}, {"mmH2O", 8, 9.80665, 0}, {"mmHg", 8, 133.322387415, 0}, {"atm", 8, 101325, 0},
+    {"Pa", 8, 1, 0}, {"kPa", 8, 1e3, 0}, {"mmH2O", 8, 9.80665, 0}, {"mmHg", 8, 101325.0 / 760.0, 0}, {"atm", 8, 101325, 0},
     {"inH2O", 8, 249.08891, 0}, {"inHg", 8, 3386.388640341, 0}, {"lbf/in\xC2\xB2", 8, 6894.757293168, 0}, {"bar", 8, 1e5, 0},
     {"kgf/cm\xC2\xB2", 8, 98066.5, 0},
     {"eV", 9, 1.602176634e-19, 0}, {"J", 9, 1, 0}, {"calth", 9, 4.184, 0}, {"cal15", 9, 4.1855, 0}, {"calIT", 9, 4.1868, 0},
@@ -119,13 +119,24 @@ double convertUnit(double value, const UnitInfo& from, const UnitInfo& to) {
 // ---------------------------------------------------------------- distribuzioni
 double normPD(double x, double sigma, double mu) { return stats::normalPd(x, sigma, mu); }
 double normCD(double lower, double upper, double sigma, double mu) { return stats::normalCd(lower, upper, sigma, mu); }
+// Quantile della normale standard raffinato con Newton sulla funzione di
+// ripartizione (precisione di ~1e-15 invece di ~1e-9 dell'approssimazione razionale).
+double standardQuantile(double p) {
+    double z = inverseNormalCdf(p, 0.0, 1.0);
+    for (int k = 0; k < 3; ++k) {
+        const double pdf = std::exp(-0.5 * z * z) / std::sqrt(2 * kPi);
+        if (pdf <= 0) break;
+        z -= (normalCdf(z) - p) / pdf;
+    }
+    return z;
+}
 double invNormCD(int tail, double area, double sigma, double mu) {
     need(area > 0 && area < 1 && sigma > 0, "0<Area<1, sigma>0");
-    return tail > 0 ? stats::inverseNormal(1 - area, sigma, mu) : stats::inverseNormal(area, sigma, mu);
+    return mu + sigma * standardQuantile(tail > 0 ? 1 - area : area);
 }
 void invNormCentral(double area, double sigma, double mu, double& lower, double& upper) {
     need(area > 0 && area < 1 && sigma > 0, "0<Area<1, sigma>0");
-    upper = stats::inverseNormal(0.5 + area / 2, sigma, mu);
+    upper = mu + sigma * standardQuantile(0.5 + area / 2);
     lower = 2 * mu - upper;
 }
 double tPD(double x, double df) {

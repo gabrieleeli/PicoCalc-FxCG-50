@@ -106,9 +106,9 @@ FormattedNumber formatNumber(double v,DisplayFormat f){
         std::string m=digits.substr(0,static_cast<std::size_t>(intDigits))+"."+digits.substr(static_cast<std::size_t>(intDigits));
         stripZeros(m);
         out.mantissa=sign+m;
-        // Simboli ingegneristici (fx-CG50 Eng): f p n µ m _ k M G T.
-        static const char* const symbols[]={"f","p","n","\xC2\xB5","m","","k","M","G","T"};
-        if(e3>=-15&&e3<=12){
+        // Simboli ingegneristici (fx-CG50 Eng): f p n µ m _ k M G T, e dalla v1.12.0 P E.
+        static const char* const symbols[]={"f","p","n","\xC2\xB5","m","","k","M","G","T","P","E"};
+        if(e3>=-15&&e3<=18){
             out.symbol=symbols[(e3+15)/3];
             return out;
         }

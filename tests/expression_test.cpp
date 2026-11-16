@@ -165,7 +165,7 @@ int main() {
     // v1.11.0: Eng mostra i simboli ingegneristici come la fx-CG50 (oltre f..T resta ×10ⁿ)
     CHECK_EQ_STR(formatReal(12345.0, {DisplayMode::Eng, 0}), "12.345k");
     CHECK_EQ_STR(formatReal(0.00012, {DisplayMode::Eng, 0}), "120\xC2\xB5");
-    CHECK_EQ_STR(formatReal(1.5e20, {DisplayMode::Eng, 0}), "150E+18");
+    CHECK_EQ_STR(formatReal(1.5e20, {DisplayMode::Eng, 0}), "150E");   // v1.12.0: simbolo E (10^18) in Eng
     CHECK_EQ_STR(formatValue({3, 4}, ComplexMode::Rectangular), "3+4i");
     CHECK_EQ_STR(formatValue({0, -1}, ComplexMode::Rectangular), "-i");
     CHECK_EQ_STR(formatValue({2, 0}, ComplexMode::Rectangular), "2");

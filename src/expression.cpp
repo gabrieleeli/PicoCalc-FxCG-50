@@ -158,8 +158,14 @@ int listNumber(const std::string& lowerName){
 bool isListName(const std::string& lowerName){return listNumber(lowerName)!=0;}
 constexpr const char* kSpecialCollections[]={"eq_simres","eq_simcoef","eq_plyres","eq_plycoef","tbl_result"};
 bool specialCollection(const std::string& lowerName){for(const char* n:kSpecialCollections)if(lowerName==n)return true;return false;}
+// "str_1".."str_20": Str 1-20 (testo; un nome riservato anche se non e' un numero).
+bool stringName(const std::string& n){
+    if(n.size()<5||n.size()>6||n.compare(0,4,"str_")!=0||n[4]=='0')return false;
+    int v=0;for(std::size_t i=4;i<n.size();++i){if(n[i]<'0'||n[i]>'9')return false;v=v*10+(n[i]-'0');}
+    return v>=1&&v<=20;
+}
 bool isConstantName(const std::string& lowerName){
-    if(explicitVariable(lowerName)||specialCollection(lowerName))return true;
+    if(explicitVariable(lowerName)||specialCollection(lowerName)||stringName(lowerName))return true;
     for(const auto& c:kConstants)if(lowerName==c.name)return true;
     for(const char* s:kSpecialNames)if(lowerName==s)return true;
     return isSystemName(lowerName);
@@ -3079,6 +3085,26 @@ private:
         const std::size_t count=n.children.size();
         for(const auto& c:n.children)if(!c)throw SyntaxError("Syntax ERROR: argomento mancante");
         if(f=="seq"){if(count!=5)throw SyntaxError("Argument ERROR: Seq(espressione,variabile,inizio,fine,incremento)");return sequence(n);}
+        if(f=="convert"){
+            // valore[da]▶[a] anche su liste e matrici, elemento per elemento.
+            if constexpr(std::is_same_v<D,ExactDomain>)throw NoExactForm{};
+            else{
+                if(count!=3)throw SyntaxError("Syntax ERROR: conversione non valida");
+                C v=eval(*n.children[0]);
+                env.at=&n;
+                auto unit=[](const ast::Node& u){
+                    const std::string& t=u.text;
+                    const calclib::UnitInfo* info=t.size()>2?calclib::findUnit(t.substr(1,t.size()-2)):nullptr;
+                    if(!info)throw SyntaxError("Syntax ERROR: unita' sconosciuta "+t,u.pos,u.len);
+                    return info;
+                };
+                const calclib::UnitInfo* from=unit(*n.children[1]);
+                const calclib::UnitInfo* to=unit(*n.children[2]);
+                if(v.scalar()){v.s=D::fromDouble(calclib::convertUnit(D::toReal(v.s,"conversione"),*from,*to));return v;}
+                for(E& e:v.v)e=D::fromDouble(calclib::convertUnit(D::toReal(e,"conversione"),*from,*to));
+                return v;
+            }
+        }
         if(f=="solve_n"||f=="f_min"||f=="f_max"){
             if constexpr(std::is_same_v<D,ExactDomain>)throw NoExactForm{};
             else{

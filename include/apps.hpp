@@ -147,6 +147,7 @@ public:
     MatrixEditorView& matrixEditor() noexcept { return matrices_; }
     AnswerView& answerView() noexcept { return answers_; }
     int resultScroll() const noexcept { return resultScroll_; }
+    bool menuOpen() const noexcept { return menu_.open; }     // OPTN, VARS, CATALOG... aperto (v1.12.0)
     enum class Menu : std::uint8_t { None, Math, MatVct, Action, MatRows, MatCols };
 private:
     void syncInputMode(Context& ctx);                    // Setup Input/Output -> modalita' dell'editor

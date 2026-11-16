@@ -68,7 +68,7 @@ int main() {
         CHECK_EQ_STR(formatReal(25, eng), "25");                // 10^0: nessun simbolo
         CHECK_EQ_STR(formatReal(-1500, eng), "-1.5k");
         CHECK_EQ_STR(formatReal(1e-18, eng), "1E-18");          // oltre f..T resta ×10ⁿ
-        CHECK_EQ_STR(formatReal(5e15, eng), "5E+15");
+        CHECK_EQ_STR(formatReal(5e15, eng), "5P");                     // v1.12.0: simboli P ed E
         Workspace w;
         w.settings.display = eng;
         runCalculation(w, "999#k+25#k");

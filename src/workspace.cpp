@@ -719,7 +719,7 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
     const auto hn = r.u16(); if (hn > Workspace::MaxHistory) return false;
     for (std::uint16_t i = 0; i < hn && r.ok; ++i) {
         HistoryEntry h; h.expression = r.str(); const double re = r.f64(), im = r.f64(); h.value = {re, im}; h.error = r.str(); h.view = r.u8();
-        if (h.view > 7) return false;
+        if (h.view > (version >= 8 ? 10 : 7)) return false;          // v8: ENG, ►r∠θ, ►a+bi
         if (v2) {
             h.exact = r.slot();
             const auto flags = r.u8(); if (flags > 3) return false;
