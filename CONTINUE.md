@@ -1,25 +1,25 @@
 # CONTINUE — punto di ripresa del progetto PicoCalc FX-CG50 AI
 
 Documento di checkpoint per riprendere lo sviluppo esattamente da qui.
-Ultimo aggiornamento: **v1.11.0 — completamento di Run-Matrix** (List 1–26 e
-sottonomi, CSV, MatAns/ListAns, celle esatte e complesse, Line con INS e ⌟,
-SHIFT+INS, simboli ingegneristici, Simp, Base-N intera, comandi grafici),
-branch **`main`**, tag `v1.11.0` creato dal workflow
-`.github/workflows/release.yml`. Rapporti:
-`docs/reports/ANALISI_FONTI_v1.11.0.md`, `docs/reports/SVILUPPO_v1.11.0.md`;
-v1.10.0: `docs/reports/SVILUPPO_v1.10.0.md`; v1.9.0:
-`docs/reports/CONSOLIDAMENTO_v1.9.0.md`.
+Ultimo aggiornamento: **v1.12.0 — completamento di EQUATION** (SIML, POLY e
+SOLVER come il capitolo 4 del manuale fx-CG50, coefficienti esatti e
+complessi, Infinitely Many Solutions con la formula, ×k, Complex Mode,
+Lower/Upper, VARS › EQUATION, record v8), branch **`main`**, tag `v1.12.0`
+creato dal workflow `.github/workflows/release.yml`. Rapporti:
+`docs/reports/ANALISI_FONTI_v1.12.0.md` (tabella di parità),
+`docs/reports/SVILUPPO_v1.12.0.md`; guida `docs/EQUATION.md`; v1.11.0:
+`docs/reports/SVILUPPO_v1.11.0.md`.
 
 ## 0. Branch
 
 | Branch | Contenuto | Regola |
 |---|---|---|
-| **`main`** | **v1.11.0** (tag `v1.11.0`): v1.10.0 + completamento di Run-Matrix | si continua qui |
-| tag `v1.10.0` (`dfdb08b`), `v1.9.0` (`bb2bdee`) | versioni precedenti su `main` | non spostare |
+| **`main`** | **v1.12.0** (tag `v1.12.0`): v1.11.0 + completamento di EQUATION | si continua qui |
+| tag `v1.11.0` (`f6933fd`), `v1.10.0` (`dfdb08b`), `v1.9.0` (`bb2bdee`) | versioni precedenti su `main` | non spostare |
 | `version/v1.5.4`, `version/v1.6.0`, `version/v1.7.0`, `version/v1.8.0` | snapshot storici, uno per versione | non modificare |
 
-Il branch di lavoro della v1.11.0 (`ccr-b2793f7c-vk8p8o`) ha commit
-intermedi; `main` riceve un solo commit con tutta la v1.11.0 (fast-forward),
+Il branch di lavoro della v1.12.0 (`ccr-bbf29b2b-0ipbnx`) ha commit
+intermedi; `main` riceve un solo commit con tutta la v1.12.0 (fast-forward),
 quindi quel branch può essere eliminato dopo la pubblicazione, come i
 duplicati della 1.9.0 elencati nel rapporto del consolidamento (l'ambiente
 di sviluppo rifiuta l'eliminazione dei branch remoti e il push dei tag:
@@ -27,18 +27,20 @@ HTTP 403). Un solo branch per versione; mai force-push.
 
 ## 1. Stato attuale
 
-**v1.11.0** (sopra la v1.10.0): List 1–26 con i sottonomi e il budget per
-scheda; CSV di liste e matrici su microSD e flash interna; schermate
-MatAns/VctAns/ListAns; editor MAT/VCT con celle esatte e complesse e colonne
-scorrevoli; modalità Line con INS, `⌟` e risultati scorrevoli; SHIFT+INS in
-Math; simboli ingegneristici e display Eng; ▶Simp e Simplify; Base-N intera
-a 32 bit; comandi grafici disegnati da GRAPH; record del workspace **v7**.
-Test host: 40 per profilo (9 757 controlli sulla Plus, 9 751 sul Pico 2 W),
-anche con ASan/UBSan e TSan; relay 15/15; firmware compilato per le due
-schede senza warning (immagine di 1 594 956 byte sulla Plus, 1 586 168 byte
-sul Pico 2 W; RAM statica 302 556 / 298 632 byte); gli stessi passi girano su
-GitHub Actions (`.github/workflows/release.yml`).
-**Nessuna prova su hardware**: `docs/HARDWARE_TEST_v1.11.0.md` (HW-100…HW-115).
+**v1.12.0** (sopra la v1.11.0): EQUATION con le schermate e i tasti del
+manuale fx-CG50 (4-1…4-5), coefficienti come espressioni esatte e complesse
+(editor `MathField`), SIML 2–6 con Gauss-Jordan esatto e formula delle
+infinite soluzioni, POLY 2–6 con radici esatte, ordine del manuale, ×k e
+Complex Mode, SOLVER su qualsiasi variabile con Lower/Upper e i messaggi del
+manuale, VARS › SimRes/SimCoef/PlyRes/PlyCoef in Run-Matrix, SET UP che torna
+alla modalità, correzione della frazione seguita da un fattore implicito
+nell'editor Math; record del workspace **v8**. Numeri di test e firmware:
+`docs/reports/SVILUPPO_v1.12.0.md` §6–7 e `docs/BUILD_STATUS.md`.
+**Nessuna prova su hardware**: `docs/HARDWARE_TEST_v1.12.0.md` (HW-120…HW-134).
+
+v1.11.0: List 1–26 e sottonomi, CSV, MatAns/ListAns, celle esatte e
+complesse, Line con INS e ⌟, simboli ingegneristici, Simp, Base-N, comandi
+grafici, record v7.
 
 v1.10.0: matrici, vettori e liste come valori del parser, editor MAT/VCT,
 Math/Line, CLIP, parentesi colorate, cursore sugli errori, record v6.
@@ -65,17 +67,16 @@ Stato della v1.9.0 (invariato dove non indicato):
 - Memoria e flash della Plus: `docs/PICO_PLUS_2W.md`; formato del record:
   versione 5 (`docs/STORAGE.md`).
 
-## 2. Cosa è stato fatto nell'ultima sessione (v1.11.0)
+## 2. Cosa è stato fatto nell'ultima sessione (v1.12.0)
 
 | Area | Contenuto |
 |---|---|
-| Git | partenza verificata dal tag `v1.10.0` (`dfdb08b` = `origin/main`); sviluppo sul branch di sessione; un solo commit su `main` in fast-forward; tag e release dal workflow (il push dei tag dall'ambiente è rifiutato) |
-| Liste | List 1–26 nel parser, nel workspace, in Statistics (SUB, SET XList/YList), GRAPH, TABLE, `.pcgraph`; budget per scheda |
-| File | modulo `csv_io`: CSV di liste e matrici su microSD e LittleFS, scrittura atomica, separatore e decimale configurabili |
-| Run-Matrix | MatAns/ListAns, celle esatte e complesse e colonne scorrevoli nell'editor MAT/VCT, Line (INS, ⌟, scorrimento), SHIFT+INS, simboli ingegneristici e Eng, Simp, Base-N intera, comandi grafici (`graph_commands`) disegnati da GRAPH |
-| Workspace | record v7; fixture della v1.10.0 per la migrazione |
-| Architettura | servizio GraphCmd, collegamenti Run-Matrix ⇄ Graph, `dataSectionOfMember`, test di architettura più stretto |
-| Test | `lists_csv_test`, `calc_v111_test`, `run_matrix_v111_test`; screenshot 52–61 e rigenerati, compressi senza perdita |
+| Git | partenza verificata dal tag `v1.11.0` (`f6933fd` = `origin/main`); sviluppo sul branch di sessione; `main` ricontrollato prima della pubblicazione; un solo commit su `main` in fast-forward; tag e release dal workflow |
+| Fonti | manuale ufficiale fx-CG50 v3.60 (PDF) letto anche come immagini; tabella di parità in `ANALISI_FONTI_v1.12.0.md` |
+| Motore | `equation.hpp/.cpp`: `eq::Number`/`ExactComplex`, `solveSimultaneous`, `solvePolynomial`, `solveFor`, visualizzazione; `SimRes`… nel lexer e in `CollectionResolver` |
+| Interfaccia | `EquationApp` riscritta, widget `MathField`, VARS › EQUATION in Run-Matrix, SET UP con ritorno |
+| Workspace | record v8; fixture della v1.11.0 per la migrazione |
+| Test | `equation_v112_test`, `architecture_test` più severo; screenshot 08 e 62–76 |
 
 ## 3. Funzionalità ancora da completare
 
@@ -93,7 +94,7 @@ Stato della v1.9.0 (invariato dove non indicato):
 ## 4. Prossimi passaggi esatti
 
 1. **Collaudo fisico sulla PicoCalc con il Pimoroni Pico Plus 2 W**: HW-01…HW-36,
-   HW-40…HW-82, HW-90…HW-99 e HW-100…HW-115 (log USB dall'accensione, righe `[psram]`,
+   HW-40…HW-82, HW-90…HW-99, HW-100…HW-115 e HW-120…HW-134 (log USB dall'accensione, righe `[psram]`,
    `[flash]`, `[mem]`, `[DIAG]`, `[fault]`, foto). Ogni KO va riprodotto con un test e corretto;
    solo le voci provate passano a TESTED ON HARDWARE (data, modulo, revisione
    della scheda).
@@ -142,11 +143,12 @@ scripts/make_release.sh
 ```
 
 ```bash
-# Simulatore (profilo Plus, pool PSRAM simulato): Run-Matrix, MAT/VCT e novità 1.10.0 e 1.11.0, GRAPH/TABLE, 3D
+# Simulatore (profilo Plus, pool PSRAM simulato): Run-Matrix, MAT/VCT e novità 1.10.0 e 1.11.0, EQUATION 1.12.0, GRAPH/TABLE, 3D
 # (il simulatore scrive PNG non compressi: comprimerli senza perdita prima di copiarli in docs/screenshots)
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix_v110.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix_v111.txt
+build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/equation.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph3d.txt
 ```

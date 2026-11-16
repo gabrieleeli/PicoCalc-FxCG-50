@@ -1,5 +1,8 @@
-# Feature matrix — v1.11.0
+# Feature matrix — v1.12.0
 
+La v1.12.0 aggiunge il completamento di **EQUATION** (SIML, POLY e SOLVER come
+il capitolo 4 del manuale fx-CG50, VARS › EQUATION, record v8;
+[EQUATION.md](EQUATION.md), [reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md)).
 La v1.11.0 contiene tutte le funzioni della v1.10.0 più il completamento di
 Run-Matrix: List 1–26 con i sottonomi, file CSV di liste e matrici,
 schermate MatAns/ListAns, celle esatte e complesse nell'editor MAT/VCT,
@@ -170,9 +173,15 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Table: lista delle relazioni, Y=/r=/Param, SET, Variable Range/List, derivate, celle di 6 caratteri | TESTED ON SIMULATOR | [TABLE.md](TABLE.md), screenshot 32, 35–37 |
 | Table: EDIT, ROW DELETE/INSERT/ADD, DELETE, LISTMEM, GPH-CON/GPH-PLT dalle righe | TESTED ON HOST | `table_test` |
 | Table: Dual Screen T+G | NOT STARTED | sessione v1.9.0 |
-| Equation: sistemi 2–6, polinomi 2–6, solver | TESTED ON HOST | |
-| Disequazioni polinomiali 1–6 | TESTED ON HOST | |
-| Sistemi di disequazioni (interfaccia) | NOT STARTED | API `solveInequalitySystem` (grado ≤ 2) TESTED ON HOST |
+| Equation: schermate e tasti del manuale (Select Type, Number of Unknowns/Degree, SOLVE DELETE CLEAR EDIT, REPEAT, EXE/EXIT) | TESTED ON SIMULATOR | v1.12.0; screenshot 08, 62–76 (`tests/sim/equation.txt`) |
+| Equation: coefficienti come espressioni esatte e complesse, editor Math/Line, EDIT | TESTED ON SIMULATOR | v1.12.0 |
+| Equation SIML 2–6: soluzioni esatte/decimali, No Solution, Infinitely Many Solutions con la formula, complessi, S⇔D | TESTED ON SIMULATOR | v1.12.0 (`equation_v112_test`) |
+| Equation POLY 2–6: radici esatte, ordine del manuale, ×k, Complex Mode Real/a+bi/r∠θ, Underflow / Ma ERROR | TESTED ON SIMULATOR | v1.12.0 |
+| Equation SOLVER: qualsiasi variabile, tabella, Lower/Upper, Lft/Rgt, RECALL/DELETE, Retry, No Variable, Can't Solve!, Time Out | TESTED ON SIMULATOR | v1.12.0 |
+| VARS › EQUATION in Run-Matrix (SimRes, SimCoef, PlyRes, PlyCoef → MatAns) | TESTED ON SIMULATOR | v1.12.0 |
+| SET UP aperto da una modalità: EXIT torna alla modalità | TESTED ON HOST | v1.12.0 |
+| Disequazioni polinomiali 1–6 (estensione, F4 INEQ) | TESTED ON SIMULATOR | |
+| Sistemi di disequazioni (interfaccia) | NOT STARTED | estensione non presente sulla fx-CG50; API `solveInequalitySystem` (grado ≤ 2) TESTED ON HOST |
 | System / Set Up | TESTED ON HOST | |
 | Memory | TESTED ON HOST | |
 | Conversion | TESTED ON HOST | |
@@ -200,12 +209,13 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Lettura dei record v1.7.0 (versione 2) e correzione delle V-Window legacy | TESTED ON HOST |
 | Progetti `.pcgraph` e immagini `.pcpict`/BMP sulla microSD, scrittura atomica e recupero | TESTED ON HOST (scheda simulata, pila completa GraphApp → FatFs → SD) |
 | Progetti e immagini sulla flash interna (LittleFS), scelta in SYSTEM | TESTED ON HOST |
-| Coefficienti Equation | TESTED ON HOST |
+| Coefficienti Equation (record v8: forme esatte e complesse, equazione, Lower/Upper, soluzioni) | TESTED ON HOST |
 | Conversazioni AI (cancellabili da AI Chat e Memory) | TESTED ON HOST |
 | Programmi, file Python, documenti | NOT STARTED |
 | Matrici e vettori salvati nel workspace (record v6) | TESTED ON HOST (v1.10.0) |
 | Matrici e liste come file CSV (manuale 2-48, 3-18) | TESTED ON HOST (v1.11.0) |
 | Record v7 (v1.11.0): Base-N, Simplify, CSV, List 7–26, sottonomi, forme esatte delle memorie, ▶Simp e base della cronologia, grafici dei comandi; lettura dei record v6 della v1.10.0 | TESTED ON HOST |
+| Record v8 (v1.12.0): dati di EQUATION in coda; lettura senza perdite dei record v7 della v1.11.0 (fixture) | TESTED ON HOST |
 
 ## Relay AI
 

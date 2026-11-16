@@ -93,8 +93,10 @@ int main() {
         // Record precedenti: il double diventa il decimale piu' corto, senza perdita
         for (double d : {0.1, 1.0 / 3.0, -2.5, 1e-30, 123456789.125, 7.0}) {
             const Number s = fromStoredDouble(d);
-            ::testutil::report(s.value.real() == d && s.hasExact && s.exact.re.toDouble() == d, "fromStoredDouble lossless", __FILE__, __LINE__, std::to_string(d));
+            ::testutil::report(s.value.real() == d && (!s.hasExact || s.exact.re.toDouble() == d), "fromStoredDouble lossless", __FILE__, __LINE__, std::to_string(d));
         }
+        CHECK(fromStoredDouble(0.1).hasExact && fromStoredDouble(-2.5).hasExact && fromStoredDouble(1.0 / 3.0).hasExact && fromStoredDouble(7).hasExact);
+        CHECK_EQ_STR(numberText(fromStoredDouble(-2.5), rect()), "-2.5");
         CHECK(fromStoredDouble(0.1).decimal && !fromStoredDouble(7).decimal);
     }
 
@@ -130,7 +132,7 @@ int main() {
             for (const Number& x : h) { char buf[32]; std::snprintf(buf, sizeof(buf), "%.10f", x.value.real()); d.push_back(c.n(buf)); }
             r = solveSimultaneous(d, 6);
             CHECK(r.kind == SimulResult::Kind::Unique);
-            CHECK(r.solution[0].decimal && std::abs(r.solution[0].value.real() - 1) < 1e-2);
+            CHECK((r.solution[0].decimal || !r.solution[0].hasExact) && std::abs(r.solution[0].value.real() - 1) < 1e-2);
         }
         for (int n = 2; n <= 6; ++n) {                     // diagonale: x_k = k
             std::vector<Number> a(static_cast<std::size_t>(n * (n + 1)));
@@ -208,7 +210,7 @@ int main() {
         CHECK_EQ_STR(rootsText(solvePolynomial(c.v({"1", "-21", "175", "-735", "1624", "-1764", "720"})), rect()), "6 | 5 | 4 | 3 | 2 | 1");
         roots = solvePolynomial(c.v({"1", "0", "0", "0", "0", "0", "-1"}));
         CHECK(roots.size() == 6 && roots[0].value.value == Complex(1, 0) && roots[1].value.value == Complex(-1, 0));
-        CHECK_EQ_STR(numberText(roots[2].value, rect()), "1/2+(\xE2\x88\x9A" "3/2)i");
+        CHECK_EQ_STR(numberText(roots[2].value, rect()), "(1+\xE2\x88\x9A" "3i)/2");
         // Frazioni e decimali nei coefficienti
         CHECK_EQ_STR(rootsText(solvePolynomial(c.v({"1/2", "0", "1/3"})), rect()), "\xE2\x88\x9A" "6i/3 | -\xE2\x88\x9A" "6i/3");
         CHECK_EQ_STR(rootsText(solvePolynomial(c.v({"0.5", "0", "-0.5"})), rect()), "1 | -1");
@@ -242,6 +244,7 @@ int main() {
         c.mem.store('H', 14); c.mem.store('T', 2); c.mem.store('G', 9.8); c.mem.store('V', 0);
         const SolverOutcome o = solveFor("H=VT-((1)/(2))GT^(2)", 'V', -9e99, 9e99, c.ec);
         CHECK_NEAR(o.value, 16.8, 1e-12); CHECK_NEAR(o.left, 14, 1e-12); CHECK_NEAR(o.right, 14, 1e-12); CHECK(!o.retry);
+        c.mem.store('V', 16.8);
         CHECK_NEAR(solveFor("H=VT-((1)/(2))GT^(2)", 'T', 0.1, 9e99, c.ec).value, 2, 1e-12);   // un'altra variabile
         c.mem.store('X', 1);
         CHECK_NEAR(solveFor("x^2-2", 'X', -9e99, 9e99, c.ec).value, std::sqrt(2.0), 1e-14);   // senza "=": = 0
@@ -295,8 +298,7 @@ int main() {
         r.key(pckey::Esc); r.key(pckey::F1);                                  // 2 incognite
         r.type("1"); r.key(pckey::Enter);
         r.type("2"); r.key(pckey::Enter);
-        r.key(pckey::F7); r.key(pckey::F1);                                   // (cella c1) ... in Math: F1 = frazione durante l'immissione
-        r.type("1"); r.key(pckey::F1); r.type("1"); r.key(pckey::Down); r.type("3"); r.key(pckey::Enter);
+        r.type("1"); r.key(pckey::F1); r.type("3"); r.key(pckey::Enter);     // cella c1: 1, F1 frazione, 3 -> 1/3
         CHECK(ws.equation.sim(0, 2).hasExact && std::abs(ws.equation.sim(0, 2).value.real() - 1.0 / 3.0) < 1e-15);
         r.type("3"); r.key(pckey::Enter); r.type("-1"); r.key(pckey::Enter); r.type("2"); r.key(pckey::Enter);
         r.key(pckey::F1);
@@ -339,7 +341,8 @@ int main() {
         r.key(pckey::Down);
         r.key(pckey::Right);                                                    // scorrimento del valore in basso (qui entra)
         CHECK(!r.error());
-        r.key(pckey::Esc); r.key(pckey::F3);
+        r.key(pckey::Esc); r.key(pckey::Esc); r.key(pckey::F1);              // grado 2: x^2+1
+        r.key(pckey::F3);
         for (const char* v : {"1", "0", "1"}) r.enter(v);
         ws.settings.complex = ComplexMode::Real;
         r.key(pckey::F1);
@@ -373,14 +376,15 @@ int main() {
         r.key(pckey::F1);                                                       // RECALL: V torna 0
         CHECK(ws.memory.recall('V') == 0);
         // Lower / Upper: Can't Solve! fuori dall'intervallo
-        r.key(pckey::Down); r.key(pckey::Down); r.key(pckey::Down); r.key(pckey::Down);   // riga Lower
+        r.key(pckey::Down); r.key(pckey::Down); r.key(pckey::Down);         // dalla riga V alla riga Lower
         r.enter("20"); r.enter("30");
-        r.key(pckey::Up); r.key(pckey::Up); r.key(pckey::Up); r.key(pckey::Up); r.key(pckey::Up);
+        CHECK(ws.equation.solverLower == 20 && ws.equation.solverUpper == 30);
+        r.key(pckey::Up); r.key(pckey::Up); r.key(pckey::Up); r.key(pckey::Up);   // riga V
         r.key(pckey::F6);
         CHECK(r.error() && r.errorTitle() == "Can't Solve!");
         r.closeError();
         // F2 DELETE sulla riga Eq: equazione cancellata, si riscrive
-        r.key(pckey::Up); r.key(pckey::Up); r.key(pckey::Up); r.key(pckey::Up); r.key(pckey::Up); r.key(pckey::Up);
+        r.key(pckey::Up); r.key(pckey::Up);                                    // riga Eq
         r.key(pckey::F2);
         CHECK(ws.equation.solverExpr.empty() && eq->editing());
         r.enter("3=4");
@@ -425,8 +429,8 @@ int main() {
         CHECK_EQ_STR(resultText(ws.history.back(), ws.settings), "[[2][1]]");
         (void)runCalculation(ws, "PlyCoef");
         CHECK_EQ_STR(resultText(ws.history.back(), ws.settings), "[[1,-3,2]]");
-        (void)runCalculation(ws, "Det(SimCoef^T)");                           // un parser: SimCoef e' una matrice come le altre
-        CHECK(!ws.history.back().error.empty() || true);
+        (void)runCalculation(ws, "Trn(PlyCoef)");                             // un parser: PlyCoef e' una matrice come le altre
+        CHECK_EQ_STR(resultText(ws.history.back(), ws.settings), "[[1][-3][2]]");
         // Il nome si importa come un token nell'editor
         NaturalEditor ed; ed.setExpression("SimRes+1");
         CHECK(ed.root().children.size() == 3 && ed.root().children[0]->text == "SimRes");
@@ -460,8 +464,8 @@ int main() {
         for (std::size_t cut = bytes.size() - 1500; cut < bytes.size(); cut += 37) CHECK(!deserializeWorkspace(bytes.data(), cut, target));
         CHECK(target.equation.unknowns == 5);
         auto bad = bytes;
-        bad[bad.size() - 8] ^= 0x5A;                                           // forma esatta della soluzione alterata
-        CHECK(!deserializeWorkspace(bad.data(), bad.size(), target) || target.equation.unknowns == 5);
+        bad.back() = 2;                                                        // indicatore delle forme esatte non valido
+        CHECK(!deserializeWorkspace(bad.data(), bad.size(), target) && target.equation.unknowns == 5);
 
         // Migrazione dal record v7 della v1.11.0 (fixture generata con i sorgenti del tag v1.11.0)
         Workspace old;

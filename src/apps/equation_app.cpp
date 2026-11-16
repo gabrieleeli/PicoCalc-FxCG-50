@@ -555,7 +555,7 @@ void EquationApp::drawCoefficients(Context& ctx, gfx::Canvas& c) {
     cellView.mode = 1;                                    // celle: decimali (manuale 4-2, 1-29)
     for (int r = 0; r < rows; ++r) {
         const int y = gridTop + r * rowH;
-        if (mode_ == Mode::Simultaneous) { char lbl[4]; std::snprintf(lbl, sizeof(lbl), "%d", r + 1); ui::textRight(c, labelW - 3, y + 4, lbl, Ink, font::Face::Small); }
+        if (mode_ == Mode::Simultaneous) { char lbl[12]; std::snprintf(lbl, sizeof(lbl), "%d", r + 1); ui::textRight(c, labelW - 3, y + 4, lbl, Ink, font::Face::Small); }
         for (int k = 0; k < visibleCols; ++k) {
             const int cc = firstCol_ + k, x = labelW + 4 + k * colW;
             const bool sel = r == row_ && cc == col_;

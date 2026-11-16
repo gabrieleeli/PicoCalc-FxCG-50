@@ -1,4 +1,4 @@
-# Architettura — v1.11.0
+# Architettura — v1.12.0
 
 Architettura di ogni modalità, servizi condivisi, dati scambiati e regole
 verificate dai test: [APPLICATIONS_ARCHITECTURE.md](APPLICATIONS_ARCHITECTURE.md).
@@ -88,7 +88,9 @@ metodi controllati (`storeMatrix`, `storeVector`, `storeList`,
 `storeCollectionAnswer`) che verificano tipo, forma e limiti della scheda. Così
 Run-Matrix non accede direttamente a `ws.lists` (lo verifica `architecture_test`).
 
-`serializeWorkspace()` produce un blob binario versionato (versione 7 dalla
+`serializeWorkspace()` produce un blob binario versionato (versione 8 dalla
+v1.12.0 con i dati di EQUATION in coda e le forme esatte dei coefficienti;
+versione 7 dalla
 v1.11.0 con Base-N, Simplify, formato CSV, List 7–26 e sottonomi, forme
 esatte delle memorie, base e ▶Simp della cronologia, grafici dei comandi;
 versione 6 dalla v1.10.0 con Input/Output, matrici, vettori e risultati
@@ -138,6 +140,30 @@ testo ──Lexer (token con posizione)──▶ Parser ──▶ ast::Node (pos
   ciclo). `ast::SerializeMap` riporta la posizione del testo nell'albero
   dell'editor (`NaturalEditor::markError`).
 
+### EQUATION (v1.12.0)
+
+```
+EquationApp (schermate del manuale)   MathField (NaturalEditor + math_renderer)
+   │ testo delle celle / dell'equazione
+   ▼
+equation.hpp (motore, senza UI) ── parseExpression / evaluateAny / evaluateExact
+   │ eq::Number (valore + forma esatta complessa)
+   │ solveSimultaneous · solvePolynomial · solveFor · numberTree
+   ▼
+ws.equation (record v8: coefficienti, equazione, limiti, SimRes/PlyRes)
+   │ CollectionResolver::Memory::Equation
+   ▼
+Run-Matrix: VARS › EQUATION (SimRes, SimCoef, PlyRes, PlyCoef → MatAns)
+```
+
+- Nessun parser separato: anche i nomi `SimRes`… sono token dello stesso
+  lexer; Run-Matrix non vede `ws.equation` né il motore di EQUATION
+  (`architecture_test`), ma solo le matrici attraverso `CollectionResolver`.
+- Le soluzioni si disegnano con gli alberi 2D di Run-Matrix
+  (`exactValueTree`, `appendNumberTree`) e `math_renderer`.
+- Il SET UP aperto da una modalità torna a quella modalità
+  (`Context::leaveSetup`, `Context::resuming`).
+
 ### Novità del motore e dei dati (v1.11.0)
 
 ```
@@ -177,7 +203,14 @@ GRAPH: GraphEngine::build(…, commands) → curve e SKETCH disegnati da GRAPH
 - **Forme esatte delle memorie**: `CalcValue::exact` (fino a 64 elementi); il
   dominio esatto di `CollEval` le usa al posto dei soli interi.
 
-### Editor (v1.10.0, v1.11.0)
+### Editor (v1.10.0, v1.11.0, v1.12.0)
+
+Dalla v1.12.0 `ast::serialize` racchiude tra parentesi un modello di frazione
+seguito da un fattore implicito (`((1)/(2))X`, prima `(1)/(2)X` = 1/(2X)) e
+l'importazione lo riconosce come frazione; l'operando di x²/^ è il numero o la
+sola variabile prima del cursore (`GT²` = G·T²). Il widget `MathField`
+(`src/apps/math_field.cpp`) porta lo stesso editor nelle celle di EQUATION e
+nel Solver.
 
 Dalla v1.11.0 l'editor ha anche la sovrascrittura in Line (`setOverwrite`),
 l'argomento di SHIFT+INS in Math (`beginArgument`: il prossimo modello prende

@@ -40,7 +40,7 @@ sulla causa di un errore**.
 | F6 | `Ans` | θ |
 | OPTN (F8) | CALC, PROB, NUMERIC (anche **▶Simp**), ANGLE, COMPLEX, HYPERBL, LOG, LOGIC, RELAZIONI, CONST, **MAT/VCT**, **LIST**, **ESYM** (simboli ingegneristici), **SKETCH** (comandi grafici), RISULTATO, **BASE-N** (d h b o, And Or Xor Xnor Not Neg, ▶Dec ▶Hex ▶Bin ▶Oct) | |
 | DEL | cancella a sinistra | **INS**: in Line alterna sovrascrittura/inserimento (barra di stato `OVR`), in Math il prossimo modello prende come argomento il valore a destra del cursore |
-| VARS (F9) | A~Z (con il valore esatto), Ans/PreAns, V-WIN di Graph, TABLE | |
+| VARS (F9) | A~Z (con il valore esatto), Ans/PreAns, V-WIN di Graph, TABLE, EQUATION (SimRes, SimCoef, PlyRes, PlyCoef: matrici di EQUATION, v1.12.0, [EQUATION.md](EQUATION.md#5-uso-dei-risultati)) | |
 | ↑ | entra nella cronologia (con il cursore fuori dai modelli) | |
 | EXE | calcola; su riga vuota ripete l'ultimo calcolo | |
 | EXIT | cancella l'input; su input vuoto torna al menu | |

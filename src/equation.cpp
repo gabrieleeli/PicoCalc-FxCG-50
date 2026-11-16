@@ -96,13 +96,17 @@ void renameToken(ast::Node& n, const char* from, const char* to) {
 // sostituita da un intero t = 0..4; le differenze finite danno il polinomio
 // in t (grado <= 3, controllato con la quarta) e i^2 = -1 lo riduce ad A + Bi.
 // Il risultato e' accettato solo se coincide con il valore complesso calcolato.
-bool exactComplex(ast::Node& tree, const EvalContext& base, Complex z, ExactComplex& out, bool& decimal) {
+// Le tabelle (15 valori esatti, ~840 byte) stanno sull'heap: il frame resta
+// piccolo anche sul core 0 (32 KB di stack).
+__attribute__((noinline)) bool exactComplex(ast::Node& tree, const EvalContext& base, Complex z, ExactComplex& out, bool& decimal) {
     if (base.bindingCount >= EvalContext::MaxBindings) return false;
     static const char* const kMarker = "_i";              // nessun nome digitato inizia con '_'
     renameToken(tree, "i", kMarker);
     EvalContext ec = base;
     ec.bind(kMarker, 0.0);
-    Value f[5];
+    struct Tables { Value f[5], d[5], row[5]; };
+    const auto tables = std::make_unique<Tables>();
+    Value* f = tables->f;
     for (int t = 0; t < 5; ++t) {
         ec.bindings[ec.bindingCount - 1].value = t;
         bool dec = false;
@@ -110,8 +114,8 @@ bool exactComplex(ast::Node& tree, const EvalContext& base, Complex z, ExactComp
         decimal = decimal || dec;
     }
     // Differenze finite d0..d4.
-    Value d[5];
-    Value row[5];
+    Value* d = tables->d;
+    Value* row = tables->row;
     for (int k = 0; k < 5; ++k) row[k] = f[k];
     for (int k = 0; k < 5; ++k) {
         d[k] = row[0];
@@ -163,7 +167,9 @@ Number fromStoredDouble(double value) {
         // Il decimale si legge con il lettore esatto dei numeri (exact::parseDecimal):
         // va bene solo se torna esattamente lo stesso double.
         Rational r;
-        if (!exact::parseDecimal(buf, r)) break;
+        const bool negative = buf[0] == '-';
+        if (!exact::parseDecimal(negative ? buf + 1 : buf, r)) break;
+        if (negative && !exact::sub(Rational{}, r, r)) break;
         if (r.toDouble() != value) continue;
         // Gli interi restano interi; un valore non intero era un decimale (la
         // v1.11.0 memorizzava il risultato della valutazione).
@@ -271,13 +277,28 @@ bool rrefExact(std::vector<ExactComplex>& m, std::vector<bool>& dec, int rows, i
 }
 // Gauss-Jordan in virgola mobile con pivoting parziale. Un pivot e' nullo
 // sotto una soglia relativa alla norma della matrice dei coefficienti.
-void rrefNumeric(std::vector<Complex>& m, int rows, int cols, int pivotCols, std::vector<int>& pivots) {
+void rrefNumeric(std::vector<Complex>& m, int rows, int cols, int coefCols, std::vector<int>& pivots) {
     pivots.clear();
-    double norm = 0;
-    for (int k = 0; k < rows; ++k) for (int j = 0; j < pivotCols; ++j) norm = std::max(norm, std::abs(m[static_cast<std::size_t>(k * cols + j)]));
-    const double tol = 1e-11 * std::max(norm, std::numeric_limits<double>::min()) * std::max(1, rows);
+    // Equilibratura: ogni equazione divisa per il suo coefficiente piu' grande,
+    // cosi' la soglia dei pivot nulli vale anche per righe di scala molto diversa
+    // (1E-60 X = 1E60). Le soluzioni non cambiano.
+    for (int k = 0; k < rows; ++k) {
+        double big = 0;
+        for (int j = 0; j < coefCols; ++j) big = std::max(big, std::abs(m[static_cast<std::size_t>(k * cols + j)]));
+        if (big > 0 && std::isfinite(big)) for (int j = 0; j < cols; ++j) m[static_cast<std::size_t>(k * cols + j)] /= big;
+    }
+    // Soglia dei pivot nulli per colonna: relativa alla colonna piu' grande dei
+    // coefficienti, e per i termini noti alla loro scala.
+    double coefNorm = 0, rhsNorm = 0;
+    for (int k = 0; k < rows; ++k)
+        for (int j = 0; j < cols; ++j) {
+            const double a = std::abs(m[static_cast<std::size_t>(k * cols + j)]);
+            if (j < coefCols) coefNorm = std::max(coefNorm, a); else rhsNorm = std::max(rhsNorm, a);
+        }
+    const double tiny = std::numeric_limits<double>::min();
     int r = 0;
-    for (int c = 0; c < pivotCols && r < rows; ++c) {
+    for (int c = 0; c < cols && r < rows; ++c) {
+        const double tol = 1e-11 * std::max(1, rows) * std::max(c < coefCols ? coefNorm : rhsNorm, tiny);
         int p = r; double best = std::abs(m[static_cast<std::size_t>(r * cols + c)]);
         for (int k = r + 1; k < rows; ++k) { const double a = std::abs(m[static_cast<std::size_t>(k * cols + c)]); if (a > best) { best = a; p = k; } }
         if (!(best > tol)) { for (int k = r; k < rows; ++k) m[static_cast<std::size_t>(k * cols + c)] = 0; continue; }
@@ -295,14 +316,15 @@ void rrefNumeric(std::vector<Complex>& m, int rows, int cols, int pivotCols, std
         pivots.push_back(c);
         ++r;
     }
-    // Residui dell'eliminazione: le parti trascurabili diventano zero.
-    double scale = 0;
-    for (const Complex& z : m) scale = std::max(scale, std::abs(z));
-    const double clean = 1e-12 * std::max(1.0, scale);
-    for (Complex& z : m) {
-        if (std::abs(z.real()) < clean) z.real(0.0);
-        if (std::abs(z.imag()) < clean) z.imag(0.0);
-    }
+    // Residui dell'eliminazione nei coefficienti: le parti trascurabili diventano
+    // zero (i termini noti, cioe' le soluzioni, restano come sono).
+    for (int k = 0; k < rows; ++k)
+        for (int j = 0; j < coefCols; ++j) {
+            Complex& z = m[static_cast<std::size_t>(k * cols + j)];
+            const double clean = 1e-12 * std::max(1.0, coefNorm);
+            if (std::abs(z.real()) < clean) z.real(0.0);
+            if (std::abs(z.imag()) < clean) z.imag(0.0);
+        }
 }
 } // namespace
 
@@ -319,7 +341,7 @@ SimulResult solveSimultaneous(const std::vector<Number>& coefficients, int n) {
         std::vector<ExactComplex> m(cells);
         std::vector<bool> dec(cells);
         for (std::size_t i = 0; i < cells; ++i) { m[i] = used[i].exact; dec[i] = used[i].decimal; }
-        if (rrefExact(m, dec, n, cols, n, pivots)) {
+        if (rrefExact(m, dec, n, cols, cols, pivots)) {
             for (std::size_t i = 0; i < cells; ++i) rref[i] = Number::fromExact(m[i], dec[i] && !m[i].isZero());
             exactDone = true;
         }
@@ -327,15 +349,16 @@ SimulResult solveSimultaneous(const std::vector<Number>& coefficients, int n) {
     if (!exactDone) {
         std::vector<Complex> m(cells);
         for (std::size_t i = 0; i < cells; ++i) m[i] = used[i].value;
-        rrefNumeric(m, n, cols, n, pivots);
+        rrefNumeric(m, n, cols, n, pivots);   // Rref della matrice completa (SimRes, manuale 1-33)
         for (std::size_t i = 0; i < cells; ++i) rref[i] = Number::fromComplex(m[i]);
     }
     SimulResult out;
     out.unknowns = n;
     out.exactPath = exactDone;
+    // Un pivot nella colonna dei termini noti: nessuna soluzione.
+    const bool inconsistent = !pivots.empty() && pivots.back() == n;
+    if (inconsistent) pivots.pop_back();
     const int rank = static_cast<int>(pivots.size());
-    bool inconsistent = false;
-    for (int r = rank; r < n; ++r) if (!rref[static_cast<std::size_t>(r * cols + n)].isZero()) inconsistent = true;
     out.rref = rref;
     if (inconsistent) { out.kind = SimulResult::Kind::None; return out; }
     if (rank == n) {
@@ -624,6 +647,33 @@ bool exactEven(const RPoly& p, std::vector<ExactComplex>& out) {
     const int d = degreeOf(p);
     if (d < 4 || d % 2 != 0) return false;
     for (int k = 1; k <= d; k += 2) if (!p[static_cast<std::size_t>(k)].isZero()) return false;
+    if (d == 4) {
+        // x^4 + b x^2 + c (monico) = (x^2 + s)^2 - (2s - b) x^2 con s^2 = c e
+        // 2s - b = t^2 razionali: (x^2 - t x + s)(x^2 + t x + s). Esempio x^4+x^2+1.
+        RPoly m = p;
+        if (makeMonic(m)) {
+            Value sv;
+            if (exact::sqrt(Value::fromRational(m[0]), sv)) {
+                Rational s0;
+                if (sv.rational(s0)) {
+                    for (int sign : {1, -1}) {
+                        Rational s = s0, twoS, t2;
+                        if (sign < 0 && !exact::sub(Rational{}, s0, s)) continue;
+                        if (!exact::mul(s, Rational::integer(2), twoS) || !exact::sub(twoS, m[2], t2) || t2.sign() <= 0) continue;
+                        Value tv; Rational t;
+                        if (!exact::sqrt(Value::fromRational(t2), tv) || !tv.rational(t)) continue;
+                        Rational mt;
+                        if (!exact::sub(Rational{}, t, mt)) continue;
+                        std::vector<ExactComplex> found;
+                        if (exactLowDegree(RPoly{s, mt, Rational::integer(1)}, found) && exactLowDegree(RPoly{s, t, Rational::integer(1)}, found)) {
+                            out.insert(out.end(), found.begin(), found.end());
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
     RPoly y;
     for (int k = 0; k <= d; k += 2) y.push_back(p[static_cast<std::size_t>(k)]);
     // Radici razionali di q(y) e quadratiche esatte del resto.
@@ -853,7 +903,10 @@ SolverOutcome solveFor(const std::string& equation, char variable, double lower,
     ec.memory = memory.get();
     ec.complexMode = ComplexMode::Real;
     double lastL = 0, lastR = 0;
+    std::size_t evaluations = 0;
     auto f = [&](double t, bool& ok) {
+        // Limite di calcolo per scheda (limits.hpp): oltre, Time Out come la fx-CG50.
+        if (++evaluations > limits::kSolverEvaluations) throw MathError("Time Out: troppe valutazioni dell'equazione (cambia il valore iniziale o i limiti)");
         memory->store(variable, t);
         ok = false;
         try {
@@ -878,6 +931,14 @@ SolverOutcome solveFor(const std::string& equation, char variable, double lower,
         const double sc = scaleAt(x);
         int verdict = std::abs(y) <= 1e-11 * sc ? 2 : std::abs(y) <= 1e-6 * sc ? 1 : 0;
         if (verdict == 0) return 0;
+        if (verdict == 1) {
+            // "Retry" solo vicino a un vero cambio di segno (non per 1/x = 0 a x grande).
+            const double delta = 1e-6 * std::max(1.0, std::abs(x));
+            bool o1 = false, o2 = false;
+            const double a = f(x - delta, o1), b = f(x + delta, o2);
+            if (!o1 || !o2 || (a > 0) == (b > 0)) return 0;
+            (void)f(x, ok);
+        }
         if (x < lower || x > upper) { outsideFound = true; return 0; }
         out.value = x; out.left = lastL; out.right = lastR; out.retry = verdict == 1;
         return verdict;
