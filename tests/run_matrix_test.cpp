@@ -358,13 +358,14 @@ int main() {
         r.key(pckey::Enter); r.type("*9"); r.key(pckey::Enter);
         CHECK_EQ_STR(r.last(), "1");
         // OPTN > LOGIC > and; OPTN > RELAZIONI > "≥".
-        r.type("1"); r.key(pckey::F8); r.type("8"); r.key(pckey::Enter); r.type("0"); r.key(pckey::Enter);
+        // v1.12.0: OPTN nell'ordine della fx-CG50 (LOGIC e' la 14a voce, le relazioni la 18a).
+        r.type("1"); r.key(pckey::F8); for (int i = 0; i < 13; ++i) r.key(pckey::Down); r.key(pckey::Enter); r.key(pckey::Enter); r.type("0"); r.key(pckey::Enter);
         CHECK_EQ_STR(r.last(), "0");
-        r.type("3"); r.key(pckey::F8); r.type("9"); r.type("5"); r.type("2"); r.key(pckey::Enter);
+        r.type("3"); r.key(pckey::F8); for (int i = 0; i < 17; ++i) r.key(pckey::Down); r.key(pckey::Enter); r.type("5"); r.type("2"); r.key(pckey::Enter);
         CHECK_EQ_STR(r.last(), "1");
-        // OPTN > RISULTATO > ▶Periodo on the last result.
+        // OPTN > RISULTATO > ▶Periodo on the last result (terzultima voce).
         r.enter("1/7");
-        r.key(pckey::F8); r.key(pckey::Up); r.key(pckey::Up); r.key(pckey::Enter); r.type("3");
+        r.key(pckey::F8); r.key(pckey::Up); r.key(pckey::Up); r.key(pckey::Up); r.key(pckey::Enter); r.type("3");
         CHECK_EQ_STR(r.last(), "0.(142857)");
         // Persisted exactly across a reboot.
         r.key(pckey::Tab); r.frame();

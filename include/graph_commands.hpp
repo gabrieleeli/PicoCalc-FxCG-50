@@ -15,6 +15,13 @@
 //   Circle x,y,r   Vertical x   Horizontal y   Text riga,colonna,"testo"
 //   PxlOn riga,colonna   PxlOff riga,colonna   PxlChg riga,colonna
 //   Tangent f(x),x   Normal f(x),x   Inverse f(x)
+// v1.12.0:
+//   Graph Y> Y< Y≥ Y≤ X> X< X≥ X≤ f    G∫dx f(x),a,b
+//   SketchNormal | SketchThick | SketchBroken | SketchDot | SketchThin [comando]
+//   StoPict n   RclPict n   BG-Pict n   RclCapt n
+//   DrawGraph   DrawStat   DrawDyna   DrawR-Con   DrawR-Plt   DrawWeb   DrawFTG-Con   DrawFTG-Plt
+//   G-SelOn n   G-SelOff n
+// PxlTest( e' una funzione del valutatore (ServiceResolver::pixelTest).
 // Riga e colonna sono pixel della schermata del grafico (1..282, 1..320).
 // Ogni comando e' tutto o niente: errori di sintassi o di calcolo (Syntax
 // ERROR, Math ERROR, Memory ERROR con 64 elementi SKETCH o 10 grafici) non
@@ -34,6 +41,8 @@ bool isCommand(const std::string& text);
 // grafico (GraphState::commandScreen). Lancia SyntaxError / MathError con la
 // posizione nel testo.
 void execute(Workspace& ws, const std::string& text);
+// Cartella delle catture dello schermo di Run-Matrix (CAPTURE, RclCapt n).
+constexpr const char* CaptureFolder = "PICOCALC/CAPT";
 // Nomi dei comandi per il menu SKETCH di Run-Matrix (terminati da nullptr).
 const char* const* menuNames() noexcept;
 

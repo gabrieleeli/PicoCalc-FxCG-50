@@ -20,7 +20,7 @@ enum class Cmd : std::uint8_t {
     // v1.12.0
     GraphYGreater, GraphYLess, GraphYGreaterEq, GraphYLessEq, GraphXGreater, GraphXLess, GraphXGreaterEq, GraphXLessEq,
     GIntegral, StoPict, RclPict, BgPict, DrawStat, DrawGraph, DrawDyna, DrawRCon, DrawRPlt, DrawFtgCon, DrawFtgPlt, DrawWeb,
-    GSelOn, GSelOff,
+    GSelOn, GSelOff, RclCapt,
 };
 struct Keyword { const char* word; Cmd cmd; };
 // Le parole piu' lunghe prima ("PlotOn" prima di "Plot", "F-Line" prima di "Line").
@@ -31,7 +31,7 @@ const Keyword kKeywords[] = {
     {"GraphY\xE2\x89\xA4", Cmd::GraphYLessEq}, {"GraphY>", Cmd::GraphYGreater}, {"GraphY<", Cmd::GraphYLess},
     {"GraphX>=", Cmd::GraphXGreaterEq}, {"GraphX<=", Cmd::GraphXLessEq}, {"GraphX\xE2\x89\xA5", Cmd::GraphXGreaterEq},
     {"GraphX\xE2\x89\xA4", Cmd::GraphXLessEq}, {"GraphX>", Cmd::GraphXGreater}, {"GraphX<", Cmd::GraphXLess},
-    {"G\xE2\x88\xAB" "dx", Cmd::GIntegral}, {"StoPict", Cmd::StoPict}, {"RclPict", Cmd::RclPict}, {"BG-Pict", Cmd::BgPict},
+    {"G\xE2\x88\xAB" "dx", Cmd::GIntegral}, {"StoPict", Cmd::StoPict}, {"RclPict", Cmd::RclPict}, {"BG-Pict", Cmd::BgPict}, {"RclCapt", Cmd::RclCapt},
     {"DrawStat", Cmd::DrawStat}, {"DrawGraph", Cmd::DrawGraph}, {"DrawDyna", Cmd::DrawDyna}, {"DrawR-Con", Cmd::DrawRCon},
     {"DrawR-Plt", Cmd::DrawRPlt}, {"DrawFTG-Con", Cmd::DrawFtgCon}, {"DrawFTG-Plt", Cmd::DrawFtgPlt}, {"DrawWeb", Cmd::DrawWeb},
     {"G-SelOn", Cmd::GSelOn}, {"G-SelOff", Cmd::GSelOff},
@@ -45,7 +45,7 @@ const char* const kMenu[] = {"Cls", "ViewWindow ", "Graph Y=", "Graph r=", "Grap
                              "Graph X\xE2\x89\xA5", "Graph X\xE2\x89\xA4", "G\xE2\x88\xAB" "dx ", "Plot ", "PlotOn ", "PlotOff ",
                              "PlotChg ", "Line", "F-Line ", "Circle ", "Vertical ", "Horizontal ", "Text ", "PxlOn ", "PxlOff ",
                              "PxlChg ", "PxlTest(", "Tangent ", "Normal ", "Inverse ", "SketchNormal ", "SketchThick ", "SketchBroken ",
-                             "SketchDot ", "SketchThin ", "StoPict ", "RclPict ", "BG-Pict ", "DrawGraph", "DrawStat", "DrawDyna",
+                             "SketchDot ", "SketchThin ", "StoPict ", "RclPict ", "BG-Pict ", "RclCapt ", "DrawGraph", "DrawStat", "DrawDyna",
                              "DrawR-Con", "DrawR-Plt", "DrawWeb", "DrawFTG-Con", "DrawFTG-Plt", "G-SelOn ", "G-SelOff ", nullptr};
 // Prefisso di stile della fx-CG50 (SketchThick F-Line ...): lo stile dell'elemento disegnato.
 struct StylePrefix { const char* word; LineStyle style; };
@@ -284,6 +284,15 @@ struct Runner {
             if (styled) cg.style = style;
             pendingGraph = std::move(cg);
             hasPendingGraph = true;
+            break;
+        }
+        case Cmd::RclCapt: {
+            // RclCapt n: la schermata catturata (SHIFT 7) mostrata nella schermata del grafico.
+            const auto v = numbers(args, 1, 1, "RclCapt n (n da 1 a 20)");
+            if (v[0] != std::floor(v[0]) || v[0] < 1 || v[0] > 20) throw MathError("Argument ERROR: Capture da 1 a 20", args[0].pos, args[0].len);
+            char name[32];
+            std::snprintf(name, sizeof(name), "CAPT%02d%s", static_cast<int>(v[0]), files::PictExtension);
+            g.overlay = files::join(CaptureFolder, name);
             break;
         }
         case Cmd::StoPict: case Cmd::RclPict: case Cmd::BgPict: {

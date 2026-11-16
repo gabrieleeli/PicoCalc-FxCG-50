@@ -77,6 +77,7 @@ public:
     void insertTenPower();                                 // 10^[]
     void insertIntegral();
     void insertDerivative();
+    void insertSecondDerivative();                         // d²/dx² (v1.12.0)
     void insertSummation();
     void insertProduct();
     // Modello MAT/VCT: rows x cols celle (1..6), cursore nella prima cella.

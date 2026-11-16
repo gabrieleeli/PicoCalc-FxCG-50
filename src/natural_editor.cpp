@@ -274,7 +274,9 @@ void importInto(NaturalNode& target, const std::string& s, int depth, bool linea
                 else if (low == "abs" && args.size() == 1) { box = node(Kind::Call, "abs"); box->children = {importRow(inner, depth)}; }
                 else if (low == "log" && args.size() == 2) { box = node(Kind::Call, "log"); box->children = {importRow(args[0], depth), importRow(args[1], depth)}; }
                 else if ((low == "integral" || low == "sum" || low == "prod") && args.size() == 3) { box = node(Kind::Calculus, low); box->children = {importRow(args[0], depth), importRow(args[1], depth), importRow(args[2], depth)}; }
-                else if (low == "derivative" && args.size() == 2) { box = node(Kind::Calculus, "derivative"); box->children = {importRow(args[0], depth), importRow(args[1], depth)}; }
+                // v1.12.0: Σ/Π con la variabile e d²/dx² come modelli
+                else if ((low == "sum" || low == "prod") && args.size() == 4) { box = node(Kind::Calculus, low); box->children = {importRow(args[0], depth), importRow(args[1], depth), importRow(args[2], depth), importRow(args[3], depth)}; }
+                else if ((low == "derivative" || low == "derivative2") && args.size() == 2) { box = node(Kind::Calculus, low); box->children = {importRow(args[0], depth), importRow(args[1], depth)}; }
                 if (box) { target.children.push_back(box); i = next; continue; }
             }
             for (char ch : word) appendToken(target, std::string(1, ch));
@@ -669,8 +671,16 @@ void NaturalEditor::insertTenPower() {
 }
 void NaturalEditor::insertIntegral() { if (linear_) { insertLinear("integral("); return; } auto n = node(Kind::Calculus, "integral"); n->children = {row(), row(), row()}; insertBox(n, 0); }
 void NaturalEditor::insertDerivative() { if (linear_) { insertLinear("derivative("); return; } auto n = node(Kind::Calculus, "derivative"); n->children = {row(), row()}; insertBox(n, 0); }
-void NaturalEditor::insertSummation() { if (linear_) { insertLinear("sum("); return; } auto n = node(Kind::Calculus, "sum"); n->children = {row(), row(), row()}; insertBox(n, 0); }
-void NaturalEditor::insertProduct() { if (linear_) { insertLinear("prod("); return; } auto n = node(Kind::Calculus, "prod"); n->children = {row(), row(), row()}; insertBox(n, 0); }
+// Σ e Π della fx-CG50: espressione, variabile (proposta x), inizio, fine (v1.12.0).
+void NaturalEditor::insertSummation() {
+    if (linear_) { insertLinear("sum("); return; }
+    auto n = node(Kind::Calculus, "sum"); auto var = row(); var->children.push_back(token("x")); n->children = {row(), var, row(), row()}; insertBox(n, 0);
+}
+void NaturalEditor::insertProduct() {
+    if (linear_) { insertLinear("prod("); return; }
+    auto n = node(Kind::Calculus, "prod"); auto var = row(); var->children.push_back(token("x")); n->children = {row(), var, row(), row()}; insertBox(n, 0);
+}
+void NaturalEditor::insertSecondDerivative() { if (linear_) { insertLinear("derivative2("); return; } auto n = node(Kind::Calculus, "derivative2"); n->children = {row(), row()}; insertBox(n, 0); }
 void NaturalEditor::insertMatrix(std::size_t rows, std::size_t cols) {
     if (rows < 1 || rows > 6 || cols < 1 || cols > 6) throw std::invalid_argument("Modello MAT/VCT: da 1x1 a 6x6");
     if (linear_) {

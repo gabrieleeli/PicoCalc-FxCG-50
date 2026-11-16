@@ -12,6 +12,7 @@ const char* complexName(ComplexMode m) { return m == ComplexMode::Real ? "Real" 
 } // namespace
 
 void Context::open(AppId id) { manager_.open(id); }
+const gfx::Canvas* Context::screen() const noexcept { return manager_.canvas_; }
 void Context::home() { manager_.home(); }
 namespace {
 // Copies into the capacity already reserved: never allocates (the text is cut).

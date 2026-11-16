@@ -116,7 +116,7 @@ const AppInfo kApps[AppCount] = {
      "Guida di simboli e funzioni", nullptr, s::Widgets | s::Help, 0, 0, kSymbolsSrc},
 };
 
-const char* const kHExpression[] = {"expression.hpp", "expression_ast.hpp", "value.hpp", nullptr};
+const char* const kHExpression[] = {"expression.hpp", "expression_ast.hpp", "value.hpp", "calc_library.hpp", nullptr};
 const char* const kHExact[] = {"exact.hpp", nullptr};
 const char* const kHEditor[] = {"natural_editor.hpp", "line_editor.hpp", nullptr};
 const char* const kHRender[] = {"math_renderer.hpp", nullptr};
@@ -154,7 +154,7 @@ const MemberSection kMembers[] = {
     {"checkListLength", d::Lists}, {"listFits", d::Lists}, {"listElements", d::Lists},
     // v1.12.0: List "QTY", List File 1-6, Str, function memory, variabili di sistema
     {"listByName", d::Lists}, {"selectListFile", d::Lists}, {"listFiles", d::Lists},
-    {"setString", d::Strings}, {"functionMemories", d::Strings}, {"setFunctionMemory", d::Strings}, {"modeVars", d::Strings}, {"setRecursionFormula", d::Strings},
+    {"setString", d::Strings}, {"functionMemories", d::Strings}, {"setFunctionMemory", d::Strings}, {"modeVars", d::Strings}, {"setRecursionFormula", d::Strings}, {"functionMemory", d::Strings},
     // Una variabile di sistema puo' essere della V-Window, di TABLE, di GRAPH (Xfct) o di Dyna/Recursion/TVM.
     {"storeSystemVariable", d::View | d::Table | d::Graph | d::Strings},
     {"statisticVariable", d::Settings | d::Lists}, {"pixelProbe", d::Graph},

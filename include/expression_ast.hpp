@@ -47,7 +47,9 @@ inline bool validShape(const Node& n) noexcept {
     case Kind::Fraction: case Kind::Power: case Kind::Subscript: case Kind::Binary: return count==2;
     case Kind::Radical: case Kind::Group: case Kind::Unary: return count==1;
     case Kind::Call: return !n.text.empty() && count>=1;
-    case Kind::Calculus: return (n.text=="derivative"&&count==2)||((n.text=="integral"||n.text=="sum"||n.text=="prod")&&count==3);
+    // v1.12.0: d²/dx² (due campi) e Σ/Π con la variabile (espressione, variabile, inizio, fine).
+    case Kind::Calculus: return ((n.text=="derivative"||n.text=="derivative2")&&count==2)||(n.text=="integral"&&count==3)||
+                                ((n.text=="sum"||n.text=="prod")&&(count==3||count==4));
     }
     return false;
 }
@@ -117,8 +119,8 @@ inline void serializeInto(const Node& n, std::string& out, SerializeMap* map) {
         for(std::size_t i=0;i<n.children.size();++i){ if(i) out+=","; child(i); }
         out+="}"; return;
     case Kind::Calculus:
-        out+=n.text; out+="("; child(0); out+=","; child(1);
-        if(n.children.size()==3){ out+=","; child(2); }
+        out+=n.text; out+="(";
+        for(std::size_t i=0;i<n.children.size();++i){ if(i) out+=","; child(i); }
         out+=")"; return;
     }
     throw std::runtime_error("Tipo di nodo VPAM sconosciuto");

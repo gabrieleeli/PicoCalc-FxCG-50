@@ -147,13 +147,12 @@ public:
     MatrixEditorView& matrixEditor() noexcept { return matrices_; }
     AnswerView& answerView() noexcept { return answers_; }
     int resultScroll() const noexcept { return resultScroll_; }
-    enum class Menu : std::uint8_t { None, Math, MatVct, OptnCategories, OptnItems, VarsCategories, VarsItems, MatRows, MatCols };
+    enum class Menu : std::uint8_t { None, Math, MatVct, Action, MatRows, MatCols };
 private:
     void syncInputMode(Context& ctx);                    // Setup Input/Output -> modalita' dell'editor
     bool clipKey(Context& ctx, const KeyEvent& ev);      // tasti durante una selezione CLIP
     void markError(const ErrorLocation& where);           // cursore sulla causa di un errore
     void evaluate(Context& ctx);
-    void insertCatalogItem(Context& ctx, const std::string& item);
     void beginEdit(Context& ctx, int index);
     void endEdit(bool restoreInput);
     bool browseKey(Context& ctx, const KeyEvent& ev);    // false: the key leaves browsing and is handled normally
@@ -167,8 +166,16 @@ private:
     int scrollX_{0};
     PopupMenu menu_;
     Menu menuKind_{Menu::None};
-    int optnCategory_{0};
-    int varsCategory_{0};
+    std::vector<std::string> actions_;   // azioni delle voci del menu aperto (v1.12.0)
+    std::string menuTitle_;
+    pict::Image capture_;                // schermata catturata con SHIFT 7, in attesa del numero
+    void showMenu(const std::string& title, const std::vector<std::pair<std::string, std::string>>& items);
+    void openOptn(Context& ctx);
+    void openVars(Context& ctx);
+    void openCatalog(Context& ctx);
+    void runAction(Context& ctx, const std::string& action, const std::string& label);
+    void takeCapture(Context& ctx);
+    void writeCapture(Context& ctx, int n);
     std::size_t matRows_{2};
     MatrixEditorView matrices_;
     AnswerView answers_;
