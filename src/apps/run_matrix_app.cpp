@@ -32,7 +32,7 @@ using MenuList = std::vector<MenuItem>;
 // relazioni = PRGM, viste del risultato, Base-N = tasti F del modo Base-N).
 MenuList optnRoot() {
     return {{"LIST  List Dim Seq Mean", "sub:LIST"}, {"MAT/VCT  Mat Det Trn Vct", "sub:MAT"}, {"COMPLEX  i Arg Conjg \xE2\x88\xA0", "sub:CPLX"},
-            {"CALC  Solve d/dx \xE2\x88\xAB SolveN FMin", "sub:CALC"}, {"STAT  x\xCC\x82 \xC5\xB7 DIST S-Dev", "sub:STAT"},
+            {"CALC  Solve d/dx \xE2\x88\xAB SolveN FMin", "sub:CALC"}, {"STAT  \xEE\x80\x80 \xC5\xB7 DIST S-Dev", "sub:STAT"},
             {"CONVERT  [cm]\xE2\x96\xB6[in]", "sub:CONV"}, {"HYPERBL  sinh cosh tanh", "sub:HYP"}, {"PROB  x! nPr nCr Ran# P(", "sub:PROB"},
             {"NUMERIC  Abs Int Frac Rnd", "sub:NUM"}, {"ANGLE  \xC2\xB0 \xCA\xB3 \xE1\xB5\x8D \xC2\xB0\xE2\x80\xB2\xE2\x80\xB3 Pol Rec", "sub:ANGLE"},
             {"ESYM  m \xC2\xB5 n p f k M G T P E ENG", "sub:ESYM"}, {"PICTURE  StoPict RclPict", "sub:PICT"},
@@ -78,7 +78,7 @@ MenuList optnSub(Context& ctx, const std::string& name) {
         {"\xE2\x88\xAB" "dx", "tpl:integral"}, {"SolveN(", "fn:solve_n"}, {"FMin(", "fn:f_min"}, {"FMax(", "fn:f_max"},
         {"\xCE\xA3(", "tpl:sum"}, {"\xCE\xA0(", "tpl:prod"}, {"log\xE2\x82\x90" "b", "tpl:logab"}, {"Int\xC3\xB7", "sym:Int\xC3\xB7"},
         {"Rmdr", "sym:Rmdr"}, {"\xE2\x96\xB6Simp", "sym:\xE2\x96\xB6Simp"}});
-    if (name == "STAT") return fnItems({{"x\xCC\x82(", "fn:x_hat"}, {"\xC5\xB7(", "fn:y_hat"}, {"DIST  \xE2\x96\xB6", "sub:DIST"},
+    if (name == "STAT") return fnItems({{"\xEE\x80\x80(", "fn:x_hat"}, {"\xC5\xB7(", "fn:y_hat"}, {"DIST  \xE2\x96\xB6", "sub:DIST"},
         {"S-Dev(", "fn:s_dev"}, {"Var(", "fn:stat_var"}});
     if (name == "DIST") return fnItems({{"NormPD(", "fn:norm_pd"}, {"NormCD(", "fn:norm_cd"}, {"InvNormCD(", "fn:invnorm_cd"},
         {"tPD(", "fn:t_pd"}, {"tCD(", "fn:t_cd"}, {"InvTCD(", "fn:invt_cd"}, {"ChiPD(", "fn:chi_pd"}, {"ChiCD(", "fn:chi_cd"},
@@ -161,7 +161,7 @@ MenuList optnSub(Context& ctx, const std::string& name) {
 // RECURSION, EQUATION, TVM, Str) e le memorie A~Z, r, θ e Ans.
 MenuList varsRoot() {
     return {{"A~Z, r, \xCE\xB8  variabili", "sub:VAZ"}, {"Ans  PreAns", "sub:VANS"}, {"V-WIN  finestra Graph", "sub:VWIN"},
-            {"FACTOR  Xfct Yfct", "sub:VFACT"}, {"STAT  n x\xCC\x84 \xCF\x83x a b r", "sub:VSTAT"}, {"GRAPH  Y r Xt Yt X", "sub:VGRAPH"},
+            {"FACTOR  Xfct Yfct", "sub:VFACT"}, {"STAT  n \xEE\x80\x81 \xCF\x83x a b r", "sub:VSTAT"}, {"GRAPH  Y r Xt Yt X", "sub:VGRAPH"},
             {"DYNA  Start End Pitch", "sub:VDYNA"}, {"TABLE  Start End Pitch Result", "sub:VTABLE"},
             {"RECURSION  an+1 a0 R Start", "sub:VREC"}, {"EQUATION  SimRes PlyRes", "sub:VEQ"}, {"TVM  n I% PV PMT FV", "sub:VTVM"},
             {"Str  Str 1-20", "sub:VSTR"}};

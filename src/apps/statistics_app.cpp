@@ -90,7 +90,7 @@ void StatisticsApp::runCalc(Context& ctx, int choice) {
     if (choice == 0) {
         const auto o = stats::oneVariable(X);
         results_.title = "1-Variable (" + listLabel(st.statXList) + ")";
-        results_.add("x\xCC\x84", F(o.mean)); results_.add("\xCE\xA3x", F(o.sum)); results_.add("\xCE\xA3x\xC2\xB2", F(o.sumSq));
+        results_.add("\xEE\x80\x81", F(o.mean)); results_.add("\xCE\xA3x", F(o.sum)); results_.add("\xCE\xA3x\xC2\xB2", F(o.sumSq));
         results_.add("\xCF\x83x", F(o.popSd)); results_.add("sx", F(o.sampleSd)); results_.add("n", F(o.n));
         results_.add("minX", F(o.min)); results_.add("Q1", F(o.q1)); results_.add("Med", F(o.median)); results_.add("Q3", F(o.q3)); results_.add("maxX", F(o.max));
         std::string modes; for (std::size_t i = 0; i < o.modes.size() && i < 4; ++i) { if (i) modes += ", "; modes += F(o.modes[i]); }
@@ -99,8 +99,8 @@ void StatisticsApp::runCalc(Context& ctx, int choice) {
     } else if (choice == 1) {
         const auto t = stats::twoVariable(X, Y);
         results_.title = "2-Variable (" + listLabel(st.statXList) + ", " + listLabel(st.statYList) + ")";
-        results_.add("x\xCC\x84", F(t.meanX)); results_.add("\xCE\xA3x", F(t.sumX)); results_.add("\xCE\xA3x\xC2\xB2", F(t.sumX2)); results_.add("\xCF\x83x", F(t.popSdX)); results_.add("sx", F(t.sampleSdX)); results_.add("n", F(t.n));
-        results_.add("y\xCC\x84", F(t.meanY)); results_.add("\xCE\xA3y", F(t.sumY)); results_.add("\xCE\xA3y\xC2\xB2", F(t.sumY2)); results_.add("\xCF\x83y", F(t.popSdY)); results_.add("sy", F(t.sampleSdY));
+        results_.add("\xEE\x80\x81", F(t.meanX)); results_.add("\xCE\xA3x", F(t.sumX)); results_.add("\xCE\xA3x\xC2\xB2", F(t.sumX2)); results_.add("\xCF\x83x", F(t.popSdX)); results_.add("sx", F(t.sampleSdX)); results_.add("n", F(t.n));
+        results_.add("\xEE\x80\x82", F(t.meanY)); results_.add("\xCE\xA3y", F(t.sumY)); results_.add("\xCE\xA3y\xC2\xB2", F(t.sumY2)); results_.add("\xCF\x83y", F(t.popSdY)); results_.add("sy", F(t.sampleSdY));
         results_.add("\xCE\xA3xy", F(t.sumXY)); results_.add("minX", F(t.minX)); results_.add("maxX", F(t.maxX)); results_.add("minY", F(t.minY)); results_.add("maxY", F(t.maxY));
     } else {
         const auto type = static_cast<RegType>(choice - 2);
@@ -167,13 +167,13 @@ void StatisticsApp::computeForm(Context& ctx) {
         const auto r = formKind_ == 200 ? stats::zTest1(X, n(1), n(2), t) : stats::tTest1(X, n(1), t);
         results_.add(formKind_ == 200 ? "z" : "t", F(r.statistic)); results_.add("p", F(r.p));
         if (formKind_ == 201) results_.add("df", F(r.df));
-        results_.add("x\xCC\x84", F(r.mean)); results_.add("sx", F(r.sd)); results_.add("n", F(r.n));
+        results_.add("\xEE\x80\x81", F(r.mean)); results_.add("sx", F(r.sd)); results_.add("n", F(r.n));
         break;
     }
     case 202: case 203: {
         const auto& X = ctx.ws.lists[ctx.ws.settings.statXList];
         const auto iv = formKind_ == 202 ? stats::zInterval(X, n(1), n(0)) : stats::tInterval(X, n(0));
-        results_.add("Left", F(iv.lower)); results_.add("Right", F(iv.upper)); results_.add("x\xCC\x84", F(iv.mean)); results_.add("n", F(iv.n));
+        results_.add("Left", F(iv.lower)); results_.add("Right", F(iv.upper)); results_.add("\xEE\x80\x81", F(iv.mean)); results_.add("n", F(iv.n));
         break;
     }
     default: break;

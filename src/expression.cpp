@@ -2891,22 +2891,22 @@ private:
         }
         if(f=="x_hat"){
             // x̂(y): stima di x dalla regressione dell'ultimo calcolo (Quad: due valori).
-            const double y=realOf(a[0],"x\xCC\x82");
+            const double y=realOf(a[0],"\xEE\x80\x80");
             const int type=static_cast<int>(systemValue(env,"reg_type"));
             const double ca=systemValue(env,"reg_a"),cb=systemValue(env,"reg_b");
             switch(type){
             case 0: case 1: if(ca==0)throw MathError("Math ERROR: a = 0");out=scalarOf(D::fromDouble((y-cb)/ca));return true;
             case 2:{
                 const double cc=systemValue(env,"reg_c")-y,d=cb*cb-4*ca*cc;
-                if(ca==0||d<0)throw MathError("Math ERROR: x\xCC\x82 non esiste");
+                if(ca==0||d<0)throw MathError("Math ERROR: \xEE\x80\x80 non esiste");
                 const double r1=(-cb-std::sqrt(d))/(2*ca),r2=(-cb+std::sqrt(d))/(2*ca);
                 out=listFromDoubles({std::min(r1,r2),std::max(r1,r2)});return true;
             }
             case 5: if(cb==0)throw MathError("Math ERROR: b = 0");out=scalarOf(D::fromDouble(std::exp((y-ca)/cb)));return true;
-            case 6: if(ca==0||cb==0||y/ca<=0)throw MathError("Math ERROR: x\xCC\x82 non esiste");out=scalarOf(D::fromDouble(std::log(y/ca)/cb));return true;
-            case 7: if(ca==0||cb<=0||cb==1||y/ca<=0)throw MathError("Math ERROR: x\xCC\x82 non esiste");out=scalarOf(D::fromDouble(std::log(y/ca)/std::log(cb)));return true;
-            case 8: if(ca==0||cb==0||y/ca<=0)throw MathError("Math ERROR: x\xCC\x82 non esiste");out=scalarOf(D::fromDouble(std::pow(y/ca,1/cb)));return true;
-            default: throw MathError("Math ERROR: x\xCC\x82 non disponibile per questa regressione");
+            case 6: if(ca==0||cb==0||y/ca<=0)throw MathError("Math ERROR: \xEE\x80\x80 non esiste");out=scalarOf(D::fromDouble(std::log(y/ca)/cb));return true;
+            case 7: if(ca==0||cb<=0||cb==1||y/ca<=0)throw MathError("Math ERROR: \xEE\x80\x80 non esiste");out=scalarOf(D::fromDouble(std::log(y/ca)/std::log(cb)));return true;
+            case 8: if(ca==0||cb==0||y/ca<=0)throw MathError("Math ERROR: \xEE\x80\x80 non esiste");out=scalarOf(D::fromDouble(std::pow(y/ca,1/cb)));return true;
+            default: throw MathError("Math ERROR: \xEE\x80\x80 non disponibile per questa regressione");
             }
         }
         // Mean, Median, S-Dev, Var con le frequenze facoltative (manuale 3-10).

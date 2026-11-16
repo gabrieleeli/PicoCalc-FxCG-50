@@ -37,6 +37,10 @@ namespace fx::graphcmd {
 // Vero se il testo inizia con un comando grafico (grafia della fx-CG50, con o
 // senza lo spazio dopo il nome: "Plot 1,2" e "Plot1,2").
 bool isCommand(const std::string& text);
+// v1.12.0: byte del testo occupati dal nome del comando (con l'eventuale
+// prefisso di stile e gli spazi che seguono), 0 se il testo non e' un comando.
+// L'editor ne fa un solo token, cosi' la riga si mostra "G∫dx x,0,2".
+std::size_t keywordLength(const std::string& text);
 // Esegue il comando sui dati di GRAPH del workspace e chiede la schermata del
 // grafico (GraphState::commandScreen). Lancia SyntaxError / MathError con la
 // posizione nel testo.

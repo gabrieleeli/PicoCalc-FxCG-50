@@ -518,6 +518,24 @@ bool isCommand(const std::string& text) {
     return match(c, cmd, length);
 }
 
+std::size_t keywordLength(const std::string& text) {
+    Compact c = compact(text);
+    LineStyle style{};
+    const std::size_t before = c.origin.size();
+    const bool styled = stylePrefix(c, style);
+    const std::size_t prefix = before - c.origin.size();      // caratteri compatti del prefisso
+    (void)prefix;
+    Cmd cmd{};
+    std::size_t length = 0;
+    std::size_t end = 0;
+    if (styled && c.text.empty()) end = text.size();
+    else if (match(c, cmd, length)) end = static_cast<std::size_t>(c.origin[length]);
+    else return 0;
+    // "(" di Graph(X,Y)=( e PxlTest( restano fuori; gli spazi dopo il nome entrano.
+    while (end < text.size() && text[end] == ' ') ++end;
+    return end;
+}
+
 void execute(Workspace& ws, const std::string& text) {
     Compact c = compact(text);
     LineStyle style{};

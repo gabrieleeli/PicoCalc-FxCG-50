@@ -1,4 +1,5 @@
 #include "natural_editor.hpp"
+#include "graph_commands.hpp"
 #include "expression.hpp"
 #include "math_renderer.hpp"
 #include <algorithm>
@@ -172,6 +173,15 @@ void appendToken(NaturalNode& r, std::string text) {
 void importInto(NaturalNode& target, const std::string& s, int depth, bool linear) {
     if (depth > static_cast<int>(NaturalEditor::MaxTemplateDepth)) throw MathError("Stack ERROR: annidamento eccessivo");
     std::size_t i = 0;
+    // v1.12.0: il nome di un comando grafico all'inizio della riga ("G∫dx ",
+    // "SketchThick F-Line ", "Graph Y>") e' un solo token, con i suoi spazi.
+    if (depth == 0) {
+        const std::size_t lead = s.find_first_not_of(' ');
+        if (lead != std::string::npos) {
+            const std::size_t n = graphcmd::keywordLength(s.substr(lead));
+            if (n) { target.children.push_back(token(s.substr(lead, n))); i = lead + n; }
+        }
+    }
     while (i < s.size()) {
         const unsigned char c = static_cast<unsigned char>(s[i]);
         if (std::isspace(c)) { ++i; continue; }
@@ -544,7 +554,8 @@ void NaturalEditor::insert(char c) {
     // '{' '}' le liste, '@' inizia un riferimento a una funzione di GRAPH; il
     // parser li rifiuta dove non sono validi.
     // '"' delimita il testo del comando grafico Text (v1.11.0).
-    if (!(std::isalnum(static_cast<unsigned char>(c)) || std::strchr(".+-*/%!,()=<>~[]{}@\"", c) != nullptr))
+    // ':' separa le istruzioni di una riga (v1.12.0, manuale 2-9).
+    if (!(std::isalnum(static_cast<unsigned char>(c)) || std::strchr(".+-*/%!,()=<>~[]{}@\":", c) != nullptr))
         throw std::invalid_argument("Carattere non ammesso nell'espressione");
     pushUndo();
     argumentPending_ = false;
