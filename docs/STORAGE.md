@@ -68,7 +68,12 @@ restano intatti. Un ID non riconosciuto lascia la mappa della build.
 Due slot con CRC-32 e numero di sequenza: si scrive sempre lo slot più
 vecchio, quindi un'interruzione durante la scrittura lascia valido l'altro
 (test di interruzione in ogni punto in `storage_test`). Il record è alla
-**versione 7** (v1.11.0): aggiunge in coda Base-N, Simplify, formato CSV,
+**versione 8** (v1.12.0): aggiunge in coda List File, Sub Name e tipo
+dell'ultima regressione, le variabili r e θ, le liste degli altri List File,
+function memory, Str, le variabili di Dyna/Recursion/TVM e la formula an+1,
+le celle decimali delle memorie e, per le righe della cronologia, ENG, i
+risultati di ◢ e i risultati stringa (formato sotto). La **versione 7**
+(v1.11.0) aggiunge in coda Base-N, Simplify, formato CSV,
 liste di Statistics, List 7–26 e i sottonomi, le forme esatte delle memorie,
 base e frazione ▶Simp delle righe della cronologia e i grafici dei comandi
 (formato sotto). La **versione 6** (v1.10.0) aggiunge la modalità
@@ -84,7 +89,9 @@ record v4 generato dai sorgenti della v1.8.0, un record v5 generato dai
 sorgenti della v1.9.0 e un record v6 generato dai sorgenti della v1.10.0
 sono nei test (`tests/fixtures/workspace_v1_8_0.inc`,
 `tests/fixtures/workspace_v1_9_0.inc`, `tests/fixtures/workspace_v1_10_0.inc`:
-la migrazione v6→v7 è provata da `lists_csv_test`);
+la migrazione v6→v7 è provata da `lists_csv_test`), come il record v7
+generato dai sorgenti della v1.11.0 (`tests/fixtures/workspace_v1_11_0.inc`:
+migrazione v7→v8 in `run_matrix_v112_test`);
 le 6 funzioni della v1.6.0 diventano Y1–Y6 e la griglia booleana diventa Grid
 On/Off; una V-Window che non supera i controlli viene corretta o sostituita da
 quella iniziale, senza scartare il resto dei dati.
@@ -93,7 +100,9 @@ quella iniziale, senza scartare il resto dei dati.
 |---|---|---|
 | Capacità di un salvataggio | 59,75 KB | 511,75 KB |
 | Cronologia Run-Matrix | 40 righe | 200 righe |
-| Liste (List 1–26, v1.11.0) | 255 per lista, 1 530 in tutto (≈ 12 KB) | 999 per lista (fx-CG50), 20 000 in tutto (≈ 156 KB) |
+| Liste (List 1–26 in List File 1–6, v1.12.0) | 255 per lista, 1 530 in tutti i file (≈ 12 KB) | 999 per lista (fx-CG50), 20 000 in tutti i file (≈ 156 KB) |
+| Forme esatte delle memorie di matrici (v1.12.0) | 400 (≈ 10 KB) | 4 000 (≈ 104 KB) |
+| Str 1–20, function memory f1–f20 | 20 × 255 + 20 × 255 caratteri | come Pico 2 W |
 | Sottonomi delle liste | 26 × 8 caratteri | 26 × 8 caratteri |
 | Grafici dei comandi di Run-Matrix | 10 | 10 |
 | Matrici e vettori (Mat/Vct A–Z, MatAns, VctAns) | 1 200 elementi in tutto (≈ 9,4 KB reali, 18,8 KB complessi), 400 per matrice, lato ≤ 40 | 20 000 elementi (≈ 156 KB reali, 312 KB complessi), 10 000 per matrice, lato ≤ 999 |
@@ -137,6 +146,27 @@ nel blocco della versione 4 (stessa posizione di prima).
 La lettura controlla ogni campo (valori ammessi, separatore ≠ decimale,
 forme esatte coerenti con i valori memorizzati, budget di tutte le liste,
 indici crescenti): un record non valido viene rifiutato per intero.
+
+### Blocco della versione 8 (v1.12.0)
+
+In coda al blocco della versione 7, in little endian.
+
+| Campo | Contenuto |
+|---|---|
+| 3 × `u8` | List File attivo (0–5), Sub Name (0/1), tipo dell'ultima regressione (`stats::RegType`, 0xFF = nessuna) |
+| 2 × (`f64`, forma esatta, `u8` usata) | variabili r e θ |
+| 6 × (26 × (`u16` n, n × `f64`), 26 × stringa) | List File 1–6: liste e sottonomi; lo slot del file attivo è vuoto (le sue liste sono List 1–26 dei blocchi precedenti) |
+| 20 × stringa | function memory f1–f20 (≤ 255 caratteri, sintassi verificata) |
+| 20 × stringa | Str 1–20 (≤ 255 caratteri) |
+| 24 × `f64` | D Start, D End, D pitch, R Start, R End, a0…c2, anStart, bnStart, cnStart, n, I%, PV, PMT, FV, P/Y, C/Y |
+| stringa | formula an+1 (≤ 255 caratteri) |
+| 55 × (`u8` presente, bit) | celle digitate come decimali di Mat A–Z, Vct A–Z, MatAns, VctAns, ListAns (un bit per elemento) |
+| `u16` n, n × (`u16` indice, `i8` ENG, `u8` k, k × stringa, stringa) | righe della cronologia con lo spostamento ENG, i risultati di ◢ e il risultato stringa |
+
+La vista di una riga (`u8` del blocco della versione 2) ammette dalla
+versione 8 i valori 8 (ENG), 9 (►r∠θ) e 10 (►a+bi). La lettura controlla
+ogni campo e il budget di tutte le liste di tutti i file: un record non
+valido viene rifiutato per intero (`run_matrix_v112_test`, record troncati).
 
 ## File CSV (v1.11.0)
 

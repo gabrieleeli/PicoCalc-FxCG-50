@@ -1,10 +1,27 @@
-# Run-Matrix — v1.11.0
+# Run-Matrix — v1.12.0
 
 Run-Matrix mostra **calcoli e risultati**; grafici, statistiche, tabelle e
 conversioni sono nelle rispettive modalità (i comandi grafici eseguiti qui li
 disegna GRAPH). Riferimento di comportamento: manuale fx-CG50, capitoli 1-3…1-31,
 2-1…2-63 (matrici e vettori 2-42…2-63), 3-7…3-20 (liste e CSV), 5 (SKETCH) e 8
 (comandi). Stato per voce: [FEATURE_MATRIX.md](FEATURE_MATRIX.md).
+
+Novità della v1.12.0 (completamento di Run-Matrix, sezione
+[v1.12.0](#completamento-della-v1120) sotto): **CALC** completo (Solve con
+limiti, SolveN, FMin, FMax, Σ con variabile e passo, d²/dx² anche come
+modello), **PROB** (Ran# n, RanList#, RanSamp#, P( Q( R( t( ), **STAT** (x̂ ŷ,
+24 distribuzioni, S-Dev, Var), **TVM**, **CONVERT**, **ʳ ᵍ ° ′ ″**, **∠** e
+►r∠θ/►a+bi, Pol/Rec in List Ans, **Rnd**, simboli **P E** ed **ENG/ENG←**,
+**Simplify Manual** con la regola del m.c.m., **Bin a 16 bit** e variabili A–F
+in Hex, istruzioni multiple **`:`** e **`◢`**, **Str 1–20**, **function
+memory**, variabili **r θ** e di sistema assegnabili, **List "nome"**, **List
+File 1–6**, matrici esatte senza limite di 64 elementi, **tutti i comandi
+grafici** (PxlTest(, disequazioni, G∫dx, stili, Pict, Draw…), **CATALOG**,
+**CAPTURE**, OPTN nell'ordine della fx-CG50 e VARS completo.
+
+![SolveN e FMin](screenshots/62_calc_solven.png) ![OPTN](screenshots/63_optn.png) ![CATALOG](screenshots/64_catalog.png) ![Distribuzioni](screenshots/65_distributions.png) ![CONVERT](screenshots/66_convert.png)
+
+![Modelli d²/dx² e Σ](screenshots/67_templates.png) ![Istruzioni multiple](screenshots/68_multistatement.png) ![VARS STAT](screenshots/69_vars_stat.png) ![Graph Y>](screenshots/70_graph_inequality.png) ![G∫dx](screenshots/71_graph_integral.png) ![ENG](screenshots/72_eng.png)
 
 Novità della v1.11.0 (dettagli nelle sezioni sotto): **List 1–26** con i
 sottonomi, **file CSV** di liste e matrici, schermate **MatAns/ListAns**,
@@ -38,14 +55,16 @@ sulla causa di un errore**.
 | F4 | menu MATH | `→` (memorizza) |
 | F5 | **S⇔D** sull'ultimo risultato | **a b/c ⇔ d/c** |
 | F6 | `Ans` | θ |
-| OPTN (F8) | CALC, PROB, NUMERIC (anche **▶Simp**), ANGLE, COMPLEX, HYPERBL, LOG, LOGIC, RELAZIONI, CONST, **MAT/VCT**, **LIST**, **ESYM** (simboli ingegneristici), **SKETCH** (comandi grafici), RISULTATO, **BASE-N** (d h b o, And Or Xor Xnor Not Neg, ▶Dec ▶Hex ▶Bin ▶Oct) | |
+| OPTN (F8) | v1.12.0, ordine della fx-CG50: **LIST, MAT/VCT, COMPLEX, CALC, STAT, CONVERT, HYPERBL, PROB, NUMERIC, ANGLE, ESYM, PICTURE, FUNCMEM, LOGIC, CAPTURE, TVM**, poi SKETCH (comandi grafici, SHIFT F4 sulla calcolatrice), RELAZIONI (anche `:` e `◢`), RISULTATO (S⇔D, ab/c, periodo, basi, DMS, ENG, ►r∠θ), BASE-N, CONST | |
 | DEL | cancella a sinistra | **INS**: in Line alterna sovrascrittura/inserimento (barra di stato `OVR`), in Math il prossimo modello prende come argomento il valore a destra del cursore |
-| VARS (F9) | A~Z (con il valore esatto), Ans/PreAns, V-WIN di Graph, TABLE | |
+| VARS (F9) | A~Z, r, θ (con il valore esatto), Ans/PreAns, **V-WIN, FACTOR, STAT, GRAPH, DYNA, TABLE (anche Result), RECURSION, EQUATION, TVM, Str** (v1.12.0) | |
 | ↑ | entra nella cronologia (con il cursore fuori dai modelli) | |
 | EXE | calcola; su riga vuota ripete l'ultimo calcolo | |
 | EXIT | cancella l'input; su input vuoto torna al menu | |
 | AC (Shift+Esc) | cancella l'input; su input vuoto cancella la cronologia | |
 | SHIFT `3` | | **editor MAT/VCT** (fx-CG50 SHIFT 3 'MAT/VCT') |
+| SHIFT `4` | | **CATALOG**: tutti i comandi in ordine alfabetico (v1.12.0) |
+| SHIFT `7` | | **CAPTURE**: la schermata in Capture 1–20 (v1.12.0) |
 | SHIFT `8` | | **CLIP**: inizia la selezione |
 | SHIFT `9` | | **PASTE**: incolla gli appunti |
 | Ctrl+C/X/V/Z/Y | copia, taglia, incolla, annulla, ripeti (con una selezione CLIP attiva: copia/taglia la selezione) | |
@@ -448,27 +467,142 @@ cronologia e per gli errori dopo la freccia (segnalati sulla freccia).
 | `include/graph_commands.hpp`, `src/graph_commands.cpp` | interprete dei comandi grafici (v1.11.0): argomenti valutati dal parser unico, risultato nei dati di GRAPH |
 | `include/csv_io.hpp`, `src/csv_io.cpp` | file CSV di liste e matrici (v1.11.0) |
 
+## Completamento della v1.12.0
+
+Perimetro e stato voce per voce: [reports/ANALISI_FONTI_v1.12.0.md](reports/ANALISI_FONTI_v1.12.0.md)
+(tabella di parità iniziale) e [reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md)
+(tabella finale). Nel testo canonico i comandi nuovi hanno un nome con `_`
+(un solo token, che non si forma digitando lettere) e si mostrano con il nome
+della calcolatrice.
+
+### CALC, PROB, NUMERIC, ANGLE, COMPLEX
+
+| Comando | Testo canonico | Esempio |
+|---|---|---|
+| Solve(f, stima[, inf, sup]), anche `a=b` | `solve(` | `solve(x^2=9,1)` → 3; senza soluzione `Iteration ERROR` |
+| SolveN(f[=g][, x][, inf, sup]) | `solve_n(` | `SolveN(x²−x−6)` → `{−2,3}` (fino a 10, List Ans); nessuna → `Can't Solve!`; senza limiti cerca tra ±10¹⁰ |
+| FMin / FMax(f, a, b[, n]) | `f_min(` `f_max(` | `FMin(x²−4x+9,1,4)` → `{2,5}` |
+| Σ(f, k, a, b[, n]), Π | `sum(` `prod(` | `Σ(k²−3k+5,k,3,6)` → 52; modello con il campo della variabile |
+| d²/dx²(f, a) | `derivative2(` | modello Math a due campi |
+| ∫(f, a, b[, tol]) | `integral(` | tolleranza tra 0 e 1 |
+| Funzioni vietate | | dentro Solve/SolveN/FMin/FMax non si usano Solve, SolveN, FMin, FMax, Σ, d²/dx² (Syntax ERROR, manuale 2-28) |
+| Ran# n | `ran 3` | sequenze 1–10 riproducibili; `Ran# 0` le riavvia |
+| RanInt#(a,b[,n]), RanNorm#(σ,μ[,n]), RanBin#(n,p[,m]) | | con n: lista di n numeri |
+| RanList#(n), RanSamp#(lista,n[,m]) | `ran_list(` `ran_samp(` | m = 0 senza ripetizione, 1 con ripetizione |
+| P( Q( R( t( | `prob_p(`… | normale standard; t(x) = (x−x̄)/σx dei dati di Statistics |
+| Rnd | `num_rnd(` | arrotonda alle cifre del display (Fix n, Sci n, Norm 10) |
+| ʳ ᵍ ° ′ ″ | | `πʳ` = 180 in Deg, `100ᵍ` = 90, `2°20′30″` = 2.341666667 |
+| Pol( Rec( | | `{r,θ}`, `{x,y}` in List Ans |
+| r∠θ, ►r∠θ, ►a+bi | `∠` | `2∠90` = 2i; viste del risultato da OPTN › COMPLEX o RISULTATO |
+
+### STAT, TVM, CONVERT
+
+- **x̂( ŷ(** (`x_hat`, `y_hat`): stime della regressione dell'ultimo calcolo
+  di Statistics (XList/YList del SET); Quad dà due valori.
+- **Distribuzioni** (OPTN › STAT › DIST): NormPD, NormCD, InvNormCD
+  (`"L"`, `"R"`, `"C"`: centrale = due estremi), tPD, tCD, InvTCD, ChiPD, ChiCD,
+  InvChiCD, FPD, FCD, InvFCD (code destre per gli inversi), BinomialPD/CD (con
+  2 argomenti la lista per x = 0…n), InvBinomialCD, PoissonPD/CD, InvPoissonCD,
+  GeoPD/CD, InvGeoCD, HypergeoPD/CD, InvHypergeoCD; anche su liste.
+- **S-Dev( Var(** con frequenze; **Mean( Median(** con frequenze; **Min/Max** di due liste.
+- **TVM** (OPTN › TVM): Smpl_SI, Smpl_SFV, Cmpd_PV/FV/PMT/n/I%, Cash_NPV/IRR/PBP/NFV,
+  Amt_BAL/INT/PRN/ΣINT/ΣPRN, Cnvt_EFF/APR, Cost, Sell, Margin, Days_Prd (anno
+  di 365 giorni, pagamento a fine periodo, date 1902–2097).
+- **CONVERT**: `valore[unità]▶[unità]` (11 categorie, 103 unità: lunghezza,
+  area, volume, tempo, temperatura, velocità, massa, forza, pressione,
+  energia, potenza); anche su liste. Il menu inserisce `[u]` dopo il valore e
+  `▶[u]` dopo la prima unità.
+
+### ESYM, ENG, overflow
+
+- Simboli **P** (10¹⁵) ed **E** (10¹⁸), anche nel display Eng.
+- **ENG / ENG←** (OPTN › ESYM o RISULTATO): `1234` → `1.234E+03` →
+  `0.001234E+06`; ENG← → `1234E+00` → `1234000E−03`. Il valore non cambia.
+- Un risultato o un passaggio con |x| ≥ 10¹⁰⁰ è un Math ERROR (70! compreso).
+
+### Simplify Manual (regola)
+
+Con SET UP › Simplify **Manual** (solo nel modo Real) le operazioni tra interi
+e frazioni non riducono il risultato: **+ e −** sul **minimo comune multiplo**
+dei denominatori (`2/4+1/4` = `3/4`, `1/6+1/6` = `2/6`), **× e ÷** sui
+prodotti (`1/2×2/3` = `2/6`), potenze intere termine per termine, una frazione
+digitata resta com'è. Un risultato intero si mostra intero. **▶Simp** divide
+per il più piccolo fattore primo comune o per n; su una frazione irriducibile
+restituisce il valore senza «F=»; un divisore che non divide è un Math ERROR.
+Un decimale nell'espressione dà un risultato decimale. Fonte della regola:
+manuali fx-7400G («least common multiple of the fractions») e fx-9750GII
+(stessa famiglia); il manuale fx-CG50 non dà esempi completi.
+
+### Base-N
+
+- **Bin a 16 bit** (0…0111111111111111, negativi fino a 1111111111111111),
+  Dec/Oct/Hex a 32 bit; fuori intervallo Math ERROR.
+- In **Hex** le lettere digitate A–F sono cifre; la **variabile** A–F si
+  inserisce da VARS › A~Z (o Alt+lettera) ed è mostrata **sottolineata**
+  (testo canonico `v_a`).
+- Liste e matrici calcolate in Base-N si mostrano nella base della riga.
+
+### Istruzioni multiple, stringhe, memorie
+
+- **`:`** separa le istruzioni (si mostra l'ultimo risultato); **`◢`**
+  mostra anche il risultato intermedio (`5◢6+1` → `5 ◢ 7`). Una riga con più
+  istruzioni si modifica e si ricalcola come le altre.
+- **Stringhe**: `"ABC"` mostra il testo; `"ABC"→Str 1`, `Str 1` (VARS › Str).
+- **Function memory** f1–f20 (OPTN › FUNCMEM): STORE memorizza l'input,
+  RECALL lo reinserisce, fn lo usa nei calcoli con X (`f1`) o con un argomento
+  (`f1(3)`), SEE elenca. Anche `x^2+1→f1`.
+- Variabili **r** e **θ** (VARS › A~Z, r, θ).
+- **Variabili di sistema assegnabili**: `10→Xmax` (Range ERROR se la finestra
+  non è valida), Xfct/Yfct, TblStart/End/Pitch, D Start/End/Pitch, R Start/End,
+  a0…c2, anStart…, n I% PV PMT FV P/Y C/Y; la formula `"2an+1"→an+1` per
+  DrawR/DrawWeb.
+- **VARS STAT** (n, x̄, Σx… a…e, r, r², MSe, Q1, Q3, Med, Mod, H-Start,
+  H-pitch), **EQUATION** (SimRes, SimCoef, PlyRes, PlyCoef), **TABLE Result**.
+
+### Liste
+
+- **`List "QTY"`** nei calcoli e come destinazione (`{1,2}→List "QTY"`).
+- **List File 1–6** (SET UP › List File): 26 liste e sottonomi per file; il
+  budget degli elementi è comune a tutti i file. **Sub Name** On/Off.
+- `n→Dim List k` crea n zeri; `Fill(v, List n)` e `Fill(v, Mat A)` cambiano la memoria.
+
+### Matrici
+
+- Forme esatte delle celle senza il limite di 64 elementi (budget della
+  scheda: 400 forme sul Pico 2 W, 4 000 sulla Plus); una cella digitata come
+  decimale resta decimale (`0.25`).
+- **Swap A,r1,r2**, **\*Row k,A,r**, **\*Row+ k,A,r1,r2**, **Row+ A,r1,r2**.
+
+### Comandi grafici
+
+`PxlTest(riga,colonna)` (1 se il pixel della schermata del grafico è acceso:
+GRAPH la disegna come la VRAM della calcolatrice), `Graph Y> Y< Y≥ Y≤ X> X< X≥ X≤`,
+`G∫dx f,a,b` (area colorata e valore), prefissi `SketchNormal/Thick/Broken/Dot/Thin`
+(da soli cambiano Sketch Line), `StoPict n`, `RclPict n`, `BG-Pict n`,
+`RclCapt n`, `DrawGraph`, `DrawStat` (StatGraph1: Scatter di XList/YList),
+`DrawDyna` (Y1 con A da D Start a D End), `DrawR-Con`, `DrawR-Plt`, `DrawWeb`
+(formula an+1), `DrawFTG-Con`, `DrawFTG-Plt` (la tabella di TABLE),
+`G-SelOn n`, `G-SelOff n`. I grafici dei comandi si salvano nei progetti
+`.pcgraph` (righe `c=`).
+
+### Editor Math/Line
+
+- Conversione testo ↔ albero esatta nelle due direzioni (corpus di test):
+  gruppi con modelli, radice con indice qualsiasi, d²/dx², Σ/Π con variabile.
+- **× obbligatorio prima di una frazione** (manuale 1-23): una frazione
+  accostata a un operando è un fattore della moltiplicazione implicita
+  (`6÷2[1/3]` = 9); per `6÷2×1/3` serve il ×. In Line si vede `2(1/3)`.
+- La cronologia in Line mostra le parentesi minime (`1/3`, `x^2`).
+- I nomi dei comandi grafici restano un solo token (`G∫dx x,0,2`).
+
 ## Limiti noti
 
-- Liste: i nomi delle liste (sottonomi) si modificano e si vedono
-  nell'editor di Statistics ma non si usano nei calcoli come riferimento
-  (`List "QTY"` non è realizzato); i file di lista multipli (List File 1–6
-  della fx-CG50) non sono realizzati: c'è un solo insieme di 26 liste.
-- Editor MAT/VCT: le forme esatte si conservano per memorie reali fino a 64
-  elementi; un decimale digitato in una cella si mostra come frazione esatta
-  (`0.25` → `1/4`).
-- Simplify Manual: solo una frazione digitata resta non ridotta; le altre
-  operazioni danno frazioni ridotte (la regola esatta della calcolatrice per
-  le operazioni tra frazioni non è stata verificata).
-- Base-N: le variabili A–F non sono raggiungibili in Hex (le lettere sono
-  cifre); un numero esadecimale non può iniziare con `0d`/`0b`/`0o`/`0x`
-  (sono i prefissi). Liste e matrici in Base-N seguono le stesse regole
-  intere ma non hanno una vista dedicata.
-- Comandi grafici: non realizzati `PxlTest(`, `DrawStat`, `DrawDyna`, `DrawR`,
-  `DrawFTG`, `G-SelOn/Off`, `StoPict`/`RclPict`, `BG-Pict`, gli stili
-  (`SketchThick`…), `Graph Y>` e le altre disequazioni, `G∫dx`; i grafici dei
-  comandi non vanno nei progetti `.pcgraph`.
-- Simboli ingegneristici: `P` ed `E` (10¹⁵, 10¹⁸) e le conversioni ►ENG/►ENG←
-  non sono realizzati.
-- Nessuna prova su hardware PicoCalc (tasti SHIFT DEL, colori, tempi dei CSV
-  sulla microSD reale: [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md)).
+- Nessuna prova su hardware PicoCalc: [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md).
+- Differenze inevitabili (schermo 320×320, tastiera senza ALPHA, generatore
+  di Ran# diverso da quello Casio, CONVERT integrato): tabella in
+  [reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md#6-differenze-inevitabili-e-scelte).
+- Comportamenti non descritti per intero dal manuale e scelti dal progetto:
+  intervallo di ricerca di SolveN senza limiti (±10¹⁰), ripartizione tra
+  `Can't Solve!` e `Iteration ERROR`, DrawStat sullo StatGraph1 predefinito,
+  DrawDyna su Y1 con il coefficiente A.
+- PxlTest( ridisegna la schermata di GRAPH a ogni chiamata (lento in un ciclo).

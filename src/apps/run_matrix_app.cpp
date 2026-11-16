@@ -11,6 +11,7 @@
 #include "math_renderer.hpp"
 #include "run_matrix.hpp"
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 
 namespace fx::app {
@@ -663,6 +664,12 @@ void RunMatrixApp::key(Context& ctx, const KeyEvent& ev) {
     }
     switch (ev.key) {
     case Key::Char:
+        // Alt+lettera (v1.12.0): la variabile A-Z scritta esplicitamente (v_a), distinta
+        // dalle cifre esadecimali A-F come le lettere di ALPHA della fx-CG50.
+        if (ev.alt && std::isalpha(static_cast<unsigned char>(ev.ch))) {
+            editor_.insertSymbol(std::string("v_") + static_cast<char>(std::tolower(static_cast<unsigned char>(ev.ch))));
+            return;
+        }
         try { editor_.insert(ev.ch); }
         catch (const std::invalid_argument&) { ctx.toast("Carattere non ammesso"); }
         return;

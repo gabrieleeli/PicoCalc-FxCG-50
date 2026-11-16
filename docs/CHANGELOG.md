@@ -1,5 +1,78 @@
 # Changelog
 
+## v1.12.0 — completamento totale di Run-Matrix (parità con la fx-CG50)
+
+Base: tag `v1.11.0` (commit `f6933fd`, uguale a `origin/main`). Analisi delle
+fonti e tabella di parità iniziale: [reports/ANALISI_FONTI_v1.12.0.md](reports/ANALISI_FONTI_v1.12.0.md);
+rapporto con la tabella finale: [reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md).
+**Nessuna prova su hardware fisico**: procedura [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md).
+
+### Calcolo (stesso parser, stesso AST, stesso valutatore)
+- **CALC**: Solve con limiti e forma `a=b`, **SolveN** (fino a 10 soluzioni in
+  List Ans), **FMin/FMax** (`{x, f(x)}`), **Σ/Π con variabile e passo**, ∫ con
+  tolleranza, d²/dx² anche come modello, funzioni vietate negli argomenti di
+  Solve/SolveN/FMin/FMax (manuale 2-28).
+- **PROB**: Ran# n (sequenze 1–10, `Ran# 0`), RanInt#/RanNorm#/RanBin# con n,
+  **RanList#**, **RanSamp#**, **P( Q( R( t(**.
+- **NUMERIC** Rnd (cifre del display); **ANGLE** ʳ ᵍ ° ′ ″, Pol/Rec in List
+  Ans; **COMPLEX** ∠ in input, ►r∠θ / ►a+bi; Arg elemento per elemento.
+- **STAT** in Run-Matrix: x̂( ŷ( (ultima regressione di Statistics), 24
+  distribuzioni (Norm, t, χ², F, Binomial, Poisson, Geo, Hypergeo: PD, CD,
+  Inv…CD), S-Dev(, Var(, Mean/Median con frequenze.
+- **TVM** (22 funzioni) e **CONVERT** (11 categorie, 103 unità).
+- Simboli **P** ed **E**, **ENG / ENG←**, overflow |x| ≥ 10¹⁰⁰ (Math ERROR).
+- **Simplify Manual**: frazioni non ridotte per tutte le operazioni (m.c.m.
+  dei denominatori per + e −, prodotti per × e ÷); ▶Simp su una frazione
+  irriducibile senza «F=».
+- **Base-N**: Bin a 16 bit; variabili A–F in Hex distinte dalle cifre (`v_a`,
+  VARS o Alt+lettera, sottolineate); liste e matrici nella base della riga.
+- Nuovo modulo del motore `calc_library` (unità, distribuzioni, TVM, nomi,
+  CATALOG): puro calcolo.
+
+### Run-Matrix
+- Istruzioni multiple **`:`** e **`◢`**; **stringhe** e **Str 1–20**;
+  **function memory f1–f20** (OPTN › FUNCMEM); variabili **r** e **θ**;
+  variabili di sistema assegnabili (`10→Xmax`, Xfct, TblStart, D Start,
+  R Start, a0…, n I% PV PMT FV P/Y C/Y, `"formula"→an+1`).
+- **List "nome"**, **List File 1–6** (SET UP, budget comune), **Sub Name**,
+  `n→Dim List k`, `Fill(v, List/Mat)` che modifica la memoria.
+- Matrici: forme esatte **senza il limite di 64 elementi** (budget per
+  scheda), celle decimali conservate, **Swap / \*Row / \*Row+ / Row+**.
+- VARS completo: V-WIN (anche in scrittura), FACTOR, STAT, GRAPH, DYNA, TABLE
+  (Result), RECURSION, EQUATION (SimRes, SimCoef, PlyRes, PlyCoef), TVM, Str.
+- **OPTN nell'ordine della fx-CG50**; **CATALOG** (SHIFT 4); **CAPTURE**
+  (SHIFT 7) con RclCapt.
+- Messaggi dell'Appendice α: `Argument ERROR` al posto di «Type ERROR»,
+  `Complex Number In List / In Matrix`, `Can't Solve!`, `Iteration ERROR`,
+  `Range ERROR`.
+
+### Comandi grafici
+- **PxlTest(**, **Graph Y> Y< Y≥ Y≤ X> X< X≥ X≤**, **G∫dx**, **SketchNormal /
+  Thick / Broken / Dot / Thin**, **StoPict / RclPict / BG-Pict / RclCapt**,
+  **DrawGraph, DrawStat, DrawDyna, DrawR-Con/Plt, DrawWeb, DrawFTG-Con/Plt**,
+  **G-SelOn/Off**; disegnati dal motore e dal renderer di GRAPH.
+- I grafici dei comandi si salvano nei progetti `.pcgraph` (righe `c=`).
+
+### Editor Math/Line
+- Conversione testo ↔ albero esatta nelle due direzioni (corpus di test);
+  parentesi implicite di una frazione accostata a un operando
+  (`6÷2[1/3]` = 9, come sulla calcolatrice); testo Line con le parentesi
+  minime; modelli **d²/dx²** e **Σ/Π con la variabile**; nomi dei comandi
+  grafici come un solo token.
+- Font: glifi ◢ ʳ ᵍ ′ ″ ŷ x̂ x̄ ȳ Å disegnati dal progetto.
+
+### Workspace
+- **Record v8** in coda al v7 (List File, Sub Name, regressione, r e θ, Str,
+  function memory, variabili di Dyna/Recursion/TVM, formula an+1, celle
+  decimali, ENG, ◢ e risultati stringa della cronologia); v1–v7 letti senza
+  perdite; fixture della v1.11.0.
+
+### Test
+- Nuove suite `calc_v112_test`, `run_matrix_v112_test`, `graph_cmd_v112_test`,
+  `editor_v112_test`; `architecture_test` più severo (parser unico,
+  `calc_library` puro, separazione di Run-Matrix ampliata); script del
+  simulatore `tests/sim/run_matrix_v112.txt` (screenshot 62–72).
+
 ## v1.11.0 — completamento di Run-Matrix: List 1–26, CSV, MatAns/ListAns, Line (INS, ⌟), simboli ingegneristici, Simp, Base-N, comandi grafici
 
 Base: tag `v1.10.0` (commit `dfdb08b`, uguale a `origin/main`). Analisi delle
