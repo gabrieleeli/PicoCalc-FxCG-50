@@ -123,7 +123,7 @@ int main() {
         ws.settings.fileStore = Settings::FileStore::Internal;
         ws.graph3d.model.z[2] = "x*y"; ws.graph3d.model.selected[2] = true; ws.graph3d.yaw = 100;
         const auto blob = serializeWorkspace(ws);
-        CHECK(blob[4] == 9 && blob[5] == 0);
+        CHECK(blob[4] == 10 && blob[5] == 0);
         Workspace back;
         CHECK(deserializeWorkspace(blob.data(), blob.size(), back));
         CHECK(back.settings.fileStore == Settings::FileStore::Internal && back.graph3d.model.z[2] == "x*y" && back.graph3d.yaw == 100);

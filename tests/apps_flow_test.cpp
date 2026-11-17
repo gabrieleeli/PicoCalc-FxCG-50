@@ -152,9 +152,19 @@ int main() {
     r.key(pckey::Esc);
     CHECK(r.fw.apps().activeId() == AppId::MainMenu);
     r.type("k"); CHECK(r.fw.apps().activeId() == AppId::Conversion);
-    r.key(pckey::Break); r.enter("2.5");                  // 2.5 m -> km (default From m, To km)
-    r.key(pckey::F1);
-    CHECK_NEAR(ws.memory.answer(), 0.0025, 1e-15);
+    // v1.14.0: elenco delle grandezze con la ricerca; Lunghezza parte da m
+    r.type("Lunghezza"); r.key(pckey::Enter);
+    {
+        auto* cv = r.app<app::ConversionApp>();
+        CHECK(cv->screen() == app::ConversionApp::Screen::Convert && cv->fromName() == "m");
+        r.key(pckey::Down); r.key(pckey::Down);           // campo A
+        r.type("km"); r.key(pckey::Enter);                // elenco filtrato: km
+        CHECK(cv->toName() == "km");
+        r.key(pckey::Up); r.key(pckey::Up);               // campo Valore
+        r.enter("2.5");                                    // EXE converte
+        CHECK_NEAR(ws.memory.answer(), 0.0025, 1e-15);
+        r.key(pckey::Esc); r.key(pckey::Esc);
+    }
     r.home();
     r.type("f"); CHECK(r.fw.apps().activeId() == AppId::Memory);
     r.key(pckey::F1); r.key(pckey::Enter);                 // delete Run-Matrix history

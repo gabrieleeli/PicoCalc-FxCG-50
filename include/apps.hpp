@@ -676,16 +676,71 @@ private:
     int confirm_{-1};
 };
 
+// CONVERSION (v1.14.0): tutte le grandezze di units.hpp (77 categorie, prefissi
+// SI e IEC, derivate), le conversioni di formato di unit_formats.hpp e le valute
+// con tassi inseriti dall'utente. Il valore e' un'espressione (A-Z, Ans); il
+// risultato va in Ans.
 class ConversionApp final : public App {
 public:
+    enum class Screen : std::uint8_t { Menu, Convert, All, Pick, Prefix, Rates };
     AppId id() const override { return AppId::Conversion; }
     void enter(Context& ctx) override;
     void key(Context& ctx, const KeyEvent& ev) override;
     void draw(Context& ctx, gfx::Canvas& c) override;
+    // Stato visibile (test e simulatore).
+    Screen screen() const noexcept { return screen_; }
+    std::uint16_t entry() const noexcept { return entry_; }
+    const std::string& result() const noexcept { return result_; }
+    const std::string& exactResult() const noexcept { return exact_; }
+    const std::string& query() const noexcept { return query_; }
+    std::string fromName() const;
+    std::string toName() const;
+    std::size_t menuRows() const noexcept { return rows_.size(); }
+    const ResultList& allList() const noexcept { return all_; }
+    // Apre una voce: (tipo << 8) | indice; tipo 0 grandezza, 1 formato, 2 valute.
+    void open(Context& ctx, std::uint16_t code);
+    void setValue(const std::string& text) { value_ = text; }
+    void setUnits(std::uint16_t from, std::uint16_t to) { from_ = from; to_ = to; fromPrefix_ = toPrefix_ = -1; }
 private:
-    void rebuildUnits();
-    Form form_;
-    std::string result_;
+    struct Row { std::uint16_t code; std::int16_t recent; const char* header; };
+    void buildMenu(Context& ctx);
+    void menuKey(Context& ctx, const KeyEvent& ev);
+    void convertKey(Context& ctx, const KeyEvent& ev);
+    void pickKey(Context& ctx, const KeyEvent& ev);
+    void ratesKey(Context& ctx, const KeyEvent& ev);
+    void convert(Context& ctx);
+    void showAll(Context& ctx);
+    void swap();
+    void copy(Context& ctx);
+    void remember(Context& ctx);
+    void buildPick();
+    std::size_t optionCount() const;
+    std::string optionName(std::size_t i, bool withLabel) const;
+    std::string paramText(Context& ctx) const;
+    bool hasParam() const;
+    double convertValue(Context& ctx, double v, std::size_t from, int fromPrefix, std::size_t to, int toPrefix) const;
+    void drawMenu(Context& ctx, gfx::Canvas& c);
+    void drawConvert(Context& ctx, gfx::Canvas& c);
+    void drawPick(Context& ctx, gfx::Canvas& c);
+    void drawRates(Context& ctx, gfx::Canvas& c);
+
+    Screen screen_{Screen::Menu};
+    std::vector<Row> rows_;
+    int sel_{0};
+    mutable int first_{0};
+    std::string query_;
+    std::uint16_t entry_{0};
+    std::uint16_t from_{0}, to_{1};
+    int fromPrefix_{-1}, toPrefix_{-1};
+    std::string value_{"1"};
+    double formatParam_{0};
+    int field_{0};                       // 0 valore, 1 da, 2 a, 3 parametro
+    bool editing_{false};
+    LineEditor editor_{120};
+    bool pickTo_{false};
+    std::vector<std::uint16_t> pick_;    // opzioni (o prefissi) filtrate
+    std::string result_, exact_, copyText_;
+    ResultList all_;
 };
 
 class AiChatApp final : public App {

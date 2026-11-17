@@ -64,6 +64,26 @@ struct Settings {
     // Tipo dell'ultima regressione calcolata in Statistics (stats::RegType),
     // per x̂, ŷ e VARS STAT a..e, r, r²; 0xFF = nessuna.
     std::uint8_t statRegType{0xFF};
+    // ---- v1.14.0 (record v10): CONVERSION
+    struct Conversion {
+        static constexpr std::size_t Currencies = 16;     // codici in ConversionApp (EUR, USD, ...)
+        static constexpr std::size_t MaxRecent = 8;
+        static constexpr std::size_t MaxFavorites = 16;
+        static constexpr std::size_t MaxValue = 64;        // caratteri del valore di una conversione recente
+        // Valute: unita' di ciascuna valuta per 1 EUR, inserite dall'utente (0 = non impostato).
+        std::array<double, Currencies> rates{};
+        double dpi{96};                  // pixel: punti per pollice
+        double molarMass{18.015};        // g/mol per Moli <-> massa
+        // Voce dell'elenco: (tipo << 8) | indice; tipo 0 grandezza, 1 formato, 2 valute.
+        struct Recent {
+            std::uint16_t entry{0};
+            std::uint16_t from{0}, to{0};
+            std::int8_t fromPrefix{-1}, toPrefix{-1};
+            std::string value;
+        };
+        std::vector<Recent> recent;      // la piu' recente per prima
+        std::vector<std::uint16_t> favorites;
+    } conversion;
 };
 
 // Un file di liste (fx-CG50 List File 1-6): 26 liste con i sottonomi.

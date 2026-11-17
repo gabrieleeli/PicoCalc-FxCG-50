@@ -443,7 +443,11 @@ constexpr std::uint32_t Magic = 0x46584157;   // "WAXF"
 // Dyna Graph, Recursion e TVM; per le righe della cronologia lo spostamento
 // ENG, i risultati intermedi di ◢ e i risultati stringa. I record delle
 // versioni 1-8 si caricano con i valori predefiniti di questi campi.
-constexpr std::uint16_t Version = 9;
+// Version 10 (v1.14.0, CONVERSION) aggiunge in coda le preferenze di
+// CONVERSION: tassi delle valute inseriti dall'utente, DPI dei pixel, massa
+// molare, conversioni recenti e preferite. I record delle versioni 1-9 si
+// caricano senza perdite con i valori predefiniti di questi campi.
+constexpr std::uint16_t Version = 10;
 constexpr std::size_t LegacyLists = 6;     // liste del blocco delle versioni 1-6
 constexpr std::uint8_t NoValue = 0xFF;      // byte di tipo di una memoria non definita
 constexpr std::size_t LegacyFunctions = 6;
@@ -715,6 +719,20 @@ std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws) {
         for (std::size_t k = 0; k < h.displays.size() && k < 255; ++k) w.str(h.displays[k]);
         w.str(h.text);
     }
+    // v10: CONVERSION
+    const Settings::Conversion& cv = st.conversion;
+    w.u8(static_cast<std::uint8_t>(cv.rates.size()));
+    for (double d : cv.rates) w.f64(d);
+    w.f64(cv.dpi); w.f64(cv.molarMass);
+    w.u8(static_cast<std::uint8_t>(std::min(cv.recent.size(), Settings::Conversion::MaxRecent)));
+    for (std::size_t i = 0; i < cv.recent.size() && i < Settings::Conversion::MaxRecent; ++i) {
+        const auto& r = cv.recent[i];
+        w.u16(r.entry); w.u16(r.from); w.u16(r.to);
+        w.u8(static_cast<std::uint8_t>(r.fromPrefix)); w.u8(static_cast<std::uint8_t>(r.toPrefix));
+        w.str(r.value.substr(0, Settings::Conversion::MaxValue));
+    }
+    w.u8(static_cast<std::uint8_t>(std::min(cv.favorites.size(), Settings::Conversion::MaxFavorites)));
+    for (std::size_t i = 0; i < cv.favorites.size() && i < Settings::Conversion::MaxFavorites; ++i) w.u16(cv.favorites[i]);
     return std::move(w.out);
 }
 
@@ -1076,6 +1094,32 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
             for (std::uint8_t d = 0; d < shown && r.ok; ++d) h.displays.push_back(r.str());
             h.text = r.str();
             if (h.engShift < -40 || h.engShift > 40) return false;
+        }
+    }
+    if (version >= 10) {
+        // CONVERSION (v1.14.0); i riferimenti a categorie e unita' li controlla l'app.
+        Settings::Conversion& cv = ws.settings.conversion;
+        if (r.u8() != cv.rates.size()) return false;
+        for (double& d : cv.rates) { d = r.f64(); if (!std::isfinite(d) || d < 0) return false; }
+        cv.dpi = r.f64(); cv.molarMass = r.f64();
+        if (!(cv.dpi > 0 && cv.dpi <= 1e5) || !(cv.molarMass > 0 && cv.molarMass <= 1e9)) return false;
+        const auto recent = r.u8();
+        if (recent > Settings::Conversion::MaxRecent) return false;
+        for (std::uint8_t k = 0; k < recent && r.ok; ++k) {
+            Settings::Conversion::Recent e;
+            e.entry = r.u16(); e.from = r.u16(); e.to = r.u16();
+            e.fromPrefix = static_cast<std::int8_t>(r.u8()); e.toPrefix = static_cast<std::int8_t>(r.u8());
+            e.value = r.str();
+            if ((e.entry >> 8) > 2 || e.fromPrefix < -1 || e.fromPrefix > 63 || e.toPrefix < -1 || e.toPrefix > 63 ||
+                e.value.size() > Settings::Conversion::MaxValue) return false;
+            cv.recent.push_back(std::move(e));
+        }
+        const auto favorites = r.u8();
+        if (favorites > Settings::Conversion::MaxFavorites) return false;
+        for (std::uint8_t k = 0; k < favorites && r.ok; ++k) {
+            const std::uint16_t f = r.u16();
+            if ((f >> 8) > 2) return false;
+            cv.favorites.push_back(f);
         }
     }
     if (ws.listElements() > Workspace::MaxListElements) return false;
