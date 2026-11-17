@@ -1,13 +1,13 @@
-# Test — v1.13.0 (completamento totale di Run-Matrix: CALC, STAT, TVM, CONVERT, Base-N, List File, Str, function memory, comandi grafici, round-trip dell'editor; v1.12.0: EQUATION)
+# Test — v1.13.1 (versione di correzione: un test per ogni errore di ERRORI_v1.13.1, UBSan bloccante, fuzzing; v1.13.0: completamento totale di Run-Matrix)
 
 ## Cosa viene provato e dove
 
 | Livello | Strumento | Stato |
 |---|---|---|
-| Logica portabile (motore, editor, app, grafici, tabelle, 3D, file, storage, memoria, protocollo AI) | test host C++ (CTest), **per entrambi i profili di scheda** (`FXAI_TEST_BOARD=PICO_PLUS_2W` e `PICO2W`) | eseguito: 39 suite; 10 316 controlli (Plus) / 10 310 (Pico 2 W) più ≈ 333 000 verifiche dello stress dell'allocatore (`mem_pools_smoke`) |
+| Logica portabile (motore, editor, app, grafici, tabelle, 3D, file, storage, memoria, protocollo AI) | test host C++ (CTest), **per entrambi i profili di scheda** (`FXAI_TEST_BOARD=PICO_PLUS_2W` e `PICO2W`) | eseguito: 44 suite; PLUS_TOT controlli (Plus) / P2W_TOT (Pico 2 W) più ≈ 333 000 verifiche dello stress dell'allocatore (`mem_pools_smoke`) |
 | Integrazione continua | GitHub Actions (`.github/workflows/release.yml`, `ubuntu-24.04`) | a ogni push: test host dei due profili, ASan/UBSan, TSan, relay, firmware dei due moduli, pacchetto |
 | Architettura (registro ↔ sorgenti ↔ firmware) | `architecture_test` | eseguito |
-| Stessi test con AddressSanitizer + UBSan | `--sanitize` | eseguito su entrambi i profili |
+| Stessi test con AddressSanitizer + UBSan | `--sanitize` (dalla v1.13.1 UBSan è bloccante: `-fno-sanitize-recover=undefined`) | eseguito su entrambi i profili |
 | Allocatore su due thread con ThreadSanitizer | `--tsan` (`mem_pools_tsan`, cartella di build propria) | eseguito su entrambi i profili |
 | Memoria esaurita con `operator new` instradato nei pool | `oom_test` (SRAM simulata limitata, senza PSRAM) | eseguito |
 | PSRAM | pool PSRAM simulato sul PC (arena TLSF; 8 MB nei test di sistema e nel simulatore), self-test con modelli di guasto | eseguito; il chip APS6404L reale non è provato |
@@ -17,8 +17,9 @@
 | Interoperabilità FAT/exFAT | `sd_interop_test` (immagini con mkfs.fat/mkfs.exfat, fsck, mtools) | eseguito: 41 controlli |
 | Relay AI | `unittest` Python con SDK ufficiali e API simulate, TLS in loopback | eseguito: 15 test |
 | Compilazione firmware RP2350 | Pico SDK 2.2.0, `scripts/build.sh --board pico_plus_2w` e `--board pico2w` | eseguita, nessun warning, `picotool info` verificato ([BUILD_STATUS.md](BUILD_STATUS.md)) |
-| Stack sul target | `-fstack-usage` su tutto il firmware | eseguito (frame massimo 1712 byte su 32 KB) |
-| Collaudo fisico | procedure [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md), [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md), [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md), [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) e [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md), SYSTEM → DIAG | **non eseguito: in attesa dei risultati dal dispositivo** |
+| Stack sul target | `-fstack-usage` su tutto il firmware | eseguito nella v1.13.1: frame massimo 2 016 byte (`SystemApp::enter`) su 32 KB; valutatore ricorsivo ≤ 328 byte per livello, limitato dal budget di 16 KB |
+| Fuzzing (v1.13.1) | libFuzzer + ASan + UBSan (`tools/fuzz`, `run_fuzz.sh`): parser e valutatori, forma esatta contro decimale, workspace con andata e ritorno, CSV, `.pcgraph`, EQUATION, sequenze di tasti | eseguito sul profilo Plus (conteggi in [reports/SVILUPPO_v1.13.1.md](reports/SVILUPPO_v1.13.1.md)) |
+| Collaudo fisico | procedure [HARDWARE_TEST_v1.13.1.md](HARDWARE_TEST_v1.13.1.md), [HARDWARE_TEST_v1.13.0.md](HARDWARE_TEST_v1.13.0.md), [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md), [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md), [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md), [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) e [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md), SYSTEM → DIAG | **non eseguito: in attesa dei risultati dal dispositivo** |
 
 Quattro livelli distinti, mai confusi nella documentazione:
 **test host** (logica compilata dallo stesso sorgente del firmware ed eseguita
@@ -50,6 +51,7 @@ errore, non solo il primo.
 |---|---|---|---|
 | expression_test (v1.10.0: 154) | 155 | 155 | priorità Casio, funzioni, complessi, formati e arrotondamento come la calcolatrice, limiti di lunghezza/annidamento, budget di stack |
 | exact_test | 152 | 152 | razionali (overflow, confronto esatto), radicali, π, letterali decimali e periodici, sviluppo periodico, limiti di visualizzazione CG50, valutatore esatto (trigonometria esatta, radici, log, n!, nCr, relazioni, Σ/Π, memoria esatta, catene lunghe, budget di stack), coerenza esatto/virgola mobile |
+| fixes_v1131_test **nuova v1.13.1** | 142 | 142 | un gruppo per ogni errore di [ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md), che fallisce con i sorgenti della v1.13.0: record v1–v8 non rileggibili dopo il salvataggio (fixture della v1.11.0 modificata), HypergeoCD/InvHypergeoCD con x, n, M grandi, inverse discrete in tempo lineare (anche contro la definizione), forme esatte complesse con Abs/Conjg/ReP, nCr/nPr fino a 1E10, CSV senza allocazioni prima dei controlli (byte misurati con un `operator new` contato), salvataggio atomico dopo due interruzioni, quantili t, 1-Variable con frequenze, Ran# n, Σ/Π con estremi enormi, distribuzione geometrica con p piccolo, InvPoissonCD oltre 1E6, HypergeoPD con argomenti grandi, nomi di VARS › V-WIN e TABLE |
 | calc_v112_test **nuova v1.13.0** | 207 | 207 | CALC con i valori del manuale (d/dx 52, d²/dx² 26, ∫ 404/3, Σ con variabile e passo, Solve con limiti ed equazione, SolveN anche con radice doppia e poli, FMin/FMax, funzioni vietate), PROB (sequenze di Ran#, RanInt#/RanNorm#/RanBin# con n, RanList#, RanSamp# con e senza ripetizione, P Q R t), Rnd, ʳ ᵍ ° ′ ″, Pol/Rec in List Ans, ∠ e ►r∠θ/►a+bi, 24 distribuzioni con valori di riferimento, S-Dev/Var/Mean/Median con frequenze, x̂ ŷ e VARS STAT, 22 funzioni TVM, CONVERT (anche su liste, grandezze diverse), P ed E, ENG/ENG←, overflow, Simplify Manual (m.c.m., prodotti, ▶Simp senza F=, divisore non valido, modo complesso), Base-N (Bin 16 bit, Hex con v_a, liste e matrici nella base, Oct), messaggi dell'Appendice α |
 | run_matrix_v112_test **nuova v1.13.0** | 152 | 152 | `:` e `◢` (posizione degli errori, ricalcolo), stringhe e Str, function memory (X, argomento, ricorsione), r e θ, variabili di sistema (V-Window con Range ERROR, Xfct, TblStart, D Start, R End, TVM), formula an+1, List "QTY", List File 1–6 e budget comune, n→Dim List, Fill su liste e matrici, Swap/\*Row/\*Row+/Row+, forme esatte oltre 64 elementi e celle decimali, VARS EQUATION e TABLE Result, migrazioni v7→v9 e v8→v9 dai fixture della v1.11.0 e della v1.12.0, record v9 con tutti i campi nuovi e record troncati, interfaccia (OPTN nell'ordine della fx-CG50, ENG, CONVERT, VARS STAT, Hex con v_a, FUNCMEM, CATALOG, CAPTURE e RclCapt) |
 | graph_cmd_v112_test **nuova v1.13.0** | 56 | 56 | le otto disequazioni, G∫dx, prefissi di stile (anche da soli), StoPict/RclPict/BG-Pict/RclCapt, G-SelOn/Off, DrawGraph, DrawStat, DrawR-Con/Plt, DrawWeb, DrawFTG-Con/Plt, DrawDyna (anche il limite di 10 grafici, tutto o niente), limite dei punti per scheda, `.pcgraph` con i grafici dei comandi (codifica, decodifica, identità), PxlTest( sul firmware (punto acceso, assi, fuori schermo, errore), StoPict eseguito da GRAPH |
@@ -93,7 +95,7 @@ errore, non solo il primo.
 | internal_fs_test **nuova** | 197 | 197 | LittleFS su flash NOR simulata: contratto `files::FileSystem` come FatFs, partizione piena, interruzione di alimentazione durante `writeAtomic`, rimontaggio senza riformattare, progetti GRAPH nell'archivio interno |
 | graph3d_test **nuova** | 111 | 111 | motore 3D (campionamento, poli e domini, proiezione, z-buffer e pittore, rotazione, colori per superficie) e modalità 3D Graph (lista, editor, V-Window, campionamento incrementale, rotazione/zoom senza ricalcolo, AUTO, persistenza, budget di memoria con e senza PSRAM) |
 | system_diag_test **nuova** | 15 | 12 | SYSTEM → DIAG completa (MEM, PSR, ALC, FLS, LCD, SD, INT, GPH) con la memoria della scheda; Plus con PSRAM fallita; pagina INFO; "Archivio file"; riga del chip della flash; kernel di stress dell'allocatore |
-| **Totale** | **9 757** + ≈ 333 000 dello stress + 41 dello script | **9 751** + ≈ 334 000 + 41 | 0 errori, con e senza sanitizer (ASan + UBSan); `mem_pools_tsan` con ThreadSanitizer |
+| **Totale** | **PLUS_TOT** + ≈ 333 000 dello stress + 41 dello script | **P2W_TOT** + ≈ 333 000 + 41 | 0 errori, con e senza sanitizer (ASan + UBSan bloccante); `mem_pools_tsan` con ThreadSanitizer |
 
 `run_matrix_test` usa `tests/fixtures/workspace_v1_6_0.inc`, un record salvato
 dai sorgenti della v1.6.0 (commit 7dc65cd), per verificare la compatibilità.
@@ -110,6 +112,14 @@ un record v7 generato con i sorgenti della v1.11.0 (tag `v1.11.0`, commit
 sottonomi, Hex, comandi grafici), e `tests/fixtures/workspace_v1_12_0.inc`, un
 record v8 generato con i sorgenti della v1.12.0 (commit `51691de` di `main`,
 con i dati di EQUATION), per le migrazioni v7→v9 e v8→v9.
+
+v1.13.1: 46 test per profilo (44 suite C++, lo stress dell'allocatore e
+l'interoperabilità FAT/exFAT): PLUS_TOT controlli sulla Plus e P2W_TOT sul Pico 2 W;
+rispetto alla v1.13.0 (12 081 / 12 075) si aggiunge `fixes_v1131_test` (142
+controlli, un gruppo per errore). Nessun test esistente è stato modificato; la
+build con sanitizer è più severa (UBSan bloccante). La tabella sopra riporta i
+conteggi misurati nella v1.13.1 (nella v1.13.0 l'intestazione e la riga
+«Totale» erano rimaste ai numeri delle versioni precedenti).
 
 v1.13.0: 45 test per profilo (43 suite C++, lo stress dell'allocatore e
 l'interoperabilità FAT/exFAT): 12 081 controlli sulla Plus e 12 075 sul Pico 2 W

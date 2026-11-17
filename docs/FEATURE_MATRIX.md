@@ -1,5 +1,9 @@
-# Feature matrix — v1.13.0
+# Feature matrix — v1.13.1
 
+La v1.13.1 è una versione di correzione della v1.13.0: nessuna funzione
+nuova e nessuno stato cambiato; 18 errori corretti, ognuno con un test
+([reports/ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md)). Nessuna voce è
+provata su hardware ([HARDWARE_TEST_v1.13.1.md](HARDWARE_TEST_v1.13.1.md)).
 La v1.13.0 porta Run-Matrix alla parità con la fx-CG50: ogni voce della
 tabella di parità è presente o è una differenza inevitabile documentata
 ([reports/SVILUPPO_v1.13.0.md](reports/SVILUPPO_v1.13.0.md#5-tabella-di-parità-finale)).

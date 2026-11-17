@@ -482,11 +482,11 @@ della calcolatrice.
 | Solve(f, stima[, inf, sup]), anche `a=b` | `solve(` | `solve(x^2=9,1)` → 3; senza soluzione `Iteration ERROR` |
 | SolveN(f[=g][, x][, inf, sup]) | `solve_n(` | `SolveN(x²−x−6)` → `{−2,3}` (fino a 10, List Ans); nessuna → `Can't Solve!`; senza limiti cerca tra ±10¹⁰ |
 | FMin / FMax(f, a, b[, n]) | `f_min(` `f_max(` | `FMin(x²−4x+9,1,4)` → `{2,5}` |
-| Σ(f, k, a, b[, n]), Π | `sum(` `prod(` | `Σ(k²−3k+5,k,3,6)` → 52; modello con il campo della variabile |
+| Σ(f, k, a, b[, n]), Π | `sum(` `prod(` | `Σ(k²−3k+5,k,3,6)` → 52; modello con il campo della variabile; al più 100 001 termini, estremi interi qualsiasi entro 1E100 (v1.13.1) |
 | d²/dx²(f, a) | `derivative2(` | modello Math a due campi |
 | ∫(f, a, b[, tol]) | `integral(` | tolleranza tra 0 e 1 |
 | Funzioni vietate | | dentro Solve/SolveN/FMin/FMax non si usano Solve, SolveN, FMin, FMax, Σ, d²/dx² (Syntax ERROR, manuale 2-28) |
-| Ran# n | `ran 3` | sequenze 1–10 riproducibili; `Ran# 0` le riavvia |
+| Ran# n | `ran 3` | sequenze 1–10 riproducibili; `Ran# 0` le riavvia; altri n: Argument ERROR |
 | RanInt#(a,b[,n]), RanNorm#(σ,μ[,n]), RanBin#(n,p[,m]) | | con n: lista di n numeri |
 | RanList#(n), RanSamp#(lista,n[,m]) | `ran_list(` `ran_samp(` | m = 0 senza ripetizione, 1 con ripetizione |
 | P( Q( R( t( | `prob_p(`… | normale standard; t(x) = (x−x̄)/σx dei dati di Statistics |
@@ -504,6 +504,11 @@ della calcolatrice.
   InvChiCD, FPD, FCD, InvFCD (code destre per gli inversi), BinomialPD/CD (con
   2 argomenti la lista per x = 0…n), InvBinomialCD, PoissonPD/CD, InvPoissonCD,
   GeoPD/CD, InvGeoCD, HypergeoPD/CD, InvHypergeoCD; anche su liste.
+  Limiti di calcolo (v1.13.1): BinomialCD e InvBinomialCD n ≤ 10⁶,
+  PoissonCD x ≤ 10⁶ e InvPoissonCD con risultato ≤ 10⁶ (oltre: Argument
+  ERROR), HypergeoCD e InvHypergeoCD al più 10⁶ valori possibili; le inverse
+  discrete sommano una sola volta (tempo lineare) e InvGeoCD usa la formula
+  chiusa (anche con p minuscoli).
 - **S-Dev( Var(** con frequenze; **Mean( Median(** con frequenze; **Min/Max** di due liste.
 - **TVM** (OPTN › TVM): Smpl_SI, Smpl_SFV, Cmpd_PV/FV/PMT/n/I%, Cash_NPV/IRR/PBP/NFV,
   Amt_BAL/INT/PRN/ΣINT/ΣPRN, Cnvt_EFF/APR, Cost, Sell, Margin, Days_Prd (anno
@@ -519,6 +524,8 @@ della calcolatrice.
 - **ENG / ENG←** (OPTN › ESYM o RISULTATO): `1234` → `1.234E+03` →
   `0.001234E+06`; ENG← → `1234E+00` → `1234000E−03`. Il valore non cambia.
 - Un risultato o un passaggio con |x| ≥ 10¹⁰⁰ è un Math ERROR (70! compreso).
+- **nCr, nPr** (v1.13.1): n e r interi, 0 ≤ r ≤ n < 1E10, risultato < 1E100
+  come nell'Appendice del manuale (prima n ≤ 100000).
 
 ### Simplify Manual (regola)
 

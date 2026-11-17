@@ -1,5 +1,56 @@
 # Changelog
 
+## v1.13.1 — versione di correzione
+
+Base: tag `v1.13.0` (commit `a72d901` = `main`). **Nessuna funzione nuova**:
+solo correzioni di errori, incoerenze e documentazione. Elenco completo con
+gravità, riproduzione e causa: [reports/ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md);
+rapporto: [reports/SVILUPPO_v1.13.1.md](reports/SVILUPPO_v1.13.1.md).
+**Nessuna prova su hardware fisico**: procedura [HARDWARE_TEST_v1.13.1.md](HARDWARE_TEST_v1.13.1.md).
+
+### Correzioni
+- **Workspace** (E01, alta): un record v1–v8 con un coefficiente di EQUATION
+  non finito, un'equazione del Solver oltre 255 caratteri o una lista con un
+  elemento non finito veniva caricato, ma il record salvato subito dopo era
+  rifiutato all'avvio successivo (workspace azzerato). Ora si applicano gli
+  stessi controlli alla lettura; i record validi si leggono come prima.
+- **Distribuzioni** (E02, E03, E14, E15, E16): `HypergeoCD`/`InvHypergeoCD`
+  con x, n o M grandi non terminavano (ora somma sul solo supporto, al più
+  10⁶ termini); `InvBinomialCD`/`InvPoissonCD`/`InvHypergeoCD` in tempo
+  lineare invece che quadratico (stessi risultati); `InvGeoCD` con p piccolo
+  non terminava e `GeoCD`/`GeoPD` perdevano precisione; `InvPoissonCD` oltre
+  10⁶ restituiva 1000000 (ora Argument ERROR); `HypergeoPD` poteva superare 1
+  con argomenti grandi.
+- **EQUATION** (E04): un coefficiente con una funzione non polinomiale di `i`
+  (`1E10+Abs(i)`, `Conjg`, `ReP`…) poteva avere una forma esatta sbagliata.
+- **nCr / nPr** (E05): ammessi n < 1E10 come sulla fx-CG50 (prima n ≤ 100000),
+  risultato < 1E100.
+- **CSV** (E06): righe e colonne si controllano prima di allocare; un file
+  con troppe righe o colonne dà Dimension ERROR invece di esaurire la memoria
+  del Pico 2 W.
+- **File** (E07): un salvataggio dopo un salvataggio interrotto completa prima
+  quello interrotto: due interruzioni di seguito non possono più lasciare un
+  file troncato.
+- **Statistics** (E08, E09): intervallo t con C-Level vicino a 1 e `InvTCD`
+  nelle code estreme corretti, `InvTCD(0.5, df)` = 0; 1-Variable con le
+  frequenze senza replicare i dati in memoria.
+- **Σ / Π e Ran#** (E10, E12): estremi oltre 9,2E18 e `Ran# n` fuori intervallo
+  non provocano più conversioni indefinite (sulla PicoCalc Σ poteva non
+  terminare).
+- **VARS** (E17): V-WIN e TABLE mostrano Xmin…Tptch, TblStart… invece dei nomi
+  interni.
+
+### Test e strumenti
+- Nuova suite `fixes_v1131_test` (un gruppo per errore, ognuno fallisce con
+  la v1.13.0); build con sanitizer: UBSan bloccante (`-fno-sanitize-recover`,
+  E11), prima un comportamento indefinito non faceva fallire i test.
+- Fuzzing con libFuzzer + ASan/UBSan di parser, workspace, CSV, `.pcgraph`,
+  EQUATION e sequenze di tasti (strumenti nella sessione, vedi il rapporto).
+
+### Documentazione
+- `TESTING.md` con i numeri reali (E13); script del simulatore aggiornati al
+  nuovo ordine di OPTN e screenshot 17, 18, 51, 55, 60 rigenerati (E18).
+
 ## v1.13.0 — completamento totale di Run-Matrix (parità con la fx-CG50)
 
 Base: tag `v1.11.0` (commit `f6933fd`), unito con la v1.12.0 di EQUATION (commit `51691de` di `main`). Analisi delle

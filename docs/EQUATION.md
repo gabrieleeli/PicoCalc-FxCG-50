@@ -58,7 +58,10 @@ funzioni, variabili A–Z, `Ans`, numeri complessi con `i` (anche nel modo
 Real, come nell'editor MAT/VCT). Il valore è conservato **in forma esatta**
 (frazione, radicale quadratico, multiplo di π; per i complessi una parte
 reale e una immaginaria esatte quando l'espressione è un polinomio in `i`,
-per esempio `(1+√3 i)/2`, `(1+i)²`), altrimenti in virgola mobile. Durante
+per esempio `(1+√3 i)/2`, `(1+i)²`), altrimenti in virgola mobile. Dalla
+v1.13.1 un'espressione con `i` dentro una funzione (`Abs(i)`, `Conjg(i)`,
+`ReP(i)`…), in un divisore o in un esponente non ha forma esatta complessa:
+prima `1E10+Abs(i)` poteva diventare `1E+10+i`. Durante
 l'immissione i tasti funzione diventano: F1 frazione (SHIFT: mista), F2 √
 (SHIFT: x²), F3 potenza (SHIFT: π), F4 menu MATH, F5 `i`, F6 Ans (SHIFT: θ).
 

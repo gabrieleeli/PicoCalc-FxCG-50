@@ -172,6 +172,17 @@ versione 9 i valori 8 (ENG), 9 (►r∠θ) e 10 (►a+bi). La lettura controlla
 ogni campo e il budget di tutte le liste di tutti i file: un record non
 valido viene rifiutato per intero (`run_matrix_v112_test`, record troncati).
 
+**Regola della v1.13.1** (E01 di [reports/ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md)):
+un record si accetta solo se il record scritto al salvataggio successivo si
+rilegge. I blocchi delle versioni precedenti hanno quindi gli stessi
+controlli dei blocchi recenti: coefficienti di EQUATION finiti (blocco
+v1–v7), equazione del Solver di al più 255 caratteri, elementi delle liste
+finiti (blocchi v1–v8). Prima un record v1–v8 con questi dati veniva
+caricato, ma il record v9 salvato subito dopo era rifiutato all'avvio
+successivo (workspace azzerato). Il formato non cambia (versione 9); i record
+validi si leggono come prima (fixture v1.6.0–v1.12.0); il fuzzing
+(`tools/fuzz/fuzz_workspace.cpp`) controlla l'andata e ritorno di ogni record accettato.
+
 ## File CSV (v1.11.0)
 
 `include/csv_io.hpp`: cartella `PICOCALC/CSV`, nomi di 1–8 caratteri
