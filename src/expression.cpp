@@ -233,7 +233,8 @@ public:
             // Unita' di CONVERT dopo un valore: 10[cm] (non l'indice di Mat A[...] ne' una riga di matrice).
             if(c=='['&&unitAllowed(out)){
                 const std::size_t e=s_.find(']',p_+1);
-                if(e!=std::string::npos&&calclib::findUnit(s_.substr(p_+1,e-p_-1))){
+                // v1.14.0: le unita' non fx-CG50 solo se seguite da ▶[ (10[nm]▶[eV]).
+                if(e!=std::string::npos&&calclib::unitToken(s_.substr(p_+1,e-p_-1),s_.compare(e+1,4,"\xE2\x96\xB6[")==0)){
                     out.push_back({TT::Op,s_.substr(p_+1,e-p_-1),'U',at(p_),at(e-p_+1)});p_=e+1;continue;
                 }
             }
@@ -481,7 +482,7 @@ private:
         // ▶[unita']: destinazione di una conversione metrica (10[cm]▶[in]).
         if(s_.compare(p_,4,"\xE2\x96\xB6[")==0){
             const std::size_t e=s_.find(']',p_+4);
-            if(e!=std::string::npos&&calclib::findUnit(s_.substr(p_+4,e-p_-4))){
+            if(e!=std::string::npos&&calclib::unitToken(s_.substr(p_+4,e-p_-4),true)){
                 out.push_back({TT::Op,s_.substr(p_+4,e-p_-4),'V',at(p_),at(e-p_+1)});p_=e+1;return;
             }
             throw SyntaxError("Syntax ERROR: unita' sconosciuta dopo \xE2\x96\xB6",static_cast<int>(p_),static_cast<int>(e==std::string::npos?3:e-p_+1));
@@ -1568,13 +1569,12 @@ template<typename T> FXAI_NOINLINE double convertNode(const ast::Node& n,Env& en
     if(n.children.size()!=3||!n.children[0]||!n.children[1]||!n.children[2])throw SyntaxError("Syntax ERROR: conversione non valida");
     auto unit=[](const ast::Node& u){
         const std::string& t=u.text;
-        const calclib::UnitInfo* info=t.size()>2?calclib::findUnit(t.substr(1,t.size()-2)):nullptr;
-        if(!info)throw SyntaxError("Syntax ERROR: unita' sconosciuta "+t,u.pos,u.len);
-        return info;
+        if(t.size()<=2||!calclib::unitToken(t.substr(1,t.size()-2),true))throw SyntaxError("Syntax ERROR: unita' sconosciuta "+t,u.pos,u.len);
+        return t.substr(1,t.size()-2);
     };
     const double v=asReal<T>(evalNode<T>(*n.children[0],env),"conversione");
     env.at=&n;
-    return calclib::convertUnit(v,*unit(*n.children[1]),*unit(*n.children[2]));
+    return calclib::convertUnitNames(v,unit(*n.children[1]),unit(*n.children[2]));
 }
 template<typename T> FXAI_NOINLINE T callFunction(const ast::Node& n,Env& env){
     if(env.ctx.integerBase){
@@ -3126,14 +3126,13 @@ private:
                 env.at=&n;
                 auto unit=[](const ast::Node& u){
                     const std::string& t=u.text;
-                    const calclib::UnitInfo* info=t.size()>2?calclib::findUnit(t.substr(1,t.size()-2)):nullptr;
-                    if(!info)throw SyntaxError("Syntax ERROR: unita' sconosciuta "+t,u.pos,u.len);
-                    return info;
+                    if(t.size()<=2||!calclib::unitToken(t.substr(1,t.size()-2),true))throw SyntaxError("Syntax ERROR: unita' sconosciuta "+t,u.pos,u.len);
+                    return t.substr(1,t.size()-2);
                 };
-                const calclib::UnitInfo* from=unit(*n.children[1]);
-                const calclib::UnitInfo* to=unit(*n.children[2]);
-                if(v.scalar()){v.s=D::fromDouble(calclib::convertUnit(D::toReal(v.s,"conversione"),*from,*to));return v;}
-                for(E& e:v.v)e=D::fromDouble(calclib::convertUnit(D::toReal(e,"conversione"),*from,*to));
+                const std::string from=unit(*n.children[1]);
+                const std::string to=unit(*n.children[2]);
+                if(v.scalar()){v.s=D::fromDouble(calclib::convertUnitNames(D::toReal(v.s,"conversione"),from,to));return v;}
+                for(E& e:v.v)e=D::fromDouble(calclib::convertUnitNames(D::toReal(e,"conversione"),from,to));
                 return v;
             }
         }

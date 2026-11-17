@@ -2,6 +2,7 @@
 #include "expression.hpp"
 #include "limits.hpp"
 #include "mem_pools.hpp"
+#include "units.hpp"
 #include <new>
 #include <algorithm>
 #include <cmath>
@@ -17,10 +18,16 @@ void same(const Matrix&a,const Matrix&b){shape(a);shape(b);if(a.size()!=b.size()
 std::int64_t safeSub(std::int64_t a,std::int64_t b){if((b<0&&a>INT64_MAX+b)||(b>0&&a<INT64_MIN+b))throw std::overflow_error("Overflow frazione");return a-b;}
 std::int64_t safeMul(std::int64_t a,std::int64_t b){if(a==0||b==0)return 0;if(a==-1&&b==INT64_MIN)throw std::overflow_error("Overflow frazione");if(b==-1&&a==INT64_MIN)throw std::overflow_error("Overflow frazione");if(a>0?(b>0?a>INT64_MAX/b:b<INT64_MIN/a):(b>0?a<INT64_MIN/b:a!=0&&b<INT64_MAX/a))throw std::overflow_error("Overflow frazione");return a*b;}
 std::string trim(std::string s){auto a=s.find_first_not_of(" \t\r\n");if(a==s.npos)return {};return s.substr(a,s.find_last_not_of(" \t\r\n")-a+1);}
-int dim(Unit u){switch(u){case Unit::Meter:case Unit::Kilometer:case Unit::Centimeter:case Unit::Millimeter:case Unit::Inch:case Unit::Foot:case Unit::Mile:return 1;case Unit::SquareMeter:case Unit::SquareCentimeter:case Unit::Hectare:case Unit::Acre:return 2;case Unit::CubicMeter:case Unit::Liter:case Unit::Milliliter:case Unit::GallonUS:return 3;case Unit::Second:case Unit::Minute:case Unit::Hour:case Unit::Day:return 4;case Unit::MeterPerSecond:case Unit::KilometerPerHour:case Unit::MilePerHour:return 5;case Unit::Kilogram:case Unit::Gram:case Unit::Milligram:case Unit::Pound:return 6;case Unit::Pascal:case Unit::Kilopascal:case Unit::Bar:case Unit::Atmosphere:return 7;case Unit::Joule:case Unit::Kilojoule:case Unit::Calorie:case Unit::Kilocalorie:return 8;case Unit::Watt:case Unit::Kilowatt:case Unit::Horsepower:return 9;default:return 0;}}
-double scaleOf(Unit u){switch(u){case Unit::Meter:case Unit::SquareMeter:case Unit::CubicMeter:case Unit::Second:case Unit::MeterPerSecond:case Unit::Kilogram:case Unit::Pascal:case Unit::Joule:case Unit::Watt:return 1;case Unit::Kilometer:return 1e3;case Unit::Centimeter:return 1e-2;case Unit::Millimeter:return 1e-3;case Unit::Inch:return .0254;case Unit::Foot:return .3048;case Unit::Mile:return 1609.344;case Unit::SquareCentimeter:return 1e-4;case Unit::Hectare:return 1e4;case Unit::Acre:return 4046.8564224;case Unit::Liter:return 1e-3;case Unit::Milliliter:return 1e-6;case Unit::GallonUS:return .003785411784;case Unit::Minute:return 60;case Unit::Hour:return 3600;case Unit::Day:return 86400;case Unit::KilometerPerHour:return 1/3.6;case Unit::MilePerHour:return .44704;case Unit::Gram:return 1e-3;case Unit::Milligram:return 1e-6;case Unit::Pound:return .45359237;case Unit::Kilopascal:return 1e3;case Unit::Bar:return 1e5;case Unit::Atmosphere:return 101325;case Unit::Kilojoule:return 1e3;case Unit::Calorie:return 4.184;case Unit::Kilocalorie:return 4184;case Unit::Kilowatt:return 1e3;case Unit::Horsepower:return 745.6998715822702;default:return 1;}}
-double toK(double v,Unit u){return u==Unit::Kelvin?v:u==Unit::Celsius?v+273.15:u==Unit::Fahrenheit?(v-32)*5/9+273.15:throw std::invalid_argument("Temperatura non valida");}
-double fromK(double v,Unit u){return u==Unit::Kelvin?v:u==Unit::Celsius?v-273.15:u==Unit::Fahrenheit?(v-273.15)*9/5+32:throw std::invalid_argument("Temperatura non valida");}
+// v1.14.0: le unita' vengono dall'unica tabella di units.hpp (simbolo nella categoria).
+units::Ref unitRef(Unit u){
+ struct M{std::uint8_t cat;const char* sym;};
+ static const M map[]={{0,"m"},{0,"km"},{0,"cm"},{0,"mm"},{0,"in"},{0,"ft"},{0,"mile"},{1,"m\xC2\xB2"},{1,"cm\xC2\xB2"},{1,"ha"},{1,"acre"},
+  {2,"m\xC2\xB3"},{2,"L"},{2,"mL"},{2,"gal(US)"},{3,"s"},{3,"min"},{3,"h"},{3,"day"},{5,"m/s"},{5,"km/h"},{5,"mile/h"},{6,"kg"},{6,"g"},{6,"mg"},{6,"lb"},
+  {8,"Pa"},{8,"kPa"},{8,"bar"},{8,"atm"},{9,"J"},{9,"kJ"},{9,"calth"},{9,"kcalth"},{10,"W"},{10,"kW"},{10,"hp"},{4,"K"},{4,"\xC2\xB0" "C"},{4,"\xC2\xB0" "F"}};
+ const auto i=static_cast<std::size_t>(u);
+ if(i>=sizeof(map)/sizeof(map[0]))throw std::invalid_argument("Unita' non valida");
+ return units::find(map[i].cat,map[i].sym);
+}
 }
 double RunMatrixSession::execute(const std::string& expression){
  const double value=fx::evaluate(expression,memory_);
@@ -67,7 +74,7 @@ double derivative(const std::string&e,double x,double h){if(!(h>0))throw std::in
 double integrate(const std::string&e,double a,double b,unsigned n){if(n<2)n=2;if(n%2)++n;auto f=[&](double x){return fx::evaluate(e,x);};double h=(b-a)/n,s=f(a)+f(b);for(unsigned i=1;i<n;++i)s+=(i%2?4:2)*f(a+i*h);return s*h/3;}
 std::vector<double> roots(const std::string&e,double lo,double hi,unsigned n,double tol){if(!(lo<hi)||!n)throw std::invalid_argument("Intervallo non valido");auto f=[&](double x){return fx::evaluate(e,x);};std::vector<double>r;double x0=lo,y0=f(x0);for(unsigned i=1;i<=n;++i){double x1=lo+(hi-lo)*i/n,y1=f(x1);if(y0==0){if(r.empty()||std::abs(r.back()-x0)>tol*10)r.push_back(x0);}else if(std::isfinite(y0)&&std::isfinite(y1)&&((y0<0&&y1>0)||(y0>0&&y1<0)||y1==0)){double a=x0,b=x1,fa=y0;for(int k=0;k<100&&b-a>tol;++k){double m=(a+b)/2,fm=f(m);if(fm==0){a=b=m;break;}if((fa<0&&fm>0)||(fa>0&&fm<0))b=m;else{a=m;fa=fm;}}double q=(a+b)/2;if(r.empty()||std::abs(r.back()-q)>tol*10)r.push_back(q);}x0=x1;y0=y1;}return r;}
 double solve(const std::string&e,double x,unsigned n,double tol){auto f=[&](double z){return fx::evaluate(e,z);};for(unsigned i=0;i<n;++i){double y=f(x);if(std::abs(y)<=tol)return x;double d=derivative(e,x,1e-5);if(std::abs(d)<1e-14)throw std::domain_error("Derivata nulla in SOLVE");double nx=x-y/d;if(!std::isfinite(nx))throw std::domain_error("SOLVE non convergente");if(std::abs(nx-x)<=tol&&std::abs(f(nx))<=tol*10)return nx;x=nx;}throw std::runtime_error("SOLVE: iterazioni esaurite");}
-double convert(double v,Unit a,Unit b){bool ta=a==Unit::Kelvin||a==Unit::Celsius||a==Unit::Fahrenheit,tb=b==Unit::Kelvin||b==Unit::Celsius||b==Unit::Fahrenheit;if(ta||tb){if(!ta||!tb)throw std::invalid_argument("Dimensioni incompatibili");return fromK(toK(v,a),b);}if(dim(a)!=dim(b))throw std::invalid_argument("Dimensioni incompatibili");return v*scaleOf(a)/scaleOf(b);}
+double convert(double v,Unit a,Unit b){const units::Ref ra=unitRef(a),rb=unitRef(b);if(ra.unit->cat!=rb.unit->cat)throw std::invalid_argument("Dimensioni incompatibili");return units::convert(v,ra,rb);}
 double engineeringPrefix(const std::string&p){if(p=="da")return 1e1;if(p=="h")return 1e2;if(p=="k"||p=="K")return 1e3;if(p=="M")return 1e6;if(p=="G")return 1e9;if(p=="T")return 1e12;if(p=="d")return 1e-1;if(p=="c")return 1e-2;if(p=="m")return 1e-3;if(p=="u"||p=="µ")return 1e-6;if(p=="n")return 1e-9;if(p=="p")return 1e-12;if(p=="f")return 1e-15;throw std::invalid_argument("Prefisso SI sconosciuto");}
 double physicalConstant(const std::string&n){if(n=="pi"||n=="PI")return M_PI;if(n=="e")return M_E;if(n=="c"||n=="C")return 299792458.;if(n=="G")return 6.67430e-11;if(n=="h")return 6.62607015e-34;if(n=="NA")return 6.02214076e23;if(n=="kB")return 1.380649e-23;if(n=="qe")return 1.602176634e-19;if(n=="g0")return 9.80665;throw std::invalid_argument("Costante non riconosciuta");}
 std::string formatEngineering(double v,unsigned p){if(!std::isfinite(v))throw std::invalid_argument("Valore non finito");if(v==0)return "0";int e=int(std::floor(std::log10(std::abs(v))/3))*3;std::ostringstream o;o<<std::setprecision(p)<<std::defaultfloat<<v/std::pow(10.,e)<<"e"<<(e>=0?"+":"")<<e;return o.str();}

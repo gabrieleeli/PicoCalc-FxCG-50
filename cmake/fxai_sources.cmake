@@ -14,6 +14,8 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/value.cpp
   ${FXAI_ROOT}/src/expression.cpp
   ${FXAI_ROOT}/src/calc_library.cpp
+  ${FXAI_ROOT}/src/units.cpp
+  ${FXAI_ROOT}/src/unit_formats.cpp
   ${FXAI_ROOT}/src/exact.cpp
   ${FXAI_ROOT}/src/memory.cpp
   ${FXAI_ROOT}/src/number_format.cpp

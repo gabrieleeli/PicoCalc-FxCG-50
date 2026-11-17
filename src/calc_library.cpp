@@ -15,39 +15,6 @@ constexpr double kPi = 3.14159265358979323846;
 void need(bool ok, const char* what) { if (!ok) argumentError(what); }
 bool integral(double v) { return std::isfinite(v) && v == std::floor(v); }
 
-// ---------------------------------------------------------------- unita'
-const char* const kCategories[] = {"LENGTH", "AREA", "VOLUME", "TIME", "TMPR", "VELOCITY", "MASS", "FORCE", "PRESSURE", "ENERGY", "POWER", nullptr};
-// Fattori verso le unita' SI (m, m², m³, s, K, m/s, kg, N, Pa, J, W).
-const UnitInfo kUnits[] = {
-    {"fm", 0, 1e-15, 0}, {"\xC3\x85", 0, 1e-10, 0}, {"\xC2\xB5m", 0, 1e-6, 0}, {"mm", 0, 1e-3, 0}, {"cm", 0, 1e-2, 0},
-    {"m", 0, 1, 0}, {"km", 0, 1e3, 0}, {"AU", 0, 1.495978707e11, 0}, {"l.y.", 0, 9.4607304725808e15, 0},
-    {"pc", 0, 3.0856775814913673e16, 0}, {"Mil", 0, 2.54e-5, 0}, {"in", 0, 0.0254, 0}, {"ft", 0, 0.3048, 0},
-    {"yd", 0, 0.9144, 0}, {"fath", 0, 1.8288, 0}, {"rd", 0, 5.0292, 0}, {"mile", 0, 1609.344, 0}, {"n mile", 0, 1852, 0},
-    {"cm\xC2\xB2", 1, 1e-4, 0}, {"m\xC2\xB2", 1, 1, 0}, {"ha", 1, 1e4, 0}, {"km\xC2\xB2", 1, 1e6, 0}, {"in\xC2\xB2", 1, 6.4516e-4, 0},
-    {"ft\xC2\xB2", 1, 0.09290304, 0}, {"yd\xC2\xB2", 1, 0.83612736, 0}, {"acre", 1, 4046.8564224, 0}, {"mile\xC2\xB2", 1, 2589988.110336, 0},
-    {"cm\xC2\xB3", 2, 1e-6, 0}, {"mL", 2, 1e-6, 0}, {"L", 2, 1e-3, 0}, {"m\xC2\xB3", 2, 1, 0}, {"in\xC2\xB3", 2, 1.6387064e-5, 0},
-    {"ft\xC2\xB3", 2, 0.028316846592, 0}, {"fl_oz(UK)", 2, 2.84130625e-5, 0}, {"fl_oz(US)", 2, 2.95735295625e-5, 0},
-    {"gal(US)", 2, 3.785411784e-3, 0}, {"gal(UK)", 2, 4.54609e-3, 0}, {"pt", 2, 4.73176473e-4, 0}, {"qt", 2, 9.46352946e-4, 0},
-    {"tsp", 2, 4.92892159375e-6, 0}, {"tbsp", 2, 1.478676478125e-5, 0}, {"cup", 2, 2.365882365e-4, 0},
-    {"ns", 3, 1e-9, 0}, {"\xC2\xB5s", 3, 1e-6, 0}, {"ms", 3, 1e-3, 0}, {"s", 3, 1, 0}, {"min", 3, 60, 0}, {"h", 3, 3600, 0},
-    {"day", 3, 86400, 0}, {"week", 3, 604800, 0}, {"yr", 3, 31536000, 0}, {"s-yr", 3, 31556925.9747, 0}, {"t-yr", 3, 31558149.76, 0},
-    {"\xC2\xB0" "C", 4, 1, 273.15}, {"K", 4, 1, 0}, {"\xC2\xB0" "F", 4, 5.0 / 9.0, 459.67}, {"\xC2\xB0" "R", 4, 5.0 / 9.0, 0},
-    {"m/s", 5, 1, 0}, {"km/h", 5, 1 / 3.6, 0}, {"knot", 5, 1852.0 / 3600.0, 0}, {"ft/s", 5, 0.3048, 0}, {"mile/h", 5, 0.44704, 0},
-    {"u", 6, 1.66053906660e-27, 0}, {"mg", 6, 1e-6, 0}, {"g", 6, 1e-3, 0}, {"kg", 6, 1, 0}, {"mton", 6, 1000, 0},
-    {"oz", 6, 0.028349523125, 0}, {"lb", 6, 0.45359237, 0}, {"slug", 6, 14.593902937206, 0}, {"ton(short)", 6, 907.18474, 0},
-    {"ton(long)", 6, 1016.0469088, 0},
-    {"N", 7, 1, 0}, {"lbf", 7, 4.4482216152605, 0}, {"tonf", 7, 9964.01641818352, 0}, {"dyne", 7, 1e-5, 0}, {"kgf", 7, 9.80665, 0},
-    {"Pa", 8, 1, 0}, {"kPa", 8, 1e3, 0}, {"mmH2O", 8, 9.80665, 0}, {"mmHg", 8, 101325.0 / 760.0, 0}, {"atm", 8, 101325, 0},
-    {"inH2O", 8, 249.08891, 0}, {"inHg", 8, 3386.388640341, 0}, {"lbf/in\xC2\xB2", 8, 6894.757293168, 0}, {"bar", 8, 1e5, 0},
-    {"kgf/cm\xC2\xB2", 8, 98066.5, 0},
-    {"eV", 9, 1.602176634e-19, 0}, {"J", 9, 1, 0}, {"calth", 9, 4.184, 0}, {"cal15", 9, 4.1855, 0}, {"calIT", 9, 4.1868, 0},
-    {"kcalth", 9, 4184, 0}, {"kcal15", 9, 4185.5, 0}, {"kcalIT", 9, 4186.8, 0}, {"l-atm", 9, 101.325, 0},
-    {"kW\xE2\x80\xA2h", 9, 3.6e6, 0}, {"ft\xE2\x80\xA2lbf", 9, 1.3558179483314, 0}, {"Btu", 9, 1055.05585262, 0}, {"erg", 9, 1e-7, 0},
-    {"kgf\xE2\x80\xA2m", 9, 9.80665, 0},
-    {"W", 10, 1, 0}, {"calth/s", 10, 4.184, 0}, {"hp", 10, 745.69987158227, 0}, {"ft\xE2\x80\xA2lbf/s", 10, 1.3558179483314, 0},
-    {"Btu/min", 10, 17.584264210, 0},
-};
-
 // ---------------------------------------------------------------- distribuzioni
 // Inversa monotona per bisezione: il piu' piccolo x con cdf(x) >= target
 // (cdf crescente) su [lo, hi], allargando hi finche' serve.
@@ -124,19 +91,36 @@ long dayNumber(double m, double d, double y) {
 }
 } // namespace
 
-const char* const* unitCategories() noexcept { return kCategories; }
+const char* const* unitCategories() noexcept { return units::fxCategoryNames(); }
 std::vector<const UnitInfo*> unitsOf(std::size_t category) {
     std::vector<const UnitInfo*> out;
-    for (const auto& u : kUnits) if (u.category == category) out.push_back(&u);
+    std::size_t first = 0, count = 0;
+    units::unitsOf(category, first, count);
+    if (!unitCategories()[std::min<std::size_t>(category, 11)]) return out;
+    for (std::size_t i = first; i < first + count; ++i)
+        if (units::unit(i).has(units::flag::FxCG50)) out.push_back(&units::unit(i));
     return out;
 }
 const UnitInfo* findUnit(const std::string& name) noexcept {
-    for (const auto& u : kUnits) if (name == u.name) return &u;
+    for (std::size_t c = 0; unitCategories()[c]; ++c) {
+        const units::Ref r = units::find(c, name);
+        if (r && r.prefix < 0 && r.unit->has(units::flag::FxCG50)) return r.unit;
+    }
     return nullptr;
 }
-double convertUnit(double value, const UnitInfo& from, const UnitInfo& to) {
-    if (from.category != to.category) throw MathError("Argument ERROR: [" + std::string(from.name) + "] e [" + to.name + "] misurano grandezze diverse");
-    return (value + from.offset) * from.factor / to.factor - to.offset;
+double convertUnit(double value, const UnitInfo& from, const UnitInfo& to) { return units::convertLinear(value, from, to); }
+bool unitToken(const std::string& name, bool extended) noexcept {
+    return findUnit(name) != nullptr || (extended && units::known(name, false, true));
+}
+double convertUnitNames(double value, const std::string& from, const std::string& to) {
+    const UnitInfo* a = findUnit(from);
+    const UnitInfo* b = findUnit(to);
+    if (a && b) return convertUnit(value, *a, *b);
+    units::Ref ra, rb;
+    const int r = units::resolve(from, to, ra, rb, false, true);
+    if (r == 2) throw SyntaxError("Syntax ERROR: unita' sconosciuta [" + (units::known(from, false, true) ? to : from) + "]");
+    if (r == 1) argumentError(("[" + from + "] e [" + to + "] misurano grandezze diverse").c_str());
+    return units::convert(value, ra, rb);
 }
 
 // ---------------------------------------------------------------- distribuzioni

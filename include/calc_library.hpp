@@ -4,6 +4,7 @@
 // distribuzioni di probabilita' (OPTN › STAT › DIST, PROB › P( Q( R( ),
 // funzioni finanziarie (OPTN › TVM) e nomi mostrati dei comandi.
 // Solo calcolo: nessuna interfaccia, nessun accesso al workspace.
+#include "units.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -12,23 +13,30 @@
 namespace fx::calclib {
 
 // ---------------------------------------------------------------- CONVERT
-// Unita' delle conversioni metriche della fx-CG50 (manuale 2-64…): il valore
-// in unita' SI e' (v + offset) × factor; le temperature hanno l'offset.
-struct UnitInfo {
-    const char* name;        // nome scritto tra [ ] ("cm", "inch", "°C", "kgf/cm²")
-    std::uint8_t category;   // indice in unitCategories()
-    double factor;
-    double offset;
-};
+// Conversioni metriche della fx-CG50 (manuale 2-64...). Dalla v1.14.0 le unita'
+// vengono dall'unica tabella di units.hpp: il menu OPTN › CONVERT mostra solo le
+// 103 unita' marcate units::flag::FxCG50, nelle 11 categorie e nell'ordine del
+// manuale; il valore SI e' (v + offset) × factor, con gli stessi fattori di prima.
+using UnitInfo = units::Unit;     // name: nome scritto tra [ ] ("cm", "°C", "kgf/cm²")
 // Categorie nell'ordine del menu CONVERT (terminato da nullptr).
 const char* const* unitCategories() noexcept;
-// Unita' di una categoria, nell'ordine del menu.
+// Unita' fx-CG50 di una categoria, nell'ordine del menu.
 std::vector<const UnitInfo*> unitsOf(std::size_t category);
-// Unita' con il nome esatto, nullptr se sconosciuta.
+// Unita' fx-CG50 con il nome esatto, nullptr se sconosciuta.
 const UnitInfo* findUnit(const std::string& name) noexcept;
 // Converte tra due unita' della stessa categoria; Argument ERROR (MathError)
 // per categorie diverse.
 double convertUnit(double value, const UnitInfo& from, const UnitInfo& to);
+// v1.14.0: nome valido tra [ ] in Run-Matrix. Le unita' fx-CG50 lo sono sempre;
+// le altre unita' della tabella (anche con prefisso: [nPa], [TiB]) solo se
+// `extended` (sorgente seguita da ▶[ o destinazione dopo ▶): cosi' le
+// espressioni scritte prima della v1.14.0 non cambiano significato.
+bool unitToken(const std::string& name, bool extended) noexcept;
+// valore[da]▶[a] con i nomi: due unita' fx-CG50 si convertono esattamente come
+// prima (stesse categorie, stessa formula); altrimenti la prima categoria della
+// tabella che contiene entrambe. Argument ERROR per grandezze diverse, Syntax
+// ERROR per un nome sconosciuto, Math ERROR fuori dominio.
+double convertUnitNames(double value, const std::string& from, const std::string& to);
 
 // ---------------------------------------------------------------- distribuzioni
 // Funzioni della fx-CG50 (OPTN › STAT › DIST e PROB). Gli argomenti fuori
