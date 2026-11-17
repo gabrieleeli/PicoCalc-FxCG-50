@@ -1,10 +1,15 @@
 #pragma once
+#include "physical_constants.hpp"
 #include <cstddef>
 #include <cstdint>
 
 namespace fx::help {
 struct Entry { const char* symbol; const char* meaning; const char* example; };
-struct Page { const char* title; const Entry* entries; std::uint8_t count; };
+// Una pagina e' una tabella di voci fisse oppure (constGroup >= 0, v1.14.0) un
+// gruppo della tabella delle costanti (physical_constants.hpp): simbolo = glifo,
+// significato = nome italiano, riquadro = nome del parser, valore, incertezza ed
+// esempio del gruppo. Le pagine delle costanti non copiano nessun dato.
+struct Page { const char* title; const Entry* entries; std::uint8_t count; std::int8_t constGroup = -1; };
 
 inline constexpr Entry arithmetic[] = {
  {"+  -", "Somma e differenza", "8 + 3 = 11"},
@@ -37,14 +42,6 @@ inline constexpr Entry greek_upper[] = {
  {"Ν Ξ Ο Π", "Nu, xi, omicron, pi", "Pi maiuscola può indicare un prodotto"},
  {"Ρ Σ Τ Υ", "Rho, sigma, tau, upsilon", "Sigma maiuscola indica una somma"},
  {"Φ Χ Ψ Ω", "Phi, chi, psi, omega", "Omega può indicare una frequenza"},
-};
-inline constexpr Entry constants[] = {
- {"pi", "Rapporto circonferenza/diametro", "pi ~= 3.14159265"},
- {"e", "Base dei logaritmi naturali", "e ~= 2.71828183"},
- {"tau", "Giro completo: due pi greco", "tau = 2*pi"},
- {"phi", "Sezione aurea", "phi ~= 1.61803399"},
- {"sqrt2", "Radice di due", "sqrt2 ~= 1.41421356"},
- {"eulerGamma", "Costante di Eulero-Mascheroni", "eulerGamma ~= 0.57721"},
 };
 inline constexpr Entry functions[] = {
  {"sin  cos  tan", "Funzioni trigonometriche", "sin(30) in modalita DEG"},
@@ -144,7 +141,10 @@ inline constexpr Entry run_matrix_v17[] = {
 };
 inline constexpr Page pages[] = {
  {"ARITMETICA", arithmetic, 6}, {"POTENZE E RADICI", powers_roots, 6},
- {"LETTERE GRECHE", greek, 6}, {"COSTANTI MATEMATICHE", constants, 6},
+ {"LETTERE GRECHE", greek, 6},
+ // Costanti (v1.14.0): titolo e voci dalla tabella unica, un gruppo per pagina.
+ {nullptr, nullptr, 0, 0}, {nullptr, nullptr, 0, 1}, {nullptr, nullptr, 0, 2}, {nullptr, nullptr, 0, 3},
+ {nullptr, nullptr, 0, 4}, {nullptr, nullptr, 0, 5}, {nullptr, nullptr, 0, 6},
  {"FUNZIONI", functions, 6}, {"CALCOLO", calculus, 6},
  {"INSIEMI E LOGICA", sets_logic, 6}, {"STATISTICA", statistics, 6},
  {"GRAFICI", graphing, 6}, {"COMPLESSI / MATRICI", complex_matrix, 6},
@@ -154,4 +154,20 @@ inline constexpr Page pages[] = {
  {"CONFRONTI E FRAZIONI", run_matrix_v17, 6},
 };
 inline constexpr std::size_t PageCount = sizeof(pages) / sizeof(pages[0]);
+// Voci visibili insieme sullo schermo di SYMBOLS (le altre scorrono).
+inline constexpr unsigned VisibleRows = 6;
+
+inline bool isConstantPage(const Page& p) noexcept { return p.constGroup >= 0; }
+inline const char* pageTitle(const Page& p) noexcept {
+    return isConstantPage(p) ? physconst::constGroups()[static_cast<std::size_t>(p.constGroup)].title : p.title;
+}
+inline std::size_t entryCount(const Page& p) noexcept {
+    return isConstantPage(p) ? physconst::constantsOf(static_cast<std::size_t>(p.constGroup)).size() : p.count;
+}
+inline const char* entrySymbol(const Page& p, std::size_t i) noexcept {
+    return isConstantPage(p) ? physconst::constantsOf(static_cast<std::size_t>(p.constGroup))[i].glyph : p.entries[i].symbol;
+}
+inline const char* entryMeaning(const Page& p, std::size_t i) noexcept {
+    return isConstantPage(p) ? physconst::constantsOf(static_cast<std::size_t>(p.constGroup))[i].nameIT : p.entries[i].meaning;
+}
 } // namespace fx::help

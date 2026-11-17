@@ -9,6 +9,7 @@
 #include "calc_library.hpp"
 #include "graph_commands.hpp"
 #include "math_renderer.hpp"
+#include "physical_constants.hpp"
 #include "run_matrix.hpp"
 #include <algorithm>
 #include <cctype>
@@ -40,7 +41,7 @@ MenuList optnRoot() {
             {"FUNCMEM  STORE RECALL fn SEE", "sub:FM"}, {"LOGIC  And Or Not Xor", "sub:LOGIC"}, {"CAPTURE  RclCapt", "sub:CAPT"},
             {"TVM  Smpl Cmpd Cash Amt Cnvt", "sub:TVM"}, {"SKETCH  Cls Plot Graph Draw", "sub:SKETCH"},
             {"RELAZIONI  = \xE2\x89\xA0 < > \xE2\x89\xA5 \xE2\x89\xA4", "sub:REL"}, {"RISULTATO  S\xE2\x87\x94" "D ab/c \xE2\x96\xB6" "DMS", "sub:RES"},
-            {"BASE-N  d~o LOGIC DISPLAY", "sub:BASEN"}, {"CONST  \xCF\x80 e c G", "sub:CONST"}};
+            {"BASE-N  d~o LOGIC DISPLAY", "sub:BASEN"}, {"CONST  \xCF\x80 e c h m\xE2\x82\x91 N\xE2\x82\x90 au", "sub:CONST"}};
 }
 MenuList fnItems(std::initializer_list<std::pair<const char*, const char*>> v) {
     MenuList out;
@@ -154,8 +155,25 @@ MenuList optnSub(Context& ctx, const std::string& name) {
     if (name == "BASEN") return fnItems({{"d  (decimale)", "sym:0d"}, {"h  (esadecimale)", "sym:0x"}, {"b  (binario)", "sym:0b"},
         {"o  (ottale)", "sym:0o"}, {"Neg", "fn:neg"}, {"Not", "fn:not"}, {"and", "sym:and"}, {"or", "sym:or"}, {"xor", "sym:xor"},
         {"xnor", "sym:xnor"}, {"\xE2\x96\xB6" "Dec", "view:3"}, {"\xE2\x96\xB6Hex", "view:4"}, {"\xE2\x96\xB6" "Bin", "view:5"}, {"\xE2\x96\xB6Oct", "view:6"}});
-    if (name == "CONST") return fnItems({{"\xCF\x80", "txt:pi"}, {"e", "txt:e"}, {"c", "sym:physc"}, {"G", "sym:physg"}, {"h", "sym:physh"},
-        {"NA", "sym:NA"}, {"kB", "sym:kB"}, {"qe", "sym:qe"}, {"g0", "sym:g0"}, {"\xCF\x86", "sym:goldenRatio"}});
+    // CONST (v1.14.0): gruppo -> costanti, dalla tabella unica (physical_constants.hpp).
+    // Ogni voce mostra glifo e nome e inserisce il nome del parser come un token.
+    if (name == "CONST") {
+        MenuList out;
+        const auto groups = physconst::constGroups();
+        for (std::size_t g = 0; g < groups.size(); ++g) {
+            std::string label = std::string(groups[g].name) + " ";
+            std::size_t shown = 0;
+            for (const auto& k : physconst::constantsOf(g)) { if (shown++ == 4) break; label += std::string(" ") + k.glyph; }
+            out.push_back({label, "sub:CONST" + std::to_string(g)});
+        }
+        return out;
+    }
+    if (name.size() > 5 && name.compare(0, 5, "CONST") == 0) {
+        MenuList out;
+        for (const auto& k : physconst::constantsOf(static_cast<std::size_t>(std::atoi(name.c_str() + 5))))
+            out.push_back({std::string(k.glyph) + "  " + k.nameIT, std::string("sym:") + k.parserName});
+        return out;
+    }
     return {};
 }
 // VARS di Run-Matrix (fx-CG50: V-WIN, FACTOR, STAT, GRAPH, DYNA, TABLE,

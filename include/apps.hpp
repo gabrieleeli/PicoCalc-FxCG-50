@@ -189,8 +189,11 @@ public:
     AppId id() const override { return AppId::Symbols; }
     void key(Context& ctx, const KeyEvent& ev) override;
     void draw(Context& ctx, gfx::Canvas& c) override;
+    unsigned page() const noexcept { return page_; }
+    unsigned selected() const noexcept { return selected_; }
+    unsigned firstVisible() const noexcept { return first_; }
 private:
-    unsigned page_{0}, selected_{0};
+    unsigned page_{0}, selected_{0}, first_{0};   // first_: prima voce visibile (pagine che scorrono, v1.14.0)
 };
 
 // Campo di input Math/Line (v1.12.0): lo stesso editor naturale di Run-Matrix
