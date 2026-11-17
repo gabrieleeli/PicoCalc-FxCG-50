@@ -2,6 +2,7 @@
 #include "expression.hpp"
 #include "limits.hpp"
 #include "mem_pools.hpp"
+#include "physical_constants.hpp"
 #include <new>
 #include <algorithm>
 #include <cmath>
@@ -69,7 +70,18 @@ std::vector<double> roots(const std::string&e,double lo,double hi,unsigned n,dou
 double solve(const std::string&e,double x,unsigned n,double tol){auto f=[&](double z){return fx::evaluate(e,z);};for(unsigned i=0;i<n;++i){double y=f(x);if(std::abs(y)<=tol)return x;double d=derivative(e,x,1e-5);if(std::abs(d)<1e-14)throw std::domain_error("Derivata nulla in SOLVE");double nx=x-y/d;if(!std::isfinite(nx))throw std::domain_error("SOLVE non convergente");if(std::abs(nx-x)<=tol&&std::abs(f(nx))<=tol*10)return nx;x=nx;}throw std::runtime_error("SOLVE: iterazioni esaurite");}
 double convert(double v,Unit a,Unit b){bool ta=a==Unit::Kelvin||a==Unit::Celsius||a==Unit::Fahrenheit,tb=b==Unit::Kelvin||b==Unit::Celsius||b==Unit::Fahrenheit;if(ta||tb){if(!ta||!tb)throw std::invalid_argument("Dimensioni incompatibili");return fromK(toK(v,a),b);}if(dim(a)!=dim(b))throw std::invalid_argument("Dimensioni incompatibili");return v*scaleOf(a)/scaleOf(b);}
 double engineeringPrefix(const std::string&p){if(p=="da")return 1e1;if(p=="h")return 1e2;if(p=="k"||p=="K")return 1e3;if(p=="M")return 1e6;if(p=="G")return 1e9;if(p=="T")return 1e12;if(p=="d")return 1e-1;if(p=="c")return 1e-2;if(p=="m")return 1e-3;if(p=="u"||p=="µ")return 1e-6;if(p=="n")return 1e-9;if(p=="p")return 1e-12;if(p=="f")return 1e-15;throw std::invalid_argument("Prefisso SI sconosciuto");}
-double physicalConstant(const std::string&n){if(n=="pi"||n=="PI")return M_PI;if(n=="e")return M_E;if(n=="c"||n=="C")return 299792458.;if(n=="G")return 6.67430e-11;if(n=="h")return 6.62607015e-34;if(n=="NA")return 6.02214076e23;if(n=="kB")return 1.380649e-23;if(n=="qe")return 1.602176634e-19;if(n=="g0")return 9.80665;throw std::invalid_argument("Costante non riconosciuta");}
+// Valore di una costante della tabella unica (physical_constants.hpp, v1.14.0):
+// nome del parser o alias senza distinguere le maiuscole ("pi", "PI", "NA", "kB",
+// "physme", "electronMass"), oppure il glifo mostrato ("c", "G", "h", "e", "mₑ");
+// un glifo ASCII si puo' scrivere anche tutto maiuscolo ("C" = c).
+double physicalConstant(const std::string&n){
+ using namespace fx::physconst;
+ const ConstDef* k=n.size()>1?findConstantNoCase(n):nullptr;
+ if(!k)k=findByGlyph(n);
+ if(!k){std::string low=n;bool upper=!n.empty();for(char&ch:low){if(ch>='a'&&ch<='z')upper=false;ch=static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));}if(upper&&low!=n)k=findByGlyph(low);}
+ if(!k)throw std::invalid_argument("Costante non riconosciuta");
+ return k->value;
+}
 std::string formatEngineering(double v,unsigned p){if(!std::isfinite(v))throw std::invalid_argument("Valore non finito");if(v==0)return "0";int e=int(std::floor(std::log10(std::abs(v))/3))*3;std::ostringstream o;o<<std::setprecision(p)<<std::defaultfloat<<v/std::pow(10.,e)<<"e"<<(e>=0?"+":"")<<e;return o.str();}
 std::string formatNaturalExpression(const std::string&e){std::string o;for(size_t i=0;i<e.size();++i){if(e[i]=='*'&&i+1<e.size()&&e[i+1]=='*'){o+='^';++i;}else if(e[i]=='*')o+=" × ";else if(e[i]=='/')o+=" ÷ ";else o+=e[i];}return o;}
 }

@@ -2,6 +2,7 @@
 #include "graph_commands.hpp"
 #include "expression.hpp"
 #include "math_renderer.hpp"
+#include "physical_constants.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
@@ -48,6 +49,21 @@ bool isWord(const std::string& s) {
     if (isReservedWord(low)) return true;
     for (const char* g : kGreek) if (low == g) return true;
     return false;
+}
+// v1.14.0: una costante con nome che contiene cifre (g0, physa0, physmu0, physrad1)
+// e' un solo token, mostrato con il suo glifo, come le parole di sole lettere che
+// appendToken e mergeWord uniscono. I nomi che iniziano con una funzione (ln2,
+// ln10, sqrt2) restano scritti come prima della v1.14.0.
+bool digitConstantWord(const std::string& word) {
+    if (word.size() < 2 || !std::isalpha(static_cast<unsigned char>(word[0]))) return false;
+    bool digit = false;
+    for (unsigned char ch : word) { if (std::isdigit(ch)) digit = true; else if (!std::isalpha(ch)) return false; }
+    if (!digit) return false;
+    const std::string low = lowerCopy(word);
+    if (!physconst::findConstant(low)) return false;
+    std::size_t letters = 0;
+    while (letters < low.size() && std::isalpha(static_cast<unsigned char>(low[letters]))) ++letters;
+    return !isReservedWord(low.substr(0, letters));
 }
 unsigned autoRootIndex(const std::string& s) {
     if (s == "sqrt") return 2;
@@ -349,6 +365,7 @@ void importInto(NaturalNode& target, const std::string& s, int depth, bool linea
                 else if ((low == "derivative" || low == "derivative2") && args.size() == 2) { box = node(Kind::Calculus, low); box->children = {importRow(args[0], depth), importRow(args[1], depth)}; }
                 if (box) { target.children.push_back(box); i = next; continue; }
             }
+            if (digitConstantWord(word)) { target.children.push_back(token(word)); i = e; continue; }
             for (char ch : word) appendToken(target, std::string(1, ch));
             i = e; continue;
         }
@@ -608,11 +625,36 @@ void NaturalEditor::insert(char c) {
             checkLimits();
             return;
         }
-        if (std::isalpha(static_cast<unsigned char>(c))) mergeWord();
+        if (std::isalpha(static_cast<unsigned char>(c))) mergeWord(); else mergeDigitConstant();
     } else if (std::isalpha(static_cast<unsigned char>(c))) {
         mergeWord();
+    } else if (std::isdigit(static_cast<unsigned char>(c))) {
+        mergeDigitConstant();
     }
     checkLimits();
+}
+// Dopo una cifra: "g0", "physa0"... scritti lettera per lettera diventano un solo
+// token (glifo g₀, a₀), come fa mergeWord per le parole di sole lettere (v1.14.0).
+void NaturalEditor::mergeDigitConstant() {
+    auto& r = activeRow();
+    std::size_t begin = cursor_; std::string tail;
+    while (begin > 0) {
+        const auto& n = *r.children[begin - 1];
+        if (n.kind != Kind::Token || n.text.empty() ||
+            !std::all_of(n.text.begin(), n.text.end(), [](char ch) { return std::isalnum(static_cast<unsigned char>(ch)) != 0; })) break;
+        tail.insert(0, n.text); --begin;
+    }
+    std::size_t pos = begin, offset = 0;
+    while (pos + 1 < cursor_) {
+        const std::string suffix = tail.substr(offset);
+        if (digitConstantWord(suffix)) {
+            r.children.erase(r.children.begin() + static_cast<std::ptrdiff_t>(pos), r.children.begin() + static_cast<std::ptrdiff_t>(cursor_));
+            r.children.insert(r.children.begin() + static_cast<std::ptrdiff_t>(pos), token(suffix));
+            cursor_ = pos + 1;
+            return;
+        }
+        offset += r.children[pos]->text.size(); ++pos;
+    }
 }
 // Modalita' Line: un tasto di modello inserisce il suo testo lineare; il
 // cursore finisce `cursorBack` token prima della fine (dentro "[[,][,]]").

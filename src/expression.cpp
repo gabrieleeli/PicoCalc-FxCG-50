@@ -8,6 +8,7 @@
 #include "calc_library.hpp"
 #include "limits.hpp"
 #include "math_engine.hpp"
+#include "physical_constants.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -96,16 +97,12 @@ int functionMemoryIndex(const std::string& f){
     for(std::size_t i=2;i<f.size();++i){if(f[i]<'0'||f[i]>'9')return 0;v=v*10+(f[i]-'0');}
     return v>=1&&v<=20&&f[2]!='0'?v:0;
 }
-struct ConstInfo { const char* name; double value; };
-const ConstInfo kConstants[] = {
-    {"pi",kPi},{"tau",2*kPi},{"phi",1.6180339887498948482},{"goldenratio",1.6180339887498948482},
-    {"eulergamma",0.5772156649015328606},{"sqrt2",1.4142135623730950488},{"ln2",0.69314718055994530942},
-    {"ln10",2.30258509299404568402},{"speedoflight",299792458.0},{"physc",299792458.0},
-    {"gravitationalconstant",6.67430e-11},{"physg",6.67430e-11},{"planckconstant",6.62607015e-34},
-    {"physh",6.62607015e-34},{"avogadro",6.02214076e23},{"na",6.02214076e23},{"boltzmann",1.380649e-23},
-    {"kb",1.380649e-23},{"elementarycharge",1.602176634e-19},{"qe",1.602176634e-19},
-    {"standardgravity",9.80665},{"g0",9.80665},
-};
+// Costanti con nome (pi, phi, physc, physme, na...): una sola tabella, in
+// physical_constants.cpp (v1.14.0). La "e" di Nepero, di una lettera, e' a parte
+// (evalToken): "E" e' la variabile, le lettere singole non sono mai nomi della tabella.
+const physconst::ConstDef* namedConstant(const std::string& lowerName){
+    return lowerName.size()>1?physconst::findConstant(lowerName):nullptr;
+}
 // Names resolved at evaluation time (not constants): memory values and bindings.
 constexpr const char* kSpecialNames[] = {"ans","preans","theta","r_var"};
 // Variables owned by other applications (VARS menu), resolved through EvalContext::names.
@@ -166,7 +163,7 @@ bool stringName(const std::string& n){
 }
 bool isConstantName(const std::string& lowerName){
     if(explicitVariable(lowerName)||specialCollection(lowerName)||stringName(lowerName))return true;
-    for(const auto& c:kConstants)if(lowerName==c.name)return true;
+    if(namedConstant(lowerName))return true;
     for(const char* s:kSpecialNames)if(lowerName==s)return true;
     return isSystemName(lowerName);
 }
@@ -1627,10 +1624,10 @@ template<typename T> FXAI_NOINLINE T evalToken(const ast::Node& n,Env& env){
         }
         double bound=0;
         if(lookupBinding(env,n.text,bound))return fromReal<T>(bound);
-        if(n.text=="e")return fromReal<T>(std::exp(1.0));
+        if(n.text=="e")return fromReal<T>(physconst::findConstant("e")->value);
         if(n.text=="i"){if constexpr(std::is_same_v<T,double>)throw NonRealError("Non-Real ERROR: i richiede il modo complesso");else return Complex(0,1);}
         const std::string low=lower(n.text);
-        for(const auto& k:kConstants)if(low==k.name)return fromReal<T>(k.value);
+        if(const auto* k=namedConstant(low))return fromReal<T>(k->value);
         const CalculatorMemory* mem=env.ctx.memory;
         if(low=="ans"||low=="preans"){
             if(!mem)throw MathError("Math ERROR: Ans non disponibile");

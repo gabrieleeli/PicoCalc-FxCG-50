@@ -117,7 +117,7 @@ const AppInfo kApps[AppCount] = {
      "Guida di simboli e funzioni", nullptr, s::Widgets | s::Help, 0, 0, kSymbolsSrc},
 };
 
-const char* const kHExpression[] = {"expression.hpp", "expression_ast.hpp", "value.hpp", "calc_library.hpp", nullptr};
+const char* const kHExpression[] = {"expression.hpp", "expression_ast.hpp", "value.hpp", "calc_library.hpp", "physical_constants.hpp", nullptr};
 const char* const kHExact[] = {"exact.hpp", nullptr};
 const char* const kHEditor[] = {"natural_editor.hpp", "line_editor.hpp", nullptr};
 const char* const kHRender[] = {"math_renderer.hpp", nullptr};
@@ -129,7 +129,7 @@ const char* const kHWidgets[] = {"ui_kit.hpp", "app_widgets.hpp", "graphics_engi
 const char* const kHNetwork[] = {"net.hpp", "ai_protocol.hpp", "ai_client.hpp", nullptr};
 const char* const kHStorage[] = {"storage.hpp", nullptr};
 const char* const kHUnits[] = {"point_a.hpp", nullptr};
-const char* const kHHelp[] = {"cheatsheet.hpp", nullptr};
+const char* const kHHelp[] = {"cheatsheet.hpp", "physical_constants.hpp", nullptr};
 const char* const kHRunCore[] = {"run_matrix.hpp", nullptr};
 const char* const kHModels[] = {"app_models.hpp", nullptr};
 const char* const kHGraphCore[] = {"graph_model.hpp", "graph_engine.hpp", "graph_solve.hpp", "table_model.hpp", "limits.hpp", nullptr};

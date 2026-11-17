@@ -176,6 +176,7 @@ private:
     void overwriteAtCursor();       // sovrascrittura in Line: toglie il token sotto il cursore
     NodePtrAlias takeArgument();    // SHIFT+INS: il valore a destra del cursore (Row) o nullptr
     void mergeWord();
+    void mergeDigitConstant();   // g0, physa0... scritti a mano: un token (v1.14.0)
     void pushUndo();
     void checkLimits();   // rolls back the edit recorded by the last pushUndo() and throws
 };

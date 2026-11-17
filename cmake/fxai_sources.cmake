@@ -12,6 +12,7 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/system_info.cpp
   ${FXAI_ROOT}/src/bt_support.cpp
   ${FXAI_ROOT}/src/value.cpp
+  ${FXAI_ROOT}/src/physical_constants.cpp
   ${FXAI_ROOT}/src/expression.cpp
   ${FXAI_ROOT}/src/calc_library.cpp
   ${FXAI_ROOT}/src/exact.cpp

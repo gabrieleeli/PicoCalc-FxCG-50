@@ -1,5 +1,6 @@
 // Libreria di funzioni di Run-Matrix (vedi calc_library.hpp).
 #include "calc_library.hpp"
+#include "physical_constants.hpp"
 #include "expression.hpp"
 #include "math_engine.hpp"
 #include "statistics.hpp"
@@ -458,6 +459,10 @@ const CatalogEntry kCatalog[] = {
 
 const char* displayName(const std::string& canonical) noexcept {
     for (const auto& n : kNames) if (canonical == n.canonical) return n.shown;
+    // v1.14.0: le costanti con nome mostrano il glifo della tabella unica
+    // (physc -> c, physme -> mₑ, na -> Nₐ); le lettere singole ("e") restano tali.
+    if (canonical.size() > 1)
+        if (const auto* k = physconst::findConstant(canonical)) return k->glyph;
     return nullptr;
 }
 const CatalogEntry* catalog() noexcept { return kCatalog; }

@@ -90,8 +90,10 @@ double daysPrd(double m1, double d1, double y1, double m2, double d2, double y2)
 
 // ---------------------------------------------------------------- nomi
 // Nome mostrato di un comando del testo canonico ("norm_pd" -> "NormPD",
-// "solve_n" -> "SolveN", "ran_list" -> "RanList#"), nullptr se il nome non
-// e' nella tabella. L'editor e il renderer lo usano per disegnare il token.
+// "solve_n" -> "SolveN", "ran_list" -> "RanList#") o glifo di una costante con
+// nome ("physme" -> "mₑ", v1.14.0, physical_constants.hpp); nullptr se il nome
+// non e' in nessuna delle due tabelle. L'editor e il renderer lo usano per
+// disegnare il token.
 const char* displayName(const std::string& canonical) noexcept;
 // Tutti i comandi del CATALOG (nome mostrato, testo canonico inserito),
 // terminato da {nullptr, nullptr}; la finestra CATALOG li ordina per nome.
