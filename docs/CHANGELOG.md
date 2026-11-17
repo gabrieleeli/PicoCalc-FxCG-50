@@ -1,5 +1,55 @@
 # Changelog
 
+## v1.14.0 — CONVERSION completo
+
+Base: `v1.13.1` (commit `62b3f8f`). Rapporto: [reports/SVILUPPO_v1.14.0.md](reports/SVILUPPO_v1.14.0.md);
+elenco di categorie, unità, fattori e fonti: [CONVERSION.md](CONVERSION.md).
+**Nessuna prova su hardware fisico**: procedura [HARDWARE_TEST_v1.14.0.md](HARDWARE_TEST_v1.14.0.md).
+
+### Novità
+- **Una sola tabella delle unità** (`include/units.hpp`, `src/units.cpp`), in
+  flash: 77 categorie, **771 unità**, prefissi SI q…Q (anche ronto e ronna) e
+  IEC Ki…Yi; costanti SI 2019, NIST SP 811 e **CODATA 2018**; ogni fattore non
+  esatto con la fonte. Unifica `point_a::Unit` e la tabella CONVERT di
+  Run-Matrix (`pointa::convert` è un wrapper).
+- **Modello generico**: lineare, affine (temperature, taglie), inverso
+  (L/100 km, min/km, lunghezza d'onda) e non lineare (dB, dBm, Np, dB SPL,
+  dBu, ottave/cent, pH/pOH, AWG, magnitudo sismica e stellare).
+- **Conversioni derivate** con le costanti a schermo: fotone λ ↔ ν ↔ E ↔ σ,
+  massa ↔ energia (E = mc²), temperatura ↔ energia (kT, eV ↔ K), moli ↔
+  massa (massa molare impostabile) ↔ particelle ↔ litri di gas, peso ↔ massa.
+- **19 conversioni di formato** (testo → testo con validazione): basi 2–36
+  con parte frazionaria, complemento a due 8/16/32/64 bit, BCD, Gray,
+  IEEE-754 half/single/double con segno/esponente/mantissa, numeri romani (anche
+  vinculum), testo ↔ Unicode/UTF-8, DMS e HMS, h:m:s, date (giuliano, MJD,
+  giorno dell'anno, settimana ISO, Unix, giorno della settimana), differenza
+  tra date (Days_Prd), coordinate 2D/3D/geografiche, complessi a+bi ↔ r∠θ,
+  notazioni (frazione, mista, periodo, scientifica, ingegneristica con simboli
+  SI), colori HEX/RGB/HSL/HSV/CMYK/RGB565 con anteprima, APR ↔ EFF, anelli.
+- **Taglie** (scarpe da adulto, anelli) marcate "approssimato"; **valute** con
+  tassi inseriti dall'utente e salvati (nessuna rete richiesta).
+- **Interfaccia di CONVERSION**: elenco raggruppato con ricerca per nome o
+  simbolo, Valore come espressione (A–Z, Ans), F1 CONVERT, F2 SWAP, F3 ALL,
+  F4 PREFIX/TASSI, F5 COPY, F6 EXIT; risultato col formato del SET UP, in Ans
+  e in forma esatta quando le unità sono esatte; preferiti e recenti.
+- **Run-Matrix**: il menu OPTN › CONVERT resta identico (le 106 unità della
+  fx-CG50 — non 103 come diceva la documentazione — stesso ordine, risultati
+  identici bit per bit); la sintassi `[unità]▶[unità]` accetta anche le
+  unità nuove e i prefissi prima di `▶[` (`10[nm]▶[eV]`).
+- **Workspace record v10** (preferenze di CONVERSION); i record v1–v9 si
+  leggono senza perdite.
+- Glifi ø, ħ, ‰, ⇄ nei font.
+
+### Build
+- I sorgenti fuori dal percorso critico (CONVERSION, serializzazione, file,
+  menu, impostazioni, editor di dati) sono compilati con `-Os`: il Pico 2 W
+  passa da 87 % a 84 % della partizione da 2 MB nonostante CONVERSION
+  (≈ 110 KB); la Plus da 44 % a 42 %. RAM statica +264 byte.
+
+### Test
+- `conversion_v114_test` (5 632 controlli), flusso di CONVERSION in
+  `apps_flow_test`, fuzzer `fuzz_conversion`, screenshot 88–96.
+
 ## v1.13.1 — versione di correzione
 
 Base: tag `v1.13.0` (commit `a72d901` = `main`). **Nessuna funzione nuova**:

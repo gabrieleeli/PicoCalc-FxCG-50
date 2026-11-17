@@ -1,7 +1,33 @@
-# Build status — v1.13.1 (versione di correzione)
+# Build status — v1.14.0 (CONVERSION completo)
 
 Stato delle build per versione; le novità sono in [CHANGELOG.md](CHANGELOG.md).
-Le sezioni dopo "v1.13.1" descrivono le build delle versioni precedenti.
+Le sezioni dopo "v1.14.0" descrivono le build delle versioni precedenti.
+
+## v1.14.0 — branch `claude/blissful-albattani-1dx6nb`
+
+Build con `scripts/build.sh --board <scheda>` (Release, `-O2`; dalla v1.14.0 i
+sorgenti di `FXAI_SIZE_OPTIMIZED_SOURCES` in `CMakeLists.txt` sono a `-Os`,
+vedi [reports/SVILUPPO_v1.14.0.md](reports/SVILUPPO_v1.14.0.md#6-flash-e-ram)),
+Pico SDK 2.2.0, `gcc-arm-none-eabi` 13.2.1. **Nessuna prova su hardware.**
+
+| Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (3 576 320 byte) | `build/pico2w/picocalc_fxai_pico2w.uf2` (3 560 960 byte) |
+| Immagine flash | 1 787 788 byte (`__flash_binary_end` = `0x101B478C`) = 42 % della partizione da 4 MB; −60 980 byte rispetto alla v1.13.1 | 1 780 056 byte (`0x101B2958`) = 84 % della partizione da 2 MB; −59 884 byte |
+| RAM statica | 309 608 byte (`__end__` = `0x2004B168`, +264 byte: stato di CONVERSION) | 305 684 byte (`0x2004A214`, +264 byte) |
+| CONVERSION | `units.cpp` 49 660 B (tabella `kUnits` 18 504 B in flash), `unit_formats.cpp` 41 207 B, `conversion_app.cpp` 19 547 B | uguale |
+| `check_firmware_size.cmake` | superato, nessun avviso | superato, nessun avviso (prima di `-Os`: 94 %, oltre la soglia del 90 %) |
+| Warning | **nessuno** del compilatore (resta l'avviso di CMake dell'SDK su picotool) | nessuno |
+| SHA-256 dell'UF2 locale | `6b6e52fb44a6c238ac83e4872c4a82ce1ddedb846d6bfbe7ca20e2b0a55fe938` | `849cdcdba8d5c278d7de96384daec6adfce85d38fd49dd5a92374135586ddf77` |
+
+### Test
+
+| Suite | Pico Plus 2 W | Pico 2 W |
+|---|---|---|
+| CTest (`tests/run_host_tests.sh`) | 47/47: 45 suite C++ con **17 962** controlli (+5 632 di `conversion_v114_test`), `mem_pools_smoke` e `sd_interop_test` | 47/47: **17 956** controlli |
+| AddressSanitizer + UBSan bloccante (`--sanitize`) | 47/47 | 47/47 |
+| Fuzzing (`tools/fuzz/fuzz_conversion`) | 42 132 esecuzioni in 120 s, nessun crash | — |
+| Simulatore | `tests/sim/conversion.txt`: screenshot 88–96 | — |
 
 ## v1.13.1 — `main`
 

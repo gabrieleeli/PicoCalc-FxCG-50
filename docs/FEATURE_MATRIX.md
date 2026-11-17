@@ -158,7 +158,7 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Forme esatte conservate nelle memorie Mat/Vct (fino a 64 elementi nella v1.11.0; dalla v1.13.0 senza limite per memoria, budget della scheda, celle decimali conservate) | TESTED ON HOST (v1.13.0) |
 | Errori Dimension ERROR / Type ERROR con posizione | TESTED ON HOST (v1.10.0) |
 | Vettori: somma, prodotto scalare/vettoriale, norma, angolo (API C++) | TESTED ON HOST |
-| Conversioni metriche (10 grandezze, prefissi SI) | TESTED ON HOST |
+| Conversioni (v1.14.0): 77 grandezze, 771 unità, prefissi SI q…Q e IEC Ki…Yi, non lineari (dB, pH, AWG, L/100 km, magnitudo), derivate (fotone, E = mc², kT, moli, peso), 19 formati, taglie, valute — [CONVERSION.md](CONVERSION.md) | TESTED ON HOST (v1.14.0) |
 | Limiti di lunghezza/annidamento e budget di stack ("Stack ERROR", "Memory ERROR") | TESTED ON HOST (budget del firmware verificato solo con `-fstack-usage`) |
 
 ## Modalità
@@ -204,7 +204,7 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Sistemi di disequazioni (interfaccia) | NOT STARTED | estensione non presente sulla fx-CG50; API `solveInequalitySystem` (grado ≤ 2) TESTED ON HOST |
 | System / Set Up | TESTED ON HOST | |
 | Memory | TESTED ON HOST | |
-| Conversion | TESTED ON HOST | |
+| Conversion | TESTED ON SIMULATOR | v1.14.0: elenco raggruppato con ricerca, CONVERT/SWAP/ALL/PREFIX/COPY, valore come espressione, risultato esatto, preferiti, recenti, valute; screenshot 88–96 |
 | AI Chat (Claude / ChatGPT) | TESTED ON HOST | con trasporto simulato; rete reale da collaudare |
 | Symbols (guida) | TESTED ON HOST | |
 | eActivity, Spreadsheet, Dyna Graph, Recursion, Conic Graphs | IN PROGRESS | solo architettura e modello dati (`app_models.hpp`, testato); nessuna interfaccia; schermata "non disponibile" |

@@ -12,17 +12,25 @@ Plus 2 W** (RP2350B, 8 MB di PSRAM, 16 MB di flash); profilo alternativo:
 
 ![Menu principale](docs/screenshots/01_main_menu.png) ![Run-Matrix](docs/screenshots/12_run_matrix_exact.png) ![Matrici](docs/screenshots/46_run_matrix_matrices.png) ![Comandi grafici](docs/screenshots/61_graph_commands.png) ![CATALOG](docs/screenshots/79_catalog.png) ![Base-N](docs/screenshots/60_base_n.png) ![Equation](docs/screenshots/70_equation_poly_complex.png) ![Graph](docs/screenshots/22_graph_multi.png) ![3D Graph](docs/screenshots/41_graph3d_surfaces.png)
 
-## Stato (v1.13.1)
+## Stato (v1.14.0)
 
-La **v1.13.1** è una versione di correzione della v1.13.0, senza funzioni
-nuove: revisione completa (test, sanitizer, analisi statica, fuzzing,
-simulatore, confronto con il manuale) e **18 errori corretti**, ognuno con un
-test che lo riproduce: tra questi la lettura di record vecchi che dopo il
-salvataggio non si sarebbero più riletti, calcoli di distribuzioni che non
-terminavano (HypergeoCD, InvGeoCD), forme esatte complesse errate in EQUATION,
-nCr/nPr limitati a n ≤ 100000, CSV e salvataggi interrotti, Σ con estremi
-enormi. Elenco: [docs/reports/ERRORI_v1.13.1.md](docs/reports/ERRORI_v1.13.1.md) ·
-rapporto: [docs/reports/SVILUPPO_v1.13.1.md](docs/reports/SVILUPPO_v1.13.1.md).
+La **v1.14.0** trasforma **CONVERSION** in un convertitore completo per una
+calcolatrice scientifica e ingegneristica
+([docs/CONVERSION.md](docs/CONVERSION.md)): **77 grandezze e 771 unità** in una
+sola tabella in flash condivisa con Run-Matrix, prefissi SI (q…Q) e IEC
+(Ki…Yi), conversioni non lineari (dB, pH, AWG, L/100 km, magnitudo) e derivate
+(fotone, E = mc², kT, moli ↔ massa), **19 conversioni di formato** (basi,
+IEEE-754, romani, Unicode, date, coordinate, colori, APR ↔ EFF…), taglie e
+valute con tassi inseriti dall'utente; valore come espressione, risultato
+esatto quando le unità lo permettono e in Ans, ricerca, SWAP, ALL, PREFIX,
+COPY, preferiti e recenti (record del workspace **v10**). OPTN › CONVERT di
+Run-Matrix resta identico (106 unità fx-CG50). Rapporto:
+[docs/reports/SVILUPPO_v1.14.0.md](docs/reports/SVILUPPO_v1.14.0.md).
+
+![CONVERSION](docs/screenshots/88_conversion_menu.png) ![Esatto](docs/screenshots/90_conversion_exact.png) ![Fotone](docs/screenshots/93_conversion_photon.png) ![Colori](docs/screenshots/94_conversion_color.png)
+
+La v1.13.1 è stata una versione di correzione della v1.13.0 (18 errori corretti,
+[docs/reports/ERRORI_v1.13.1.md](docs/reports/ERRORI_v1.13.1.md)).
 
 La v1.13.0 porta **Run-Matrix** alla parità di funzioni con la fx-CG50
 (tabella voce per voce in
@@ -36,7 +44,7 @@ conservati; tutti i comandi grafici (**PxlTest(**, **DrawStat**, **DrawDyna**,
 **BG-Pict**, stili **Sketch**, **Graph Y>/Y</Y≥/Y≤** e X…, **G∫dx**), salvati
 anche nei progetti `.pcgraph`; round trip **Math/Line** esatto con tutti i
 modelli; **CALC** (Solve, SolveN, FMin, FMax, d²/dx², Σ con passo),
-**PROB**, **distribuzioni**, **CONVERT** (103 unità), **TVM**, angoli DMS e
+**PROB**, **distribuzioni**, **CONVERT** (106 unità), **TVM**, angoli DMS e
 ʳ/ᵍ, complessi ∠, numeri casuali, variabili statistiche, stringhe Str 1–20,
 **function memory** f1–f20, istruzioni multiple con `:` e **◢**,
 **CATALOG**, **CAPTURE**, menu OPTN/VARS nell'ordine della fx-CG50 e i
@@ -52,10 +60,10 @@ fonti: [docs/reports/ANALISI_FONTI_v1.13.0.md](docs/reports/ANALISI_FONTI_v1.13.
 | | Stato |
 |---|---|
 | Compilazione UF2 (Pico SDK 2.2.0) per Pimoroni Pico Plus 2 W e per Pico 2 W | ✅ entrambe compilano, nessun warning; cartelle e UF2 separati per scheda |
-| Test automatici host | ✅ 46 test per ciascun profilo di scheda: 44 suite C++ (12 223 controlli sulla Plus e 12 217 sul Pico 2 W, più le ≈ 334 000 verifiche di integrità dello stress dell'allocatore su due thread) e l'interoperabilità FAT/exFAT con fsck e mtools (41); tutti superati anche con AddressSanitizer/UBSan (UBSan bloccante dalla v1.13.1), allocatore su due thread con ThreadSanitizer; fuzzing con libFuzzer in `tools/fuzz`; gli stessi test girano su GitHub Actions a ogni push |
+| Test automatici host | ✅ 47 test per ciascun profilo di scheda: 45 suite C++ (17 962 controlli sulla Plus e 17 956 sul Pico 2 W, più le ≈ 334 000 verifiche di integrità dello stress dell'allocatore su due thread) e l'interoperabilità FAT/exFAT con fsck e mtools (41); tutti superati anche con AddressSanitizer/UBSan (UBSan bloccante dalla v1.13.1), allocatore su due thread con ThreadSanitizer; fuzzing con libFuzzer in `tools/fuzz`; gli stessi test girano su GitHub Actions a ogni push |
 | Test relay AI | ✅ 15 test (SDK ufficiali contro API simulate, TLS reale in loopback) |
 | Parità con la fx-CG50 | Run-Matrix (v1.13.0) ed EQUATION (v1.12.0): ✅ ogni voce della tabella di parità presente o differenza inevitabile documentata ([Run-Matrix](docs/reports/SVILUPPO_v1.13.0.md#5-tabella-di-parit%C3%A0-finale), [EQUATION](docs/reports/SVILUPPO_v1.12.0.md#4-tabella-di-parità-finale)); ❌ **non completa** per le altre modalità — GRAPH in [docs/GRAPH_PARITY.md](docs/GRAPH_PARITY.md), elenco in [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md) |
-| **Prova su PicoCalc fisica** | ❌ **non ancora eseguita**, né con il Pico Plus 2 W né con il Pico 2 W: display, tastiera, flash, PSRAM, microSD, Wi-Fi e TLS vanno collaudati con [docs/HARDWARE_TEST_v1.13.1.md](docs/HARDWARE_TEST_v1.13.1.md), [v1.13.0](docs/HARDWARE_TEST_v1.13.0.md), [v1.12.0](docs/HARDWARE_TEST_v1.12.0.md), [v1.11.0](docs/HARDWARE_TEST_v1.11.0.md), [v1.10.0](docs/HARDWARE_TEST_v1.10.0.md), [v1.9.0](docs/HARDWARE_TEST_v1.9.0.md) e [v1.8.0](docs/HARDWARE_TEST_v1.8.0.md), diagnostica SYSTEM → DIAG |
+| **Prova su PicoCalc fisica** | ❌ **non ancora eseguita**, né con il Pico Plus 2 W né con il Pico 2 W: display, tastiera, flash, PSRAM, microSD, Wi-Fi e TLS vanno collaudati con [docs/HARDWARE_TEST_v1.14.0.md](docs/HARDWARE_TEST_v1.14.0.md), [v1.13.1](docs/HARDWARE_TEST_v1.13.1.md), [v1.13.0](docs/HARDWARE_TEST_v1.13.0.md), [v1.12.0](docs/HARDWARE_TEST_v1.12.0.md), [v1.11.0](docs/HARDWARE_TEST_v1.11.0.md), [v1.10.0](docs/HARDWARE_TEST_v1.10.0.md), [v1.9.0](docs/HARDWARE_TEST_v1.9.0.md) e [v1.8.0](docs/HARDWARE_TEST_v1.8.0.md), diagnostica SYSTEM → DIAG |
 
 Dettagli: [docs/BUILD_STATUS.md](docs/BUILD_STATUS.md) · stato per funzione:
 [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md) · scheda e memoria:
@@ -89,7 +97,7 @@ viene riconosciuto (capacità reale della flash) e non scrive oltre il chip.
 | A | **Equation** | SIML 2–6 incognite e POLY grado 2–6 con coefficienti esatti e complessi, soluzioni esatte, ×k, Infinitely Many Solutions con la formula, Complex Mode; SOLVER su qualsiasi variabile (Lower/Upper, Lft/Rgt); VARS › SimRes/PlyRes; disequazioni (estensione) — [docs/EQUATION.md](docs/EQUATION.md) |
 | F | **Memory** | uso della memoria, cancellazione selettiva (anche delle funzioni 3D e di matrici e vettori), salvataggio |
 | G | **System** | Input/Output (Math/Line), angolo, formato display, modo complesso, frazioni, retroilluminazione, archivio dei file (microSD o flash interna), Wi-Fi, relay AI; INFO (SRAM, PSRAM) e DIAG (memoria, PSRAM, allocatore su 2 core, flash, LCD, microSD, flash interna, GRAPH) |
-| K | **Conversion** | conversioni metriche (10 grandezze) |
+| K | **Conversion** | convertitore completo: 77 grandezze, 771 unità, prefissi, derivate, 19 formati, taglie, valute (v1.14.0) |
 | M | **AI Chat** | conversazione con Claude o ChatGPT tramite relay HTTPS |
 | N | **Symbols** | guida di simboli e funzioni |
 
@@ -169,7 +177,7 @@ Senza rete tutte le funzioni matematiche restano disponibili.
 [GRAPH_PARITY](docs/GRAPH_PARITY.md) · [GRAPH_ENGINE](docs/GRAPH_ENGINE.md) ·
 [STORAGE](docs/STORAGE.md) · [PCGRAPH_FORMAT](docs/PCGRAPH_FORMAT.md) ·
 [TABLE](docs/TABLE.md) · [PICO_PLUS_2W](docs/PICO_PLUS_2W.md) ·
-[EQUATION](docs/EQUATION.md) · [ERRORI v1.13.1](docs/reports/ERRORI_v1.13.1.md) · [HARDWARE_TEST v1.13.1](docs/HARDWARE_TEST_v1.13.1.md) · [v1.13.0](docs/HARDWARE_TEST_v1.13.0.md) · [v1.12.0](docs/HARDWARE_TEST_v1.12.0.md) · [v1.11.0](docs/HARDWARE_TEST_v1.11.0.md) · [v1.10.0](docs/HARDWARE_TEST_v1.10.0.md) · [v1.9.0](docs/HARDWARE_TEST_v1.9.0.md) · [v1.8.0](docs/HARDWARE_TEST_v1.8.0.md) ·
+[EQUATION](docs/EQUATION.md) · [CONVERSION](docs/CONVERSION.md) · [ERRORI v1.13.1](docs/reports/ERRORI_v1.13.1.md) · [HARDWARE_TEST v1.14.0](docs/HARDWARE_TEST_v1.14.0.md) · [v1.13.1](docs/HARDWARE_TEST_v1.13.1.md) · [v1.13.0](docs/HARDWARE_TEST_v1.13.0.md) · [v1.12.0](docs/HARDWARE_TEST_v1.12.0.md) · [v1.11.0](docs/HARDWARE_TEST_v1.11.0.md) · [v1.10.0](docs/HARDWARE_TEST_v1.10.0.md) · [v1.9.0](docs/HARDWARE_TEST_v1.9.0.md) · [v1.8.0](docs/HARDWARE_TEST_v1.8.0.md) ·
 [GRAPHICS_ENGINE](docs/GRAPHICS_ENGINE.md) · [MATH_ENGINE](docs/MATH_ENGINE.md) ·
 [AI_INTEGRATION](docs/AI_INTEGRATION.md) · [TESTING](docs/TESTING.md) ·
 [ROADMAP](docs/ROADMAP.md) · [CHANGELOG](docs/CHANGELOG.md) ·

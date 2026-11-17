@@ -79,7 +79,7 @@ display) → `tick()` per lavoro periodico (rete) → `leave()`.
 | Widgets | `ui_kit.hpp`, `app_widgets.hpp` | tutte |
 | Network | `net.hpp`, `ai_protocol.hpp` | AI Chat, System |
 | Storage | `storage.hpp` (via `Firmware`) | persistenza del workspace |
-| Units | `point_a.hpp` | Conversion |
+| Units | `units.hpp` (v1.14.0: unica tabella delle unità, in flash: 77 categorie, 771 unità, prefissi; la usa anche Run-Matrix tramite `calc_library.hpp`), `unit_formats.hpp` (conversioni di formato testo → testo) | Conversion |
 | Help | `cheatsheet.hpp` | Symbols |
 | RunCore | `run_matrix.hpp` | Run-Matrix; previsto per eActivity e Program (righe di calcolo) |
 | GraphCmd (v1.11.0) | `graph_commands.hpp` | Run-Matrix: comandi grafici (Plot, F-Line, Graph Y=…) che scrivono V-Window, SKETCH e grafici dei comandi; li disegna Graph |
@@ -148,7 +148,7 @@ dell'utente (progetti GRAPH, immagini) sono sulla microSD o nella flash interna
 | 3D Graph | `Graph3DApp` (`graph3d_app.cpp`) + motore `graph3d.cpp` | superfici z = f(x, y) Z1–Z3, finestra 3D, griglia, rotazione/zoom senza ricalcolo, AUTO, calcolo incrementale | Expression, Widgets, Editor, Format, Storage, Models, Graph3D | Settings, Memory, Graph3D | — |
 | Memory | `MemoryApp` | uso e cancellazione dei dati (anche delle funzioni 3D) | Widgets, Storage | tutte | — |
 | System | `SystemApp` | SET UP, retroilluminazione, archivio dei file, Wi-Fi, relay, reset, INFO, DIAG | Widgets, Editor, Format, Network, Storage, Diag, Hardware | tutte (RESET) | — |
-| Conversion | `ConversionApp` | conversioni di unità, risultato in Ans | Expression, Units | Settings, Memory | — |
+| Conversion | `ConversionApp` | v1.14.0: convertitore completo (77 grandezze, 771 unità, prefissi SI/IEC, non lineari e derivate, 19 formati, taglie, valute con tassi dell'utente), valore come espressione, risultato esatto e in Ans, preferiti e recenti nel workspace (record v10) — [CONVERSION.md](CONVERSION.md) | Expression, **Exact** (v1.14.0: forma esatta del risultato), Editor (COPY negli appunti), Format, Widgets, Units | Settings (preferenze di CONVERSION), Memory | — |
 | AI Chat | `AiChatApp` | chat con Claude/ChatGPT tramite relay | Network, Editor | Settings, Chat | System |
 | Symbols | `SymbolsApp` | guida dei simboli | Help | — | — |
 
@@ -157,6 +157,19 @@ sono solo in Graph (Table li apre con G-CON/G-PLT), quelli statistici solo in
 Statistics, le conversioni solo in Conversion, le tabelle solo in Table,
 equazioni e disequazioni solo in Equation; Run-Matrix mostra solo calcoli e
 risultati (nessun riferimento a grafici, liste, tabelle o conversioni).
+
+**v1.14.0 — una sola fonte dati per le unità.** `point_a::Unit` (40 unità
+scritte con due `switch`) e `calclib::kUnits` (106 unità) sono stati unificati
+in `units.hpp`/`units.cpp`: una tabella `const` in flash (24 byte per unità su
+RP2350) con categorie, fattori, testo esatto, fonte e flag. `calc_library`
+(servizio Expression) ne è un involucro: il menu CONVERT di Run-Matrix filtra
+le unità *fx-CG50*; `pointa::convert` è un wrapper della stessa tabella. Le
+conversioni di formato sono un modulo separato (`unit_formats.hpp`) perché
+non sono numero → numero. Entrambi sono moduli del motore (nessun header
+dell'interfaccia, verificato da `architecture_test`). Conversion dichiara ora
+anche il servizio **Exact** (risultato esatto con `evaluateExact` ed
+`exact::toText`): è l'unica dipendenza aggiunta, registrata in
+`src/app_registry.cpp`.
 
 ## 6. Modalità non ancora disponibili
 

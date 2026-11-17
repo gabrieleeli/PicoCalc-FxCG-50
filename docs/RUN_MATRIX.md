@@ -513,10 +513,26 @@ della calcolatrice.
 - **TVM** (OPTN › TVM): Smpl_SI, Smpl_SFV, Cmpd_PV/FV/PMT/n/I%, Cash_NPV/IRR/PBP/NFV,
   Amt_BAL/INT/PRN/ΣINT/ΣPRN, Cnvt_EFF/APR, Cost, Sell, Margin, Days_Prd (anno
   di 365 giorni, pagamento a fine periodo, date 1902–2097).
-- **CONVERT**: `valore[unità]▶[unità]` (11 categorie, 103 unità: lunghezza,
+- **CONVERT**: `valore[unità]▶[unità]` (11 categorie, **106** unità: lunghezza,
   area, volume, tempo, temperatura, velocità, massa, forza, pressione,
-  energia, potenza); anche su liste. Il menu inserisce `[u]` dopo il valore e
-  `▶[u]` dopo la prima unità.
+  energia, potenza; le versioni precedenti di questo documento dicevano 103,
+  ma la tabella ne ha sempre avute 106: 18+9+15+11+4+5+10+5+10+14+5); anche su
+  liste. Il menu inserisce `[u]` dopo il valore e `▶[u]` dopo la prima unità.
+- **v1.14.0 — una sola tabella con CONVERSION** (`include/units.hpp`,
+  [CONVERSION.md](CONVERSION.md)): il menu CONVERT mostra solo le 106 unità
+  marcate *fx-CG50*, con gli stessi nomi, lo stesso ordine e gli stessi
+  fattori; due unità fx-CG50 si convertono con la stessa formula
+  `(v + offset)·fattore/fattore′ − offset′` (risultati identici bit per bit,
+  verificato su ogni coppia da `tests/conversion_v114_test.cpp`).
+  La sintassi accetta anche le altre 665 unità della tabella e i prefissi SI
+  e IEC, **solo prima di ▶[** o dopo ▶ (così un'espressione scritta prima non
+  cambia significato): `10[nm]▶[eV]` = 123.984198 (fotone), `2[kWb]▶[Mx]`,
+  `30[dBm]▶[W]` = 1, `1[TiB]▶[GB]`. La coppia si cerca nella prima categoria
+  che contiene entrambi i simboli; due nomi fx-CG50 restano limitati alle 11
+  categorie della fx-CG50 (`1[eV]▶[K]` resta Argument ERROR: per kT usare
+  CONVERSION). Le unità con un parametro (pixel con DPI, moli con la massa
+  molare) e le valute sono solo in CONVERSION. Nessun risultato esatto in
+  Run-Matrix per CONVERT, come prima.
 
 ### ESYM, ENG, overflow
 

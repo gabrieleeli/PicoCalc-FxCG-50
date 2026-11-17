@@ -83,6 +83,21 @@ target_compile_definitions(${FXAI_TARGET} PRIVATE
 target_compile_options(${FXAI_TARGET} PRIVATE -${FXAI_OPT_LEVEL} -Wall -Wextra
   $<$<COMPILE_LANGUAGE:CXX>:-Wno-psabi> -fstack-usage)
 target_link_options(${FXAI_TARGET} PRIVATE "LINKER:--print-memory-usage")
+# v1.14.0: per dimensione (-Os, dopo -O2 sulla riga di comando) i sorgenti che
+# non sono sul percorso critico del calcolo ne' del disegno dei grafici: le
+# tabelle e i convertitori di CONVERSION, la serializzazione del workspace e dei
+# file, le schermate di menu, impostazioni, editor di dati e diagnostica. Cosi'
+# il Pico 2 W resta sotto il 90 % della sua partizione firmware da 2 MB (vedi
+# docs/reports/SVILUPPO_v1.14.0.md). Il valutatore, i grafici e il disegno
+# restano a -O2.
+set(FXAI_SIZE_OPTIMIZED_SOURCES
+  src/units.cpp src/unit_formats.cpp src/apps/conversion_app.cpp
+  src/workspace.cpp src/graph_file.cpp src/csv_io.cpp src/file_store.cpp src/diagnostics.cpp src/ai_protocol.cpp
+  src/apps/graph_files.cpp src/apps/statistics_app.cpp src/apps/table_app.cpp src/apps/equation_app.cpp
+  src/apps/matrix_editor.cpp src/apps/system_app.cpp src/apps/ai_chat_app.cpp src/apps/memory_app.cpp
+  src/apps/symbols_app.cpp src/apps/launcher.cpp src/apps/answer_view.cpp src/apps/widgets.cpp)
+list(TRANSFORM FXAI_SIZE_OPTIMIZED_SOURCES PREPEND ${FXAI_ROOT}/)
+set_source_files_properties(${FXAI_SIZE_OPTIMIZED_SOURCES} PROPERTIES COMPILE_OPTIONS "-Os")
 if(FXAI_ENABLE_LTO)
   # Whole-target LTO breaks the SDK's -Wl,--wrap mechanism (pico_stdio,
   # pico_float/double): only the application sources are LTO-compiled.

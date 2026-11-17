@@ -1,4 +1,4 @@
-# Roadmap — dopo la v1.13.1
+# Roadmap — dopo la v1.14.0
 
 La v1.13.1 corregge gli errori trovati nella revisione completa della v1.13.0
 ([reports/ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md)); restano aperti i
@@ -123,6 +123,7 @@ Stato e progetto di ogni modalità in [APPLICATIONS_ARCHITECTURE.md](APPLICATION
 | Link | trasferimento del record del workspace via USB seriale (formato proprio) |
 | Python | MicroPython come libreria con heap separato |
 | E-CON4 | non realizzabile (data logger esterno); al più import CSV nelle liste |
+| Conversion | **completata nella v1.14.0** ([CONVERSION.md](CONVERSION.md)). Restano: aggiornamento facoltativo dei tassi delle valute via Wi-Fi (oggi solo tassi inseriti dall'utente, salvati nel record v10: la funzione non deve dipendere dalla rete; serve un endpoint del relay con una fonte di tassi a licenza libera, es. BCE); codici di valuta personalizzati (oggi 16 fissi); misure degli anelli giapponesi e taglie dei bambini (tabelle non lineari per paese); unità agrarie storiche di altre regioni italiane (oggi 4 con valori convenzionali); risultati esatti per le unità inverse e con prefissi oltre 10^±18 |
 
 ## 5. Piattaforma
 

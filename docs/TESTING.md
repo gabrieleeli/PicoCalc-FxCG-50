@@ -1,4 +1,4 @@
-# Test — v1.13.1 (versione di correzione: un test per ogni errore di ERRORI_v1.13.1, UBSan bloccante, fuzzing; v1.13.0: completamento totale di Run-Matrix)
+# Test — v1.14.0 (CONVERSION completo: conversion_v114_test, flusso dell'app, fuzzing delle conversioni; v1.13.1: un test per ogni errore di ERRORI_v1.13.1, UBSan bloccante)
 
 ## Cosa viene provato e dove
 
@@ -51,6 +51,7 @@ errore, non solo il primo.
 |---|---|---|---|
 | expression_test (v1.10.0: 154) | 155 | 155 | priorità Casio, funzioni, complessi, formati e arrotondamento come la calcolatrice, limiti di lunghezza/annidamento, budget di stack |
 | exact_test | 152 | 152 | razionali (overflow, confronto esatto), radicali, π, letterali decimali e periodici, sviluppo periodico, limiti di visualizzazione CG50, valutatore esatto (trigonometria esatta, radici, log, n!, nCr, relazioni, Σ/Π, memoria esatta, catene lunghe, budget di stack), coerenza esatto/virgola mobile |
+| conversion_v114_test **nuova v1.14.0** | 5 632 | 5 632 | tabella unica delle unità (77 categorie, 771 unità, simboli unici, fattori esatti, 32 prefissi); Run-Matrix CONVERT identico alla v1.13.1 (106 unità, ordine, 8 666 conversioni bit per bit, sintassi `[nm]▶[eV]`); per ogni categoria un valore di riferimento NIST/BIPM/CODATA 2018, round trip A→B→A di ogni coppia entro 1E−12, errore per categorie incompatibili, casi limite delle non lineari; risultati esatti; 19 formati con input non validi; record v10 da un record v9 della v1.13.1 (`workspace_v1_13_1.inc`); docs/CONVERSION.md generato dalla tabella |
 | fixes_v1131_test **nuova v1.13.1** | 142 | 142 | un gruppo per ogni errore di [ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md), che fallisce con i sorgenti della v1.13.0: record v1–v8 non rileggibili dopo il salvataggio (fixture della v1.11.0 modificata), HypergeoCD/InvHypergeoCD con x, n, M grandi, inverse discrete in tempo lineare (anche contro la definizione), forme esatte complesse con Abs/Conjg/ReP, nCr/nPr fino a 1E10, CSV senza allocazioni prima dei controlli (byte misurati con un `operator new` contato), salvataggio atomico dopo due interruzioni, quantili t, 1-Variable con frequenze, Ran# n, Σ/Π con estremi enormi, distribuzione geometrica con p piccolo, InvPoissonCD oltre 1E6, HypergeoPD con argomenti grandi, nomi di VARS › V-WIN e TABLE |
 | calc_v112_test **nuova v1.13.0** | 207 | 207 | CALC con i valori del manuale (d/dx 52, d²/dx² 26, ∫ 404/3, Σ con variabile e passo, Solve con limiti ed equazione, SolveN anche con radice doppia e poli, FMin/FMax, funzioni vietate), PROB (sequenze di Ran#, RanInt#/RanNorm#/RanBin# con n, RanList#, RanSamp# con e senza ripetizione, P Q R t), Rnd, ʳ ᵍ ° ′ ″, Pol/Rec in List Ans, ∠ e ►r∠θ/►a+bi, 24 distribuzioni con valori di riferimento, S-Dev/Var/Mean/Median con frequenze, x̂ ŷ e VARS STAT, 22 funzioni TVM, CONVERT (anche su liste, grandezze diverse), P ed E, ENG/ENG←, overflow, Simplify Manual (m.c.m., prodotti, ▶Simp senza F=, divisore non valido, modo complesso), Base-N (Bin 16 bit, Hex con v_a, liste e matrici nella base, Oct), messaggi dell'Appendice α |
 | run_matrix_v112_test **nuova v1.13.0** | 152 | 152 | `:` e `◢` (posizione degli errori, ricalcolo), stringhe e Str, function memory (X, argomento, ricorsione), r e θ, variabili di sistema (V-Window con Range ERROR, Xfct, TblStart, D Start, R End, TVM), formula an+1, List "QTY", List File 1–6 e budget comune, n→Dim List, Fill su liste e matrici, Swap/\*Row/\*Row+/Row+, forme esatte oltre 64 elementi e celle decimali, VARS EQUATION e TABLE Result, migrazioni v7→v9 e v8→v9 dai fixture della v1.11.0 e della v1.12.0, record v9 con tutti i campi nuovi e record troncati, interfaccia (OPTN nell'ordine della fx-CG50, ENG, CONVERT, VARS STAT, Hex con v_a, FUNCMEM, CATALOG, CAPTURE e RclCapt) |
@@ -95,7 +96,7 @@ errore, non solo il primo.
 | internal_fs_test **nuova** | 197 | 197 | LittleFS su flash NOR simulata: contratto `files::FileSystem` come FatFs, partizione piena, interruzione di alimentazione durante `writeAtomic`, rimontaggio senza riformattare, progetti GRAPH nell'archivio interno |
 | graph3d_test **nuova** | 111 | 111 | motore 3D (campionamento, poli e domini, proiezione, z-buffer e pittore, rotazione, colori per superficie) e modalità 3D Graph (lista, editor, V-Window, campionamento incrementale, rotazione/zoom senza ricalcolo, AUTO, persistenza, budget di memoria con e senza PSRAM) |
 | system_diag_test **nuova** | 15 | 12 | SYSTEM → DIAG completa (MEM, PSR, ALC, FLS, LCD, SD, INT, GPH) con la memoria della scheda; Plus con PSRAM fallita; pagina INFO; "Archivio file"; riga del chip della flash; kernel di stress dell'allocatore |
-| **Totale** | **12 223** + ≈ 333 000 dello stress + 41 dello script | **12 217** + ≈ 333 000 + 41 | 0 errori, con e senza sanitizer (ASan + UBSan bloccante); `mem_pools_tsan` con ThreadSanitizer |
+| **Totale** | **17 962** + ≈ 333 000 dello stress + 41 dello script | **17 956** + ≈ 333 000 + 41 | 0 errori, con e senza sanitizer (ASan + UBSan bloccante); `mem_pools_tsan` con ThreadSanitizer |
 
 `run_matrix_test` usa `tests/fixtures/workspace_v1_6_0.inc`, un record salvato
 dai sorgenti della v1.6.0 (commit 7dc65cd), per verificare la compatibilità.
@@ -112,6 +113,16 @@ un record v7 generato con i sorgenti della v1.11.0 (tag `v1.11.0`, commit
 sottonomi, Hex, comandi grafici), e `tests/fixtures/workspace_v1_12_0.inc`, un
 record v8 generato con i sorgenti della v1.12.0 (commit `51691de` di `main`,
 con i dati di EQUATION), per le migrazioni v7→v9 e v8→v9.
+
+v1.14.0: 47 test per profilo (45 suite C++, lo stress dell'allocatore e
+l'interoperabilità FAT/exFAT): 17 962 controlli sulla Plus e 17 956 sul Pico 2 W
+(somma dei controlli stampati dalle suite C++, escluso lo stress), tutti
+superati anche con `--sanitize`. Si aggiungono `conversion_v114_test` e il
+flusso di CONVERSION in `apps_flow_test`; i test che controllavano la
+versione del record passano da 9 a 10 e `table_test` toglie anche la coda
+v10. `conversion_v114_test` usa `tests/fixtures/workspace_v1_13_1.inc`, un
+record v9 scritto con i sorgenti della v1.13.1 (commit `62b3f8f`). Fuzzing:
+`tools/fuzz/fuzz_conversion.cpp` (incluso in `run_fuzz.sh`).
 
 v1.13.1: 46 test per profilo (44 suite C++, lo stress dell'allocatore e
 l'interoperabilità FAT/exFAT): 12 223 controlli sulla Plus e 12 217 sul Pico 2 W;
