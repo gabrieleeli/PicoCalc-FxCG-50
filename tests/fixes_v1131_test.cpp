@@ -414,5 +414,17 @@ int main() {
         CHECK(runFails<MathError>(w, "sum(x,x,1,200000)"));
         CHECK(runFails<MathError>(w, "sum(x,x,1.5,3)"));
     }
+    // ================================================================ E17 nomi delle voci VARS › V-WIN e TABLE
+    {
+        // La v1.13.0 mostrava i nomi interni ("xmin = -6.3", "tblstart = -3"): la
+        // fx-CG50 (e la v1.12.0) scrive Xmin, Ymin, TblStart...
+        const struct { const char* token; const char* shown; } names[] = {
+            {"xmin", "Xmin"}, {"xmax", "Xmax"}, {"xscl", "Xscl"}, {"ymin", "Ymin"}, {"ymax", "Ymax"}, {"yscl", "Yscl"},
+            {"tmin", "Tmin"}, {"tmax", "Tmax"}, {"tptch", "Tptch"}, {"tblstart", "TblStart"}, {"tblend", "TblEnd"}, {"tblpitch", "TblPitch"}};
+        for (const auto& n : names) {
+            const char* shown = calclib::displayName(n.token);
+            CHECK(shown != nullptr && std::string(shown) == n.shown);
+        }
+    }
     return testutil::finish("fixes_v1131_test");
 }

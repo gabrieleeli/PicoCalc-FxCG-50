@@ -50,7 +50,9 @@ key AC
 key AC
 type 1/7
 key EXE
+# OPTN > RISULTATO (terzultima voce dalla v1.13.0) > ▶Periodo
 key OPTN
+key UP
 key UP
 key UP
 key EXE

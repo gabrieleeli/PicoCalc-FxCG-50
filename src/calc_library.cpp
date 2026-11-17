@@ -401,6 +401,9 @@ const Name kNames[] = {
     {"amt_sprn", "Amt_\xCE\xA3PRN"}, {"cnvt_eff", "Cnvt_EFF"}, {"cnvt_apr", "Cnvt_APR"}, {"fin_cost", "Cost"}, {"fin_sell", "Sell"},
     {"fin_margin", "Margin"}, {"days_prd", "Days_Prd"},
     {"pxl_test", "PxlTest"}, {"r_var", "r"}, {"theta", "\xCE\xB8"},
+    // v1.13.1 (E17): VARS › V-WIN e TABLE con i nomi della fx-CG50 (non "xmin", "tblstart").
+    {"xmin", "Xmin"}, {"xmax", "Xmax"}, {"xscl", "Xscl"}, {"ymin", "Ymin"}, {"ymax", "Ymax"}, {"yscl", "Yscl"},
+    {"tmin", "Tmin"}, {"tmax", "Tmax"}, {"tptch", "Tptch"}, {"tblstart", "TblStart"}, {"tblend", "TblEnd"}, {"tblpitch", "TblPitch"},
     {"xfct", "Xfct"}, {"yfct", "Yfct"}, {"d_start", "D Start"}, {"d_end", "D End"}, {"d_pitch", "D pitch"},
     {"r_start", "R Start"}, {"r_end", "R End"}, {"rec_a0", "a0"}, {"rec_a1", "a1"}, {"rec_a2", "a2"}, {"rec_b0", "b0"}, {"rec_b1", "b1"},
     {"rec_b2", "b2"}, {"rec_c0", "c0"}, {"rec_c1", "c1"}, {"rec_c2", "c2"}, {"rec_anstart", "anStart"}, {"rec_bnstart", "bnStart"},
