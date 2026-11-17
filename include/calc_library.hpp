@@ -15,7 +15,7 @@ namespace fx::calclib {
 // ---------------------------------------------------------------- CONVERT
 // Conversioni metriche della fx-CG50 (manuale 2-64...). Dalla v1.14.0 le unita'
 // vengono dall'unica tabella di units.hpp: il menu OPTN › CONVERT mostra solo le
-// 103 unita' marcate units::flag::FxCG50, nelle 11 categorie e nell'ordine del
+// 106 unita' marcate units::flag::FxCG50, nelle 11 categorie e nell'ordine del
 // manuale; il valore SI e' (v + offset) × factor, con gli stessi fattori di prima.
 using UnitInfo = units::Unit;     // name: nome scritto tra [ ] ("cm", "°C", "kgf/cm²")
 // Categorie nell'ordine del menu CONVERT (terminato da nullptr).

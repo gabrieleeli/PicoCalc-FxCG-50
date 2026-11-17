@@ -3,7 +3,7 @@
 //
 // Una sola tabella in flash (const, nessuna copia in RAM) usata da:
 //  - CONVERSION (tutte le categorie, tutte le unita', prefissi SI/IEC);
-//  - Run-Matrix OPTN › CONVERT (calc_library.hpp): solo le 103 unita' marcate
+//  - Run-Matrix OPTN › CONVERT (calc_library.hpp): solo le 106 unita' marcate
 //    flag::FxCG50, nelle 11 categorie e nell'ordine del manuale della fx-CG50;
 //  - la sintassi valore[unita']▶[unita'] di Run-Matrix (anche le unita' nuove).
 //

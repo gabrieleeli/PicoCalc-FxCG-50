@@ -166,6 +166,84 @@ int main() {
         r.key(pckey::Esc); r.key(pckey::Esc);
     }
     r.home();
+    // ---------------- CONVERSION v1.14.0: categorie, SWAP, ALL, PREFIX, Ans, esatti, valute, errori
+    {
+        using CA = app::ConversionApp;
+        r.type("k");
+        auto* cv = r.app<CA>();
+        CHECK(cv->screen() == CA::Screen::Menu && cv->menuRows() > 100);   // gruppi + 97 voci (+ recenti)
+        r.type("Temperatura"); r.key(pckey::Enter);                        // ricerca: prima voce trovata
+        CHECK(cv->screen() == CA::Screen::Convert && cv->fromName() == "K");
+        r.key(pckey::Down); r.type("C"); r.key(pckey::Enter);   // Da: °C (simbolo identico in cima)
+        r.key(pckey::Down); r.type("F"); r.key(pckey::Enter);   // A: °F
+        CHECK(cv->fromName() == "\xC2\xB0" "C" && cv->toName() == "\xC2\xB0" "F");
+        r.key(pckey::Up); r.key(pckey::Up); r.enter("100");
+        CHECK(!r.error() && cv->result() == "212");
+        CHECK_NEAR(ws.memory.answer(), 212, 1e-12);                       // stessa formula della v1.13.1 (211.99999999999997)
+        r.key(pckey::F2);                                                  // SWAP: 100 °F -> °C
+        CHECK(cv->fromName() == "\xC2\xB0" "F" && cv->toName() == "\xC2\xB0" "C");
+        CHECK_NEAR(ws.memory.answer(), 37.77777777777778, 1e-12);
+        CHECK(cv->exactResult() == "340/9");                               // forma esatta
+        r.key(pckey::F3);                                                  // ALL: 100 °F in tutte le 8 unita'
+        CHECK(cv->screen() == CA::Screen::All && cv->allList().rows.size() == 8);
+        CHECK(cv->allList().rows[1].first == "K");
+        r.key(pckey::Esc);
+        CHECK(cv->screen() == CA::Screen::Convert);
+        r.key(pckey::Esc);                                                 // F6/EXIT: elenco
+        CHECK(cv->screen() == CA::Screen::Menu);
+        // Cambio di categoria: Dati digitali, prefisso IEC con F4, valore come espressione con Ans e A-Z
+        r.type("dati d"); r.key(pckey::Enter);
+        CHECK(cv->fromName() == "bit");
+        r.key(pckey::Down); r.type("B"); r.key(pckey::Enter);            // Da: byte
+        r.key(pckey::F4);                                                  // PREFIX su Da
+        CHECK(cv->screen() == CA::Screen::Prefix);
+        r.type("gibi"); r.key(pckey::Enter);
+        CHECK(cv->fromName() == "GiB");
+        r.key(pckey::Down); r.type("MiB"); r.key(pckey::Enter);
+        ws.memory.store('A', 2);
+        r.key(pckey::Up); r.key(pckey::Up); r.enter("A+1");
+        CHECK(!r.error() && cv->result() == "3072" && ws.memory.answer() == 3072);
+        r.key(pckey::F5);                                                  // COPY negli appunti
+        CHECK(r.fw.apps().context().clipboard != nullptr);
+        // Errori senza crash: testo nel campo numerico, unita' incompatibili non selezionabili
+        r.key(pckey::Enter); r.key(pckey::Break); r.type("abc+"); r.key(pckey::Enter);
+        CHECK(r.error() && r.fw.apps().errorTitle() == "Syntax ERROR");
+        r.key(pckey::Esc); r.key(pckey::Esc);
+        CHECK(!r.error());
+        r.key(pckey::Esc);
+        // Formati: numeri romani fuori intervallo -> Argument ERROR
+        r.type("romani"); r.key(pckey::Enter);
+        r.type("4000"); r.key(pckey::Enter);
+        CHECK(r.error() && r.fw.apps().errorTitle() == "Argument ERROR");
+        r.key(pckey::Esc);
+        r.key(pckey::Down); r.key(pckey::Down); r.key(pckey::Right);        // A: romano
+        r.key(pckey::Up); r.key(pckey::Up); r.key(pckey::Enter); r.key(pckey::Break); r.type("2026"); r.key(pckey::Enter);
+        CHECK(!r.error() && cv->result() == "MMXXVI");
+        r.key(pckey::Esc);
+        // Valute: tasso non impostato -> Argument ERROR; con F4 TASSI il tasso viene salvato
+        r.type("valute"); r.key(pckey::Enter);
+        CHECK(cv->fromName() == "EUR" && cv->toName() == "USD");
+        r.key(pckey::F1);
+        CHECK(r.error() && r.fw.apps().errorTitle() == "Argument ERROR");
+        r.key(pckey::Esc);
+        r.key(pckey::F4);                                                  // TASSI: USD per 1 EUR
+        CHECK(cv->screen() == CA::Screen::Rates);
+        r.enter("1.08");
+        CHECK(ws.settings.conversion.rates[1] == 1.08);
+        r.key(pckey::Esc);
+        r.key(pckey::Up); r.key(pckey::Up); r.key(pckey::Up); r.enter("100");
+        CHECK(!r.error() && cv->result() == "108");
+        r.key(pckey::Esc);
+        // Preferiti e recenti nel workspace (record v10)
+        CHECK(!ws.settings.conversion.recent.empty() && ws.settings.conversion.recent[0].entry == 0x0200);
+        r.key(pckey::F2);                                                  // la prima voce (recente) tra i preferiti
+        CHECK(ws.settings.conversion.favorites.size() == 1);
+        const auto blob = serializeWorkspace(ws);
+        Workspace back;
+        CHECK(deserializeWorkspace(blob.data(), blob.size(), back) && back.settings.conversion.favorites == ws.settings.conversion.favorites &&
+              back.settings.conversion.rates[1] == 1.08 && back.settings.conversion.recent.size() == ws.settings.conversion.recent.size());
+        r.home();
+    }
     r.type("f"); CHECK(r.fw.apps().activeId() == AppId::Memory);
     r.key(pckey::F1); r.key(pckey::Enter);                 // delete Run-Matrix history
     CHECK(ws.history.empty());

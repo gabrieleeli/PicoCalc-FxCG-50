@@ -55,7 +55,9 @@ set(FXAI_TESTS
   # v1.13.0: completamento di Run-Matrix (calcolo, Run-Matrix e workspace v9, comandi grafici, editor)
   calc_v112_test run_matrix_v112_test graph_cmd_v112_test editor_v112_test
   # v1.13.1: versione di correzione (un gruppo per errore di docs/reports/ERRORI_v1.13.1.md)
-  fixes_v1131_test)
+  fixes_v1131_test
+  # v1.14.0: CONVERSION completo (units, unit_formats, ConversionApp, record v10)
+  conversion_v114_test)
 foreach(t ${FXAI_TESTS})
   add_executable(${t} ${CMAKE_CURRENT_LIST_DIR}/${t}.cpp)
   target_link_libraries(${t} PRIVATE fxai_core fxai_host_board)
@@ -73,6 +75,8 @@ endforeach()
 
 # The architecture test reads the sources it checks.
 target_compile_definitions(architecture_test PRIVATE FXAI_SOURCE_ROOT="${FXAI_ROOT}")
+# conversion_v114_test genera e confronta docs/CONVERSION.md.
+target_compile_definitions(conversion_v114_test PRIVATE FXAI_SOURCE_ROOT="${FXAI_ROOT}")
 
 # ThreadSanitizer build of the allocator stress (two threads on the same pools).
 # TSan cannot be combined with ASan: run_host_tests.sh --tsan uses its own build.

@@ -20,7 +20,7 @@ add_library(fxai_fuzz_core STATIC ${FXAI_CORE_SOURCES} ${FXAI_ROOT}/src/platform
 target_include_directories(fxai_fuzz_core PUBLIC ${FXAI_INCLUDE_DIR} ${FXAI_ROOT}/tests)
 target_compile_definitions(fxai_fuzz_core PUBLIC FXAI_VERSION_STRING="${FXAI_VERSION_STRING}" FXAI_FATFS_MKFS=1 ${FXAI_BOARD_DEFINE}
   LFS_NO_DEBUG=1 LFS_NO_WARN=1 LFS_NO_ERROR=1 LFS_NO_ASSERT=1)
-foreach(t fuzz_expr fuzz_exactdiff fuzz_workspace fuzz_csv fuzz_pcgraph fuzz_equation fuzz_ui)
+foreach(t fuzz_expr fuzz_exactdiff fuzz_workspace fuzz_csv fuzz_pcgraph fuzz_equation fuzz_ui fuzz_conversion)
   add_executable(${t} ${CMAKE_CURRENT_LIST_DIR}/${t}.cpp)
   target_link_libraries(${t} PRIVATE fxai_fuzz_core)
   target_link_options(${t} PRIVATE -fsanitize=fuzzer)

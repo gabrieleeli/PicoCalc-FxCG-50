@@ -291,14 +291,17 @@ void ConversionApp::buildPick() {
     const std::string q = lower(query_);
     if (screen_ == Screen::Prefix) {
         const units::Unit& u = units::unit(firstUnit(entry_) + (pickTo_ ? to_ : from_));
-        pick_.push_back(0xFFFF);
+        if (q.empty()) pick_.push_back(0xFFFF);
         for (std::size_t p = 0; p < units::prefixCount(); ++p)
-            if (units::prefixAllowed(u, p) && (q.empty() || units::matchesText(units::prefix(p).name, q))) pick_.push_back(static_cast<std::uint16_t>(p));
+            if (units::prefixAllowed(u, p) && (q.empty() || units::matchesText(units::prefix(p).name, q) || query_ == units::prefix(p).sym)) pick_.push_back(static_cast<std::uint16_t>(p));
     } else {
-        for (std::size_t i = 0; i < optionCount(); ++i) {
-            if (kindOf(entry_) == Format && !pickTo_ && !unitfmt::readable(unitfmt::converter(indexOf(entry_)), i)) continue;
-            if (q.empty() || units::matchesText(optionName(i, true).c_str(), q)) pick_.push_back(static_cast<std::uint16_t>(i));
-        }
+        // Prima il simbolo identico ("eV" prima di "meV"), poi le altre corrispondenze.
+        for (int pass = 0; pass < 2; ++pass)
+            for (std::size_t i = 0; i < optionCount(); ++i) {
+                if (kindOf(entry_) == Format && !pickTo_ && !unitfmt::readable(unitfmt::converter(indexOf(entry_)), i)) continue;
+                const bool same = !query_.empty() && optionName(i, false) == query_;
+                if (pass == 0 ? same : !same && (q.empty() || units::matchesText(optionName(i, true).c_str(), q))) pick_.push_back(static_cast<std::uint16_t>(i));
+            }
     }
     sel_ = 0; first_ = 0;
 }
@@ -533,7 +536,7 @@ void ConversionApp::draw(Context& ctx, gfx::Canvas& c) {
 void ConversionApp::drawMenu(Context& ctx, gfx::Canvas& c) {
     int y = ui::ContentTop + 2;
     c.rect(0, y, ui::ScreenW, 20, SelectSoft, true);
-    if (query_.empty()) ui::text(c, 6, y + 2, "Scrivi per cercare una grandezza o un'unita'", Muted, font::Face::Small);
+    if (query_.empty()) ui::text(c, 6, y + 2, "Scrivi per cercare (grandezza o unita')", Muted, font::Face::Small);
     else { ui::textFit(c, 6, y + 2, "Cerca: " + query_ + "_", ui::ScreenW - 80, Ink); }
     char cnt[24];
     std::size_t entries = 0;

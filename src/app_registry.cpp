@@ -104,7 +104,7 @@ const AppInfo kApps[AppCount] = {
      "Superfici z=f(x,y) (fino a 3) nella finestra 3D, rotazione e zoom; z-buffer e griglie fino a 128 con la PSRAM",
      nullptr, s::Expression | Ui | s::Storage | s::Models | s::Graph3D, d::Settings | d::Memory | d::Graph3D, 0, kGraph3DSrc},
     {AppId::Conversion, "Conversion", "K", rgb888To565(220, 90, 120), AppStatus::Available,
-     "Convertitore completo: 77 grandezze e 771 unita' (le 103 della fx-CG50 in comune con Run-Matrix), prefissi SI e IEC, "
+     "Convertitore completo: 77 grandezze e 771 unita' (le 106 della fx-CG50 in comune con Run-Matrix), prefissi SI e IEC, "
      "conversioni non lineari (dB, pH, AWG, L/100 km) e derivate (fotone, E=mc\xC2\xB2, kT, moli), 19 formati (basi, IEEE-754, romani, "
      "date, colori...), taglie e valute con tassi dell'utente; valore come espressione, risultato esatto quando possibile e in Ans",
      nullptr, s::Expression | s::Exact | Ui | s::Units, d::Settings | d::Memory, 0, kConversionSrc},
