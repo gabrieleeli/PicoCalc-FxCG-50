@@ -23,5 +23,8 @@ int main(){
     font::drawText(canvas,0,0,"MMMM",gfx::palette::Red,1,80);
     for(int y=0;y<32;++y)for(int x=0;x<80;++x)
         if(x>=3||y>=3) assert(fb[static_cast<std::size_t>(y)*80+x]!=gfx::palette::Red);
+    // v1.14.0: glifi delle costanti fisiche (ħ, pedici h k m n p, ⊕, ☉) in entrambe le facce.
+    for(std::uint32_t cp:{0x0127u,0x2095u,0x2096u,0x2098u,0x2099u,0x209Au,0x2295u,0x2609u})
+        assert(font::hasGlyph(font::Face::Small,cp)&&font::hasGlyph(font::Face::Medium,cp));
     return testutil::finish("font_smoke");
 }
