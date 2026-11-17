@@ -28,6 +28,28 @@ Run-Matrix, Graph, Table, Equation, Statistics e i test usano lo stesso codice
 (`include/expression.hpp`). `CompiledExpression` analizza una volta e valuta molte
 volte (grafici, tabelle, solver).
 
+## Costanti (v1.14.0, in sviluppo)
+
+Le costanti con nome non sono più in `kConstants[]` di `expression.cpp`, ma
+nella tabella unica `kTable` di `src/physical_constants.cpp` (73 costanti,
+[PHYSICAL_CONSTANTS.md](PHYSICAL_CONSTANTS.md)):
+
+- `isConstantName()` e la valutazione usano `physconst::findConstant()` per i
+  nomi di almeno due lettere; `e` resta il caso a parte di una lettera (il
+  numero di Nepero, mentre `E` è la variabile), con il valore della tabella;
+- i nomi della v1.13 valgono come prima; i nomi nuovi (`phys` + sigla) non
+  allungano un nome riservato di cifre o di una lettera, quindi letture come
+  `physc2` = c·2 o `kbT` = k_B·T non cambiano; cambia solo una sequenza di
+  lettere che ora è un nome intero (`physme`, prima p·h·y·s·m·e). Regole e
+  confronto differenziale nel documento;
+- `isNonConstantName()` (nuova, `expression.hpp`) riconosce i nomi del
+  parser che non sono costanti; il test verifica che nessuna costante lo sia;
+- `pi` e `tau` restano esatti (multipli di π) nella valutazione esatta; le
+  altre costanti sono decimali come prima;
+- glifi: `calclib::displayName()` restituisce il glifo della tabella, quindi
+  l'editor e la cronologia mostrano `mₑ×c²` invece di `physme*physc^2`;
+  `formatNatural` usa la stessa tabella senza distinguere le maiuscole.
+
 ## Correzioni della v1.13.1
 
 Stesso parser, stesso AST, stesso valutatore; nessuna funzione nuova
@@ -247,7 +269,7 @@ per sostituire i coefficienti con i loro valori).
 | Interi e arrotondamenti (v1.7.0) | `modexp(n,p,m)` (MOD_Exp), `rndfix(x,n)` (RndFix), operatori `Int÷`, `Rmdr` |
 | Casuali (v1.7.0) | `rannorm(σ,μ)` (RanNorm#), `ranbin(n,p)` (RanBin#) |
 | Calcolo (valutazione pigra) | integral(f,a,b) derivative(f,x₀) derivative2(f,x₀) sum(f,a,b) prod(f,a,b) solve(f,x₀) |
-| Costanti | pi tau phi eulergamma sqrt2 ln2 ln10 e; fisiche: speedoflight/physc, physg, physh, na, kb, qe, g0 (anche con nomi estesi) |
+| Costanti | tabella unica `physical_constants.hpp` (v1.14.0): matematiche `pi e tau phi eulergamma sqrt2 ln2 ln10`; fisiche CODATA 2022 / SI 2019 e astronomiche IAU, es. `physc physh physhbar physme physmp na kb qe physrgas g0 physau physpc` e alias come `electronmass`; elenco completo in [PHYSICAL_CONSTANTS.md](PHYSICAL_CONSTANTS.md) |
 
 ## Metodi numerici
 
@@ -393,6 +415,7 @@ sull'heap (PSRAM sulla Plus), mai sullo stack.
 | `exact.hpp/.cpp` | razionali, radicali, multipli di π, letterali periodici, regole di visualizzazione |
 | `run_matrix.hpp/.cpp` | riga di Run-Matrix (→ verso variabili, memorie, Str, f1–f20, variabili di sistema; `:` e `◢`; Swap/\*Row), cronologia con ricalcolo, viste dei risultati (ENG, ►r∠θ) |
 | `calc_library.hpp/.cpp` | v1.13.0: unità di CONVERT, distribuzioni, TVM, nomi mostrati, CATALOG (puro calcolo) |
+| `physical_constants.hpp/.cpp` | v1.14.0: tabella unica delle costanti (nomi, alias, glifi, nomi italiani, valori SI, unità, incertezze, gruppi) |
 | `graph_engine.hpp/.cpp`, `graph_solve.hpp/.cpp` | motore dei grafici e G-Solve sullo stesso valutatore ([GRAPH_ENGINE.md](GRAPH_ENGINE.md)) |
 
 ## Non ancora disponibile

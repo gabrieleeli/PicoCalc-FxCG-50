@@ -1,5 +1,69 @@
 # Changelog
 
+## In sviluppo (prevista v1.14.0) — catalogo delle costanti fisiche
+
+Base: `v1.13.1` (commit `62b3f8f`). Branch di lavoro, nessuna versione
+pubblicata; formato del workspace e dei `.pcgraph` invariato.
+Documento: [PHYSICAL_CONSTANTS.md](PHYSICAL_CONSTANTS.md).
+
+### Novità
+- **Tabella unica delle costanti** (`include/physical_constants.hpp`,
+  `src/physical_constants.cpp`): 73 costanti `constexpr` in flash, in 7
+  gruppi — Matematiche, Universali, Elettromagnetiche, Atomiche e nucleari,
+  Fisico-chimiche, Valori adottati, Astronomiche — con nome del parser, alias,
+  glifo, nome italiano, valore SI, unità e incertezza relativa. Valori
+  CODATA 2022 verificati riga per riga sulla tabella NIST, costanti definenti
+  SI 2019, valori IAU 2012 B2 / 2015 B2 / 2015 B3; le derivate esatte (ħ, R,
+  F, Φ₀, G₀, K_J, R_K, σ, b, c₁, c₂, Vₘ, n₀, ly, pc) sono calcolate dalle
+  costanti definenti.
+- Parser, editor naturale, cronologia, `formatNatural`, `calclib::displayName`,
+  OPTN › CONST, SYMBOLS e `pointa::physicalConstant()` leggono solo questa
+  tabella: eliminate `kConstants[]` di `expression.cpp`, i glifi di
+  `memory.cpp`, la catena di `if` di `point_a.cpp` e la pagina fissa delle
+  costanti di SYMBOLS.
+- **RUN-MATRIX › OPTN › CONST** a due livelli: gruppo → costante, con glifo e
+  nome; inserisce il nome del parser come un token.
+- **SYMBOLS**: 7 pagine di costanti generate dalla tabella (23 pagine in
+  tutto), con scorrimento oltre le 6 voci visibili, nome del parser e alias,
+  valore, incertezza ed esempio del gruppo (`physme*physc^2 ≈ 8.187e-14 J`).
+- **Glifi** nell'editor e nella cronologia: `mₑ×c²`, `2g₀+a₀+ħ`; le costanti
+  con cifre (`g0`, `physa0`) sono un solo token anche digitate a mano.
+- **Font**: 8 glifi nuovi nelle due facce (ħ ₕ ₖ ₘ ₙ ₚ ⊕ ☉).
+
+### Compatibilità
+- Tutti i nomi della v1.13 valgono come prima (`physc physg physh na kb qe g0`,
+  i nomi lunghi e le maiuscole `NA`, `kB`, `speedOfLight`), anche nei file e
+  nei workspace salvati; `e` resta il numero di Nepero, `E` la variabile.
+- I nomi nuovi (`phys` + sigla) non allungano un nome riservato di cifre o di
+  una lettera: `physc2`, `kbT`, `physhF`, `physg0`, `na*2`, `physh*x` hanno
+  la lettura della v1.13 (confronto differenziale su 6 034 espressioni).
+- `formatNatural` mostra il glifo anche per gli alias minuscoli e le grafie
+  maiuscole (`speedoflight` → c, `na` → Nₐ, `PI` → π), come li legge il parser.
+
+### Correzioni
+- Il richiamo dalla cronologia di `g0^2` (e di ogni costante con cifre
+  elevata a potenza) diventava `g(0)^(2)` = 0: ora resta `g0^2`.
+
+### Test
+- Nuova suite `physical_constants_test` (9 688 controlli): valori contro le
+  righe NIST, derivate esatte entro 1e-12, relazioni tra misurate entro 1e-9,
+  ogni nome e alias valutato dal parser, nomi vecchi, collisioni e prefissi,
+  glifi (font, renderer, editor, cronologia), point_a, esempi di SYMBOLS, ogni
+  voce di OPTN › CONST eseguita in RUN-MATRIX, scorrimento di SYMBOLS.
+- `cheatsheet_smoke` per le 23 pagine; `font_smoke` per i glifi nuovi.
+- Test host: 47 per profilo, 22 261 controlli sulla Plus e 22 255 sul Pico 2 W,
+  tutti superati ([TESTING.md](TESTING.md)).
+
+### Firmware (Pico SDK 2.2.0, `-O2`, nessun warning)
+
+| Scheda | Immagine v1.13.1 | Immagine ora | Differenza | Partizione | SRAM statica |
+|---|---|---|---|---|---|
+| Pimoroni Pico Plus 2 W | 1 848 768 B | 1 859 572 B | +10 804 B | 44% di 4096 KiB | 309 344 B (invariata) |
+| Raspberry Pi Pico 2 W | 1 839 940 B | 1 850 744 B | +10 804 B | 88% di 2048 KiB (era 87%) | 305 420 B (invariata) |
+
+La tabella `kTable` (3 504 B) e le stringhe sono in flash (`.rodata`, XIP),
+nessun byte di SRAM in più.
+
 ## v1.13.1 — versione di correzione
 
 Base: tag `v1.13.0` (commit `a72d901` = `main`). **Nessuna funzione nuova**:

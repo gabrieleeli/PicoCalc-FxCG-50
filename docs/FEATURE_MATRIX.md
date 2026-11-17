@@ -1,5 +1,10 @@
 # Feature matrix — v1.13.1
 
+**In sviluppo (v1.14.0)**: catalogo delle costanti matematiche, fisiche
+(CODATA 2022, SI 2019) e astronomiche (IAU 2012/2015) in una tabella unica
+letta da parser, editor, cronologia, OPTN › CONST e SYMBOLS
+([PHYSICAL_CONSTANTS.md](PHYSICAL_CONSTANTS.md)); righe aggiornate qui sotto.
+
 La v1.13.1 è una versione di correzione della v1.13.0: nessuna funzione
 nuova e nessuno stato cambiato; 18 errori corretti, ognuno con un test
 ([reports/ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md)). Nessuna voce è
@@ -122,7 +127,8 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Variabili A–Z, Ans, PreAns, memorizzazione con →, anche →A~F | TESTED ON HOST |
 | Forma esatta conservata in Ans/PreAns/A–Z | TESTED ON HOST |
 | Variabili di altre modalità via workspace (VARS: V-WIN, TABLE) | TESTED ON SIMULATOR |
-| Costanti matematiche e fisiche | TESTED ON HOST |
+| Costanti matematiche e fisiche: 73 costanti in 7 gruppi (CODATA 2022, SI 2019, IAU 2012/2015) in una tabella unica, nomi della v1.13 invariati, glifi nell'editor e nella cronologia (v1.14.0, [PHYSICAL_CONSTANTS.md](PHYSICAL_CONSTANTS.md)) | TESTED ON HOST |
+| OPTN › CONST a due livelli (gruppo → costante, glifo e nome) (v1.14.0) | TESTED ON SIMULATOR |
 | Numeri complessi nel parser (a+bi, r∠θ, arg, conj, re, im) | TESTED ON HOST |
 | Formati Norm1/Norm2/Fix/Sci/Eng (10 cifre; Eng con i simboli f…T dalla v1.11.0, P ed E dalla v1.13.0) | TESTED ON SIMULATOR |
 | Aritmetica esatta: razionali, radicali a√b/c (≤ 2 termini), multipli di π | TESTED ON HOST |
@@ -206,7 +212,7 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Memory | TESTED ON HOST | |
 | Conversion | TESTED ON HOST | |
 | AI Chat (Claude / ChatGPT) | TESTED ON HOST | con trasporto simulato; rete reale da collaudare |
-| Symbols (guida) | TESTED ON HOST | |
+| Symbols (guida) | TESTED ON HOST | v1.14.0: 23 pagine, le 7 delle costanti generate dalla tabella unica e scorrevoli ([SYMBOL_CHEATSHEET.md](SYMBOL_CHEATSHEET.md)) |
 | eActivity, Spreadsheet, Dyna Graph, Recursion, Conic Graphs | IN PROGRESS | solo architettura e modello dati (`app_models.hpp`, testato); nessuna interfaccia; schermata "non disponibile" |
 | 3D Graph: Z1–Z3 = f(x,y), finestra 3D, griglia, rotazione, zoom, AUTO, campionamento incrementale, z-buffer in PSRAM (pittore senza PSRAM), un colore per superficie, persistenza | TESTED ON SIMULATOR | `graph3d_test` (motore e modalità, con e senza PSRAM); screenshot 40–43 (`tests/sim/graph3d.txt`); sfere/piani/rette parametrici della fx-CG50 NOT STARTED |
 | Program, Financial, Link, Geometry, Picture Plot | IN PROGRESS | solo modello dati; schermata "non disponibile" |

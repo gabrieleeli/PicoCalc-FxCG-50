@@ -55,7 +55,7 @@ sulla causa di un errore**.
 | F4 | menu MATH | `→` (memorizza) |
 | F5 | **S⇔D** sull'ultimo risultato | **a b/c ⇔ d/c** |
 | F6 | `Ans` | θ |
-| OPTN (F8) | v1.13.0, ordine della fx-CG50: **LIST, MAT/VCT, COMPLEX, CALC, STAT, CONVERT, HYPERBL, PROB, NUMERIC, ANGLE, ESYM, PICTURE, FUNCMEM, LOGIC, CAPTURE, TVM**, poi SKETCH (comandi grafici, SHIFT F4 sulla calcolatrice), RELAZIONI (anche `:` e `◢`), RISULTATO (S⇔D, ab/c, periodo, basi, DMS, ENG, ►r∠θ), BASE-N, CONST | |
+| OPTN (F8) | v1.13.0, ordine della fx-CG50: **LIST, MAT/VCT, COMPLEX, CALC, STAT, CONVERT, HYPERBL, PROB, NUMERIC, ANGLE, ESYM, PICTURE, FUNCMEM, LOGIC, CAPTURE, TVM**, poi SKETCH (comandi grafici, SHIFT F4 sulla calcolatrice), RELAZIONI (anche `:` e `◢`), RISULTATO (S⇔D, ab/c, periodo, basi, DMS, ENG, ►r∠θ), BASE-N, CONST (v1.14.0: gruppo → costante, 73 costanti, [PHYSICAL_CONSTANTS.md](PHYSICAL_CONSTANTS.md)) | |
 | DEL | cancella a sinistra | **INS**: in Line alterna sovrascrittura/inserimento (barra di stato `OVR`), in Math il prossimo modello prende come argomento il valore a destra del cursore |
 | VARS (F9) | A~Z, r, θ (con il valore esatto), Ans/PreAns, **V-WIN, FACTOR, STAT, GRAPH, DYNA, TABLE (anche Result), RECURSION, TVM, Str** (v1.13.0), EQUATION (SimRes, SimCoef, PlyRes, PlyCoef: matrici di EQUATION, v1.12.0, [EQUATION.md](EQUATION.md#5-uso-dei-risultati)) | |
 | ↑ | entra nella cronologia (con il cursore fuori dai modelli) | |
