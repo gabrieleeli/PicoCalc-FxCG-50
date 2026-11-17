@@ -13,30 +13,35 @@ using namespace ui::theme;
 
 namespace {
 // Numero con 15 cifre significative, esponente compatto: 6.02214076e23, 1.25663706127e-6.
-std::string number(double v) {
-    char buf[40];
-    std::snprintf(buf, sizeof(buf), "%.15g", v);
-    std::string s = buf;
-    const std::size_t e = s.find('e');
-    if (e == std::string::npos) return s;
-    std::string exp = s.substr(e + 1);
-    const bool negative = !exp.empty() && exp[0] == '-';
-    if (!exp.empty() && (exp[0] == '-' || exp[0] == '+')) exp.erase(0, 1);
-    while (exp.size() > 1 && exp[0] == '0') exp.erase(0, 1);
-    return s.substr(0, e + 1) + (negative ? "-" : "") + exp;
+// Buffer fissi e snprintf: niente concatenazioni di std::string nel codice di disegno.
+void number(double v, char* out, std::size_t size) {
+    std::snprintf(out, size, "%.15g", v);
+    char* e = std::strchr(out, 'e');
+    if (!e) return;
+    char* src = e + 1;
+    char* dst = e + 1;
+    if (*src == '-') *dst++ = *src++;
+    else if (*src == '+') ++src;
+    while (src[0] == '0' && src[1]) ++src;
+    std::memmove(dst, src, std::strlen(src) + 1);
 }
 // Riquadro di una costante: nome del parser e alias, valore con unita', incertezza, esempio del gruppo.
-std::size_t constantLines(const help::Page& page, std::size_t i, std::string& head, std::string* lines) {
+void constantLines(const help::Page& page, std::size_t i, char (&head)[96], char (&lines)[3][80]) {
     const std::size_t group = static_cast<std::size_t>(page.constGroup);
     const physconst::ConstDef& k = physconst::constantsOf(group)[i];
-    head = std::string("Nome: ") + k.parserName;
-    physconst::forEachAlias(k, [&](std::string_view alias) { head += "   alias: "; head += alias; });
-    lines[0] = "= " + number(k.value) + (k.unit[0] ? std::string(" ") + k.unit : std::string());
-    if (group == 0) lines[1] = "Costante matematica";
-    else if (physconst::isExact(k)) lines[1] = "Esatta (per definizione)";
-    else lines[1] = "Incertezza relativa " + number(k.relUncertainty);
-    lines[2] = std::string("Es.: ") + physconst::constGroups()[group].example;
-    return 3;
+    int used = std::snprintf(head, sizeof(head), "Nome: %s", k.parserName);
+    physconst::forEachAlias(k, [&](std::string_view alias) {
+        if (used >= 0 && static_cast<std::size_t>(used) < sizeof(head))
+            used += std::snprintf(head + used, sizeof(head) - static_cast<std::size_t>(used), "   alias: %.*s",
+                                  static_cast<int>(alias.size()), alias.data());
+    });
+    char value[40];
+    number(k.value, value, sizeof(value));
+    std::snprintf(lines[0], sizeof(lines[0]), "= %s%s%s", value, k.unit[0] ? " " : "", k.unit);
+    if (group == 0) std::snprintf(lines[1], sizeof(lines[1]), "Costante matematica");
+    else if (physconst::isExact(k)) std::snprintf(lines[1], sizeof(lines[1]), "Esatta (per definizione)");
+    else { number(k.relUncertainty, value, sizeof(value)); std::snprintf(lines[1], sizeof(lines[1]), "Incertezza relativa %s", value); }
+    std::snprintf(lines[2], sizeof(lines[2]), "Es.: %s", physconst::constGroups()[group].example);
 }
 } // namespace
 
@@ -82,15 +87,18 @@ void SymbolsApp::draw(Context& ctx, gfx::Canvas& c) {
                       static_cast<int>(count), static_cast<int>(help::VisibleRows), static_cast<int>(first_));
     const int by = 202;
     ui::panel(c, {4, by, ui::ScreenW - 8, 74}, StatusBg, Faint);
-    std::string head = "Esempio", lines[3];
-    std::size_t n = 0;
-    if (count) {
-        const unsigned sel = selected_ % count;
-        if (help::isConstantPage(data)) n = constantLines(data, sel, head, lines);
-        else n = ui::wrapText(data.entries[sel].example, 37, lines, 3);
+    const unsigned sel = count ? selected_ % count : 0;
+    if (count && help::isConstantPage(data)) {
+        char head[96], lines[3][80];
+        constantLines(data, sel, head, lines);
+        ui::textFit(c, 10, by + 4, head, ui::ScreenW - 20, Muted, font::Face::Small);
+        for (int i = 0; i < 3; ++i) ui::textFit(c, 10, by + 20 + i * 16, lines[i], ui::ScreenW - 20, Ink);
+    } else {
+        ui::text(c, 10, by + 4, "Esempio", Muted, font::Face::Small);
+        std::string lines[3];
+        const std::size_t n = count ? ui::wrapText(data.entries[sel].example, 37, lines, 3) : 0;
+        for (std::size_t i = 0; i < n; ++i) ui::text(c, 10, by + 20 + static_cast<int>(i) * 16, lines[i].c_str(), Ink);
     }
-    ui::textFit(c, 10, by + 4, head, ui::ScreenW - 20, Muted, font::Face::Small);
-    for (std::size_t i = 0; i < n; ++i) ui::textFit(c, 10, by + 20 + static_cast<int>(i) * 16, lines[i], ui::ScreenW - 20, Ink);
     const char* keys[6] = {"\xE2\x97\x80PAG", "PAG\xE2\x96\xB6", nullptr, nullptr, nullptr, "EXIT"};
     ui::softKeys(c, keys);
 }
