@@ -60,14 +60,37 @@ template <typename F> double bisectIncreasing(F cdf, double target, double lo, d
     }
     return 0.5 * (lo + hi);
 }
-double logChoose(double n, double k) { return std::lgamma(n + 1) - std::lgamma(k + 1) - std::lgamma(n - k + 1); }
-// Distribuzione discreta: il piu' piccolo intero x con CD(x) >= prob.
-template <typename F> double discreteInverse(F cd, double prob, double lo, double hi) {
+// log C(n, k). v1.13.1 (E16): con n grande la differenza dei tre lgamma (circa
+// n·ln n) perdeva ~1E-5 (HypergeoPD oltre 1); con min(k, n-k) <= 64 il prodotto
+// si calcola direttamente, termine per termine.
+double logChoose(double n, double k) {
+    const double j = std::min(k, n - k);
+    if (j >= 0 && j <= 64) {
+        double s = 0;
+        for (double i = 1; i <= j; ++i) s += std::log((n - j + i) / i);
+        return s;
+    }
+    return std::lgamma(n + 1) - std::lgamma(k + 1) - std::lgamma(n - k + 1);
+}
+// Termini sommati al massimo da una funzione di ripartizione discreta (come il
+// limite n <= 1E6 di BinomialCD e x <= 1E6 di PoissonCD): il calcolo resta
+// limitato anche senza AC (v1.13.1, E02).
+constexpr double kMaxDiscreteTerms = 1e6;
+// Distribuzione discreta: il piu' piccolo intero x in [lo, hi) con CD(x) >= prob
+// (hi se nessuno). pd e' nulla sotto lo; CD(x) e' la somma di pd(lo..x) limitata
+// a 1, come in stats::binomialCd/poissonCd e hypergeoCD: la si accumula una sola
+// volta (v1.13.1, E03: ricalcolarla per ogni x costava O(x²), minuti sulla
+// PicoCalc), con le stesse somme nello stesso ordine, quindi lo stesso risultato.
+template <typename F> double discreteInverse(F pd, double prob, double lo, double hi) {
     need(prob >= 0 && prob <= 1, "0<=prob<=1");
     // Tolleranza della calcolatrice sugli arrotondamenti delle somme.
     const double target = prob - 1e-10;
-    double x = lo;
-    for (; x < hi; ++x) if (cd(x) >= target) return x;
+    if (target <= 0) return 0;                               // CD(0) >= 0: come la ricerca da 0
+    double sum = 0;
+    for (double x = lo; x < hi; ++x) {
+        sum += pd(x);
+        if (std::min(1.0, sum) >= target) return x;
+    }
     return hi;
 }
 
@@ -146,9 +169,13 @@ double tPD(double x, double df) {
 double tCD(double lower, double upper, double df) { return stats::tCd(lower, upper, df); }
 double invTCD(double area, double df) {
     need(area > 0 && area < 1 && df > 0, "0<Area<1, df>0");
-    // P(X >= x) = area: cdf(x) = 1 - area
+    // P(X >= x) = area: cdf(x) = 1 - area. v1.13.1 (E08): la distribuzione e'
+    // simmetrica (x(1 - area) = -x(area), x(0.5) = 0); si cerca la coda superiore
+    // da 0, allargando l'intervallo (prima [-1E4, 1E4] tagliava la coda inferiore).
+    if (area == 0.5) return 0;
+    if (area > 0.5) return -invTCD(1 - area, df);
     auto cdf = [&](double v) { return stats::tCd(-std::numeric_limits<double>::infinity(), v, df); };
-    return bisectIncreasing(cdf, 1 - area, -1e4, 1e4);
+    return bisectIncreasing(cdf, 1 - area, 0, 1e4);
 }
 double chiPD(double x, double df) {
     need(df > 0 && integral(df), "df intero >0");
@@ -177,32 +204,45 @@ double binomialPD(double x, double n, double p) { return stats::binomialPd(x, n,
 double binomialCD(double x, double n, double p) { return x < 0 ? 0 : stats::binomialCd(x, n, p); }
 double invBinomialCD(double prob, double n, double p) {
     need(integral(n) && n >= 0 && p >= 0 && p <= 1, "n intero >=0, 0<=p<=1");
-    return discreteInverse([&](double x) { return stats::binomialCd(x, n, p); }, prob, 0, n);
+    need(n <= 1e6, "n intero 0..1e6");                       // limite di BinomialCD
+    return discreteInverse([&](double x) { return stats::binomialPd(x, n, p); }, prob, 0, n);
 }
 double poissonPD(double x, double lambda) { return stats::poissonPd(x, lambda); }
 double poissonCD(double x, double lambda) { return x < 0 ? 0 : stats::poissonCd(x, lambda); }
 double invPoissonCD(double prob, double lambda) {
-    need(lambda > 0, "lambda>0");
-    return discreteInverse([&](double x) { return stats::poissonCd(x, lambda); }, prob, 0, 1e6);
+    need(lambda > 0 && std::isfinite(lambda), "lambda>0");
+    // Si cerca in [0, 1E6] (il limite di PoissonCD). v1.13.1 (E15): senza un x
+    // valido si restituiva 1000000 (risultato errato per lambda grandi).
+    const double x = discreteInverse([&](double v) { return stats::poissonPd(v, lambda); }, prob, 0, kMaxDiscreteTerms + 1);
+    if (x > kMaxDiscreteTerms) argumentError("InvPoissonCD oltre 1E6 (lambda troppo grande)");
+    return x;
 }
+// v1.13.1 (E14): (1-p)^k con il logaritmo (log1p): con p < 1E-16 1-p vale 1 in
+// double e GeoCD era sempre 0 (InvGeoCD non terminava piu').
 double geoPD(double x, double p) {
     need(p > 0 && p <= 1, "0<p<=1");
     if (x < 1 || !integral(x)) return 0;
-    return p * std::pow(1 - p, x - 1);
+    if (p == 1) return x == 1 ? 1 : 0;
+    return p * std::exp((x - 1) * std::log1p(-p));
 }
 double geoCD(double x, double p) {
     need(p > 0 && p <= 1, "0<p<=1");
     if (x < 1) return 0;
-    return 1 - std::pow(1 - p, std::floor(x));
+    if (p == 1) return 1;
+    return -std::expm1(std::floor(x) * std::log1p(-p));
 }
 double invGeoCD(double prob, double p) {
     need(p > 0 && p <= 1 && prob >= 0 && prob <= 1, "0<=prob<=1, 0<p<=1");
     if (prob <= 0) return 1;
     if (p == 1 || prob >= 1) return p == 1 ? 1 : std::numeric_limits<double>::infinity();
-    double x = std::ceil(std::log1p(-prob) / std::log1p(-p) - 1e-10);
-    if (x < 1) x = 1;
-    while (x > 1 && geoCD(x - 1, p) >= prob - 1e-10) --x;
-    while (geoCD(x, p) < prob - 1e-10) ++x;
+    // Il piu' piccolo x >= 1 con GeoCD(x) >= prob - 1E-10, dalla formula chiusa;
+    // pochi passi correggono gli arrotondamenti (oltre 2^53 x non cambia piu').
+    const double target = prob - 1e-10;
+    if (target <= 0) return 1;
+    double x = std::ceil(std::log1p(-target) / std::log1p(-p));
+    if (!(x >= 1)) x = 1;
+    for (int k = 0; k < 64 && x > 1 && geoCD(x - 1, p) >= target; ++k) --x;
+    for (int k = 0; k < 64 && geoCD(x, p) < target; ++k) ++x;
     return x;
 }
 double hypergeoPD(double x, double n, double m, double N) {
@@ -211,14 +251,21 @@ double hypergeoPD(double x, double n, double m, double N) {
     return std::exp(logChoose(m, x) + logChoose(N - m, n - x) - logChoose(N, n));
 }
 double hypergeoCD(double x, double n, double m, double N) {
+    (void)hypergeoPD(0, n, m, N);                            // Argument ERROR anche quando la somma e' vuota
+    // v1.13.1 (E02): si sommano solo i termini non nulli, da max(0, n+M-N) a
+    // min(x, n, M), al piu' 1E6 (la somma andava da 0 a x: con x = 1E8 o n = M = 1E9
+    // minuti o ore, senza AC).
+    const double lo = std::max(0.0, n + m - N), top = std::min(std::floor(x), std::min(n, m));
+    need(top - lo < kMaxDiscreteTerms, "HypergeoCD con al piu' 1E6 valori possibili");
     double s = 0;
-    for (double k = 0; k <= std::floor(x); ++k) s += hypergeoPD(k, n, m, N);
-    if (x >= 0) (void)hypergeoPD(0, n, m, N);
+    for (double k = lo; k <= top; ++k) s += hypergeoPD(k, n, m, N);
     return std::min(1.0, s);
 }
 double invHypergeoCD(double prob, double n, double m, double N) {
     (void)hypergeoPD(0, n, m, N);
-    return discreteInverse([&](double x) { return hypergeoCD(x, n, m, N); }, prob, 0, std::min(n, m));
+    const double lo = std::max(0.0, n + m - N), hi = std::min(n, m);
+    need(hi - lo < kMaxDiscreteTerms, "InvHypergeoCD con al piu' 1E6 valori possibili");
+    return discreteInverse([&](double x) { return hypergeoPD(x, n, m, N); }, prob, lo, hi);
 }
 double probP(double t) { return normalCdf(t); }
 double probQ(double t) { return normalCdf(std::abs(t)) - 0.5; }
@@ -354,6 +401,9 @@ const Name kNames[] = {
     {"amt_sprn", "Amt_\xCE\xA3PRN"}, {"cnvt_eff", "Cnvt_EFF"}, {"cnvt_apr", "Cnvt_APR"}, {"fin_cost", "Cost"}, {"fin_sell", "Sell"},
     {"fin_margin", "Margin"}, {"days_prd", "Days_Prd"},
     {"pxl_test", "PxlTest"}, {"r_var", "r"}, {"theta", "\xCE\xB8"},
+    // v1.13.1 (E17): VARS › V-WIN e TABLE con i nomi della fx-CG50 (non "xmin", "tblstart").
+    {"xmin", "Xmin"}, {"xmax", "Xmax"}, {"xscl", "Xscl"}, {"ymin", "Ymin"}, {"ymax", "Ymax"}, {"yscl", "Yscl"},
+    {"tmin", "Tmin"}, {"tmax", "Tmax"}, {"tptch", "Tptch"}, {"tblstart", "TblStart"}, {"tblend", "TblEnd"}, {"tblpitch", "TblPitch"},
     {"xfct", "Xfct"}, {"yfct", "Yfct"}, {"d_start", "D Start"}, {"d_end", "D End"}, {"d_pitch", "D pitch"},
     {"r_start", "R Start"}, {"r_end", "R End"}, {"rec_a0", "a0"}, {"rec_a1", "a1"}, {"rec_a2", "a2"}, {"rec_b0", "b0"}, {"rec_b1", "b1"},
     {"rec_b2", "b2"}, {"rec_c0", "c0"}, {"rec_c1", "c1"}, {"rec_c2", "c2"}, {"rec_anstart", "anStart"}, {"rec_bnstart", "bnStart"},

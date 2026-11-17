@@ -1,4 +1,11 @@
-# Roadmap — dopo la v1.13.0
+# Roadmap — dopo la v1.13.1
+
+La v1.13.1 corregge gli errori trovati nella revisione completa della v1.13.0
+([reports/ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md)); restano aperti i
+punti A1–A6 di quel documento (A2: precisione di HypergeoPD con argomenti
+tutti grandi; A3: risultati sotto 1E−99 in Run-Matrix da verificare su una
+fx-CG50; A5: collaudo fisico; A6: SOLVER di EQUATION con SolveN/FMin/FMax
+nell'equazione, Time Out solo dopo un calcolo lungo).
 
 Il progetto **non** ha la parità con la Casio fx-CG50 e non va presentato come
 tale: le tabelle sotto elencano ciò che manca. Fanno eccezione **Run-Matrix**
@@ -55,7 +62,7 @@ Run-Matrix con l'editor MAT/VCT e quattro voci del Punto 3. Restano, in ordine:
 
 | # | Voce | Note |
 |---|---|---|
-| 0 | **Esito del collaudo fisico** della v1.12.0 sulla Pico Plus 2 W | procedure [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md), [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md), [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md), [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) e [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md); correggere i KO prima del resto e aggiornare a TESTED ON HARDWARE solo le voci provate |
+| 0 | **Esito del collaudo fisico** della v1.13.1 sulla Pico Plus 2 W | procedure [HARDWARE_TEST_v1.13.1.md](HARDWARE_TEST_v1.13.1.md), [HARDWARE_TEST_v1.13.0.md](HARDWARE_TEST_v1.13.0.md), [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md), [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md), [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md), [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) e [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md); correggere i KO prima del resto e aggiornare a TESTED ON HARDWARE solo le voci provate |
 | 1 | Dual Screen G+G (COPY, SWAP), GtoT e T+G, Graph to Table | `graph::Viewport` accetta già un'area diversa da 320×282 |
 | 2 | Dyna Graph, Recursion, Conic Graphs | sul servizio GraphCore (`sampleStep`, `Viewport`, G-Solve, `table_model` per le tabelle delle successioni); i dati (D Start/End/pitch, an+1, a0, R Start/End) sono nel workspace dalla v1.13.0 e i comandi DrawDyna/DrawR/DrawWeb li disegnano già |
 | 3 | FORMAT durante lo SKETCH | piccolo completamento di GRAPH (i suffissi angolari °/ʳ/ᵍ sono fatti nella v1.13.0) |

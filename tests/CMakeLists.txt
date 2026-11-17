@@ -22,8 +22,10 @@ include(${CMAKE_CURRENT_LIST_DIR}/../cmake/fxai_sources.cmake)
 
 add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wall> $<$<COMPILE_LANGUAGE:CXX>:-Wextra> $<$<COMPILE_LANGUAGE:CXX>:-Werror>)
 if(FXAI_SANITIZE)
-  add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
-  add_link_options(-fsanitize=address,undefined)
+  # v1.13.1: UBSan si ferma al primo comportamento indefinito (prima lo stampava e
+  # il test risultava superato).
+  add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=address,undefined -fno-sanitize-recover=undefined)
 endif()
 find_package(Threads REQUIRED)
 
@@ -51,7 +53,9 @@ set(FXAI_TESTS
   # v1.12.0: EQUATION (SIML, POLY, SOLVER, VARS › EQUATION, record v8)
   equation_v112_test
   # v1.13.0: completamento di Run-Matrix (calcolo, Run-Matrix e workspace v9, comandi grafici, editor)
-  calc_v112_test run_matrix_v112_test graph_cmd_v112_test editor_v112_test)
+  calc_v112_test run_matrix_v112_test graph_cmd_v112_test editor_v112_test
+  # v1.13.1: versione di correzione (un gruppo per errore di docs/reports/ERRORI_v1.13.1.md)
+  fixes_v1131_test)
 foreach(t ${FXAI_TESTS})
   add_executable(${t} ${CMAKE_CURRENT_LIST_DIR}/${t}.cpp)
   target_link_libraries(${t} PRIVATE fxai_core fxai_host_board)

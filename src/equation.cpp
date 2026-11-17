@@ -91,6 +91,37 @@ void renameToken(ast::Node& n, const char* from, const char* to) {
     if (n.kind == ast::Kind::Token && n.text == from) n.text = to;
     for (auto& c : n.children) if (c) renameToken(*c, from, to);
 }
+// Esponente naturale scritto come numero (eventualmente tra parentesi): 0..64.
+bool naturalLiteral(const ast::Node& n) {
+    if (n.kind == ast::Kind::Group) return n.children.size() == 1 && n.children[0] && naturalLiteral(*n.children[0]);
+    if (n.kind != ast::Kind::Token || n.text.empty() || n.text.size() > 2) return false;
+    for (char c : n.text) if (c < '0' || c > '9') return false;
+    return std::atoi(n.text.c_str()) <= 64;
+}
+// v1.13.1 (E04): true quando l'albero e' un polinomio in `marker`: i sotto-alberi
+// che lo contengono usano solo +, −, ×, il segno meno, le parentesi, la divisione
+// per una costante e le potenze con esponente naturale. Funzioni come Abs, Conjg,
+// ReP coincidono con un polinomio sugli interi sostituiti ma non in i
+// (1E10+Abs(i) dava 1E+10+i): con la variabile dentro una funzione la forma
+// esatta non si calcola per sostituzione.
+bool polynomialIn(const ast::Node& n, const char* marker) {
+    if (!hasToken(n, marker)) return true;
+    switch (n.kind) {
+    case ast::Kind::Token: return true;
+    case ast::Kind::Group: return n.children.size() == 1 && n.children[0] && polynomialIn(*n.children[0], marker);
+    case ast::Kind::Unary: return n.text == "-" && n.children.size() == 1 && n.children[0] && polynomialIn(*n.children[0], marker);
+    case ast::Kind::Binary: {
+        if (n.children.size() != 2 || !n.children[0] || !n.children[1]) return false;
+        const ast::Node& a = *n.children[0];
+        const ast::Node& b = *n.children[1];
+        if (n.text == "+" || n.text == "-" || n.text == "*") return polynomialIn(a, marker) && polynomialIn(b, marker);
+        if (n.text == "/") return polynomialIn(a, marker) && !hasToken(b, marker);
+        if (n.text == "^") return naturalLiteral(b) && polynomialIn(a, marker);
+        return false;
+    }
+    default: return false;
+    }
+}
 // Forma esatta di un'espressione complessa polinomiale in i (a+bi, (1+√3i)/2,
 // (1+i)^2...). L'unico valutatore esatto (evaluateExact) calcola f(t) con i
 // sostituita da un intero t = 0..4; le differenze finite danno il polinomio
@@ -101,6 +132,7 @@ void renameToken(ast::Node& n, const char* from, const char* to) {
 __attribute__((noinline)) bool exactComplex(ast::Node& tree, const EvalContext& base, Complex z, ExactComplex& out, bool& decimal) {
     if (base.bindingCount >= EvalContext::MaxBindings) return false;
     static const char* const kMarker = "_i";              // nessun nome digitato inizia con '_'
+    if (!polynomialIn(tree, "i")) return false;
     renameToken(tree, "i", kMarker);
     EvalContext ec = base;
     ec.bind(kMarker, 0.0);
@@ -129,9 +161,10 @@ __attribute__((noinline)) bool exactComplex(ast::Node& tree, const EvalContext& 
     if (!exact::div(d[3], two, t2) || !exact::sub(h2, t2, c2) || !exact::div(d[3], six, c3)) return false;
     ExactComplex r;
     if (!exact::sub(d[0], c2, r.re) || !exact::sub(c1, c3, r.im)) return false;
+    // Parte reale e immaginaria si confrontano ciascuna con la propria scala (v1.13.1, E04).
     const Complex v = r.toComplex();
-    const double scale = std::max(1.0, std::abs(z));
-    if (!(std::abs(v - z) <= 1e-9 * scale)) return false;
+    if (!(std::abs(v.real() - z.real()) <= 1e-9 * std::max(1.0, std::abs(z.real()))) ||
+        !(std::abs(v.imag() - z.imag()) <= 1e-9 * std::max(1.0, std::abs(z.imag())))) return false;
     out = r;
     return true;
 }

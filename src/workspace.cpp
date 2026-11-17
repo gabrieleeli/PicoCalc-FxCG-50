@@ -830,10 +830,14 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
         ws.table.rows.resize(n);
         for (double& d : ws.table.rows) { d = r.f64(); if (!std::isfinite(d)) return false; }
     }
+    // v1.13.1 (E01): un record si accetta solo se il record che se ne ricava al
+    // salvataggio successivo si rilegge. Le liste con un elemento non finito
+    // erano accettate qui ma rifiutate nel blocco dei List File (v9) dopo un
+    // cambio di List File, e il workspace veniva azzerato all'avvio successivo.
     for (std::size_t li = 0; li < LegacyLists; ++li) {
         auto& l = ws.lists[li];
         const auto n = r.u16(); if (n > Workspace::MaxListLength) return false;
-        l.resize(n); for (auto& d : l) d = r.f64();
+        l.resize(n); for (auto& d : l) { d = r.f64(); if (!std::isfinite(d)) return false; }
     }
     EquationState& e = ws.equation;
     double legacyGuess = 0;
@@ -846,6 +850,13 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
         e.solverExpr = r.str(); legacyGuess = r.f64();
         e.ineqDegree = r.u8(); e.ineqRelation = r.u8(); for (double& d : ineq) d = r.f64();
         if (e.unknowns < 2 || e.unknowns > 6 || e.degree < 2 || e.degree > 6 || e.ineqDegree < 1 || e.ineqDegree > 6 || e.ineqRelation > 3) return false;
+        // v1.13.1 (E01): gli stessi controlli del blocco v8, che rileggera' questi
+        // dati dopo il primo salvataggio (coefficienti finiti, equazione del Solver
+        // entro il limite).
+        for (double d : sim) if (!std::isfinite(d)) return false;
+        for (double d : poly) if (!std::isfinite(d)) return false;
+        for (double d : ineq) if (!std::isfinite(d)) return false;
+        if (e.solverExpr.size() > limits::kEquationExpression) return false;
         // Le celle del sistema attivo tornano alla loro riga e colonna; le altre
         // (valori di sistemi di altre dimensioni) occupano, nell'ordine, le
         // posizioni libere della griglia 6 x 7: nessun valore va perso.
@@ -918,7 +929,7 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
         for (std::size_t li = LegacyLists; li < Workspace::ListCount && r.ok; ++li) {
             auto& l = ws.lists[li];
             const auto n = r.u16(); if (n > Workspace::MaxListLength) return false;
-            l.resize(n); for (auto& d : l) d = r.f64();
+            l.resize(n); for (auto& d : l) { d = r.f64(); if (!std::isfinite(d)) return false; }   // E01
         }
         for (auto& n : ws.listNames) {
             n = r.str();
