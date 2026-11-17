@@ -1195,8 +1195,11 @@ template<typename T> FXAI_NOINLINE T callCalculus(const ast::Node& n,Env& env){
         if(!isInteger(a)||!isInteger(b))throw MathError("Argument ERROR: limiti di \xCE\xA3/\xCE\xA0 interi");
         if(std::abs(b-a)/step>100000)throw MathError("Argument ERROR: massimo 100001 termini");
         T acc=R(f=="sum"?0.0:1.0);
-        const long long lo=static_cast<long long>(a),hi=static_cast<long long>(b),st=static_cast<long long>(step);
-        if(lo<=hi){for(long long k=lo;k<=hi;k+=st){bind.set(static_cast<double>(k));const T v=evalNode<T>(body,env);if(f=="sum")acc+=v;else acc*=v;checkFinite(acc);}}
+        // v1.13.1 (E12): si contano i termini (al piu' 100001) invece di convertire gli
+        // estremi in long long: con |a| oltre 9.2E18 la conversione era indefinita e
+        // sulla PicoCalc (conversione saturata) k+=passo traboccava in un ciclo senza fine.
+        if(a<=b){const long long terms=static_cast<long long>((b-a)/step);
+            for(long long i=0;i<=terms;++i){bind.set(a+static_cast<double>(i)*step);const T v=evalNode<T>(body,env);if(f=="sum")acc+=v;else acc*=v;checkFinite(acc);}}
         env.at=&n;
         return acc;
     }
@@ -1212,7 +1215,9 @@ template<typename T> FXAI_NOINLINE T applyFunction(const std::string& f,const T*
     auto R=[](double v){return fromReal<T>(v);};
 
     // ---- zero-argument
-    if(f=="ran"&&count==1){const double n=rarg(0);if(!isInteger(n))throw MathError("Argument ERROR: Ran# n con n intero");return R(sequenceRandom(static_cast<int>(n)));}
+    // v1.13.1 (E10): n fuori da 0..10 si rifiuta prima della conversione in int
+    // (con n = 2E13 la conversione era un comportamento indefinito).
+    if(f=="ran"&&count==1){const double n=rarg(0);if(!isInteger(n)||n<0||n>10)throw MathError("Argument ERROR: Ran# n con n da 0 a 10");return R(sequenceRandom(static_cast<int>(n)));}
     if(f=="rand"||f=="ran")return R(static_cast<double>(nextRandom()>>8)/16777216.0);
 
     // ---- v1.12.0: funzioni di calc_library (argomenti reali)
@@ -1411,13 +1416,18 @@ template<typename T> FXAI_NOINLINE T applyFunction(const std::string& f,const T*
         return R(static_cast<double>(hits));
     }
     if(f=="ncr"||f=="npr"){
-        if(a<0||b<0||!isInteger(a)||!isInteger(b)||a>100000)throw MathError("Argument ERROR: nCr/nPr richiedono interi non negativi");
+        // fx-CG50 (Appendice, intervalli di input): n e r interi, 0 <= r <= n < 1E10,
+        // risultato < 1E100 (v1.13.1, E05: il limite era n <= 100000).
+        if(a<0||b<0||!isInteger(a)||!isInteger(b)||a>=1e10)throw MathError("Argument ERROR: nCr/nPr richiedono interi 0<=r<=n<1E10");
         if(b>a)throw MathError("Math ERROR: r non puo superare n");
-        // Computed in floating point to avoid 64-bit overflow for large n.
+        // In virgola mobile (per n grandi il risultato supera i 64 bit). Ogni fattore
+        // vale almeno 2 finche' il risultato cresce (r <= n/2 per nCr), quindi il ciclo
+        // si ferma all'intervallo di calcolo dopo poche centinaia di passi.
+        const double limit=1e100;
         double r=1;const auto nn=static_cast<unsigned long long>(a),rr=static_cast<unsigned long long>(b);
-        if(f=="npr"){for(unsigned long long i=0;i<rr;++i)r*=static_cast<double>(nn-i);}
-        else{const unsigned long long k=std::min(rr,nn-rr);for(unsigned long long i=1;i<=k;++i)r=r*static_cast<double>(nn-k+i)/static_cast<double>(i);r=std::round(r);}
-        if(!std::isfinite(r))throw MathError("Math ERROR: overflow");
+        if(f=="npr"){for(unsigned long long i=0;i<rr&&r<limit;++i)r*=static_cast<double>(nn-i);}
+        else{const unsigned long long k=std::min(rr,nn-rr);for(unsigned long long i=1;i<=k&&r<limit;++i)r=r*static_cast<double>(nn-k+i)/static_cast<double>(i);r=std::round(r);}
+        if(!std::isfinite(r)||r>=limit)throw MathError("Math ERROR: risultato oltre 10^100");
         return R(r);
     }
     if(f=="atan2")return R(fromRadians(std::atan2(a,b)));

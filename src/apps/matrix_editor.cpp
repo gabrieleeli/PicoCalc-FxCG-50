@@ -220,7 +220,8 @@ void MatrixEditorView::csvChosen(Context& ctx) {
     std::vector<std::uint8_t> bytes;
     const files::Status st = csv::load(*fs, file, bytes);
     if (st != files::Status::Ok) throw MathError(std::string("Storage ERROR: ") + files::statusMessage(st));
-    const csv::Table t = csv::decode(bytes.data(), bytes.size(), csv::formatOf(ctx.ws), limits::kMatrixMaxDim, limits::kMatrixMaxDim);
+    const csv::Table t = csv::decode(bytes.data(), bytes.size(), csv::formatOf(ctx.ws), limits::kMatrixMaxDim, limits::kMatrixMaxDim,
+                                     limits::kMatrixElements);
     csv::loadMatrix(ctx.ws, vectors_, static_cast<std::size_t>(selected_), t);
     ctx.markDirty();
     ctx.toast(name(selected_) + " " + dimensionText(*current(ctx)) + " da " + file + ".csv");

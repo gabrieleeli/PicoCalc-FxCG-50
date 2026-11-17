@@ -55,8 +55,14 @@ double pFromTail(double cdfAtStat, int tail) {
     if (tail > 0) return 1 - cdfAtStat;
     return 2 * std::min(cdfAtStat, 1 - cdfAtStat);
 }
+// v1.13.1 (E08): la ricerca era limitata a [-1000, 1000] (df = 1 e C-Level oltre
+// 0.9997 davano un intervallo troppo stretto). La distribuzione e' simmetrica:
+// si cerca la coda superiore su [0, hi] allargando hi finche' serve.
 double tQuantile(double p, double df) {
-    double lo = -1e3, hi = 1e3;
+    if (p == 0.5) return 0;
+    if (p < 0.5) return -tQuantile(1 - p, df);
+    double lo = 0, hi = 1e3;
+    for (int k = 0; k < 1100 && tLower(hi, df) < p; ++k) { lo = hi; hi *= 2; }
     for (int i = 0; i < 200; ++i) { const double m = 0.5 * (lo + hi); if (tLower(m, df) < p) lo = m; else hi = m; }
     return 0.5 * (lo + hi);
 }
@@ -91,19 +97,62 @@ double regularizedGammaP(double a, double x) {
     return 1 - std::exp(-x + a * std::log(x) - gln) * h;
 }
 
+namespace {
+// 1-Variable con le frequenze (v1.13.1, E09): stessi risultati dei dati ripetuti
+// f volte, senza ripeterli in memoria (con 100000 per dato erano centinaia di
+// migliaia di double copiati e ordinati).
+OneVar weightedOneVariable(const std::vector<double>& x, const std::vector<double>& freq) {
+    std::vector<std::pair<double, double>> data;          // (valore, frequenza > 0), per valore crescente
+    for (std::size_t i = 0; i < x.size(); ++i) {
+        const double f = freq[i];
+        need(f >= 0 && f == std::floor(f) && f <= 100000, "Argument ERROR: frequenze intere non negative");
+        if (f > 0) data.emplace_back(x[i], f);
+    }
+    need(!data.empty(), "Dimension ERROR: frequenze tutte nulle");
+    std::stable_sort(data.begin(), data.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+    OneVar r;
+    for (const auto& [v, f] : data) { r.n += f; r.sum += f * v; r.sumSq += f * v * v; }
+    r.mean = r.sum / r.n;
+    double ss = 0; for (const auto& [v, f] : data) ss += f * sq(v - r.mean);
+    r.popSd = std::sqrt(ss / r.n);
+    r.sampleSd = r.n > 1 ? std::sqrt(ss / (r.n - 1)) : 0;
+    r.min = data.front().first; r.max = data.back().first;
+    // Elemento k (da 0) dei dati ripetuti e ordinati.
+    auto at = [&](std::size_t k) {
+        double seen = 0;
+        for (const auto& [v, f] : data) { seen += f; if (static_cast<double>(k) < seen) return v; }
+        return data.back().first;
+    };
+    auto median = [&](std::size_t b, std::size_t e) {
+        const std::size_t len = e - b;
+        if (len == 0) return std::numeric_limits<double>::quiet_NaN();
+        return len % 2 ? at(b + len / 2) : 0.5 * (at(b + len / 2 - 1) + at(b + len / 2));
+    };
+    const auto n = static_cast<std::size_t>(r.n);
+    r.median = median(0, n);
+    if (n == 1) { r.q1 = r.q3 = at(0); }
+    else { r.q1 = median(0, n / 2); r.q3 = median(n % 2 ? n / 2 + 1 : n / 2, n); }
+    // Mode: frequenze dei valori uguali sommate (i dati sono ordinati).
+    std::vector<std::pair<double, double>> counts;
+    for (const auto& [v, f] : data) {
+        if (!counts.empty() && counts.back().first == v) counts.back().second += f;
+        else counts.emplace_back(v, f);
+    }
+    double best = 0; for (const auto& c : counts) best = std::max(best, c.second);
+    for (const auto& c : counts) if (c.second == best) r.modes.push_back(c.first);
+    r.modeCount = best;
+    return r;
+}
+} // namespace
+
 OneVar oneVariable(const std::vector<double>& x, const std::vector<double>* freq) {
     need(!x.empty(), "Dimension ERROR: lista vuota");
     validate(x);
-    std::vector<double> data;
     if (freq) {
         need(freq->size() == x.size(), "Dimension ERROR: frequenze di lunghezza diversa");
-        for (std::size_t i = 0; i < x.size(); ++i) {
-            const double f = (*freq)[i];
-            need(f >= 0 && f == std::floor(f) && f <= 100000, "Argument ERROR: frequenze intere non negative");
-            for (int k = 0; k < static_cast<int>(f); ++k) data.push_back(x[i]);
-        }
-        need(!data.empty(), "Dimension ERROR: frequenze tutte nulle");
-    } else data = x;
+        return weightedOneVariable(x, *freq);
+    }
+    const std::vector<double>& data = x;
     OneVar r;
     r.n = static_cast<double>(data.size());
     for (double v : data) { r.sum += v; r.sumSq += v * v; }

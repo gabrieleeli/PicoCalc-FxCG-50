@@ -49,6 +49,22 @@ Status checksum(FileSystem& fs, const std::string& path, std::uint32_t& crc, std
     }
 }
 bool exists(FileSystem& fs, const std::string& path) { Entry e; return fs.stat(path, e) == Status::Ok; }
+// Completa o annulla il salvataggio interrotto di `base` (base.tmp, base.bak):
+// un .tmp diventa il file solo se il file vecchio era gia' stato spostato nel
+// .bak (writeAtomic lo sposta solo dopo aver verificato il .tmp); un .bak
+// rimasto si toglie se il file c'e', altrimenti torna al suo posto.
+Status recoverFile(FileSystem& fs, const std::string& base) {
+    const std::string tmp = base + ".tmp", bak = base + ".bak";
+    Status st = Status::Ok;
+    if (exists(fs, tmp)) {
+        if (exists(fs, base)) st = fs.remove(tmp);
+        else if (exists(fs, bak)) { st = fs.rename(tmp, base); if (st == Status::Ok) st = fs.remove(bak); }
+        else st = fs.remove(tmp);                      // a new file whose save did not finish
+        if (st != Status::Ok) return st;
+    }
+    if (exists(fs, bak)) st = exists(fs, base) ? fs.remove(bak) : fs.rename(bak, base);
+    return st;
+}
 } // namespace
 
 const char* statusMessage(Status s) noexcept {
@@ -117,6 +133,11 @@ Status readAll(FileSystem& fs, const std::string& path, std::vector<std::uint8_t
 Status writeAtomic(FileSystem& fs, const std::string& path, const std::function<Status(Writer&)>& producer) {
     Status st = fs.status();
     if (st != Status::Ok) return st;
+    // v1.13.1 (E07): prima si completa un salvataggio interrotto dello stesso file.
+    // Dopo "file -> .bak" restano un .tmp completo e il .bak; riscrivere subito il
+    // .tmp e perdere di nuovo la corrente lasciava un .tmp parziale che recover()
+    // promuoveva a file (il file vecchio era perso).
+    if ((st = recoverFile(fs, path)) != Status::Ok) return st;
     const std::string tmp = path + ".tmp", bak = path + ".bak";
     {
         std::unique_ptr<Writer> w;
@@ -154,23 +175,11 @@ Status recover(FileSystem& fs, const std::string& dir) {
     std::vector<Entry> list;
     Status st = fs.list(dir, list);
     if (st != Status::Ok) return st;
-    // 1) temporary files: complete the rename when the old file was already moved away.
+    // Temporary files complete the rename when the old file was already moved
+    // away; backups are dropped when the file exists and restored otherwise.
     for (const auto& e : list) {
-        if (e.directory || !hasExtension(e.name, ".tmp")) continue;
-        const std::string base = join(dir, stem(e.name)), tmp = join(dir, e.name), bak = base + ".bak";
-        if (exists(fs, base)) st = fs.remove(tmp);
-        else if (exists(fs, bak)) { st = fs.rename(tmp, base); if (st == Status::Ok) st = fs.remove(bak); }
-        else st = fs.remove(tmp);                      // a new file whose save did not finish
-        if (st != Status::Ok) return st;
-    }
-    // 2) backups: drop them when the new file exists, restore them otherwise.
-    list.clear();
-    if ((st = fs.list(dir, list)) != Status::Ok) return st;
-    for (const auto& e : list) {
-        if (e.directory || !hasExtension(e.name, ".bak")) continue;
-        const std::string base = join(dir, stem(e.name)), bak = join(dir, e.name);
-        st = exists(fs, base) ? fs.remove(bak) : fs.rename(bak, base);
-        if (st != Status::Ok) return st;
+        if (e.directory || !(hasExtension(e.name, ".tmp") || hasExtension(e.name, ".bak"))) continue;
+        if ((st = recoverFile(fs, join(dir, stem(e.name)))) != Status::Ok) return st;
     }
     return Status::Ok;
 }

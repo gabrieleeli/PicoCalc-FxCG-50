@@ -53,8 +53,10 @@ std::string encodeColumns(const std::vector<const std::vector<double>*>& columns
 // Testo CSV di una matrice o di un vettore; lancia MathError con elementi complessi.
 std::string encodeMatrix(const CalcValue& m, const Format& f);
 // Legge un CSV; lancia MathError ("Format ERROR: ...", "Dimension ERROR: ...")
-// per testo non numerico o tabelle oltre maxRows x maxCols.
-Table decode(const std::uint8_t* data, std::size_t size, const Format& f, std::size_t maxRows, std::size_t maxCols);
+// per testo non numerico o tabelle oltre maxRows x maxCols (o oltre maxCells
+// celle). Le dimensioni si controllano prima di allocare la tabella (v1.13.1).
+Table decode(const std::uint8_t* data, std::size_t size, const Format& f, std::size_t maxRows, std::size_t maxCols,
+             std::size_t maxCells = static_cast<std::size_t>(-1));
 
 // Byte massimi di un file CSV letto (dipendono dalla scheda: liste e matrici piu' grandi sulla Plus).
 std::size_t maxFileBytes() noexcept;

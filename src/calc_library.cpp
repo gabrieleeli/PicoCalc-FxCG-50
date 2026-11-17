@@ -61,13 +61,20 @@ template <typename F> double bisectIncreasing(F cdf, double target, double lo, d
     return 0.5 * (lo + hi);
 }
 double logChoose(double n, double k) { return std::lgamma(n + 1) - std::lgamma(k + 1) - std::lgamma(n - k + 1); }
-// Distribuzione discreta: il piu' piccolo intero x con CD(x) >= prob.
-template <typename F> double discreteInverse(F cd, double prob, double lo, double hi) {
+// Distribuzione discreta: il piu' piccolo intero x in [0, hi) con CD(x) >= prob
+// (hi se nessuno). CD(x) e' la somma di pd(0..x) limitata a 1, come in
+// stats::binomialCd/poissonCd e hypergeoCD: la si accumula una sola volta
+// (v1.13.1, E03: ricalcolarla per ogni x costava O(x²), minuti sulla PicoCalc),
+// con le stesse somme nello stesso ordine, quindi lo stesso risultato.
+template <typename F> double discreteInverse(F pd, double prob, double hi) {
     need(prob >= 0 && prob <= 1, "0<=prob<=1");
     // Tolleranza della calcolatrice sugli arrotondamenti delle somme.
     const double target = prob - 1e-10;
-    double x = lo;
-    for (; x < hi; ++x) if (cd(x) >= target) return x;
+    double sum = 0;
+    for (double x = 0; x < hi; ++x) {
+        sum += pd(x);
+        if (std::min(1.0, sum) >= target) return x;
+    }
     return hi;
 }
 
@@ -146,9 +153,13 @@ double tPD(double x, double df) {
 double tCD(double lower, double upper, double df) { return stats::tCd(lower, upper, df); }
 double invTCD(double area, double df) {
     need(area > 0 && area < 1 && df > 0, "0<Area<1, df>0");
-    // P(X >= x) = area: cdf(x) = 1 - area
+    // P(X >= x) = area: cdf(x) = 1 - area. v1.13.1 (E08): la distribuzione e'
+    // simmetrica (x(1 - area) = -x(area), x(0.5) = 0); si cerca la coda superiore
+    // da 0, allargando l'intervallo (prima [-1E4, 1E4] tagliava la coda inferiore).
+    if (area == 0.5) return 0;
+    if (area > 0.5) return -invTCD(1 - area, df);
     auto cdf = [&](double v) { return stats::tCd(-std::numeric_limits<double>::infinity(), v, df); };
-    return bisectIncreasing(cdf, 1 - area, -1e4, 1e4);
+    return bisectIncreasing(cdf, 1 - area, 0, 1e4);
 }
 double chiPD(double x, double df) {
     need(df > 0 && integral(df), "df intero >0");
@@ -177,13 +188,14 @@ double binomialPD(double x, double n, double p) { return stats::binomialPd(x, n,
 double binomialCD(double x, double n, double p) { return x < 0 ? 0 : stats::binomialCd(x, n, p); }
 double invBinomialCD(double prob, double n, double p) {
     need(integral(n) && n >= 0 && p >= 0 && p <= 1, "n intero >=0, 0<=p<=1");
-    return discreteInverse([&](double x) { return stats::binomialCd(x, n, p); }, prob, 0, n);
+    need(n <= 1e6, "n intero 0..1e6");                       // limite di BinomialCD
+    return discreteInverse([&](double x) { return stats::binomialPd(x, n, p); }, prob, n);
 }
 double poissonPD(double x, double lambda) { return stats::poissonPd(x, lambda); }
 double poissonCD(double x, double lambda) { return x < 0 ? 0 : stats::poissonCd(x, lambda); }
 double invPoissonCD(double prob, double lambda) {
-    need(lambda > 0, "lambda>0");
-    return discreteInverse([&](double x) { return stats::poissonCd(x, lambda); }, prob, 0, 1e6);
+    need(lambda > 0 && std::isfinite(lambda), "lambda>0");
+    return discreteInverse([&](double x) { return stats::poissonPd(x, lambda); }, prob, 1e6);
 }
 double geoPD(double x, double p) {
     need(p > 0 && p <= 1, "0<p<=1");
@@ -211,14 +223,17 @@ double hypergeoPD(double x, double n, double m, double N) {
     return std::exp(logChoose(m, x) + logChoose(N - m, n - x) - logChoose(N, n));
 }
 double hypergeoCD(double x, double n, double m, double N) {
+    (void)hypergeoPD(0, n, m, N);                            // Argument ERROR anche quando la somma e' vuota
+    // v1.13.1 (E02): oltre min(n, M) i termini sono nulli; la somma andava fino a x
+    // (x = 1E8: secondi sul PC, minuti sulla PicoCalc, senza AC).
+    const double top = std::min(std::floor(x), std::min(n, m));
     double s = 0;
-    for (double k = 0; k <= std::floor(x); ++k) s += hypergeoPD(k, n, m, N);
-    if (x >= 0) (void)hypergeoPD(0, n, m, N);
+    for (double k = 0; k <= top; ++k) s += hypergeoPD(k, n, m, N);
     return std::min(1.0, s);
 }
 double invHypergeoCD(double prob, double n, double m, double N) {
     (void)hypergeoPD(0, n, m, N);
-    return discreteInverse([&](double x) { return hypergeoCD(x, n, m, N); }, prob, 0, std::min(n, m));
+    return discreteInverse([&](double x) { return hypergeoPD(x, n, m, N); }, prob, std::min(n, m));
 }
 double probP(double t) { return normalCdf(t); }
 double probQ(double t) { return normalCdf(std::abs(t)) - 0.5; }

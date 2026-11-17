@@ -92,51 +92,77 @@ std::string encodeMatrix(const CalcValue& m, const Format& f) {
     return out;
 }
 
-Table decode(const std::uint8_t* data, std::size_t size, const Format& f, std::size_t maxRows, std::size_t maxCols) {
+namespace {
+// Fine della riga che inizia in `at` (CR, LF, CRLF o fine del testo) e inizio della successiva.
+std::size_t lineEnd(const std::uint8_t* data, std::size_t size, std::size_t at, std::size_t& next) {
+    std::size_t e = at;
+    while (e < size && data[e] != '\r' && data[e] != '\n') ++e;
+    next = e < size ? (data[e] == '\r' && e + 1 < size && data[e + 1] == '\n' ? e + 2 : e + 1) : e;
+    return e;
+}
+} // namespace
+
+// v1.13.1 (E06): due passate sul testo. La prima conta righe e colonne senza
+// copiare nulla, cosi' un file entro maxFileBytes ma con troppe righe o colonne
+// da' Dimension ERROR prima di allocare (prima una stringa per campo e per riga:
+// centinaia di KB sul Pico 2 W); la seconda legge i campi nella tabella.
+// Righe, intestazione, tabulatori ed errori sono quelli di prima.
+Table decode(const std::uint8_t* data, std::size_t size, const Format& f, std::size_t maxRows, std::size_t maxCols, std::size_t maxCells) {
     if (const std::string bad = validate(f); !bad.empty()) throw MathError("Argument ERROR: formato CSV non valido (" + bad + ")");
-    // Righe: CR, LF o CRLF.
-    std::vector<std::string> lines;
-    std::string cur;
-    for (std::size_t i = 0; i < size; ++i) {
-        const char c = static_cast<char>(data[i]);
-        if (c == '\r' || c == '\n') {
-            lines.push_back(cur); cur.clear();
-            if (c == '\r' && i + 1 < size && data[i + 1] == '\n') ++i;
-            continue;
+    // 1) Righe: CR, LF o CRLF; le righe vuote (spazi e tabulatori) in fondo non contano.
+    //    Riga 1 con virgolette: intestazione, ignorata (fx-CG50).
+    bool header = false;
+    std::size_t lines = 0, lastFilled = 0;          // lastFilled: righe fino all'ultima non vuota
+    std::size_t colsSoFar = 0, cols = 0;
+    bool tabSoFar = false, tab = false;
+    for (std::size_t at = 0; at < size;) {
+        std::size_t next = 0;
+        const std::size_t end = lineEnd(data, size, at, next);
+        bool quote = false, tabHere = false, filled = false;
+        std::size_t fields = 1;
+        for (std::size_t i = at; i < end; ++i) {
+            const char c = static_cast<char>(data[i]);
+            if (c == '\0') formatError("file binario, non CSV");
+            if (c == '"' || c == '\'') quote = true;
+            if (c == '\t') tabHere = true;
+            else if (c != ' ') filled = true;
+            if (c == f.separator) ++fields;
         }
-        if (c == '\0') formatError("file binario, non CSV");
-        cur += c;
+        if (lines == 0 && quote) header = true;
+        else { colsSoFar = std::max(colsSoFar, fields); tabSoFar = tabSoFar || tabHere; }
+        ++lines;
+        if (filled) { lastFilled = lines; cols = colsSoFar; tab = tabSoFar; }
+        at = next;
     }
-    if (!cur.empty()) lines.push_back(cur);
-    while (!lines.empty() && trim(lines.back()).empty()) lines.pop_back();
-    // Riga 1 con virgolette: intestazione, ignorata (fx-CG50).
-    std::size_t first = 0;
-    if (!lines.empty() && (lines[0].find('"') != std::string::npos || lines[0].find('\'') != std::string::npos)) first = 1;
+    const std::size_t first = header && lastFilled >= 1 ? 1 : 0;
     // Un CSV con il tabulatore come separatore non e' supportato.
-    for (std::size_t i = first; i < lines.size(); ++i)
-        if (lines[i].find('\t') != std::string::npos) formatError("il tabulatore non e' un separatore ammesso");
+    if (tab) formatError("il tabulatore non e' un separatore ammesso");
     Table t;
-    t.rows = lines.size() - first;
+    t.rows = lastFilled - first;
+    t.cols = cols;
     if (t.rows == 0) formatError("file vuoto");
-    std::vector<std::vector<std::string>> fields(t.rows);
-    for (std::size_t r = 0; r < t.rows; ++r) {
-        const std::string& line = lines[first + r];
-        std::size_t start = 0;
-        for (std::size_t i = 0; i <= line.size(); ++i) {
-            if (i == line.size() || line[i] == f.separator) { fields[r].push_back(line.substr(start, i - start)); start = i + 1; }
-        }
-        t.cols = std::max(t.cols, fields[r].size());
-    }
     if (t.rows > maxRows || t.cols > maxCols)
         throw DimensionError("Dimension ERROR: il file ha " + std::to_string(t.rows) + " righe e " + std::to_string(t.cols) +
                              " colonne (massimo " + std::to_string(maxRows) + " x " + std::to_string(maxCols) + ")");
+    if (t.rows * t.cols > maxCells)
+        throw DimensionError("Dimension ERROR: il file ha " + std::to_string(t.rows * t.cols) + " celle (massimo " + std::to_string(maxCells) + ")");
+    // 2) Campi.
     t.cells.assign(t.rows * t.cols, 0.0);
     t.present.assign(t.rows * t.cols, 0);
-    for (std::size_t r = 0; r < t.rows; ++r)
-        for (std::size_t c = 0; c < fields[r].size(); ++c) {
+    std::size_t at = 0, next = 0;
+    if (first) { (void)lineEnd(data, size, at, next); at = next; }
+    for (std::size_t r = 0; r < t.rows; ++r) {
+        const std::size_t end = lineEnd(data, size, at, next);
+        std::size_t start = at, c = 0;
+        for (std::size_t i = at; i <= end; ++i) {
+            if (i < end && static_cast<char>(data[i]) != f.separator) continue;
             double v = 0;
-            if (parseField(fields[r][c], f, v, r + first, c)) { t.cells[r * t.cols + c] = v; t.present[r * t.cols + c] = 1; }
+            const std::string field(reinterpret_cast<const char*>(data + start), i - start);
+            if (parseField(field, f, v, r + first, c)) { t.cells[r * t.cols + c] = v; t.present[r * t.cols + c] = 1; }
+            ++c; start = i + 1;
         }
+        at = next;
+    }
     return t;
 }
 
