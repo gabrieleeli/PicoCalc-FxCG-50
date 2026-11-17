@@ -10,8 +10,9 @@ v1.13.0 e ogni errore qui sotto è riprodotto su quei sorgenti.
 Nessuna nuova funzione: solo correzioni di errori, incoerenze e documentazione.
 Ogni errore ha un gruppo di controlli in `tests/fixes_v1131_test.cpp` che
 fallisce con i sorgenti della v1.13.0 e passa con le correzioni (esito sui
-sorgenti della v1.13.0: 29 controlli falliti su 90 per E01–E09, il test si
-blocca per E02/E14 esteso, E10 ed E12 fermati da UBSan, E16/E17 12 controlli
+sorgenti della v1.13.0: 29 controlli falliti su 90 per E01–E09; il test non
+termina per E02 con n e M grandi e per E14; E10 ed E12 fermati da UBSan; E15
+restituisce 1000000 invece dell'errore; E16 1 controllo ed E17 12 controlli
 falliti; dopo le correzioni 142/142).
 
 Gravità: **critica** (dati persi o firmware inutilizzabile in uso normale),
@@ -50,6 +51,7 @@ Gravità: **critica** (dati persi o firmware inutilizzabile in uso normale),
 | A2 | `calc_library.cpp` `logChoose` | con min(k, n−k) > 64 e n dell'ordine di 1E9 `HypergeoPD` ha un errore relativo fino a ~1E−5 (differenza di `lgamma`) | serve un algoritmo diverso (deviance di Loader, "saddle point"): una nuova implementazione numerica, fuori da una versione di correzione |
 | A3 | Run-Matrix | risultati con \|x\| < 1E−99 (es. `2^-400`) sono mostrati (3.872591915E-121) | il manuale indica l'intervallo di calcolo ±1E−99…±9,999999999E+99 ma non dice se in Run-Matrix un risultato più piccolo diventa 0 o errore: da verificare su una fx-CG50 reale |
 | A4 | `docs/screenshots` 01–05, 09–11 | screenshot storici (v1.5–v1.7) non prodotti da alcuno script attuale del simulatore | non si possono rigenerare né confrontare automaticamente; restano come documentazione storica |
+| A6 | `equation.cpp` `solveFor` (SOLVER di EQUATION) | un'equazione con SolveN, FMin o FMax (trovata dal fuzzing: `SolveN(min−x−6)`) arriva a Time Out dopo 4 000 valutazioni, ciascuna con una ricerca numerica: 5,9 s sul PC, minuti sulla PicoCalc senza AC | il manuale vieta queste funzioni dentro Solve/SolveN/FMin/FMax di Run-Matrix (2-28) ma non lo dice per il SOLVER di EQUATION: va verificato su una fx-CG50; in alternativa serve un limite di tempo con l'orologio della piattaforma nel motore (una funzione nuova) |
 | A5 | collaudo fisico | nessuna prova su PicoCalc (né Pico Plus 2 W né Pico 2 W) | **nessun esito hardware** fornito; procedure in `docs/HARDWARE_TEST_v1.13.1.md` |
 
 ## Verifiche senza errori
@@ -60,7 +62,7 @@ Gravità: **critica** (dati persi o firmware inutilizzabile in uso normale),
 | cppcheck 2.13 (`warning,performance,portability`, tutti i sorgenti) | 10 segnalazioni, nessun errore: formati `snprintf` con argomenti in più (diagnostica), `std::abs` su double scambiato per int, accesso dopo `std::move` protetto dalla garanzia forte di `push_back`, condizioni ripetute e passaggi per valore |
 | GCC con `-Wall -Wextra -Wshadow -Wconversion -Wdouble-promotion -Wnull-dereference -Wduplicated-cond -Wlogical-op` (tutti i sorgenti, solo sintassi) | 55 avvisi distinti, nessun errore: 26 `-Wshadow` (variabili di ciclo e lambda volute, parametri dei costruttori), 25 `-Wconversion` (conteggi in double, coordinate in pixel < 2²⁴, byte del solo simulatore), 4 `-Wdouble-promotion` |
 | clang-tidy 18 (`clang-analyzer-*`, `bugprone-*`) su 19 moduli del motore | 49 segnalazioni valutate: 40 `misplaced-widening-cast` (indici ≤ 42), virgola "mancante" che è una concatenazione voluta, due divisioni per zero non raggiungibili (denominatori ≥ 1, colonne ≥ 1), una scrittura inutile; i cicli con contatore `double` hanno portato a E02/E14/E15, gli altri sono limitati (≤ 1E6) |
-| Fuzzing con libFuzzer + ASan/UBSan (Pico Plus 2 W) | vedi il rapporto di sviluppo: parser e valutatori, workspace (con andata e ritorno), CSV, `.pcgraph`, EQUATION, sequenze di tasti dell'intero firmware; trovati E01, E10 ed E01(b); nessun altro crash |
+| Fuzzing con libFuzzer + ASan/UBSan (Pico Plus 2 W) | vedi il rapporto di sviluppo: parser e valutatori, workspace (con andata e ritorno), CSV, `.pcgraph`, EQUATION, sequenze di tasti dell'intero firmware; trovati E01 (due varianti) ed E10; dopo le correzioni nessun crash; un timeout del SOLVER di EQUATION (A6) |
 | Simulatore | 7 script, 77 schermate: dopo E18 identiche agli screenshot pubblicati; nessun testo tagliato o sovrapposto nelle schermate esaminate |
 | Confronto con il manuale fx-CG50 | esempi del manuale nelle suite di Run-Matrix, EQUATION, GRAPH, TABLE e Statistics rieseguiti; controlli puntuali: overflow ≥ 1E100 e 69! corretti dalla v1.13.0; differenze trovate: E05 |
 | Documentazione | ROADMAP, BUILD_STATUS, FEATURE_MATRIX, README, CONTINUE della v1.13.0 coerenti con il codice; differenze trovate: E13, E18 |

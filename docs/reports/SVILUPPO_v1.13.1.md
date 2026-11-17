@@ -35,21 +35,25 @@ Harness in `tools/fuzz` (script `tools/fuzz/run_fuzz.sh`), con un corpus
 iniziale dalle fixture del workspace (v1.6.0–v1.12.0), dalle stringhe dei test
 e da un progetto `.pcgraph`:
 
-| Harness | Cosa prova | Esecuzioni (circa) | Risultato |
+| Harness | Cosa prova | Esecuzioni (tutte le campagne) | Risultato |
 |---|---|---|---|
-| `fuzz_expr` | parser e valutatori (Comp, Base-N, complessi, esatto, collezioni) | 2,4 milioni | E10 (UB in `Ran# n`), poi nessun crash |
-| `fuzz_exactdiff` | forma esatta contro valore decimale | 0,8 milioni | solo differenze dovute agli arrotondamenti del calcolo decimale (`10^16+1−10^16`, `88888888888888888%8888888`); `nCr(n,0)` esatto con n oltre il limite allora vigente (E05) |
-| `fuzz_workspace` | lettura dei record e andata e ritorno | 15 milioni | E01 (coefficienti non finiti, Solver oltre 255 caratteri); dopo la correzione nessun errore |
-| `fuzz_csv` | lettore CSV, liste e matrici | 6 milioni | nessun crash |
-| `fuzz_pcgraph` | progetti `.pcgraph`, G-Mem, andata e ritorno | 6 milioni | nessun errore |
-| `fuzz_equation` | SIML, POLY, SOLVER e visualizzazione | 0,4 milioni | nessun crash |
-| `fuzz_ui` | sequenze di tasti sull'intero firmware | 20 000 sequenze | nessun crash |
+| `fuzz_expr` | parser e valutatori (Comp, Base-N, complessi, esatto, collezioni) | 2,2 milioni | E10 (UB in `Ran# n`); dopo la correzione nessun errore |
+| `fuzz_exactdiff` | forma esatta contro valore decimale | 1,4 milioni | solo differenze dovute agli arrotondamenti del calcolo decimale (`10^16+1−10^16`, `88888888888888888%8888888`) e `nCr(n,0)` esatto oltre il limite allora vigente (E05) |
+| `fuzz_workspace` | lettura dei record e andata e ritorno | 15 milioni | E01 (coefficienti non finiti; Solver oltre 255 caratteri); dopo la correzione nessun errore |
+| `fuzz_csv` | lettore CSV, liste e matrici | 8 milioni | nessun crash |
+| `fuzz_pcgraph` | progetti `.pcgraph`, G-Mem, andata e ritorno | 4,7 milioni | nessun errore |
+| `fuzz_equation` | SIML, POLY, SOLVER e visualizzazione | 0,76 milioni | nessun crash; un timeout: SolveN nell'equazione del SOLVER (A6, aperto) |
+| `fuzz_ui` | sequenze di tasti sull'intero firmware | 21 000 sequenze | nessun crash |
+
+La verifica finale (§4) ha rieseguito tutti gli harness dal repository con
+`tools/fuzz/run_fuzz.sh build/fuzz 90` sul codice corretto: nessun crash.
 
 ## 2. Correzioni (§3)
 
 Ogni correzione ha prima un gruppo di controlli in `tests/fixes_v1131_test.cpp`
-eseguito sui sorgenti della v1.13.0 (falliti: 29 su 90 per E01–E09; blocco
-per E02 esteso ed E14; UBSan per E10 ed E12; 12 per E16–E17), poi la
+eseguito sui sorgenti della v1.13.0 (falliti: 29 su 90 per E01–E09; nessuna
+risposta per E02 con n e M grandi e per E14; UBSan per E10 ed E12; E15
+restituisce 1000000; 1 controllo per E16 e 12 per E17), poi la
 correzione, poi il test superato (142/142).
 
 | Errore | File | Correzione |
@@ -86,10 +90,10 @@ più severa (E11).
 | Controllo | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
 |---|---|---|
 | `tests/run_host_tests.sh` | 46/46: 44 suite C++ con **12 223** controlli (12 081 + 142 di `fixes_v1131_test`), `mem_pools_smoke` (≈ 333 000), `sd_interop_test` (41) | 46/46: **12 217** controlli + ≈ 333 000 + 41 |
-| `--sanitize` (ASan + UBSan bloccante) | SAN_PLUS | SAN_PICO2W |
+| `--sanitize` (ASan + UBSan bloccante) | 46/46, nessun errore | 46/46, nessun errore |
 | `--tsan` (`mem_pools_tsan`) | superato | superato |
 | Relay AI | 15/15 | |
-| `scripts/build.sh --clean` | FW_PLUS | FW_PICO2W |
+| `scripts/build.sh --clean` | nessun warning; immagine 1 848 768 byte (44 % di 4 MB, +7 160 rispetto alla v1.13.0), RAM statica 307 296 byte | nessun warning; 1 839 940 byte (88 % di 2 MB, +7 168), RAM statica 303 372 byte |
 | Simulatore | 77/77 schermate uguali agli screenshot pubblicati | |
 | Prova su PicoCalc fisica | **non eseguita** | **non eseguita** |
 
@@ -99,4 +103,5 @@ Vedi [ERRORI_v1.13.1.md](ERRORI_v1.13.1.md#problemi-rimasti-aperti): A1 (record
 illeggibile dopo il ritorno a un firmware precedente), A2 (precisione di
 `HypergeoPD` con argomenti tutti grandi), A3 (risultati sotto 1E−99 in
 Run-Matrix, da verificare su una fx-CG50), A4 (screenshot storici non
-rigenerabili), A5 (nessun collaudo su hardware).
+rigenerabili), A5 (nessun collaudo su hardware), A6 (SOLVER di EQUATION con
+SolveN/FMin/FMax nell'equazione: Time Out solo dopo un calcolo lungo).

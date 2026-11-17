@@ -12,12 +12,12 @@ una cartella per scheda, nello stesso ambiente della v1.13.0 (Pico SDK 2.2.0,
 
 | Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
 |---|---|---|
-| Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (3 698 176 byte) | P2W_UF2 |
-| Immagine flash | 1 848 768 byte (`__flash_binary_end` = `0x101C35C0`) = 44 % della partizione firmware da 4 MB; +7 160 byte rispetto alla v1.13.0 (controlli e calcoli corretti) | P2W_IMG |
-| RAM statica | 307 296 byte fino a `__end__` = `0x2004B060` (invariata) | P2W_RAM |
+| Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (3 698 176 byte) | `build/pico2w/picocalc_fxai_pico2w.uf2` (3 680 768 byte) |
+| Immagine flash | 1 848 768 byte (`__flash_binary_end` = `0x101C35C0`) = 44 % della partizione firmware da 4 MB; +7 160 byte rispetto alla v1.13.0 (controlli e calcoli corretti) | 1 839 940 byte (`0x101C1344`) = 88 % della partizione da 2 MB; +7 168 byte |
+| RAM statica | 307 296 byte fino a `__end__` = `0x2004B060` (invariata) | 303 372 byte (`0x2004A10C`, invariata) |
 | Frame di stack (`-fstack-usage`) | massimo `SystemApp::enter` 2 016 B; valutatore ricorsivo ≤ 328 B per livello (budget 16 KB, profondità 32); unico frame dinamico in `std::to_string` (limitato) | come la Plus |
-| Warning | **nessuno** del compilatore (resta l'avviso di CMake dell'SDK sulla ricerca di picotool) | P2W_WARN |
-| SHA-256 dell'UF2 locale | `c9ab78b2044e294924252e87e421b7099e91b6893223e695674fb0373089d7e1` | P2W_SHA |
+| Warning | **nessuno** del compilatore (resta l'avviso di CMake dell'SDK sulla ricerca di picotool) | nessuno |
+| SHA-256 dell'UF2 locale | `c9ab78b2044e294924252e87e421b7099e91b6893223e695674fb0373089d7e1` | `33e4dada2cb9299c4ffa761d37a1a9211748a45fae3179351d9ac37fa1ed3853` |
 
 Gli UF2 allegati alla GitHub Release sono compilati dal workflow sul commit
 pubblicato e verificati con `sha256sum -c SHA256SUMS`; i loro hash possono
@@ -28,11 +28,11 @@ differire da quelli locali.
 | Suite | Pico Plus 2 W | Pico 2 W |
 |---|---|---|
 | CTest (`tests/run_host_tests.sh`) | 46/46: 44 suite C++ con **12 223** controlli (+142 di `fixes_v1131_test`), `mem_pools_smoke` (≈ 333 000 verifiche) e `sd_interop_test` (41) | 46/46: **12 217** controlli + ≈ 333 000 + 41 |
-| AddressSanitizer + UBSan bloccante (`--sanitize`) | SAN_P | SAN_2 |
+| AddressSanitizer + UBSan bloccante (`--sanitize`) | 46/46 | 46/46 |
 | ThreadSanitizer (`--tsan`) | superato | superato |
 | Relay AI (Python, `unittest`) | 15/15 | — |
 | Analisi statica | cppcheck, GCC con warning extra, clang-tidy: nessun errore reale (dettaglio in [reports/ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md#verifiche-senza-errori)) | stesso codice |
-| Fuzzing (`tools/fuzz`) | parser, workspace, CSV, `.pcgraph`, EQUATION, tasti: nessun crash dopo le correzioni | — |
+| Fuzzing (`tools/fuzz`) | parser, workspace, CSV, `.pcgraph`, EQUATION, tasti: nessun crash dopo le correzioni; un timeout del SOLVER di EQUATION con SolveN nell'equazione (A6, aperto) | — |
 | Simulatore | 7 script, 77 schermate identiche agli screenshot pubblicati (script aggiornati all'ordine di OPTN; 17, 18, 51, 55, 60 rigenerati) | — |
 
 ## v1.13.0

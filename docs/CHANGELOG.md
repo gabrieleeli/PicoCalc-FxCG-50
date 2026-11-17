@@ -45,7 +45,12 @@ rapporto: [reports/SVILUPPO_v1.13.1.md](reports/SVILUPPO_v1.13.1.md).
   la v1.13.0); build con sanitizer: UBSan bloccante (`-fno-sanitize-recover`,
   E11), prima un comportamento indefinito non faceva fallire i test.
 - Fuzzing con libFuzzer + ASan/UBSan di parser, workspace, CSV, `.pcgraph`,
-  EQUATION e sequenze di tasti (strumenti nella sessione, vedi il rapporto).
+  EQUATION e sequenze di tasti: strumenti in `tools/fuzz` (`run_fuzz.sh`).
+
+### Problemi aperti
+- A1–A6 di [reports/ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md#problemi-rimasti-aperti),
+  tra cui il SOLVER di EQUATION con SolveN/FMin/FMax nell'equazione (Time Out
+  solo dopo un calcolo lungo) e nessun collaudo su hardware.
 
 ### Documentazione
 - `TESTING.md` con i numeri reali (E13); script del simulatore aggiornati al

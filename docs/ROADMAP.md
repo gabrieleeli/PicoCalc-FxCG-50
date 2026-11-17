@@ -2,9 +2,10 @@
 
 La v1.13.1 corregge gli errori trovati nella revisione completa della v1.13.0
 ([reports/ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md)); restano aperti i
-punti A1–A5 di quel documento (A2: precisione di HypergeoPD con argomenti
+punti A1–A6 di quel documento (A2: precisione di HypergeoPD con argomenti
 tutti grandi; A3: risultati sotto 1E−99 in Run-Matrix da verificare su una
-fx-CG50; A5: collaudo fisico).
+fx-CG50; A5: collaudo fisico; A6: SOLVER di EQUATION con SolveN/FMin/FMax
+nell'equazione, Time Out solo dopo un calcolo lungo).
 
 Il progetto **non** ha la parità con la Casio fx-CG50 e non va presentato come
 tale: le tabelle sotto elencano ciò che manca. Fanno eccezione **Run-Matrix**

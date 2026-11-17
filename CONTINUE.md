@@ -35,7 +35,7 @@ clang-tidy, `-fstack-usage`, fuzzing con `tools/fuzz`, simulatore con
 confronto pixel per pixel, manuale) e 18 errori corretti (E01–E18 di
 `docs/reports/ERRORI_v1.13.1.md`), ognuno con un gruppo di controlli in
 `tests/fixes_v1131_test.cpp`. Formato del record invariato (v9). Problemi
-aperti A1–A5 nello stesso documento. Numeri di test e firmware:
+aperti A1–A6 nello stesso documento. Numeri di test e firmware:
 `docs/reports/SVILUPPO_v1.13.1.md` §3 e `docs/BUILD_STATUS.md`.
 **Nessuna prova su hardware**: `docs/HARDWARE_TEST_v1.13.1.md` (HW-160…HW-169).
 
@@ -140,11 +140,12 @@ Stato della v1.9.0 (invariato dove non indicato):
 
 ## 5. Problemi noti / da verificare
 
-- Problemi aperti della revisione v1.13.1 (A1–A5 di `docs/reports/ERRORI_v1.13.1.md`):
+- Problemi aperti della revisione v1.13.1 (A1–A6 di `docs/reports/ERRORI_v1.13.1.md`):
   record illeggibile dopo il ritorno a un firmware precedente, precisione di
   HypergeoPD con argomenti tutti grandi, risultati sotto 1E−99 in Run-Matrix
   da verificare su una fx-CG50, screenshot storici 01–05 e 09–11 non
-  rigenerabili, nessun collaudo su hardware.
+  rigenerabili, nessun collaudo su hardware, SOLVER di EQUATION con SolveN/FMin/FMax
+  nell'equazione (Time Out solo dopo un calcolo lungo).
 - Nessuna verifica su PicoCalc: display, tastiera, flash, PSRAM (timing:
   valori SparkFun per l'APS6404L), microSD (SPI0 a 12,5 MHz, card detect GP22),
   Wi-Fi, TLS; tempi di GRAPH, TABLE e 3D sul Cortex-M33 (li misura SYSTEM →
