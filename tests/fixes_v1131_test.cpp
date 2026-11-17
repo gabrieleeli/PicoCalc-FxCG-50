@@ -142,6 +142,20 @@ int main() {
         CHECK_NEAR(calclib::hypergeoCD(2.5, 5, 5, 10), 0.5, 1e-12);
         CHECK_NEAR(calclib::hypergeoCD(-1, 5, 5, 10), 0.0, 1e-15);
         CHECK_THROWS(calclib::hypergeoCD(1e12, 5, 5, 4));                   // n > N: Argument ERROR anche con x grande
+        // Anche n e M grandi: la somma aveva min(x, n, M) termini (1E9 = minuti sul PC).
+        const auto t1 = std::chrono::steady_clock::now();
+        CHECK_THROWS_AS(calclib::hypergeoCD(1e9, 1e9, 1e9, 2e9), MathError);
+        CHECK_THROWS_AS(calclib::invHypergeoCD(0.5, 1e9, 1e9, 2e9), MathError);
+        CHECK(millis(t1) < 200);
+        // I termini nulli sotto max(0, n+M-N) non si sommano: N vicino a n+M resta veloce.
+        CHECK_NEAR(calclib::hypergeoCD(1e9, 1e9, 1e9, 1e9 + 3), 1.0, 1e-6);          // supporto 1E9-3 .. 1E9
+        CHECK_NEAR(calclib::hypergeoCD(999999997, 1e9, 1e9, 1e9 + 3), calclib::hypergeoPD(999999997, 1e9, 1e9, 1e9 + 3), 1e-15);
+        CHECK(calclib::hypergeoCD(999999996, 1e9, 1e9, 1e9 + 3) == 0);
+        // E16: C(1E9,3)/C(1E9+3,3) = 0.99999999100... (con lgamma: 1.000004, oltre 1).
+        CHECK_NEAR(calclib::hypergeoPD(999999997, 1e9, 1e9, 1e9 + 3), 0.999999991, 1e-12);
+        CHECK_NEAR(calclib::hypergeoPD(2, 5, 5, 10), 100.0 / 252.0, 1e-14);
+        const double inv = calclib::invHypergeoCD(0.5, 1e9, 1e9, 1e9 + 3);
+        CHECK(inv >= 999999997 && inv <= 1e9);
     }
 
     // ================================================================ E03 inverse discrete in tempo quadratico
@@ -335,6 +349,42 @@ int main() {
         const std::vector<double> zero{0, 0};
         CHECK_THROWS(stats::oneVariable(odd, &zero));
     }
+    // ================================================================ E14 distribuzione geometrica con p piccolo
+    {
+        // InvGeoCD(0.5, 1E-20) non terminava (1-p = 1 in double: GeoCD sempre 0 e x+1 = x
+        // oltre 2^53); GeoCD e GeoPD con p piccolo perdevano tutta la precisione.
+        const auto t0 = std::chrono::steady_clock::now();
+        CHECK_NEAR(calclib::geoCD(1e20, 1e-20) / (1 - std::exp(-1.0)), 1.0, 1e-9);
+        CHECK_NEAR(calclib::geoPD(1e20, 1e-20) / (1e-20 * std::exp(-1.0)), 1.0, 1e-9);
+        CHECK_NEAR(calclib::invGeoCD(0.5, 1e-20) / (std::log(2.0) * 1e20), 1.0, 1e-9);
+        CHECK_NEAR(calclib::invGeoCD(0.5, 1e-12) / (std::log(2.0) * 1e12), 1.0, 1e-9);
+        CHECK(millis(t0) < 50);
+        // Valori ordinari invariati.
+        CHECK(calclib::invGeoCD(0.5, 0.5) == 1 && calclib::invGeoCD(0.75, 0.5) == 2 && calclib::invGeoCD(0.8, 0.5) == 3);
+        CHECK(calclib::invGeoCD(0, 0.3) == 1 && calclib::invGeoCD(0.7, 1) == 1);
+        CHECK_NEAR(calclib::geoCD(3, 0.5), 0.875, 1e-15);
+        CHECK_NEAR(calclib::geoPD(3, 0.5), 0.125, 1e-15);
+        CHECK(calclib::geoPD(2, 1) == 0 && calclib::geoPD(1, 1) == 1 && calclib::geoCD(5, 1) == 1);
+        CHECK(calclib::geoCD(0.5, 0.3) == 0 && calclib::geoPD(2.5, 0.3) == 0);
+        bool same = true;                                     // il piu' piccolo x con GeoCD(x) >= prob
+        for (double p : {0.01, 0.2, 0.5, 0.9})
+            for (double prob : {0.001, 0.1, 0.5, 0.875, 0.99}) {
+                double x = 1;
+                while (calclib::geoCD(x, p) < prob - 1e-10) ++x;
+                same = same && calclib::invGeoCD(prob, p) == x;
+            }
+        CHECK(same);
+    }
+
+    // ================================================================ E15 InvPoissonCD oltre 1E6
+    {
+        // Senza un x <= 1E6 con PoissonCD(x) >= prob restituiva 1000000 (risultato errato).
+        CHECK_THROWS_AS(calclib::invPoissonCD(0.5, 1e9), MathError);
+        CHECK_THROWS_AS(calclib::invPoissonCD(0.5, 2e6), MathError);
+        CHECK(calclib::invPoissonCD(0.5, 100) == 100);
+        CHECK(calclib::invPoissonCD(1e-300, 5) == 0);
+    }
+
     // ================================================================ E10 Ran# n fuori intervallo
     {
         // n = 2E13 veniva convertito in int prima del controllo (comportamento indefinito).
