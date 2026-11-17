@@ -282,6 +282,11 @@ std::string rewriteIdentifiers(const std::string& expression, const std::functio
 // True for function, constant and special names known to the parser
 // (lower-case input). The editor uses it to merge typed letters into words.
 bool isReservedWord(const std::string& lowerName);
+// v1.14.0: true per i nomi del parser che NON sono costanti della tabella
+// (physical_constants.hpp): funzioni (anche rootN, f_1..f_20), operatori a
+// parola, ans/preans/theta/r_var, variabili di sistema, List 1-26, Str 1-20,
+// v_a..v_z, tbl_result e riferimenti y1..x20. Una costante non deve mai esserlo.
+bool isNonConstantName(const std::string& lowerName);
 
 // Seeds the RNG used by rand()/randint() (the firmware seeds it from the uptime counter).
 void seedRandom(std::uint32_t seed) noexcept;

@@ -3616,5 +3616,11 @@ const char* equationMatrixName(int index) noexcept{
     return index>=0&&index<4?names[index]:"";
 }
 bool isReservedWord(const std::string& lowerName){return isFunctionName(lowerName)||isConstantName(lowerName)||operatorWord(lowerName)!=0;}
+bool isNonConstantName(const std::string& lowerName){
+    if(isFunctionName(lowerName)||operatorWord(lowerName)||explicitVariable(lowerName)||specialCollection(lowerName)||
+       stringName(lowerName)||isSystemName(lowerName)||isListName(lowerName)||referenceName(lowerName))return true;
+    for(const char* s:kSpecialNames)if(lowerName==s)return true;
+    return false;
+}
 void seedRandom(std::uint32_t seed) noexcept{g_rng=seed?seed:0x9E3779B9u;}
 } // namespace fx

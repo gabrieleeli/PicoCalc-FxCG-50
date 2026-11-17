@@ -55,7 +55,9 @@ set(FXAI_TESTS
   # v1.13.0: completamento di Run-Matrix (calcolo, Run-Matrix e workspace v9, comandi grafici, editor)
   calc_v112_test run_matrix_v112_test graph_cmd_v112_test editor_v112_test
   # v1.13.1: versione di correzione (un gruppo per errore di docs/reports/ERRORI_v1.13.1.md)
-  fixes_v1131_test)
+  fixes_v1131_test
+  # v1.14.0: catalogo delle costanti (CODATA 2022, SI 2019, IAU), menu CONST e pagine di SYMBOLS
+  physical_constants_test)
 foreach(t ${FXAI_TESTS})
   add_executable(${t} ${CMAKE_CURRENT_LIST_DIR}/${t}.cpp)
   target_link_libraries(${t} PRIVATE fxai_core fxai_host_board)
