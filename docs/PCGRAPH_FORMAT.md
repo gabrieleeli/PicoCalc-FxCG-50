@@ -22,6 +22,10 @@ Le cartelle sono create alla prima scrittura (`makeDirs`).
 
 Ogni file è scritto con `files::writeAtomic`:
 
+0. (v1.13.1) se un salvataggio precedente dello stesso file è stato interrotto,
+   lo si completa o annulla come fa `files::recover` (sotto): senza questo
+   passo, una seconda interruzione durante il passo 1 lasciava un `.tmp`
+   parziale che `recover` promuoveva a file principale;
 1. scrittura completa in `NOME.ext.tmp`;
 2. rilettura di `NOME.ext.tmp` e confronto del CRC con i dati in memoria;
 3. il file esistente diventa `NOME.ext.bak`;

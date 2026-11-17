@@ -28,6 +28,21 @@ Run-Matrix, Graph, Table, Equation, Statistics e i test usano lo stesso codice
 (`include/expression.hpp`). `CompiledExpression` analizza una volta e valuta molte
 volte (grafici, tabelle, solver).
 
+## Correzioni della v1.13.1
+
+Stesso parser, stesso AST, stesso valutatore; nessuna funzione nuova
+([reports/ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md)):
+
+- `nCr`/`nPr`: n < 1E10, risultato < 1E100 (prima n ≤ 100000);
+- `Σ`/`Π`: i termini (al più 100 001) si contano in double, la variabile vale
+  `a + i·passo`; gli estremi non si convertono più in `long long`;
+- `Ran# n`: n fuori da 0…10 rifiutato prima della conversione in `int`;
+- `calc_library`: inverse discrete con la somma cumulativa, HypergeoCD sul
+  supporto (al più 10⁶ termini), distribuzione geometrica con `log1p`/`expm1`,
+  InvPoissonCD oltre 10⁶ come Argument ERROR, `logChoose` diretto con
+  min(k, n−k) ≤ 64, InvTCD e i quantili t con la simmetria;
+- EQUATION: forma esatta complessa per sostituzione solo per i polinomi in `i`.
+
 ## Novità della v1.13.0 (Run-Matrix)
 
 Tutto resta nel **parser, AST e valutatore unici**; il nuovo modulo

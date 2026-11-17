@@ -85,7 +85,7 @@ più severa (E11).
 
 | Controllo | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
 |---|---|---|
-| `tests/run_host_tests.sh` | RISULTATI_PLUS | RISULTATI_PICO2W |
+| `tests/run_host_tests.sh` | 46/46: 44 suite C++ con **12 223** controlli (12 081 + 142 di `fixes_v1131_test`), `mem_pools_smoke` (≈ 333 000), `sd_interop_test` (41) | 46/46: **12 217** controlli + ≈ 333 000 + 41 |
 | `--sanitize` (ASan + UBSan bloccante) | SAN_PLUS | SAN_PICO2W |
 | `--tsan` (`mem_pools_tsan`) | superato | superato |
 | Relay AI | 15/15 | |

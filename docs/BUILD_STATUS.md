@@ -1,9 +1,41 @@
-# Build status — v1.13.0 (completamento totale di Run-Matrix)
+# Build status — v1.13.1 (versione di correzione)
 
 Stato delle build per versione; le novità sono in [CHANGELOG.md](CHANGELOG.md).
-Le sezioni dopo "v1.13.0" descrivono le build delle versioni precedenti.
+Le sezioni dopo "v1.13.1" descrivono le build delle versioni precedenti.
 
-## v1.13.0 — `main`
+## v1.13.1 — `main`
+
+Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`),
+una cartella per scheda, nello stesso ambiente della v1.13.0 (Pico SDK 2.2.0,
+`gcc-arm-none-eabi` 13.2.1). Solo correzioni ([reports/ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md)).
+**Nessuna prova su hardware.**
+
+| Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (3 698 176 byte) | P2W_UF2 |
+| Immagine flash | 1 848 768 byte (`__flash_binary_end` = `0x101C35C0`) = 44 % della partizione firmware da 4 MB; +7 160 byte rispetto alla v1.13.0 (controlli e calcoli corretti) | P2W_IMG |
+| RAM statica | 307 296 byte fino a `__end__` = `0x2004B060` (invariata) | P2W_RAM |
+| Frame di stack (`-fstack-usage`) | massimo `SystemApp::enter` 2 016 B; valutatore ricorsivo ≤ 328 B per livello (budget 16 KB, profondità 32); unico frame dinamico in `std::to_string` (limitato) | come la Plus |
+| Warning | **nessuno** del compilatore (resta l'avviso di CMake dell'SDK sulla ricerca di picotool) | P2W_WARN |
+| SHA-256 dell'UF2 locale | `c9ab78b2044e294924252e87e421b7099e91b6893223e695674fb0373089d7e1` | P2W_SHA |
+
+Gli UF2 allegati alla GitHub Release sono compilati dal workflow sul commit
+pubblicato e verificati con `sha256sum -c SHA256SUMS`; i loro hash possono
+differire da quelli locali.
+
+### Test
+
+| Suite | Pico Plus 2 W | Pico 2 W |
+|---|---|---|
+| CTest (`tests/run_host_tests.sh`) | 46/46: 44 suite C++ con **12 223** controlli (+142 di `fixes_v1131_test`), `mem_pools_smoke` (≈ 333 000 verifiche) e `sd_interop_test` (41) | 46/46: **12 217** controlli + ≈ 333 000 + 41 |
+| AddressSanitizer + UBSan bloccante (`--sanitize`) | SAN_P | SAN_2 |
+| ThreadSanitizer (`--tsan`) | superato | superato |
+| Relay AI (Python, `unittest`) | 15/15 | — |
+| Analisi statica | cppcheck, GCC con warning extra, clang-tidy: nessun errore reale (dettaglio in [reports/ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md#verifiche-senza-errori)) | stesso codice |
+| Fuzzing (`tools/fuzz`) | parser, workspace, CSV, `.pcgraph`, EQUATION, tasti: nessun crash dopo le correzioni | — |
+| Simulatore | 7 script, 77 schermate identiche agli screenshot pubblicati (script aggiornati all'ordine di OPTN; 17, 18, 51, 55, 60 rigenerati) | — |
+
+## v1.13.0
 
 Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`)
 sul codice unito con la v1.12.0 (EQUATION), una cartella per scheda, nello
