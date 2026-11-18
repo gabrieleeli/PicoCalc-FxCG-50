@@ -23,7 +23,7 @@ const char* const kSystemSrc[] = {"src/apps/system_app.cpp", nullptr};
 const char* const kConversionSrc[] = {"src/apps/conversion_app.cpp", nullptr};
 const char* const kAiChatSrc[] = {"src/apps/ai_chat_app.cpp", nullptr};
 const char* const kSymbolsSrc[] = {"src/apps/symbols_app.cpp", nullptr};
-const char* const kGraph3DSrc[] = {"src/apps/graph3d_app.cpp", nullptr};
+const char* const kGraph3DSrc[] = {"src/apps/graph3d_app.cpp", "src/apps/graph3d_plot.cpp", nullptr};
 
 const AppInfo kApps[AppCount] = {
     {AppId::RunMatrix, "Run-Matrix", "1", rgb888To565(232, 96, 30), AppStatus::Available,
@@ -101,8 +101,8 @@ const AppInfo kApps[AppCount] = {
      "Picture Plot non ancora implementato.",
      s::Expression | Ui | s::Stats | s::Storage | s::Models, d::Settings | d::Lists | d::View, 0, nullptr},
     {AppId::Graph3D, "3D Graph", "J", rgb888To565(70, 60, 190), AppStatus::Available,
-     "Superfici z=f(x,y) (fino a 3) nella finestra 3D, rotazione e zoom; z-buffer e griglie fino a 128 con la PSRAM",
-     nullptr, s::Expression | Ui | s::Storage | s::Models | s::Graph3D, d::Settings | d::Memory | d::Graph3D, 0, kGraph3DSrc},
+     "Fino a 3 grafici: modelli Line, Plane, Sphere, Cylinder, Cone, Z=, Param, Rot X/Y; V-Window 3D, Setup, FORMAT, 3D G-Mem e V-Mem, rotazione, zoom e viste, TRACE, G-Solve (CROSS, INTSECT, RELATION), SKETCH, PICTURE; z-buffer in PSRAM",
+     nullptr, s::Expression | Ui | s::MathRender | s::Storage | s::Files | s::Graph3D, d::Settings | d::Memory | d::Graph3D, 0, kGraph3DSrc},
     {AppId::Conversion, "Conversion", "K", rgb888To565(220, 90, 120), AppStatus::Available,
      "Conversioni di unita' (10 grandezze, prefissi SI); il risultato va in Ans",
      nullptr, s::Expression | Ui | s::Units, d::Settings | d::Memory, 0, kConversionSrc},
@@ -135,7 +135,7 @@ const char* const kHModels[] = {"app_models.hpp", nullptr};
 const char* const kHGraphCore[] = {"graph_model.hpp", "graph_engine.hpp", "graph_solve.hpp", "table_model.hpp", "limits.hpp", nullptr};
 const char* const kHFiles[] = {"file_store.hpp", "graph_file.hpp", "pict.hpp", "csv_io.hpp", nullptr};
 const char* const kHDiag[] = {"diagnostics.hpp", nullptr};
-const char* const kHGraph3D[] = {"graph3d.hpp", "limits.hpp", nullptr};
+const char* const kHGraph3D[] = {"graph3d.hpp", "graph3d_model.hpp", "limits.hpp", nullptr};
 const char* const kHGraphCmd[] = {"graph_commands.hpp", nullptr};
 const char* const kHEquation[] = {"equation.hpp", nullptr};
 const char* const kHHardware[] = {"board_config.hpp", "mem_pools.hpp", "psram.hpp", "limits.hpp", "system_info.hpp", "system_runtime.hpp", nullptr};

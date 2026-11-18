@@ -443,7 +443,14 @@ constexpr std::uint32_t Magic = 0x46584157;   // "WAXF"
 // Dyna Graph, Recursion e TVM; per le righe della cronologia lo spostamento
 // ENG, i risultati intermedi di ◢ e i risultati stringa. I record delle
 // versioni 1-8 si caricano con i valori predefiniti di questi campi.
-constexpr std::uint16_t Version = 9;
+// Version 10 (v1.14.0, completamento di 3D Graph) toglie il blocco 3D della
+// versione 5 dal mezzo del record e aggiunge in coda il nuovo stato del 3D
+// Graph: le tre funzioni (tipo, modulo, espressioni, coefficienti, selezione,
+// colori), la 3D View Window con Xgrid/Ygrid, S, T, θ e φ, il Setup, lo zoom,
+// le 3D V-Win 1-6 e le 3D G-Mem 1-20 (g3d::encode). I record 5-9 convertono
+// Z1-Z3 in grafici Z=, la griglia (celle) in punti e yaw/pitch in θ/φ.
+constexpr std::uint16_t Version = 10;
+constexpr std::size_t MaxGraph3DSet = 16 * 1024;   // un insieme codificato (tre espressioni da 1000 byte al massimo)
 constexpr std::size_t LegacyLists = 6;     // liste del blocco delle versioni 1-6
 constexpr std::uint8_t NoValue = 0xFF;      // byte di tipo di una memoria non definita
 constexpr std::size_t LegacyFunctions = 6;
@@ -609,14 +616,8 @@ std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws) {
     // (v1-v7: qui c'era il blocco di EQUATION, ora in coda al record v8)
     w.u16(static_cast<std::uint16_t>(ws.chat.size()));
     for (const auto& m : ws.chat) { w.u8(m.fromUser ? 1 : 0); w.str(m.text); }
-    // v5
+    // v5 (v10: il blocco 3D della versione 5 e' in coda al record)
     w.u8(static_cast<std::uint8_t>(ws.settings.fileStore));
-    const auto& g3 = ws.graph3d;
-    w.u8(static_cast<std::uint8_t>(models::Graph3DModel::Functions));
-    for (std::size_t i = 0; i < models::Graph3DModel::Functions; ++i) { w.str(g3.model.z[i]); w.u8(g3.model.selected[i] ? 1 : 0); }
-    for (double d : {g3.model.xmin, g3.model.xmax, g3.model.ymin, g3.model.ymax, g3.model.zmin, g3.model.zmax}) w.f64(d);
-    w.u8(static_cast<std::uint8_t>(g3.model.grid));
-    w.f32(g3.yaw); w.f32(g3.pitch); w.f32(g3.zoom);
     // v6
     w.u8(static_cast<std::uint8_t>(ws.settings.inputMode));
     const CollectionMemory& cm = ws.matrices;
@@ -715,8 +716,59 @@ std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws) {
         for (std::size_t k = 0; k < h.displays.size() && k < 255; ++k) w.str(h.displays[k]);
         w.str(h.text);
     }
+    // v10: 3D Graph (v1.14.0)
+    const Graph3DState& g3 = ws.graph3d;
+    w.blob(g3d::encode(g3.set));
+    w.f32(g3.zoom);
+    w.u8(g3.vmemUsed);
+    for (const g3d::Window& vw : g3.vmem) w.blob(g3d::encodeWindow(vw));
+    for (const std::string& m : g3.gmem) w.blob(m);
     return std::move(w.out);
 }
+
+namespace {
+// Blocco 3D delle versioni 5-9 (v1.9.0-v1.13.1): superfici Z1-Z3 con la
+// selezione, finestra X/Y/Z, griglia in celle (5-128) e vista yaw/pitch/zoom.
+// Diventa lo stato della v1.14.0: grafici Z=, Xgrid = Ygrid = celle + 1 punti
+// (2-50), θ e φ con la stessa orientazione della vista (yaw = -θ - 90,
+// pitch = 90 - φ), stesso zoom. Gli stessi controlli della versione 9.
+bool readLegacyGraph3D(Reader& r, Graph3DState& g3) {
+    if (r.u8() != g3d::Functions) return false;
+    std::array<std::string, g3d::Functions> z{};
+    std::array<bool, g3d::Functions> sel{};
+    for (std::size_t i = 0; i < g3d::Functions; ++i) {
+        z[i] = r.str(); sel[i] = r.u8() != 0;
+        if (z[i].size() > MaxGraphExpression) return false;
+    }
+    double box[6];
+    for (double& d : box) d = r.f64();
+    const int grid = r.u8();
+    const float yaw = r.f32(), pitch = r.f32(), zoom = r.f32();
+    if (!r.ok) return false;
+    if (!(box[0] < box[1]) || !(box[2] < box[3]) || !(box[4] < box[5]) || grid < 5 || grid > 128) return false;
+    for (std::size_t i = 0; i < g3d::Functions; ++i) if (sel[i] && z[i].empty()) return false;
+    if (!std::isfinite(yaw) || !std::isfinite(pitch) || !(zoom > 0.05F && zoom < 20.0F)) return false;
+    Graph3DState out;
+    for (std::size_t i = 0; i < g3d::Functions; ++i) {
+        g3d::Function& f = out.set.fns[i];
+        if (z[i].empty()) continue;
+        f.kind = g3d::Kind::Z; f.expr[0] = z[i]; f.selected = sel[i];
+    }
+    g3d::Window& w = out.set.window;
+    w.xmin = box[0]; w.xmax = box[1]; w.ymin = box[2]; w.ymax = box[3]; w.zmin = box[4]; w.zmax = box[5];
+    w.xgrid = w.ygrid = std::clamp(grid + 1, g3d::MinGrid, g3d::MaxGrid);
+    w.theta = g3d::normalizeTheta(-(static_cast<double>(yaw) + 90.0));
+    w.phi = g3d::normalizePhi(90.0 - static_cast<double>(pitch));
+    if (!g3d::validate(w).empty()) {   // valori oltre 1E98 accettati dalla v1.9.0: finestra iniziale, stessa vista
+        const double theta = w.theta, phi = w.phi;
+        w = g3d::Window{};
+        w.theta = theta; w.phi = phi;
+    }
+    out.zoom = zoom;
+    g3 = std::move(out);
+    return true;
+}
+} // namespace
 
 bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace& out) {
     if (!data) return false;
@@ -878,18 +930,7 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
     if (version >= 5) {
         const auto store = r.u8(); if (store > 1) return false;
         s.fileStore = static_cast<Settings::FileStore>(store);
-        auto& g3 = ws.graph3d;
-        if (r.u8() != models::Graph3DModel::Functions) return false;
-        for (std::size_t i = 0; i < models::Graph3DModel::Functions; ++i) {
-            g3.model.z[i] = r.str(); g3.model.selected[i] = r.u8() != 0;
-            if (g3.model.z[i].size() > MaxGraphExpression) return false;
-        }
-        for (double* d : {&g3.model.xmin, &g3.model.xmax, &g3.model.ymin, &g3.model.ymax, &g3.model.zmin, &g3.model.zmax}) *d = r.f64();
-        g3.model.grid = r.u8();
-        g3.yaw = r.f32(); g3.pitch = r.f32(); g3.zoom = r.f32();
-        if (r.ok && (!models::validate(g3.model).empty() || !std::isfinite(g3.yaw) || !std::isfinite(g3.pitch) ||
-                     !(g3.zoom > 0.05F && g3.zoom < 20.0F)))
-            return false;
+        if (version < 10 && !readLegacyGraph3D(r, ws.graph3d)) return false;
     }
     if (version >= 6) {
         const auto mode = r.u8(); if (mode > 1) return false;
@@ -1077,6 +1118,22 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
             h.text = r.str();
             if (h.engShift < -40 || h.engShift > 40) return false;
         }
+    }
+    if (version >= 10) {
+        Graph3DState& g3 = ws.graph3d;
+        if (!g3d::decode(r.blob(MaxGraph3DSet), g3.set)) return false;
+        g3.zoom = r.f32();
+        g3.vmemUsed = r.u8();
+        if (!r.ok || !(g3.zoom >= 0.05F && g3.zoom <= 20.0F) || g3.vmemUsed >= (1u << g3d::WindowMemories)) return false;
+        for (g3d::Window& vw : g3.vmem) if (!g3d::decodeWindow(r.blob(256), vw)) return false;
+        std::size_t bytes = 0;
+        for (std::string& m : g3.gmem) {
+            m = r.blob(MaxGraph3DSet);
+            bytes += m.size();
+            g3d::GraphSet probe;
+            if (!m.empty() && !g3d::decode(m, probe)) return false;
+        }
+        if (bytes > limits::kGraph3DMemoryBytes) return false;
     }
     if (ws.listElements() > Workspace::MaxListElements) return false;
     if (!r.ok || r.i != r.n) return false;

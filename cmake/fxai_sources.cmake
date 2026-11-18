@@ -23,6 +23,7 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/graph_model.cpp
   ${FXAI_ROOT}/src/graph_engine.cpp
   ${FXAI_ROOT}/src/graph_solve.cpp
+  ${FXAI_ROOT}/src/graph3d_model.cpp
   ${FXAI_ROOT}/src/graph3d.cpp
   ${FXAI_ROOT}/src/table_model.cpp
   ${FXAI_ROOT}/src/diagnostics.cpp
@@ -75,6 +76,7 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/apps/conversion_app.cpp
   ${FXAI_ROOT}/src/apps/ai_chat_app.cpp
   ${FXAI_ROOT}/src/apps/graph3d_app.cpp
+  ${FXAI_ROOT}/src/apps/graph3d_plot.cpp
   ${FXAI_ROOT}/src/ai_protocol.cpp
 )
 # Device-only sources: the global operator new that routes every C++

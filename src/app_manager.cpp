@@ -104,7 +104,9 @@ void AppManager::showError(const char* what) {
     const char* error = std::strstr(what, "ERROR");
     // Titoli della fx-CG50 senza la parola ERROR (Appendice α, tabella degli errori α-2, α-3).
     static const char* const kTitles[] = {"Can't Solve!", "Time Out", "No Variable", "Underflow", "No Solution", "Infinitely Many Solutions",
-                                          "Complex Number In List", "Complex Number In Matrix", "Complex Number In Data"};
+                                          "Complex Number In List", "Complex Number In Matrix", "Complex Number In Data",
+                                          // v1.14.0 (3D Graph, Appendice α-12)
+                                          "Invalid Setting", "Out of Domain", "INTSECT requires", "RELATION requires"};
     bool known = false;
     if (colon) for (const char* t : kTitles) known = known || (std::strncmp(what, t, std::strlen(t)) == 0 && what + std::strlen(t) == colon);
     if (colon && ((error && error < colon) || known)) {

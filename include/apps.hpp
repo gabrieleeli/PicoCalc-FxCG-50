@@ -708,12 +708,19 @@ private:
     std::uint32_t lastDraw_{0};
 };
 
-// 3D GRAPH: up to three surfaces z = f(x, y) in the 3D V-Window, rotation with
-// the arrows and zoom. The samples are computed in tick() (a budget of points
-// per tick, so the keyboard is never blocked) and kept between redraws:
-// rotating or zooming only re-projects. With the PSRAM pool of the Pico Plus
-// 2 W the meshes and the z-buffer live in PSRAM (grids up to 128); without it
-// the reduced profile is used (painter's algorithm, grids up to 24).
+// 3D GRAPH (v1.14.0, fx-CG50 manual chapter 16): up to three graphs of the
+// templates Line, Plane, Sphere, Cylinder, Cone or of the directly input
+// types Z=, Param, Rot X, Rot Y. List (SELECT, DELETE, TYPE, 3D-GMEM, DRAW,
+// FORMAT), function selection screen, coefficient and function input, 3D
+// View Window (3D-VMEM), Setup (Axes, Box, Label, Plot/LineCol...), graph
+// screen with rotation (cursor keys, ROTATE), ZOOM (IN, OUT, VIEW-X/Y/Z,
+// ORIGINAL), TRACE, SKETCH (Cls, Plot, Text), G-Solve (CROSS, INTSECT,
+// RELATION), PICTURE and CAPTURE. The lattices are computed in tick() (a
+// budget of points per tick, AC stops) and kept between redraws: rotating or
+// zooming only re-projects. Meshes, z-buffer and the image of the scene
+// (TRACE/SKETCH) live in PSRAM on the Pico Plus 2 W; without PSRAM the
+// reduced profile is used (painter's algorithm, 25 points per side).
+// List and input screens: graph3d_app.cpp; graph screen: graph3d_plot.cpp.
 class Graph3DApp final : public App {
 public:
     AppId id() const override { return AppId::Graph3D; }
@@ -722,35 +729,163 @@ public:
     void key(Context& ctx, const KeyEvent& ev) override;
     void draw(Context& ctx, gfx::Canvas& c) override;
     bool tick(Context& ctx) override;
+    bool ownsSetup() const override { return true; }
 
-    enum class Screen : std::uint8_t { List, Edit, Window, Plot };
+    enum class Screen : std::uint8_t { List, Select, Coef, Input, Window, Setup, Format, Plot };
+    enum class Mode : std::uint8_t { View, Trace, Cross, Intsect, Relation, SketchPlot, SketchText };
+    // Function-key submenus (the fx-CG50 replaces the function menu).
+    enum class Sub : std::uint8_t { None, Rotate, GMem, VMem, Zoom, Sketch, GSolve, CrossAxis, Optn, Picture, AutoRotate };
     Screen screen() const noexcept { return screen_; }
+    Mode mode() const noexcept { return mode_; }
+    Sub sub() const noexcept { return sub_; }
     bool sampling() const noexcept { return sampling_; }
-    void finishSampling(Context& ctx);                   // completes the sampling now (tests)
-    const g3d::Mesh& mesh(std::size_t i) const { return meshes_.at(i); }
-    std::size_t grid() const noexcept { return grid_; }  // grid in use (after the memory limits)
+    bool drawn() const noexcept { return samplesValid_; }
+    void finishSampling(Context& ctx);                       // completes the computation now (tests)
+    const g3d::Mesh& mesh(std::size_t graph, std::size_t patch = 0) const { return meshes_.at(graph).at(patch); }
+    std::size_t points() const noexcept { return points_; }  // points per side in use (after the memory limits)
     bool zbuffer() const noexcept { return zbuffer_; }
     const g3d::RenderStats& lastRender() const noexcept { return stats_; }
     const std::string& message() const noexcept { return message_; }
-    static constexpr gfx::Rect Viewport{4, 38, 312, 236};
+    // TRACE: graph (row 0..2) and coordinates of the pointer (false: undefined).
+    int traceGraph() const noexcept { return traceGraph_; }
+    bool tracePoint(Context& ctx, g3d::Vec3& out) const;
+    // G-Solve: the pair of graphs shown (rows) and the CROSS position.
+    std::pair<int, int> solvePair() const noexcept;
+    g3d::Axis crossAxis() const noexcept { return crossAxis_; }
+    double crossValue() const noexcept { return crossValue_; }
+    std::size_t sketchMarks() const noexcept { return marks_.size(); }
+    bool autoRotating() const noexcept { return autoSteps_ > 0; }
+    const g3d::Function& editing() const noexcept { return edit_; }   // function on the input screens
+    int coefCell() const noexcept { return coefCell_; }
+    static constexpr gfx::Rect Viewport{0, ui::StatusH, ui::ScreenW, ui::ContentBottom - ui::StatusH};   // area of GRAPH
+
 private:
-    void startSampling(Context& ctx);
-    void stopSampling() noexcept;
-    void drawList(Context& ctx, gfx::Canvas& c);
-    void drawPlot(Context& ctx, gfx::Canvas& c);
-    void openWindow(Context& ctx);
+    struct Ask {
+        enum class Kind : std::uint8_t { None, GMemStore, GMemRecall, VMemStore, VMemRecall, PictStore, Capture, TraceU, TraceV, CrossValue, SketchText };
+        Kind kind{Kind::None};
+        std::string prompt;
+        LineEditor editor{60};
+    };
+    struct Mark { int x{}, y{}; bool text{}; std::string s; };
+    struct LayerKey {
+        std::uint32_t gen{}; double theta{}, phi{}; float zoom{}; g3d::Setup setup{}; bool zbuffer{};
+        bool operator==(const LayerKey&) const = default;
+    };
+    // ---- graph3d_app.cpp: list, selection, coefficients, input, window, setup, format, memories
+    void listKey(Context& ctx, const KeyEvent& ev);
+    void selectKey(Context& ctx, const KeyEvent& ev);
+    void coefKey(Context& ctx, const KeyEvent& ev);
+    void inputKey(Context& ctx, const KeyEvent& ev);
+    void windowKey(Context& ctx, const KeyEvent& ev);
+    void setupKey(Context& ctx, const KeyEvent& ev);
+    void formatKey(Context& ctx, const KeyEvent& ev);
+    void askKey(Context& ctx, const KeyEvent& ev);
+    void ask(Ask::Kind kind, std::string prompt, std::string initial = {});
+    void answered(Context& ctx, Ask::Kind kind, const std::string& text);
+    void openSelect(Context& ctx);
+    void openTemplate(Context& ctx, g3d::Kind kind);
+    void openInput(Context& ctx, g3d::Kind kind);
+    void openWindow(Context& ctx, bool fromPlot);
+    void loadWindowForm(Context& ctx, const g3d::Window& w);
+    g3d::Window windowFromForm(Context& ctx) const;
     void applyWindow(Context& ctx);
+    void openSetup(Context& ctx);
+    void applySetup(Context& ctx);
+    void openFormat(Context& ctx);
+    void setFunction(Context& ctx);                           // SET: validates edit_ and stores it in the row
+    void commitInputLine(Context& ctx);
+    void beginInputEdit(Context& ctx, bool keep, char first = 0);
+    void storeGraphMemory(Context& ctx, int n);
+    void recallGraphMemory(Context& ctx, int n);
+    void changed(Context& ctx);                               // data changed: samples are recomputed on the next DRAW
+    void drawList(Context& ctx, gfx::Canvas& c);
+    void drawSelect(Context& ctx, gfx::Canvas& c);
+    void drawCoef(Context& ctx, gfx::Canvas& c);
+    void drawInput(Context& ctx, gfx::Canvas& c);
+    void drawAsk(gfx::Canvas& c) const;
+    // ---- graph3d_plot.cpp: computation and graph screen
+    void startDraw(Context& ctx);
+    void showPlot(Context& ctx);                              // G<->T: draws again only if something changed
+    void stopSampling() noexcept;
+    void releaseScene() noexcept;
+    void plotKey(Context& ctx, const KeyEvent& ev);
+    void subKey(Context& ctx, const KeyEvent& ev);
+    void traceKey(Context& ctx, const KeyEvent& ev);
+    void crossKey(Context& ctx, const KeyEvent& ev);
+    void solveKey(Context& ctx, const KeyEvent& ev);
+    void sketchKey(Context& ctx, const KeyEvent& ev);
+    void startTrace(Context& ctx);
+    void moveTrace(int du, int dv);
+    void startCross(Context& ctx, g3d::Axis axis);
+    void startSolve(Context& ctx, Mode mode);
+    void setView(Context& ctx, double theta, double phi, float zoom);
+    void rotateBy(Context& ctx, double dTheta, double dPhi);
+    void autoZ(Context& ctx);
+    void storePicture(Context& ctx, int n);
+    void takeCapture(Context& ctx);
+    void writeCapture(Context& ctx, int n);
+    bool traceDomain(int graph, double& u0, double& u1, double& v0, double& v1, std::size_t& nu, std::size_t& nv, bool& oneD) const;
+    bool pointOf(Context& ctx, int graph, double u, double v, g3d::Vec3& out) const;
+    void drawPlot(Context& ctx, gfx::Canvas& c);
+    void drawOverlays(Context& ctx, gfx::Canvas& c, const g3d::Projector& proj);
+    std::string graphLabel(Context& ctx, int graph) const;
+
     Screen screen_{Screen::List};
+    Mode mode_{Mode::View};
+    Sub sub_{Sub::None};
     int row_{0};
-    LineEditor editor_{200};
-    Form window_;
-    std::array<g3d::Mesh, models::Graph3DModel::Functions> meshes_{};
-    std::array<CompiledExpression, models::Graph3DModel::Functions> compiled_{};
-    std::array<bool, models::Graph3DModel::Functions> active_{};
-    bool sampling_{false}, samplesValid_{false}, zbuffer_{false}, windowFromPlot_{false};
-    std::size_t sampleSurface_{0}, sampleNext_{0}, grid_{0};
+    bool confirmDelete_{false};
+    Ask ask_;
+    // selection and input screens
+    int selectRow_{0};
+    Screen inputReturn_{Screen::List};
+    g3d::Function edit_{};
+    int coefCell_{0};
+    bool coefEditing_{false};
+    LineEditor coefEditor_{120};
+    int inputLine_{0};
+    bool inputEditing_{false};
+    NaturalEditor editor_;
+    Form window_, setup_, format_;
+    bool windowFromPlot_{false};
+    Screen setupReturn_{Screen::List};
+    // scene
+    std::array<std::array<g3d::Mesh, g3d::MaxPatches>, g3d::Functions> meshes_{};
+    std::array<std::array<g3d::PatchSpec, g3d::MaxPatches>, g3d::Functions> specs_{};
+    std::array<std::size_t, g3d::Functions> patchCount_{};
+    std::array<g3d::Shape, g3d::Functions> shapes_{};
+    std::array<std::array<CompiledExpression, 3>, g3d::Functions> compiled_{};
+    std::array<bool, g3d::Functions> active_{};
+    std::array<bool, g3d::Functions> lineVisible_{};
+    std::array<g3d::Vec3, g3d::Functions> lineA_{}, lineB_{};
+    std::array<double, g3d::Functions> lineT0_{}, lineT1_{};
+    g3d::Window drawnWindow_{};                               // window of the computed lattices
+    bool sampling_{false}, samplesValid_{false}, zbuffer_{false};
+    std::size_t sampleGraph_{0}, samplePatch_{0}, sampleNext_{0}, points_{0};
+    double originalTheta_{20}, originalPhi_{70};
+    std::uint32_t dataGen_{0};
+    std::pmr::vector<std::uint16_t> layer_{mem::resource(mem::Policy::PREFER_PSRAM)};
+    LayerKey layerKey_{};
+    bool layerValid_{false};
     g3d::RenderStats stats_{};
     std::string message_;
+    bool memoryError_{false};
+    // TRACE, CROSS, INTSECT / RELATION, SKETCH, auto rotation, capture
+    int traceGraph_{-1};
+    double traceU_{0}, traceV_{0};
+    double askedU_{0};
+    g3d::Axis crossAxis_{g3d::Axis::X};
+    double crossValue_{0};
+    std::array<std::pair<int, int>, 3> pairs_{};
+    int pairCount_{0}, pairIndex_{0};
+    std::vector<Mark> marks_;
+    int px_{0}, py_{0};
+    int autoSteps_{0}, autoDir_{0};
+    std::uint32_t autoLast_{0};
+    pict::Image capture_{};
+    int pictPending_{0};                                      // PICTURE STORE: Pict n captured by the next drawPlot()
+    bool pictReady_{false};                                   // ... and written by tick()
+    pict::Image picture_{};
 };
 
 } // namespace fx::app

@@ -282,12 +282,13 @@ int main() {
         const char* engine[] = {"expression.hpp", "exact.hpp", "expression_ast.hpp", "memory.hpp", "math_engine.hpp", "number_format.hpp",
                                 "solvers.hpp", "statistics.hpp", "run_matrix.hpp", "workspace.hpp", "storage.hpp", "app_models.hpp",
                                 "graph_model.hpp", "graph_engine.hpp", "graph_solve.hpp", "file_store.hpp", "graph_file.hpp", "pict.hpp",
-                                "sd_card.hpp", "fatfs_store.hpp", "value.hpp", "csv_io.hpp", "graph_commands.hpp", "calc_library.hpp", "equation.hpp", "limits.hpp"};
+                                "sd_card.hpp", "fatfs_store.hpp", "value.hpp", "csv_io.hpp", "graph_commands.hpp", "calc_library.hpp", "equation.hpp", "limits.hpp",
+                                "graph3d_model.hpp"};
         const char* engineSrc[] = {"src/expression.cpp", "src/exact.cpp", "src/memory.cpp", "src/math_engine.cpp", "src/number_format.cpp",
                                    "src/solvers.cpp", "src/statistics.cpp", "src/run_matrix.cpp", "src/workspace.cpp", "src/storage.cpp", "src/app_models.cpp",
                                    "src/graph_model.cpp", "src/graph_engine.cpp", "src/graph_solve.cpp", "src/file_store.cpp", "src/graph_file.cpp", "src/pict.cpp",
                                    "src/sd_card.cpp", "src/fatfs_store.cpp", "src/value.cpp", "src/csv_io.cpp", "src/graph_commands.cpp",
-                                   "src/calc_library.cpp", "src/equation.cpp"};
+                                   "src/calc_library.cpp", "src/equation.cpp", "src/graph3d_model.cpp"};
         for (const char* h : engine)
             for (const auto& inc : includesOf(codeOnly(readFile(std::string("include/") + h))))
                 ::testutil::report(appLayer.count(inc) == 0, "engine header independent of the UI", h, 0, inc);
@@ -361,10 +362,11 @@ int main() {
         CHECK(classify({0, 0, 2, -1, 1, -1}) == ConicKind::Parabola);    // x = 2y²+y-1 (manual 5-51)
         CHECK(classify({1, 0, 1, 0, 0, 1}) == ConicKind::None);         // x²+y²=-1
         CHECK(classify({1, 0, -1, 0, 0, 0}) == ConicKind::Degenerate);  // two lines
-        Graph3DModel g3; g3.z[0] = "x^2-y^2";
-        CHECK(validate(g3).empty());
-        g3.grid = 128; CHECK(validate(g3).empty());
-        g3.grid = 129; CHECK(!validate(g3).empty());
+        // v1.14.0: il modello del 3D Graph e' in graph3d_model.hpp (griglia 2..50 come la fx-CG50)
+        g3d::Window g3;
+        CHECK(g3d::validate(g3).empty());
+        g3.xgrid = 50; CHECK(g3d::validate(g3).empty());
+        g3.xgrid = 51; CHECK(!g3d::validate(g3).empty());
         FinancialModel fin;
         CHECK(validate(fin).empty());
         fin.py = 0; CHECK(!validate(fin).empty());

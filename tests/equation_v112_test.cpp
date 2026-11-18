@@ -450,7 +450,7 @@ int main() {
         ws.equation.simResult = toMatrix(c.v({"1/2", "3"}), 2, 1);
         ws.equation.polyResult = toMatrix(c.v({"1+i"}), 1, 1);
         const auto bytes = serializeWorkspace(ws);
-        CHECK(bytes[4] == 9 && bytes[5] == 0);
+        CHECK(bytes[4] == 10 && bytes[5] == 0);
         Workspace back;
         CHECK(deserializeWorkspace(bytes.data(), bytes.size(), back));
         const EquationState& e = back.equation;
@@ -494,7 +494,7 @@ int main() {
         // Il record migrato si salva nella versione corrente (v9) e si rilegge identico
         const auto again = serializeWorkspace(old);
         Workspace round;
-        CHECK(again[4] == 9 && deserializeWorkspace(again.data(), again.size(), round) && round.equation.sim(2, 3) == o.sim(2, 3));
+        CHECK(again[4] == 10 && deserializeWorkspace(again.data(), again.size(), round) && round.equation.sim(2, 3) == o.sim(2, 3));
     }
 
     // ================================================================ editor (correzioni della v1.12.0 usate dal Solver)

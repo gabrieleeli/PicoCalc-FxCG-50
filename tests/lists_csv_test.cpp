@@ -73,7 +73,7 @@ int main() {
         CHECK(w.listName(1).empty());
         const auto blob = serializeWorkspace(w);
         Workspace back;
-        CHECK(blob[4] == 9 && deserializeWorkspace(blob.data(), blob.size(), back));
+        CHECK(blob[4] == 10 && deserializeWorkspace(blob.data(), blob.size(), back));
         CHECK(back.listName(0) == "QTY" && back.listName(25) == "PRICE_1");
     }
     // ================================================================ budget delle liste per scheda
@@ -344,7 +344,7 @@ int main() {
         CHECK(w.history.size() == 10);
         CHECK(w.matrices.mat[0].rows == 2 && w.matrices.mat[2].complex() && w.matrices.vct[1].cols == 3);
         CHECK(w.lists[0] == std::vector<double>({1.5, 2.5, 3.5}) && w.lists[1] == std::vector<double>({4, 5, 6}));
-        CHECK(w.functions[1].expr == "List 1x" && w.graph3d.model.z[1] == "x*y" && w.chat.size() == 1);
+        CHECK(w.functions[1].expr == "List 1x" && w.graph3d.set.fns[1].kind == g3d::Kind::Z && w.graph3d.set.fns[1].expr[0] == "x*y" && w.chat.size() == 1);
         CHECK(w.table.start == -2 && w.table.step == 0.5);
         CHECK_EQ_STR(resultText(w.history[0], w.settings), "1/2");
         CHECK(isCollection(w.history[8]) && w.history[8].collection->value.empty());   // 7x7: elementi omessi
@@ -362,7 +362,7 @@ int main() {
         CHECK_EQ_STR(last(w), "-4");
         // Salvato come v7, riletto uguale
         const auto blob = serializeWorkspace(w);
-        CHECK(blob[4] == 9 && blob[5] == 0);
+        CHECK(blob[4] == 10 && blob[5] == 0);
         Workspace back;
         CHECK(deserializeWorkspace(blob.data(), blob.size(), back));
         CHECK(back.history.size() == w.history.size() && back.lists == w.lists && back.matrices.mat[2] == w.matrices.mat[2]);

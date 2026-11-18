@@ -75,15 +75,6 @@ const char* conicName(ConicKind k) noexcept {
     return "?";
 }
 
-std::string validate(const Graph3DModel& m) {
-    if (!(m.xmin < m.xmax) || !(m.ymin < m.ymax) || !(m.zmin < m.zmax)) return "Argument ERROR: min < max su ogni asse";
-    // Up to 128 cells per side; the 3D Graph mode lowers it to what the memory
-    // allows (24 without PSRAM, see limits.hpp).
-    if (m.grid < 5 || m.grid > 128) return "Argument ERROR: griglia 5..128";
-    for (std::size_t i = 0; i < Graph3DModel::Functions; ++i) if (m.selected[i] && m.z[i].empty()) return "Argument ERROR: funzione z selezionata vuota";
-    return {};
-}
-
 std::string validate(const FinancialModel& m) {
     for (double v : {m.n, m.interest, m.pv, m.pmt, m.fv, m.py, m.cy}) if (!finite(v)) return "Argument ERROR: valore non finito";
     if (!(m.py > 0) || !(m.cy > 0)) return "Argument ERROR: P/Y e C/Y devono essere positivi";

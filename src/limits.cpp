@@ -36,14 +36,17 @@ bool graph3dZBuffer(std::size_t viewportPixels) noexcept {
     return ram().graph3dZBuffer && fitsHeavy(viewportPixels * sizeof(std::uint16_t) * 2);
 }
 
-std::size_t graph3dGrid(std::size_t viewportPixels) noexcept {
-    // Vertex (16 B) + projected vertex (12 B) per grid point; the optional
-    // z-buffer (2 B/pixel) is accounted for separately.
-    const std::size_t zbuffer = graph3dZBuffer(viewportPixels) ? viewportPixels * sizeof(std::uint16_t) : 0;
+std::size_t graph3dPoints(std::size_t viewportPixels, std::size_t patches) noexcept {
+    // Vertex (16 B) + projected vertex (16 B) per lattice point and 16 B of the
+    // painter's order per cell; the optional z-buffer (2 B/pixel) and the layer
+    // cache of TRACE (2 B/pixel) are accounted for separately.
+    const bool zb = graph3dZBuffer(viewportPixels);
+    const std::size_t extra = zb ? 2 * viewportPixels * sizeof(std::uint16_t) : 0;
     const std::size_t budget = heavyBudget() / 2;
-    std::size_t grid = ram().graph3dMaxGrid;
-    while (grid > 4 && (grid + 1) * (grid + 1) * 28 + zbuffer > budget) grid -= 4;
-    return grid;
+    const std::size_t n = patches == 0 ? 1 : patches;
+    std::size_t points = ram().graph3dMaxGrid;
+    while (points > 2 && n * points * points * 48 + extra > budget) --points;
+    return points;
 }
 
 std::size_t matrixMaxDim() noexcept {

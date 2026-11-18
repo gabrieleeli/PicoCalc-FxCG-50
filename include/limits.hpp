@@ -80,16 +80,16 @@ struct RamProfile {
     std::size_t graphCurvePoints;       // points kept per plot (int16 x,y: 4 bytes each)
     std::size_t graphTotalCurvePoints;  // points of all the plots of one graph screen
     std::size_t pictEncodedBytes;       // RLE picture (PICT, background, BMP import) kept in RAM
-    std::size_t graph3dMaxGrid;         // surface cells per side
+    std::size_t graph3dMaxGrid;         // 3D Graph: points per side of a graph (v1.14.0; fx-CG50 grid <= 50)
     bool graph3dZBuffer;                // per-pixel depth test (else painter's algorithm)
     std::size_t polygonMaxVertices;     // filled polygons (scanline scratch from the pools)
     bool graphLayerCache;               // GRAPH keeps its static layers (180 KB) while the cursor moves
 };
 // SRAM only (Pico 2 W, or Pico Plus 2 W with the PSRAM disabled): the v1.8.0
 // budgets, sized for the ~194 KB heap left next to the 200 KB framebuffer.
-inline constexpr RamProfile kSramProfile{"SRAM 520 KB", 6000, 24000, 96u * 1024u, 24, false, 256, false};
+inline constexpr RamProfile kSramProfile{"SRAM 520 KB", 6000, 24000, 96u * 1024u, 25, false, 256, false};
 // PSRAM pool active: the same data, served by the 8 MB PSRAM.
-inline constexpr RamProfile kPsramProfile{"SRAM 520 KB + PSRAM 8 MB", 40000, 400000, 1024u * 1024u, 128, true, 4096, true};
+inline constexpr RamProfile kPsramProfile{"SRAM 520 KB + PSRAM 8 MB", 40000, 400000, 1024u * 1024u, 50, true, 4096, true};
 // Profile for the pools that exist now.
 const RamProfile& ram() noexcept;
 
@@ -98,9 +98,13 @@ const RamProfile& ram() noexcept;
 std::size_t heavyBudget() noexcept;
 // True when `bytes` of heavy data can be allocated now (largest block and budget).
 bool fitsHeavy(std::size_t bytes) noexcept;
-// 3D surface: grid and depth buffer that fit the viewport and the free memory.
-std::size_t graph3dGrid(std::size_t viewportPixels) noexcept;
+// 3D Graph (v1.14.0): points per side of every patch (a scene of `patches`
+// lattices) and depth buffer that fit the graph area and the free memory.
+std::size_t graph3dPoints(std::size_t viewportPixels, std::size_t patches) noexcept;
 bool graph3dZBuffer(std::size_t viewportPixels) noexcept;
+// 3D G-Mem 1-20 (record v10): bytes of all the stored sets together. A set is
+// ~200 B for three functions (up to ~9 KB with three expressions of 1000 B).
+inline constexpr std::size_t kGraph3DMemoryBytes = board::config::kIsPicoPlus2W ? 64u * 1024u : 12u * 1024u;
 // Legacy calculator API (editors.hpp, math_engine.hpp): Mat A..Z, List 1..26.
 inline constexpr std::size_t kMatrixSlots = 26;
 inline constexpr std::size_t kMatrixMaxDim = board::config::kHasPsram ? 999 : 40;

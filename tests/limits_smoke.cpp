@@ -48,8 +48,9 @@ int main() {
     CHECK(&ram() == &kSramProfile);
     CHECK(fx::graph::maxCurvePoints() == 6000 && fx::graph::maxTotalCurvePoints() == 24000);
     CHECK(fx::pict::maxEncodedBytes() == 96u * 1024u);
-    CHECK(!graph3dZBuffer(312u * 236u));
-    CHECK(graph3dGrid(312u * 236u) <= kSramProfile.graph3dMaxGrid && graph3dGrid(312u * 236u) >= 4);
+    CHECK(!graph3dZBuffer(320u * 282u));
+    // v1.14.0: points per side of three graphs (fx-CG50 grid 2..50; 25 without PSRAM)
+    CHECK(graph3dPoints(320u * 282u, 3) <= kSramProfile.graph3dMaxGrid && graph3dPoints(320u * 282u, 3) >= 2);
     const std::size_t sramBudget = heavyBudget();
     CHECK(sramBudget > 0 && sramBudget < 192u * 1024u);
 
@@ -58,8 +59,8 @@ int main() {
     CHECK(&ram() == &kPsramProfile);
     CHECK(fx::graph::maxTotalCurvePoints() == kPsramProfile.graphTotalCurvePoints);
     CHECK(fx::pict::maxEncodedBytes() == 1024u * 1024u);
-    CHECK(graph3dZBuffer(312u * 236u));
-    CHECK(graph3dGrid(312u * 236u) == kPsramProfile.graph3dMaxGrid);
+    CHECK(graph3dZBuffer(320u * 282u));
+    CHECK(graph3dPoints(320u * 282u, 3) == kPsramProfile.graph3dMaxGrid && kPsramProfile.graph3dMaxGrid == 50);
     const std::size_t budget = heavyBudget();
     CHECK(budget > 7u * 1024u * 1024u);
     const std::size_t dim = matrixMaxDim(), list = listMaxLength(), hist = historyCapacity();
@@ -78,7 +79,7 @@ int main() {
     CHECK(heavyBudget() < budget / 16);
     CHECK(!fitsHeavy(256u * 1024u));
     CHECK(!graph3dZBuffer(312u * 236u));                 // no room for the depth buffer now
-    CHECK(graph3dGrid(312u * 236u) < kPsramProfile.graph3dMaxGrid);
+    CHECK(graph3dPoints(320u * 282u, 3) < kPsramProfile.graph3dMaxGrid);
     CHECK(listMaxLength() < list && historyCapacity() <= hist);
     for (void* p : hog) mem::free(p);
     CHECK(heavyBudget() == budget && matrixMaxDim() == dim && listMaxLength() == list);
