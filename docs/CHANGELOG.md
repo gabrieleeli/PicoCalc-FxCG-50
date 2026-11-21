@@ -52,7 +52,7 @@ procedura [HARDWARE_TEST_v1.14.0.md](HARDWARE_TEST_v1.14.0.md) (HW-170…HW-189)
   generata con i sorgenti della v1.13.1.
 
 ### Test e strumenti
-- `tests/graph3d_v114_test.cpp` (535 controlli per profilo), `graph3d_test`
+- `tests/graph3d_v114_test.cpp` (541 controlli per profilo), `graph3d_test`
   portato alla nuova API, `oom_test`, `architecture_test` (gruppo 3D),
   `limits_smoke`; fuzzing `tools/fuzz/fuzz_graph3d.cpp` (ha trovato una
   conversione di NaN in `int` con coordinate enormi, corretta con un test);

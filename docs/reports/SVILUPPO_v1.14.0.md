@@ -76,12 +76,14 @@ sezioni in vettori `pmr` dai pool.
 
 | Prova | Esito |
 |---|---|
-| `tests/run_host_tests.sh` (profili Plus e Pico 2 W) | vedi §4.1 |
-| `--sanitize --tsan` | vedi §4.1 |
-| Nuova suite `graph3d_v114_test` | 535 controlli per profilo: V-Window, modelli e «Invalid Setting», conversioni, codifica, INTSECT/RELATION (esempi 16-18 e 16-19), sezioni, taglio al box (nessun pixel fuori dall'involucro del box in tre viste, z-buffer e pittore), z-buffer condiviso con le rette, proiezione e viste, colori, record v10 e migrazione di tutte le fixture v1…v9, modalità dalla tastiera su entrambi i profili (ogni voce della tabella §5) |
+| `tests/run_host_tests.sh` (profili Plus e Pico 2 W) | **47/47 per profilo**: 45 suite C++ (**13 111** controlli sulla Plus, **13 105** sul Pico 2 W), lo stress dell'allocatore (≈ 333 000 verifiche) e l'interoperabilità FAT/exFAT (41) |
+| `--sanitize --tsan` | 47/47 per profilo con AddressSanitizer + UBSan bloccante; `mem_pools_tsan` superato con ThreadSanitizer su entrambi i profili |
+| Relay AI | 15/15 |
+| Nuova suite `graph3d_v114_test` | 541 controlli per profilo: V-Window, modelli e «Invalid Setting», conversioni, codifica, INTSECT/RELATION (esempi 16-18 e 16-19), sezioni, taglio al box (nessun pixel fuori dall'involucro del box in tre viste, z-buffer e pittore), z-buffer condiviso con le rette, proiezione e viste, colori, record v10 e migrazione di tutte le fixture v1…v9, modalità dalla tastiera su entrambi i profili (ogni voce della tabella §5) |
 | `graph3d_test` (v1.9.0, portata alla nuova API) | 88 controlli per profilo |
 | `oom_test` | 3D con Z= e cilindro sotto esaurimento: griglia ridotta o Memory ERROR, nulla trattenuto |
-| Fuzzing | `tools/fuzz/fuzz_graph3d.cpp` (insiemi G-Mem, espressioni Z=/Param, finestre) e `fuzz_workspace` con i semi v10: vedi §4.2 |
+| Fuzzing (libFuzzer + ASan + UBSan, profilo Plus) | `fuzz_graph3d` (insiemi G-Mem con geometria, sezioni e disegno; espressioni Z=/Param; finestre): primo giro 580 107 esecuzioni in 10 minuti, **un errore trovato** (NaN convertito in `int` nell'ombreggiatura con coordinate enormi e una finestra minuscola) e corretto (`shade` e `Projector::normalize` senza NaN, test di regressione in `graph3d_v114_test`); secondo giro sul codice finale 286 806 esecuzioni senza errori. `fuzz_workspace` con i semi v10 (record della v1.13.1 e record v10 con ogni tipo, G-Mem e V-Win): 7 118 615 esecuzioni senza errori |
+| Stack | `-fstack-usage`: i frame nuovi più grandi erano `readLegacyGraph3D` (2 144 B) e `Workspace::resetAll` (1 952 B) per uno stato 3D temporaneo e `g3d::render` (1 984 B): ridotti azzerando lo stato sul posto e condividendo i poligoni tagliati (valori finali in [BUILD_STATUS.md](../BUILD_STATUS.md)) |
 | Simulatore | `tests/sim/graph3d.txt` (40–43, rigenerati) e `tests/sim/graph3d_v114.txt` (88–104), PNG a palette compressi senza perdita (verifica pixel per pixel) |
 | Firmware | vedi [BUILD_STATUS.md](../BUILD_STATUS.md) |
 
