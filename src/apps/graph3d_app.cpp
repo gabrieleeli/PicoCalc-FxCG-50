@@ -748,15 +748,19 @@ void Graph3DApp::draw(Context& ctx, gfx::Canvas& c) {
         break;
     }
     case Screen::Format: {
-        drawList(ctx, c);
-        const gfx::Rect r{30, 70, 260, 110};
-        c.rect(r.x + 3, r.y + 3, r.w, r.h, Faint, true);
-        ui::panel(c, r, Bg, Ink);
         char title[24];
-        std::snprintf(title, sizeof title, "FORMAT %d", row_ + 1);
-        ui::text(c, r.x + 8, r.y + 6, title, Accent, font::Face::Small);
-        format_.draw(c, r.y + 24, r.y + r.h - 22);
-        ui::text(c, r.x + 8, r.y + r.h - 16, "OK:[EXIT]  \xE2\x86\x90\xE2\x86\x92 colore", Muted, font::Face::Small);
+        std::snprintf(title, sizeof title, "FORMAT %d:", row_ + 1);
+        ui::text(c, 8, ui::ContentTop + 4, title, Accent);
+        format_.draw(c, ui::ContentTop + 22, ui::ContentTop + 66);
+        // Sample of the two colours (16-6, 16-7).
+        const auto line = static_cast<g3d::Color>(format_.fields[0].choice), area = static_cast<g3d::Color>(format_.fields[1].choice);
+        const int sy = ui::ContentTop + 80;
+        if (area != g3d::Color::Clear) c.rect(40, sy, 240, 60, g3d::color565(area), true);
+        if (line != g3d::Color::Clear)
+            for (int k = 0; k <= 6; ++k) { c.vLine(40 + k * 40, sy, 60, g3d::color565(line)); if (k <= 3) c.hLine(40, sy + k * 20, 240, g3d::color565(line)); }
+        ui::text(c, 8, ui::ContentBottom - 18, "OK:[EXIT]  Cancel:[AC]   \xE2\x97\x80\xE2\x96\xB6 colore", Muted, font::Face::Small);
+        const char* k[6] = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
+        ui::softKeys(c, k);
         break;
     }
     case Screen::Plot: drawPlot(ctx, c); break;
@@ -799,7 +803,7 @@ void Graph3DApp::drawList(Context& ctx, gfx::Canvas& c) {
                 NaturalEditor view;
                 try { view.setExpression(f.expr[0]); } catch (...) { view.clear(); view.insertText("?"); }
                 const auto sz = math::measure(view.root());
-                auto l = math::layout(view.root(), x + 18, y + 12 + sz.baseline - sz.height / 2 + 6, w - 18, rowH - 8);
+                auto l = math::layout(view.root(), x + 18, y + 11 - sz.height / 2 + sz.baseline, w - 18, rowH - 8);   // centred on "Z="
                 math::draw(c, l, Ink, Cursor, Placeholder);
             }
             break;
@@ -912,8 +916,10 @@ void Graph3DApp::drawCoef(Context& ctx, gfx::Canvas& c) {
                 const int hx = labelW + col * cellW;
                 const bool sel = cell == coefCell_;
                 if (sel) c.rect(hx + 2, y, cellW - 4, 18, Select, true);
-                const std::string v = shortNumber(edit_.coef[static_cast<std::size_t>(l.index(r, col))]);
-                ui::textFit(c, hx + 4, y + 1, v, cellW - 8, sel ? SelectInk : Ink);
+                std::string v = shortNumber(edit_.coef[static_cast<std::size_t>(l.index(r, col))]);
+                const int maxChars = std::max(1, (cellW - 8) / 8);
+                if (static_cast<int>(v.size()) > maxChars) v = v.substr(0, static_cast<std::size_t>(maxChars - 1)) + "\xE2\x80\xA6";
+                ui::textRight(c, hx + cellW - 4, y + 1, v.c_str(), sel ? SelectInk : Ink);   // right-aligned as on the calculator
             }
         }
     }

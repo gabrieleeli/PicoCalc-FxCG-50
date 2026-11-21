@@ -826,6 +826,7 @@ private:
     void writeCapture(Context& ctx, int n);
     bool traceDomain(int graph, double& u0, double& u1, double& v0, double& v1, std::size_t& nu, std::size_t& nv, bool& oneD) const;
     bool pointOf(Context& ctx, int graph, double u, double v, g3d::Vec3& out) const;
+    bool pointOfRaw(Context& ctx, int graph, double u, double v, g3d::Vec3& out) const;
     void drawPlot(Context& ctx, gfx::Canvas& c);
     void drawOverlays(Context& ctx, gfx::Canvas& c, const g3d::Projector& proj);
     std::string graphLabel(Context& ctx, int graph) const;

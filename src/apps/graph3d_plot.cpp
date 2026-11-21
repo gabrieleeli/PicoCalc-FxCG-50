@@ -164,6 +164,15 @@ void Graph3DApp::showPlot(Context& ctx) {
 }
 
 bool Graph3DApp::pointOf(Context& ctx, int graph, double u, double v, g3d::Vec3& out) const {
+    const bool ok = pointOfRaw(ctx, graph, u, v, out);
+    if (ok) {
+        // Rounding noise of cos/sin (2.4E-16 instead of 0) is not shown.
+        const double scale = std::max({1.0, std::fabs(out.x), std::fabs(out.y), std::fabs(out.z)});
+        for (double* c : {&out.x, &out.y, &out.z}) if (std::fabs(*c) < 1e-12 * scale) *c = 0;
+    }
+    return ok;
+}
+bool Graph3DApp::pointOfRaw(Context& ctx, int graph, double u, double v, g3d::Vec3& out) const {
     if (graph < 0 || graph >= static_cast<int>(g3d::Functions)) return false;
     const auto gi = static_cast<std::size_t>(graph);
     const CalculatorMemory* memory = &ctx.ws.memory;
@@ -437,7 +446,8 @@ void Graph3DApp::startTrace(Context& ctx) {
         double u0, u1, v0, v1; std::size_t nu, nv; bool oneD;
         if (!traceDomain(k, u0, u1, v0, v1, nu, nv, oneD)) continue;
         traceGraph_ = k;
-        traceU_ = g3d::latticeAt(u0, u1, (nu - 1) / 2, nu);
+        // Centre of the lattice; on the angle of a closed surface the point in front (u = 0).
+        traceU_ = periodicU(shapes_[static_cast<std::size_t>(k)].kind) ? u0 : g3d::latticeAt(u0, u1, (nu - 1) / 2, nu);
         traceV_ = oneD ? 0 : g3d::latticeAt(v0, v1, (nv - 1) / 2, nv);
         mode_ = Mode::Trace;
         return;
@@ -481,7 +491,7 @@ void Graph3DApp::traceKey(Context& ctx, const KeyEvent& ev) {
             if (!traceDomain(g, u0, u1, v0, v1, nu, nv, oneD)) continue;
             if (g == traceGraph_) return;
             traceGraph_ = g;
-            traceU_ = g3d::latticeAt(u0, u1, (nu - 1) / 2, nu);
+            traceU_ = periodicU(shapes_[static_cast<std::size_t>(g)].kind) ? u0 : g3d::latticeAt(u0, u1, (nu - 1) / 2, nu);
             traceV_ = oneD ? 0 : g3d::latticeAt(v0, v1, (nv - 1) / 2, nv);
             return;
         }
