@@ -45,8 +45,8 @@ Il recap della v1.14.0 con la parità modalità per modalità è in
 modalità mancanti, la v1.15.0 mette le basi comuni (budget per scheda, record
 v11 a sezioni estensibili, file tipizzati, guscio delle modalità, grafico 2D con
 Dual Screen, espressioni con variabili legate, lavoro a passi interrompibile,
-editor multiriga, nucleo dell'interprete, studio di MicroPython): prompt e
-ordine delle versioni successive in [PROMPT_BASI_APPLICAZIONI.md](PROMPT_BASI_APPLICAZIONI.md).
+editor multiriga, nucleo dell'interprete, studio di MicroPython); seguono le
+modalità una per versione, dalla più piccola e più riusata alla più grande.
 
 ## 1. Collaudo su hardware (priorità massima, richiede la PicoCalc)
 

@@ -158,12 +158,11 @@ Stato della v1.9.0 (invariato dove non indicato):
 
 ## 4. Prossimi passaggi esatti
 
-0. **Recap e prompt delle fondamenta** (dopo la v1.14.0): stato e parità con la
-   fx-CG50 in `docs/reports/RECAP_v1.14.0.md`; la prossima sessione di sviluppo
-   (v1.15.0, fondamenta comuni per tutte le modalità mancanti) parte dal prompt
-   in `docs/PROMPT_BASI_APPLICAZIONI.md` (§1), le modalità successive dai prompt
-   del §2 dello stesso file. Il collaudo fisico del punto 1 resta prioritario
-   appena la PicoCalc è disponibile.
+0. **Recap** (dopo la v1.14.0): stato e parità con la fx-CG50 in
+   `docs/reports/RECAP_v1.14.0.md`; la prossima sessione di sviluppo (v1.15.0)
+   mette le basi comuni per tutte le modalità mancanti (§9 del recap). Il
+   collaudo fisico del punto 1 resta prioritario appena la PicoCalc è
+   disponibile.
 1. **Collaudo fisico sulla PicoCalc con il Pimoroni Pico Plus 2 W**: HW-01…HW-36,
    HW-40…HW-82, HW-90…HW-99, HW-100…HW-115, HW-120…HW-134, HW-140…HW-159, HW-160…HW-169 e HW-170…HW-189 (log USB dall'accensione, righe `[psram]`,
    `[flash]`, `[mem]`, `[DIAG]`, `[fault]`, foto). Ogni KO va riprodotto con un test e corretto;

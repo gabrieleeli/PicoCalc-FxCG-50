@@ -2,9 +2,8 @@
 
 Fotografia del repository al commit `b9aac14` (tag `v1.14.0`, `main`), fatta
 leggendo codice, registro delle modalità e documentazione. Serve come punto di
-partenza per la sessione descritta in
-[../PROMPT_BASI_APPLICAZIONI.md](../PROMPT_BASI_APPLICAZIONI.md), che mette le
-basi comuni per tutte le applicazioni ancora da realizzare.
+partenza per la sessione che mette le basi comuni per tutte le applicazioni
+ancora da realizzare (§9).
 
 > In breve: il progetto **non** ha la parità con la fx-CG50. Su 20 modalità
 > della calcolatrice, **3** hanno la parità software completa (Run-Matrix,
@@ -164,8 +163,7 @@ Righe superate dal codice, corrette senza cambiare altro:
 
 ## 9. Prossimo passo
 
-La sessione v1.15.0 descritta in
-[../PROMPT_BASI_APPLICAZIONI.md](../PROMPT_BASI_APPLICAZIONI.md): budget per
+La sessione v1.15.0, fondamenta comuni delle applicazioni: budget per
 scheda, workspace a sezioni estensibili (record v11), file tipizzati, guscio
 comune delle modalità, servizi condivisi (grafico 2D con Dual Screen,
 espressioni con variabili legate, lavoro a passi interrompibile con AC,

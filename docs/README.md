@@ -5,7 +5,6 @@
 | Documento | Contenuto |
 |---|---|
 | [reports/RECAP_v1.14.0.md](reports/RECAP_v1.14.0.md) | recap del progetto alla v1.14.0 e parità con la fx-CG50 modalità per modalità (3 complete, 2 quasi, 3 parziali, 10 con solo il modello, Python assente, E-CON4 non realizzabile) |
-| [PROMPT_BASI_APPLICAZIONI.md](PROMPT_BASI_APPLICAZIONI.md) | prompt della sessione v1.15.0 che mette le basi comuni per tutte le modalità mancanti, più un prompt breve per ogni modalità successiva |
 | [BUILD_STATUS.md](BUILD_STATUS.md) | ambiente di build, audit della v1.5.4, risultati di build e test, cosa non è verificato |
 | [FEATURE_MATRIX.md](FEATURE_MATRIX.md) | stato di ogni funzione (NOT STARTED … TESTED ON SIMULATOR … TESTED ON HARDWARE) |
 | [GRAPH_PARITY.md](GRAPH_PARITY.md) | GRAPH: audit della v1.7.0 e matrice di parità voce per voce con il capitolo 5 del manuale fx-CG50 |
