@@ -1,9 +1,42 @@
-# Build status — v1.13.1 (versione di correzione)
+# Build status — v1.14.0 (completamento totale di 3D Graph)
 
 Stato delle build per versione; le novità sono in [CHANGELOG.md](CHANGELOG.md).
-Le sezioni dopo "v1.13.1" descrivono le build delle versioni precedenti.
+Le sezioni dopo "v1.14.0" descrivono le build delle versioni precedenti.
 
-## v1.13.1 — `main`
+## v1.14.0 — `main`
+
+Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`),
+una cartella per scheda, nello stesso ambiente delle versioni precedenti (Pico
+SDK 2.2.0, `gcc-arm-none-eabi` 13.2.1). Novità: 3D Graph completo
+([reports/SVILUPPO_v1.14.0.md](reports/SVILUPPO_v1.14.0.md)). **Nessuna prova su hardware.**
+
+| Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (3 896 832 byte) | `build/pico2w/picocalc_fxai_pico2w.uf2` (3 878 912 byte) |
+| Immagine flash | 1 948 024 byte (`__flash_binary_end` = `0x101DB978`) = 46 % della partizione firmware da 4 MB; +99 256 byte rispetto alla v1.13.1 (modello e disegno del 3D, controller, schermate) | 1 939 180 byte (`0x101D96EC`) = 92 % della partizione da 2 MB; +99 240 byte |
+| RAM statica | 309 024 byte fino a `__end__` = `0x2004B720` (+1 728 byte: stato del controller del 3D) | 305 100 byte (`0x2004A7CC`, +1 728 byte) |
+| Heap SRAM | 182 496 byte (`__end__` → `0x20078000`) | 186 420 byte |
+| PSRAM | 8 MB come pool TLSF separato: anche reticoli, z-buffer (180 KB) e immagine della scena (180 KB) del 3D Graph | — |
+| Frame di stack (`-fstack-usage`) | massimo invariato `SystemApp::enter` 2 016 B; codice nuovo: `g3d::render` 1 800 B (poligoni tagliati di al più 12 punti), `Graph3DApp::loadWindowForm` 1 136 B, `drawList` 856 B, `drawPlot` 736 B; `readLegacyGraph3D` e `Workspace::resetAll` riportati sotto i 1 712 B azzerando lo stato 3D sul posto | come la Plus |
+| Warning | **nessuno** del compilatore (resta l'avviso di CMake dell'SDK sulla ricerca di picotool) | nessuno |
+| SHA-256 dell'UF2 locale | `68355c8be8e3e0969275a5d1598d61f7dafbbac2701c57963ddaebf68cc2efe2` | `ab2f3be0d44e7b8ef74f466159cbbbb133e58632fcba0ce7c524f442bc05269a` |
+
+Gli UF2 allegati alla GitHub Release sono compilati dal workflow sul commit
+pubblicato e verificati con `sha256sum -c SHA256SUMS`; i loro hash possono
+differire da quelli locali.
+
+### Test
+
+| Suite | Pico Plus 2 W | Pico 2 W |
+|---|---|---|
+| CTest (`tests/run_host_tests.sh`) | 47/47: 45 suite C++ con **13 111** controlli (+541 di `graph3d_v114_test`), `mem_pools_smoke` (≈ 333 000 verifiche) e `sd_interop_test` (41) | 47/47: **13 105** controlli + ≈ 333 000 + 41 |
+| AddressSanitizer + UBSan bloccante (`--sanitize`) | 47/47 | 47/47 |
+| ThreadSanitizer (`--tsan`) | superato | superato |
+| Relay AI (Python, `unittest`) | 15/15 | — |
+| Fuzzing (`tools/fuzz`) | `fuzz_graph3d` ≈ 870 000 esecuzioni (un errore trovato e corretto: NaN convertito in `int` con coordinate enormi), `fuzz_workspace` 7,1 milioni con i record v10: nessun crash sul codice finale | — |
+| Simulatore | `tests/sim/graph3d.txt` e `tests/sim/graph3d_v114.txt`: 21 schermate identiche agli screenshot pubblicati (40–43, 88–104) | — |
+
+## v1.13.1
 
 Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`),
 una cartella per scheda, nello stesso ambiente della v1.13.0 (Pico SDK 2.2.0,

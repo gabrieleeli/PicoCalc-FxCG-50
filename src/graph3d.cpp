@@ -378,7 +378,9 @@ RenderStats render(gfx::Canvas& canvas, const Item* items, std::size_t count, co
     if (vp.w <= 0 || vp.h <= 0) return st;
     std::pmr::memory_resource* heavy = mem::resource(mem::Policy::PREFER_PSRAM);
     const Projector proj(w, cam, vp);
-    P3 poly[16], tmp[16];                                 // clipped polygon (one pair for the whole frame)
+    // Clipped polygon: a quadrilateral cut by the six faces has at most 4 + 6 = 10
+    // vertices (Sutherland-Hodgman adds at most one per plane); one pair per frame.
+    P3 poly[12], tmp[12];
     const gfx::Rect oldClip = canvas.clip();
     canvas.setClip(vp);
     const std::uint16_t boxColor = gfx::rgb888To565(40, 40, 40);
@@ -599,7 +601,7 @@ RenderStats render(gfx::Canvas& canvas, const Item* items, std::size_t count, co
                 const std::uint16_t color = shaded(it.fill, poly[0], poly[1], poly[2]);
                 const std::size_t n = clipPolygon(poly, 4, tmp);
                 if (n >= 3) {
-                    gfx::Point pts[16];
+                    gfx::Point pts[12];
                     for (std::size_t k = 0; k < n; ++k) pts[k] = toPoint(proj.fromNormalized(poly[k].x, poly[k].y, poly[k].z));
                     canvas.polygon(pts, n, color, true);
                     st.triangles += n - 2;
