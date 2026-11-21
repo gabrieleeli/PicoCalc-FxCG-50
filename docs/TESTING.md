@@ -1,10 +1,10 @@
-# Test — v1.13.1 (versione di correzione: un test per ogni errore di ERRORI_v1.13.1, UBSan bloccante, fuzzing; v1.13.0: completamento totale di Run-Matrix)
+# Test — v1.14.0 (completamento totale di 3D Graph: `graph3d_v114_test`, record v10, fuzzing del 3D; v1.13.1: un test per ogni errore di ERRORI_v1.13.1, UBSan bloccante)
 
 ## Cosa viene provato e dove
 
 | Livello | Strumento | Stato |
 |---|---|---|
-| Logica portabile (motore, editor, app, grafici, tabelle, 3D, file, storage, memoria, protocollo AI) | test host C++ (CTest), **per entrambi i profili di scheda** (`FXAI_TEST_BOARD=PICO_PLUS_2W` e `PICO2W`) | eseguito: 44 suite; 12 223 controlli (Plus) / 12 217 (Pico 2 W) più ≈ 333 000 verifiche dello stress dell'allocatore (`mem_pools_smoke`) |
+| Logica portabile (motore, editor, app, grafici, tabelle, 3D, file, storage, memoria, protocollo AI) | test host C++ (CTest), **per entrambi i profili di scheda** (`FXAI_TEST_BOARD=PICO_PLUS_2W` e `PICO2W`) | eseguito: 45 suite; 13 111 controlli (Plus) / 13 105 (Pico 2 W) più ≈ 333 000 verifiche dello stress dell'allocatore (`mem_pools_smoke`) |
 | Integrazione continua | GitHub Actions (`.github/workflows/release.yml`, `ubuntu-24.04`) | a ogni push: test host dei due profili, ASan/UBSan, TSan, relay, firmware dei due moduli, pacchetto |
 | Architettura (registro ↔ sorgenti ↔ firmware) | `architecture_test` | eseguito |
 | Stessi test con AddressSanitizer + UBSan | `--sanitize` (dalla v1.13.1 UBSan è bloccante: `-fno-sanitize-recover=undefined`) | eseguito su entrambi i profili |
@@ -12,14 +12,14 @@
 | Memoria esaurita con `operator new` instradato nei pool | `oom_test` (SRAM simulata limitata, senza PSRAM) | eseguito |
 | PSRAM | pool PSRAM simulato sul PC (arena TLSF; 8 MB nei test di sistema e nel simulatore), self-test con modelli di guasto | eseguito; il chip APS6404L reale non è provato |
 | Flash interna | modello NOR (`storage::RamFlash`: erase a 0xFF, program che azzera bit, interruzione dopo n byte) per il record A/B e per LittleFS | eseguito; la flash reale non è provata |
-| Interfaccia | simulatore host + screenshot PNG | eseguito (`docs/screenshots/`: Run-Matrix 12–19, 44–51 e 52–61, EQUATION 08 e 62–76, GRAPH/TABLE 06, 07, 20–37, 3D Graph 40–43) |
+| Interfaccia | simulatore host + screenshot PNG | eseguito (`docs/screenshots/`: Run-Matrix 12–19, 44–51 e 52–61, EQUATION 08 e 62–76, GRAPH/TABLE 06, 07, 20–37, 3D Graph 40–43 e 88–104) |
 | microSD (protocollo SD in SPI + FatFs) | scheda SD simulata nei test host | eseguito (`sd_fatfs_test`); bus SPI0 reale non provato |
 | Interoperabilità FAT/exFAT | `sd_interop_test` (immagini con mkfs.fat/mkfs.exfat, fsck, mtools) | eseguito: 41 controlli |
 | Relay AI | `unittest` Python con SDK ufficiali e API simulate, TLS in loopback | eseguito: 15 test |
 | Compilazione firmware RP2350 | Pico SDK 2.2.0, `scripts/build.sh --board pico_plus_2w` e `--board pico2w` | eseguita, nessun warning, `picotool info` verificato ([BUILD_STATUS.md](BUILD_STATUS.md)) |
 | Stack sul target | `-fstack-usage` su tutto il firmware | eseguito nella v1.13.1: frame massimo 2 016 byte (`SystemApp::enter`) su 32 KB; valutatore ricorsivo ≤ 328 byte per livello, limitato dal budget di 16 KB |
-| Fuzzing (v1.13.1) | libFuzzer + ASan + UBSan (`tools/fuzz`, `run_fuzz.sh`): parser e valutatori, forma esatta contro decimale, workspace con andata e ritorno, CSV, `.pcgraph`, EQUATION, sequenze di tasti | eseguito sul profilo Plus (conteggi in [reports/SVILUPPO_v1.13.1.md](reports/SVILUPPO_v1.13.1.md)) |
-| Collaudo fisico | procedure [HARDWARE_TEST_v1.13.1.md](HARDWARE_TEST_v1.13.1.md), [HARDWARE_TEST_v1.13.0.md](HARDWARE_TEST_v1.13.0.md), [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md), [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md), [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md), [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) e [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md), SYSTEM → DIAG | **non eseguito: in attesa dei risultati dal dispositivo** |
+| Fuzzing (v1.13.1, v1.14.0) | libFuzzer + ASan + UBSan (`tools/fuzz`, `run_fuzz.sh`): parser e valutatori, forma esatta contro decimale, workspace con andata e ritorno (anche record v10), CSV, `.pcgraph`, EQUATION, sequenze di tasti; **`fuzz_graph3d`** (insiemi delle 3D G-Mem con geometria, sezioni e disegno, espressioni Z=/Param, finestre) | eseguito sul profilo Plus (conteggi in [reports/SVILUPPO_v1.13.1.md](reports/SVILUPPO_v1.13.1.md) e [reports/SVILUPPO_v1.14.0.md](reports/SVILUPPO_v1.14.0.md)) |
+| Collaudo fisico | procedure [HARDWARE_TEST_v1.14.0.md](HARDWARE_TEST_v1.14.0.md), [HARDWARE_TEST_v1.13.1.md](HARDWARE_TEST_v1.13.1.md), [HARDWARE_TEST_v1.13.0.md](HARDWARE_TEST_v1.13.0.md), [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md), [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md), [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md), [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) e [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md), SYSTEM → DIAG | **non eseguito: in attesa dei risultati dal dispositivo** |
 
 Quattro livelli distinti, mai confusi nella documentazione:
 **test host** (logica compilata dallo stesso sorgente del firmware ed eseguita
@@ -63,10 +63,10 @@ errore, non solo il primo.
 | matrix_test (v1.10.0: 673) | 1 019 | 1 019 | parsing di matrici, vettori, liste, riferimenti e indici; posizioni dei token e dei nodi; matrici (+ − × ^, inversa, Det, Trn, Identity, Dim, Augment, Fill, Ref, Rref, Mat→List, List→Mat, Abs/Int), vettori (DotP, CrossP, Norm, UnitV, Angle), liste (elemento per elemento, Sum, Prod, Mean, Median, Min, Max, Cuml, Percent, ΔList, SortA/D, Seq, Augment), complessi; errori di dimensione e di tipo con la posizione; annidamento profondo e Stack ERROR; forme esatte; nucleo di Run-Matrix (→Mat/Vct/List, elementi, Dim, MatAns/VctAns/ListAns, risultati oltre 6×6, viste, modifica della cronologia); limiti per scheda; record v6 (round trip, troncamenti) e lettura dei record v1.9.0 e v1.8.0 |
 | editor_v110_test (v1.10.0: 161) | 164 | 164 | modelli MAT/VCT (inserimento, navigazione a griglia, importazione, disegno), Math/Line (modelli lineari, conversione, incolla), CLIP (selezione, copia/taglia/incolla, parentesi bilanciate, nome di funzione, intero modello), parentesi colorate per livello e contrasto ≥ 4,5:1, cursore sulla causa degli errori (anche dentro i modelli), 600 sequenze casuali di modifica; sul firmware: errori e cursore, editor MAT/VCT (DIM, celle, ROW-OP, ROW, M⇔V, vettori), CLIP con SHIFT 8/9, Line da SET UP, riavvio con matrici e impostazione conservate |
 | run_matrix_test | 182 | 182 | esempi frazione ⇔ decimale, frazioni miste, periodo, input decimale, irrazionali mai convertiti, radicali e π (esempi del manuale), Ans/A–Z esatti, →A~F, variabili condivise, Int÷/Rmdr/MOD_Exp/logica, modifica della cronologia con ricalcolo, alberi 2D, persistenza e lettura dei record v1.6.0 (anche con V-Window non più valida), dati corrotti, flussi completi da tastiera attraverso il `Firmware` |
-| architecture_test (v1.11.0: 686; v1.12.0: 764) | 1 320 | 1 320 | Run-Matrix (v1.13.0): nessun altro lexer, parser o valutatore, `calc_library` puro, Run-Matrix solo tramite le interfacce del workspace (anche List File, Str, function memory, PxlTest(); EQUATION (v1.12.0): servizio EquationCore solo per Equation, nessuna lettura propria dei numeri né percorsi numerici separati, uso obbligato del motore `eq::` e di `MathField`, motore che valuta con il valutatore condiviso, Run-Matrix solo tramite `CollectionResolver::Memory::Equation`, `equation.hpp`/`equation.cpp` nel livello del motore; registro coerente, sezioni dei membri e dei metodi del workspace (`dataSectionOfMember`), comandi grafici solo tramite `graphcmd::execute` e disegnati da GRAPH, moduli `value`/`csv_io`/`graph_commands` nel livello del motore, controller registrati = modalità disponibili, schermate "non disponibile", include/sezioni del workspace/collegamenti dichiarati (anche GraphCore, Files, dato Graph), separazione di Run-Matrix, stratificazione motore/UI, nessun ciclo di include, modelli dati delle modalità future; 3D Graph e servizi Graph3D/Hardware |
+| architecture_test (v1.11.0: 686; v1.12.0: 764) | 1 379 | 1 379 | Run-Matrix (v1.13.0): nessun altro lexer, parser o valutatore, `calc_library` puro, Run-Matrix solo tramite le interfacce del workspace (anche List File, Str, function memory, PxlTest(); EQUATION (v1.12.0): servizio EquationCore solo per Equation, nessuna lettura propria dei numeri né percorsi numerici separati, uso obbligato del motore `eq::` e di `MathField`, motore che valuta con il valutatore condiviso, Run-Matrix solo tramite `CollectionResolver::Memory::Equation`, `equation.hpp`/`equation.cpp` nel livello del motore; registro coerente, sezioni dei membri e dei metodi del workspace (`dataSectionOfMember`), comandi grafici solo tramite `graphcmd::execute` e disegnati da GRAPH, moduli `value`/`csv_io`/`graph_commands` nel livello del motore, controller registrati = modalità disponibili, schermate "non disponibile", include/sezioni del workspace/collegamenti dichiarati (anche GraphCore, Files, dato Graph), separazione di Run-Matrix, stratificazione motore/UI, nessun ciclo di include, modelli dati delle modalità future; 3D Graph e servizi Graph3D/Hardware |
 | editor_test | 180 | 180 | modelli 2D (anche frazione mista, periodo, radice con indice), navigazione, undo/redo, copia/incolla, layout e cursore, limiti |
 | math_engine_test (v1.8.0: 108) | 108 | 109 | matrici, vettori, basi, sessagesimale, frazioni, calcolo numerico; capacità della cronologia di sessione per scheda |
-| storage_test (v1.11.0: 809) | 944 | 944 | serializzazione del workspace (formato v5 con lo stato di GRAPH, TABLE e 3D Graph; lettura dei formati precedenti), slot A/B, CRC, interruzione di alimentazione in ogni punto della scrittura |
+| storage_test (v1.11.0: 809) | 1 020 | 1 020 | serializzazione del workspace (formato v5 con lo stato di GRAPH, TABLE e 3D Graph; lettura dei formati precedenti), slot A/B, CRC, interruzione di alimentazione in ogni punto della scrittura |
 | app_test | 62 | 62 | AppManager, tasti globali, errori, barra di stato, TileDiff, rendering delle schermate |
 | apps_flow_test (v1.11.0: 56) | 62 | 62 | percorsi completi: Statistics → Graph, Graph ↔ Table, Equation (schermate della v1.12.0), System, Memory, Conversion |
 | solvers_test | 60 | 60 | polinomi (Aberth), disequazioni, solver numerico |
@@ -90,12 +90,13 @@ errore, non solo il primo.
 | mem_pools_smoke **nuova** | ≈ 333 000 | ≈ 334 000 | TLSF (base, allineamento, stress, esaurimento e frammentazione), `PlacementScope`, registro dei pool per Plus e Pico 2 W, stress su due thread (anche con ThreadSanitizer). Il numero di verifiche varia a ogni esecuzione (contesa tra i thread) |
 | mem_new_smoke **nuova** | 13 | 13 | instradamento di `operator new` (soglia 512 byte, politiche, allineamenti) |
 | psram_selftest_smoke **nuova** | 10 | 10 | self-test della PSRAM con modelli di guasto (bus dati, pattern, percorso con cache) |
-| oom_test (v1.9.0: 18) | 24 | 24 | "Memory ERROR" con `operator new` instradato nei pool e SRAM limitata (condizioni del Pico 2 W): Run-Matrix, autosalvataggio rimandato e ripreso da solo, GRAPH, 3D (griglia ridotta o errore), editor; stato intatto e nessuna perdita di memoria; v1.10.0: avvio con un record più grande della memoria libera (nessuna terminazione, salvataggi sospesi, dati in flash intatti) |
+| oom_test (v1.9.0: 18) | 27 | 27 | "Memory ERROR" con `operator new` instradato nei pool e SRAM limitata (condizioni del Pico 2 W): Run-Matrix, autosalvataggio rimandato e ripreso da solo, GRAPH, 3D (griglia ridotta o errore), editor; stato intatto e nessuna perdita di memoria; v1.10.0: avvio con un record più grande della memoria libera (nessuna terminazione, salvataggi sospesi, dati in flash intatti) |
 | graphics_memory_test **nuova** | 23 | 23 | poligoni pieni oltre i 32 vertici, copie di layer e invalidate, regioni sporche per scheda, budget PICT, 20 parametriche dense disegnate per intero con la PSRAM, cache dei layer di GRAPH identica al pixel |
 | internal_fs_test **nuova** | 197 | 197 | LittleFS su flash NOR simulata: contratto `files::FileSystem` come FatFs, partizione piena, interruzione di alimentazione durante `writeAtomic`, rimontaggio senza riformattare, progetti GRAPH nell'archivio interno |
-| graph3d_test **nuova** | 111 | 111 | motore 3D (campionamento, poli e domini, proiezione, z-buffer e pittore, rotazione, colori per superficie) e modalità 3D Graph (lista, editor, V-Window, campionamento incrementale, rotazione/zoom senza ricalcolo, AUTO, persistenza, budget di memoria con e senza PSRAM) |
+| graph3d_test (v1.9.0: 111; portata alla v1.14.0) | 88 | 88 | motore 3D (campionamento incrementale, buchi, z-buffer e pittore, due superfici con lo stesso test di profondità, taglio al box, rotazione θ/φ, colori) e modalità (lista, input Z=, V-Window, calcolo nei tick, rotazione e zoom senza ricalcolo, ORIGINAL, persistenza, profili con e senza PSRAM) |
+| graph3d_v114_test **nuova v1.14.0** | 541 | 541 | un gruppo per voce della tabella di parità del 3D Graph: V-Window (Out of Domain, Invalid Setting, normalizzazione di θ/φ), modelli e loro «Invalid Setting», conversioni dei moduli, codifica delle G-Mem, INTSECT/RELATION con gli esempi del manuale, sezioni CROSS, taglio al box (nessun pixel fuori dall'involucro del box), z-buffer condiviso con le rette, proiezione e viste, colori FORMAT, coordinate enormi (fuzzing), memoria esaurita, record v10 e migrazione delle fixture v1.6.0…v1.13.1, tutta la modalità dalla tastiera su entrambi i profili |
 | system_diag_test **nuova** | 15 | 12 | SYSTEM → DIAG completa (MEM, PSR, ALC, FLS, LCD, SD, INT, GPH) con la memoria della scheda; Plus con PSRAM fallita; pagina INFO; "Archivio file"; riga del chip della flash; kernel di stress dell'allocatore |
-| **Totale** | **12 223** + ≈ 333 000 dello stress + 41 dello script | **12 217** + ≈ 333 000 + 41 | 0 errori, con e senza sanitizer (ASan + UBSan bloccante); `mem_pools_tsan` con ThreadSanitizer |
+| **Totale** | **13 111** + ≈ 333 000 dello stress + 41 dello script | **13 105** + ≈ 333 000 + 41 | 0 errori, con e senza sanitizer (ASan + UBSan bloccante); `mem_pools_tsan` con ThreadSanitizer |
 
 `run_matrix_test` usa `tests/fixtures/workspace_v1_6_0.inc`, un record salvato
 dai sorgenti della v1.6.0 (commit 7dc65cd), per verificare la compatibilità.
@@ -112,6 +113,31 @@ un record v7 generato con i sorgenti della v1.11.0 (tag `v1.11.0`, commit
 sottonomi, Hex, comandi grafici), e `tests/fixtures/workspace_v1_12_0.inc`, un
 record v8 generato con i sorgenti della v1.12.0 (commit `51691de` di `main`,
 con i dati di EQUATION), per le migrazioni v7→v9 e v8→v9.
+`graph3d_v114_test` legge tutte le fixture (v1.6.0, v1.8.0, v1.9.0, v1.10.0,
+v1.11.0, v1.12.0) e `tests/fixtures/workspace_v1_13_1_graph3d.inc`, un record
+v9 generato con i sorgenti della v1.13.1 (tag `v1.13.1`, commit `62b3f8f`)
+prima di ogni modifica della v1.14.0, con funzioni 3D, finestra, vista e
+griglia non predefinite: migrazione v1…v9 → v10 e conservazione
+dell'orientazione della vista.
+
+v1.14.0: 47 test per profilo (45 suite C++, lo stress dell'allocatore e
+l'interoperabilità FAT/exFAT): 13 111 controlli sulla Plus e 13 105 sul Pico 2 W;
+si aggiunge `graph3d_v114_test` (541 controlli); `architecture_test` cresce di 59
+controlli (gruppo del 3D Graph), `oom_test` di 3 (modelli sotto esaurimento),
+`storage_test` (944 → 1 020) con la lunghezza del record v10 (le prove
+d'interruzione dipendono dalla dimensione del record), `graph3d_test` passa da
+111 a 88 controlli nella nuova API (le 30 verifiche delle famiglie di colore
+per altezza, che non esistono più, sono sostituite dai colori FORMAT verificati in
+`graph3d_v114_test`; AUTO è in OPTN › Z-AUTO). Test esistenti adattati solo
+ai cambiamenti voluti della v1.14.0: record alla versione 10 (controlli del
+byte di versione in `matrix_test`, `lists_csv_test`, `equation_v112_test`,
+`run_matrix_v112_test`, `board_profile_test`; la «versione futura» diventa
+11; in `table_test` la lunghezza della coda del record), modello del 3D
+(`Graph3DState`: lista vuota al primo avvio, griglia in punti 2–50) in
+`board_profile_test`, `lists_csv_test`, `matrix_test`, `limits_smoke`,
+`architecture_test` e `oom_test`; `graph3d_test` portata alla nuova API con le
+stesse verifiche (le espressioni dell'editor naturale sono nella forma
+canonica `(x)^(2)`). Nessuna verifica è stata tolta senza sostituirla.
 
 v1.13.1: 46 test per profilo (44 suite C++, lo stress dell'allocatore e
 l'interoperabilità FAT/exFAT): 12 223 controlli sulla Plus e 12 217 sul Pico 2 W;
@@ -193,8 +219,9 @@ Gli script degli screenshot sono `tests/sim/run_matrix.txt` (Run-Matrix 12–19)
 CLIP, cursore sull'errore, modalità Line: 44–51), `tests/sim/run_matrix_v111.txt`
 (List 1–26 e sottonomi, CSV, MatAns, celle esatte, Line con ⌟ e INS,
 risultato scorrevole, Eng, Simp, Base-N, comandi grafici: 52–61),
-`tests/sim/graph.txt` (GRAPH e TABLE 06, 07, 20–37) e `tests/sim/graph3d.txt`
-(3D Graph 40–43) e `tests/sim/run_matrix_v112.txt` (SolveN e FMin, OPTN,
+`tests/sim/graph.txt` (GRAPH e TABLE 06, 07, 20–37), `tests/sim/graph3d.txt`
+(3D Graph 40–43, rigenerati nella v1.14.0), `tests/sim/graph3d_v114.txt` (3D Graph
+v1.14.0: 88–104) e `tests/sim/run_matrix_v112.txt` (SolveN e FMin, OPTN,
 CATALOG, distribuzioni, CONVERT, modelli d²/dx² e Σ, istruzioni multiple,
 VARS STAT, Graph Y>, G∫dx, ENG: 77–87). Il simulatore scrive PNG non compressi: prima di copiarli in
 `docs/screenshots` vanno compressi senza perdita (nella v1.11.0: palette PNG
@@ -208,6 +235,7 @@ build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix_v111.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix_v112.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph3d.txt
+build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph3d_v114.txt
 ```
 
 Il simulatore usa una scheda microSD in RAM (16 MB) oppure, con

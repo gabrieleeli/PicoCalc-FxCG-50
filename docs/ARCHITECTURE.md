@@ -21,10 +21,11 @@ verificate dai test: [APPLICATIONS_ARCHITECTURE.md](APPLICATIONS_ARCHITECTURE.md
 │ Natural editor + renderer │ expression (tokenizer→AST→valutatori     │
 │ font_renderer, graphics   │ numerico ed esatto), exact, run_matrix,  │
 │ (Canvas RGB565, TileDiff) │ number_format, solvers, statistics,      │
-│ graph3d (superfici 3D)    │ math_engine, point_a, app_models,        │
+│ graph3d (disegno 3D)      │ math_engine, point_a, app_models,        │
 │                           │ graph_engine, graph_solve (GraphCore),   │
 │                           │ graph_commands (comandi grafici, v1.11)  │
 │                           │ calc_library (CONVERT, DIST, TVM, v1.12) │
+│                           │ graph3d_model (3D, geometria, v1.14)     │
 ├───────────────────────────┴──────────────────────────────────────────┤
 │ File (file_store, graph_file, pict, csv_io) → FatFs → protocollo SD  │
 │                                     → LittleFS (flash_fs) → flash    │
@@ -98,7 +99,8 @@ v1.11.0 con Base-N, Simplify, formato CSV, List 7–26 e sottonomi, forme
 esatte delle memorie, base e ▶Simp della cronologia, grafici dei comandi;
 versione 6 dalla v1.10.0 con Input/Output, matrici, vettori e risultati
 collezione della cronologia; versione 5 dalla v1.9.0 con il 3D Graph e
-l'archivio dei file; le versioni 1–7 vengono ancora lette); `RecordStore` lo scrive in uno dei due
+l'archivio dei file; versione 10 dalla v1.14.0 con il 3D Graph completo in
+coda; le versioni 1–9 vengono ancora lette); `RecordStore` lo scrive in uno dei due
 slot flash con CRC-32 dell'intestazione e del contenuto. Formato in
 [STORAGE.md](STORAGE.md#workspace-in-flash).
 
@@ -276,7 +278,7 @@ intercetta ogni eccezione residua (`oom_test`).
 - Limiti (`limits.hpp`): persistenti per scheda (Pico 2 W: storia 40, liste
   255 e 1 530 elementi in tutte le 26 liste; Pico Plus 2 W: storia 200, liste
   999 e 20 000 elementi in tutto), RAM dai pool presenti (curve
-  6000/24 000 o 40 000/400 000 punti, PICT 96 KB o 1 MB, 3D griglia 24 o 128),
+  6000/24 000 o 40 000/400 000 punti, PICT 96 KB o 1 MB, 3D 25 o 50 punti per lato),
   chat 30 messaggi, risposta HTTP 16 KB, tabella 999 righe.
 - Limiti contro l'esaurimento dello stack: espressioni di 320 token e 32 livelli
   annidati, editor con 12 modelli annidati e 400 nodi, budget di 16 KB per

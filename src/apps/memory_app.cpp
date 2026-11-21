@@ -6,8 +6,11 @@ namespace fx::app {
 using namespace ui::theme;
 
 namespace {
-const char* kItems[] = {"Storia Run-Matrix", "Variabili A-Z e Ans", "Liste 1-26 e sottonomi", "Funzioni Graph", "Coefficienti Equation", "Conversazioni AI", "Funzioni 3D Graph", "Matrici e vettori"};
-constexpr int ItemCount = 8;
+// v1.14.0: i dati del 3D Graph come nel Memory Manager della fx-CG50 (3DGRAPH,
+// 3DGMEM n, 3DVWIN_n): funzioni, V-Window e Setup; 3D G-Mem 1-20; 3D V-Win 1-6.
+const char* kItems[] = {"Storia Run-Matrix", "Variabili A-Z e Ans", "Liste 1-26 e sottonomi", "Funzioni Graph", "Coefficienti Equation",
+                        "Conversazioni AI", "3D Graph (funzioni)", "Matrici e vettori", "3D G-Mem 1-20", "3D V-Win 1-6"};
+constexpr int ItemCount = 10;
 }
 
 void MemoryApp::key(Context& ctx, const KeyEvent& ev) {
@@ -21,8 +24,10 @@ void MemoryApp::key(Context& ctx, const KeyEvent& ev) {
             case 3: for (std::size_t i = 0; i < ws.functions.size(); ++i) ws.functions[i] = emptyGraphFunction(i); break;
             case 4: ws.equation = EquationState{}; break;
             case 5: ws.chat.clear(); break;
-            case 6: ws.graph3d = Graph3DState{}; break;
+            case 6: ws.graph3d.set = g3d::GraphSet{}; ws.graph3d.zoom = 1.0F; break;
             case 7: ws.matrices.clear(); break;
+            case 8: for (auto& m : ws.graph3d.gmem) m.clear(); break;
+            case 9: ws.graph3d.vmem = {}; ws.graph3d.vmemUsed = 0; break;
             default: break;
             }
             ctx.markDirty();
@@ -55,16 +60,20 @@ void MemoryApp::draw(Context& ctx, gfx::Canvas& c) {
     std::snprintf(counts[3], 40, "%d definite", fns);
     std::snprintf(counts[4], 40, "%d incognite", ws.equation.unknowns);
     std::snprintf(counts[5], 40, "%u messaggi", static_cast<unsigned>(ws.chat.size()));
-    int fns3d = 0; for (const auto& z : ws.graph3d.model.z) if (!z.empty()) ++fns3d;
+    int fns3d = 0; for (const auto& f : ws.graph3d.set.fns) if (f.defined()) ++fns3d;
     std::snprintf(counts[6], 40, "%d definite", fns3d);
+    int gmem = 0; for (const auto& m : ws.graph3d.gmem) gmem += m.empty() ? 0 : 1;
+    std::snprintf(counts[8], 40, "%d usate, %u byte", gmem, static_cast<unsigned>(ws.graph3d.memoryBytes()));
+    int vmem = 0; for (std::size_t k = 0; k < g3d::WindowMemories; ++k) vmem += (ws.graph3d.vmemUsed >> k) & 1u;
+    std::snprintf(counts[9], 40, "%d usate", vmem);
     int defined = 0; for (const auto& m : ws.matrices.mat) defined += m.empty() ? 0 : 1;
     for (const auto& v : ws.matrices.vct) defined += v.empty() ? 0 : 1;
     std::snprintf(counts[7], 40, "%d, %u elementi", defined, static_cast<unsigned>(ws.matrices.elements()));
     const int top = ui::ContentTop + 4;
-    for (int i = 0; i < ItemCount; ++i) ui::listRow(c, top + i * 22, 21, kItems[i], counts[i], i == selected_);
+    for (int i = 0; i < ItemCount; ++i) ui::listRow(c, top + i * 21, 20, kItems[i], counts[i], i == selected_);
     const auto blob = serializeWorkspace(ws);
     const std::size_t cap = ctx.platform.storageCapacity();
-    const int y = top + ItemCount * 22 + 10;
+    const int y = top + ItemCount * 21 + 6;
     char used[64]; std::snprintf(used, sizeof(used), "Flash: %u / %u byte", static_cast<unsigned>(blob.size()), static_cast<unsigned>(cap));
     ui::text(c, 8, y, used, Ink, font::Face::Small);
     c.rect(8, y + 16, ui::ScreenW - 16, 10, Faint, false);

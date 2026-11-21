@@ -5,8 +5,8 @@
 // helpers the models need (conic classification, cell references, frame
 // counts). A model becomes part of fx::Workspace (and of the versioned
 // record) in the session that implements its mode, so no format change is
-// made for data nobody edits: Graph3DModel is persisted since v1.9.0 (record
-// version 5, 3D Graph mode); the others are not persisted yet.
+// made for data nobody edits. The 3D Graph model left this file in v1.14.0
+// (graph3d_model.hpp, record version 10); the others are not persisted yet.
 // All expressions are linear text evaluated by the shared engine.
 #include <array>
 #include <cstddef>
@@ -58,16 +58,6 @@ struct ConicModel {
 // Type of the general conic from the discriminant B²-4AC and the 3x3 determinant.
 ConicKind classify(const std::array<double, 6>& coefficients) noexcept;
 const char* conicName(ConicKind k) noexcept;
-
-// ---------------------------------------------------------------- 3D Graph (chapter 16)
-struct Graph3DModel {
-    static constexpr std::size_t Functions = 3;
-    std::array<std::string, Functions> z{};      // z = f(x, y)
-    std::array<bool, Functions> selected{{true, false, false}};
-    double xmin{-3}, xmax{3}, ymin{-3}, ymax{3}, zmin{-3}, zmax{3};
-    int grid{40};                                 // cells per axis (5..128; limited by the free memory)
-};
-std::string validate(const Graph3DModel& m);
 
 // ---------------------------------------------------------------- Financial (chapter 7)
 struct FinancialModel {

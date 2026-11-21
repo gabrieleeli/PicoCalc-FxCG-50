@@ -1,4 +1,4 @@
-# Architettura delle applicazioni — v1.13.0
+# Architettura delle applicazioni — v1.14.0
 
 Questo documento descrive **come sono costruite tutte le modalità** (quelle
 disponibili e quelle future), quali servizi condivisi usano, quali dati si
@@ -87,7 +87,7 @@ display) → `tick()` per lavoro periodico (rete) → `leave()`.
 | GraphCore | `graph_model.hpp`, `graph_engine.hpp`, `graph_solve.hpp`, `table_model.hpp` | Graph, Table; previsto per Dyna Graph, Recursion, Conic Graphs (campionamento, viewport, G-Solve) — [GRAPH_ENGINE.md](GRAPH_ENGINE.md) |
 | Files | `file_store.hpp`, `graph_file.hpp`, `pict.hpp` | Graph (progetti `.pcgraph`, immagini `.pcpict`, BMP sulla microSD); previsto per Picture Plot, Program, eActivity — [STORAGE.md](STORAGE.md) |
 | Diag | `diagnostics.hpp` | System (SYSTEM → DIAG: memoria, PSRAM, allocatore, flash, LCD, microSD, flash interna, tempi di GRAPH sul dispositivo, log USB) |
-| Graph3D | `graph3d.hpp`, `limits.hpp` | 3D Graph (campionamento delle superfici, proiezione, z-buffer o pittore, budget dalla memoria presente) |
+| Graph3D | `graph3d_model.hpp`, `graph3d.hpp`, `limits.hpp` | 3D Graph: modello puro (funzioni, modelli, V-Window, Setup, validazione del manuale, geometria analitica, INTSECT/RELATION, codifica delle G-Mem) e disegno (reticoli, taglio al box, proiezione θ/φ, z-buffer o pittore, sezioni CROSS), budget dalla memoria presente |
 | Hardware | `board_config.hpp`, `mem_pools.hpp`, `psram.hpp`, `limits.hpp`, `system_info.hpp`, `system_runtime.hpp` | System (INFO, "Archivio file", DIAG): scheda, pool di memoria, PSRAM, stack — [PICO_PLUS_2W.md](PICO_PLUS_2W.md) |
 
 Errori: il motore lancia `SyntaxError`, `MathError`, `NonRealError` con testi
@@ -109,7 +109,7 @@ nessuna allocazione dinamica nei percorsi ricorsivi; limiti espliciti
 | `Graph` | Setup di Graph, memorie V-Window e grafiche, SKETCH, immagine richiamata, progetto aperto, grafici dei comandi di Run-Matrix (v1.11.0) | Graph; Run-Matrix solo tramite `graph_commands` (comandi grafici) | Graph, Table (Setup Derivative) |
 | `Equation` | coefficienti con forma esatta, equazione e limiti del Solver, ultime soluzioni (record v8) | Equation | Equation; Run-Matrix solo tramite `CollectionResolver` (VARS › SimRes, SimCoef, PlyRes, PlyCoef) |
 | `Chat` | conversazione AI | AI Chat | AI Chat |
-| `Graph3D` | Z1–Z3, selezione, finestra x/y/z, griglia, vista (rotazione, zoom) | 3D Graph | 3D Graph, Memory |
+| `Graph3D` | tre funzioni (tipo, modulo, espressioni, coefficienti, selezione, colori), V-Window 3D con θ/φ, Setup, zoom, 3D G-Mem 1–20, 3D V-Win 1–6 (record v10) | 3D Graph, Memory | 3D Graph, Memory |
 | `Matrices` (v1.10.0) | Mat A–Z, Vct A–Z, MatAns, VctAns, ListAns | Run-Matrix (calcoli ed editor MAT/VCT) | Run-Matrix, Memory |
 | `Strings` (v1.13.0) | Str 1–20, function memory f1–f20, variabili di modo (Dyna, Recursion, TVM) | Run-Matrix tramite `setString`, `setFunctionMemory`, `setRecursionFormula`, `storeSystemVariable` | Run-Matrix (VARS, `functionMemory` tramite `ServiceResolver`), GRAPH (DrawDyna/DrawR tramite `graph_commands`) |
 
@@ -125,14 +125,15 @@ e le memorie Ans) e si assegnano solo con i metodi controllati del workspace
 Run-Matrix legge e scrive le liste di Statistics senza accedere a `ws.lists`.
 Non esistono sistemi di variabili separati per modalità.
 
-Persistenza: `serializeWorkspace()` (versione 9 dalla v1.13.0 con List File,
+Persistenza: `serializeWorkspace()` (versione 10 dalla v1.14.0 con il 3D Graph
+completo in coda; versione 9 dalla v1.13.0 con List File,
 stringhe, function memory, variabili di modo, viste ENG/∠/a+bi e decimali
 delle celle; versione 8 dalla v1.12.0 con i dati di
 EQUATION in coda; versione 7 dalla v1.11.0 con Base-N,
 Simplify, CSV, List 7–26, sottonomi, forme esatte delle memorie e grafici dei
 comandi; versione 6 dalla v1.10.0 con Input/Output, matrici e vettori; versione 5 dalla v1.9.0 con 3D Graph e archivio dei file;
 le versioni 1 della v1.6.0, 2 della v1.7.0, 3 e 4 della v1.8.0, 5 della v1.9.0,
-6 della v1.10.0 e 7 della v1.11.0 vengono ancora lette) → `RecordStore` con due slot e CRC-32. I file
+6 della v1.10.0, 7 della v1.11.0, 8 della v1.12.0 e 9 della v1.13.x vengono ancora lette) → `RecordStore` con due slot e CRC-32. I file
 dell'utente (progetti GRAPH, immagini) sono sulla microSD o nella flash interna
 (LittleFS), scelta in SYSTEM, tramite il servizio Files ([STORAGE.md](STORAGE.md)).
 
@@ -145,8 +146,8 @@ dell'utente (progetti GRAPH, immagini) sono sulla microSD o nella flash interna
 | Graph | `GraphApp` (`graph_app.cpp`, `graph_plot.cpp`, `graph_files.cpp`) | grafici Y=, r=, parametrici, X=, disequazioni (Y1–Y20); TRACE, ZOOM, V-Window, SKETCH, G-SOLVE, Modify, memorie, PICT, progetti `.pcgraph` — [GRAPH_PARITY.md](GRAPH_PARITY.md) | Expression, Editor, Format, Widgets, MathRender, Storage, GraphCore, Files | Settings, Memory, Functions, View, Table, Lists, Graph | Table |
 | Table | `TableApp` + `table_model` | tabelle di Y=, r= e parametriche da range o lista, derivate, EDIT/ROW/DELETE, LISTMEM, GPH-CON/GPH-PLT — [TABLE.md](TABLE.md) | Expression, Editor, Format, Widgets, MathRender, Storage, GraphCore | Settings, Memory, Functions, View, Table, Lists, Graph | Graph |
 | Equation | `EquationApp` + `MathField` (`math_field.cpp`) + motore `equation.cpp` | SIML, POLY e SOLVER come il manuale fx-CG50 (4-1…4-5), disequazioni come estensione | Expression, Exact, Editor, MathRender, Format, RunCore, Solvers, Storage, EquationCore | Settings, Memory, Equation | — |
-| 3D Graph | `Graph3DApp` (`graph3d_app.cpp`) + motore `graph3d.cpp` | superfici z = f(x, y) Z1–Z3, finestra 3D, griglia, rotazione/zoom senza ricalcolo, AUTO, calcolo incrementale | Expression, Widgets, Editor, Format, Storage, Models, Graph3D | Settings, Memory, Graph3D | — |
-| Memory | `MemoryApp` | uso e cancellazione dei dati (anche delle funzioni 3D) | Widgets, Storage | tutte | — |
+| 3D Graph | `Graph3DApp` (`graph3d_app.cpp` lista e input, `graph3d_plot.cpp` grafico) + `graph3d_model.cpp`, `graph3d.cpp` | capitolo 16 della fx-CG50 ([GRAPH3D.md](GRAPH3D.md)): modelli Line/Plane/Sphere/Cylinder/Cone, Z=, Param, Rot X/Y, V-Window, Setup, FORMAT, 3D G-Mem/V-Mem, rotazione e ROTATE, ZOOM e viste, TRACE, SKETCH, G-Solve CROSS/INTSECT/RELATION, PICTURE, CAPTURE, calcolo progressivo | Expression, Widgets, Editor, Format, MathRender, Storage, Files, Graph3D | Settings, Memory, Graph3D | — |
+| Memory | `MemoryApp` | uso e cancellazione dei dati (anche 3D Graph, 3D G-Mem, 3D V-Win) | Widgets, Storage | tutte | — |
 | System | `SystemApp` | SET UP, retroilluminazione, archivio dei file, Wi-Fi, relay, reset, INFO, DIAG | Widgets, Editor, Format, Network, Storage, Diag, Hardware | tutte (RESET) | — |
 | Conversion | `ConversionApp` | conversioni di unità, risultato in Ans | Expression, Units | Settings, Memory | — |
 | AI Chat | `AiChatApp` | chat con Claude/ChatGPT tramite relay | Network, Editor | Settings, Chat | System |

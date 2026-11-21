@@ -222,6 +222,32 @@ int main() {
     // equazioni passano dal motore di Run-Matrix (parseExpression, evaluateAny,
     // evaluateExact) attraverso equation.hpp; nessuna lettura propria dei numeri,
     // nessun percorso numerico separato (la griglia CellGrid e i vecchi solutori in double).
+    // v1.14.0, 3D Graph: one parser and evaluator (CompiledExpression for the
+    // functions, evalNumber for the coefficients), the variables of the graph
+    // bound with EvalContext (no write to A-Z), the geometry in the pure model,
+    // controller and drawing separated from the model.
+    {
+        std::string code3d;
+        for (const char* const* src = appInfo(AppId::Graph3D).sources; *src; ++src) {
+            const std::string code = codeOnly(readFile(*src));
+            code3d += code;
+            for (const char* f : {"strtod", "atof", "stod(", "stof(", "sscanf", "istringstream", "parseExpression(", "memory.store(", "storeExact("})
+                ::testutil::report(code.find(f) == std::string::npos, "3D Graph: no own number parsing, no write to A-Z", *src, 0, f);
+        }
+        for (const char* r : {"CompiledExpression(", "evalNumber(", "g3d::shapeOf(", "g3d::intersect(", "g3d::relation(", "g3d::crossSection(",
+                              "g3d::render(", "g3d::validate(", "g3d::encode("})
+            ::testutil::report(code3d.find(r) != std::string::npos, "3D Graph uses the shared engine and the 3D library", "src/apps/graph3d_*.cpp", 0, r);
+        const std::string model = codeOnly(readFile("src/graph3d_model.cpp"));
+        for (const auto& inc : includesOf(model)) {
+            const bool allowed = inc == "graph3d_model.hpp" || inc.find('.') == std::string::npos;   // standard headers only
+            ::testutil::report(allowed, "graph3d_model is pure (no parser, workspace or graphics)", "src/graph3d_model.cpp", 0, inc);
+        }
+        const std::string lib = codeOnly(readFile("src/graph3d.cpp"));
+        for (const auto& inc : includesOf(lib))
+            ::testutil::report(inc == "graph3d.hpp" || inc == "font_renderer.hpp" || inc.find('.') == std::string::npos,
+                               "graph3d drawing library: no UI, app or workspace", "src/graph3d.cpp", 0, inc);
+        CHECK(codeOnly(readFile("src/workspace.cpp")).find("g3d::decode(") != std::string::npos);   // record v10 validated by the model
+    }
     {
         const char* noParsing[] = {"strtod", "atof", "stod(", "stof(", "sscanf", "istringstream", "evalNumber("};
         const char* legacy[] = {"CellGrid", "solveLinearSystem", "polynomialRoots", "solveEquation(", "Form "};
@@ -282,12 +308,13 @@ int main() {
         const char* engine[] = {"expression.hpp", "exact.hpp", "expression_ast.hpp", "memory.hpp", "math_engine.hpp", "number_format.hpp",
                                 "solvers.hpp", "statistics.hpp", "run_matrix.hpp", "workspace.hpp", "storage.hpp", "app_models.hpp",
                                 "graph_model.hpp", "graph_engine.hpp", "graph_solve.hpp", "file_store.hpp", "graph_file.hpp", "pict.hpp",
-                                "sd_card.hpp", "fatfs_store.hpp", "value.hpp", "csv_io.hpp", "graph_commands.hpp", "calc_library.hpp", "equation.hpp", "limits.hpp"};
+                                "sd_card.hpp", "fatfs_store.hpp", "value.hpp", "csv_io.hpp", "graph_commands.hpp", "calc_library.hpp", "equation.hpp", "limits.hpp",
+                                "graph3d_model.hpp"};
         const char* engineSrc[] = {"src/expression.cpp", "src/exact.cpp", "src/memory.cpp", "src/math_engine.cpp", "src/number_format.cpp",
                                    "src/solvers.cpp", "src/statistics.cpp", "src/run_matrix.cpp", "src/workspace.cpp", "src/storage.cpp", "src/app_models.cpp",
                                    "src/graph_model.cpp", "src/graph_engine.cpp", "src/graph_solve.cpp", "src/file_store.cpp", "src/graph_file.cpp", "src/pict.cpp",
                                    "src/sd_card.cpp", "src/fatfs_store.cpp", "src/value.cpp", "src/csv_io.cpp", "src/graph_commands.cpp",
-                                   "src/calc_library.cpp", "src/equation.cpp"};
+                                   "src/calc_library.cpp", "src/equation.cpp", "src/graph3d_model.cpp"};
         for (const char* h : engine)
             for (const auto& inc : includesOf(codeOnly(readFile(std::string("include/") + h))))
                 ::testutil::report(appLayer.count(inc) == 0, "engine header independent of the UI", h, 0, inc);
@@ -361,10 +388,11 @@ int main() {
         CHECK(classify({0, 0, 2, -1, 1, -1}) == ConicKind::Parabola);    // x = 2y²+y-1 (manual 5-51)
         CHECK(classify({1, 0, 1, 0, 0, 1}) == ConicKind::None);         // x²+y²=-1
         CHECK(classify({1, 0, -1, 0, 0, 0}) == ConicKind::Degenerate);  // two lines
-        Graph3DModel g3; g3.z[0] = "x^2-y^2";
-        CHECK(validate(g3).empty());
-        g3.grid = 128; CHECK(validate(g3).empty());
-        g3.grid = 129; CHECK(!validate(g3).empty());
+        // v1.14.0: il modello del 3D Graph e' in graph3d_model.hpp (griglia 2..50 come la fx-CG50)
+        g3d::Window g3;
+        CHECK(g3d::validate(g3).empty());
+        g3.xgrid = 50; CHECK(g3d::validate(g3).empty());
+        g3.xgrid = 51; CHECK(!g3d::validate(g3).empty());
         FinancialModel fin;
         CHECK(validate(fin).empty());
         fin.py = 0; CHECK(!validate(fin).empty());

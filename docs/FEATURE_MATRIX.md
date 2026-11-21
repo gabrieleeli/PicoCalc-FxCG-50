@@ -1,5 +1,10 @@
-# Feature matrix — v1.13.1
+# Feature matrix — v1.14.0
 
+La v1.14.0 completa il **3D Graph** alla parità con la fx-CG50 (capitolo 16
+del manuale): ogni voce della tabella di parità è presente o è una differenza
+inevitabile documentata ([reports/SVILUPPO_v1.14.0.md](reports/SVILUPPO_v1.14.0.md),
+[GRAPH3D.md](GRAPH3D.md)); record del workspace v10. Nessuna voce è provata su
+hardware ([HARDWARE_TEST_v1.14.0.md](HARDWARE_TEST_v1.14.0.md)).
 La v1.13.1 è una versione di correzione della v1.13.0: nessuna funzione
 nuova e nessuno stato cambiato; 18 errori corretti, ognuno con un test
 ([reports/ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md)). Nessuna voce è
@@ -208,7 +213,10 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | AI Chat (Claude / ChatGPT) | TESTED ON HOST | con trasporto simulato; rete reale da collaudare |
 | Symbols (guida) | TESTED ON HOST | |
 | eActivity, Spreadsheet, Dyna Graph, Recursion, Conic Graphs | IN PROGRESS | solo architettura e modello dati (`app_models.hpp`, testato); nessuna interfaccia; schermata "non disponibile" |
-| 3D Graph: Z1–Z3 = f(x,y), finestra 3D, griglia, rotazione, zoom, AUTO, campionamento incrementale, z-buffer in PSRAM (pittore senza PSRAM), un colore per superficie, persistenza | TESTED ON SIMULATOR | `graph3d_test` (motore e modalità, con e senza PSRAM); screenshot 40–43 (`tests/sim/graph3d.txt`); sfere/piani/rette parametrici della fx-CG50 NOT STARTED |
+| 3D Graph (v1.14.0): lista con SELECT/DELETE/TYPE/3D-GMEM/DRAW e FORMAT (Line/Area Color); modelli Line (EXPRESS, VECTOR, P&V, POINTS), Plane (EXPRESS, VECTOR, POINTS), Sphere (FACTOR, EXPAND), Cylinder, Cone con le condizioni «Invalid Setting»; Z=, Param (S, T), Rot X, Rot Y | TESTED ON SIMULATOR | `graph3d_v114_test`, `graph3d_test` (due profili); screenshot 88–96, 100, 103–104 |
+| 3D Graph: V-Window (X/Y/Z, Xgrid/Ygrid, S/T, θ/φ, INITIAL, 3D-VMEM, Out of Domain / Invalid Setting), Setup (Axes, Box, Label, Plot/LineCol, tasti • e ,) | TESTED ON SIMULATOR | `graph3d_v114_test`; screenshot 99, 101, 102 |
+| 3D Graph: rotazione con i tasti e ROTATE (due giri, AC), ZOOM IN/OUT/VIEW-X/Y/Z/ORIGINAL, SKETCH, PICTURE, CAPTURE, TRACE (Next/Back, coordinate), G-Solve CROSS / INTSECT / RELATION (NOT FOUND, INFINITE) | TESTED ON SIMULATOR | `graph3d_v114_test` (geometria analitica e modalità); screenshot 93–98 |
+| 3D Graph: z-buffer condiviso in PSRAM (pittore senza PSRAM), taglio esatto al box, calcolo progressivo con AC, Memory ERROR senza memoria trattenuta, cache dell'immagine per TRACE | TESTED ON SIMULATOR | `graph3d_v114_test`, `graph3d_test`, `oom_test`, `limits_smoke`; fuzzing `tools/fuzz/fuzz_graph3d.cpp` |
 | Program, Financial, Link, Geometry, Picture Plot | IN PROGRESS | solo modello dati; schermata "non disponibile" |
 | E-CON4 | NOT STARTED | richiede un data logger esterno: non realizzabile sulla PicoCalc (stato External) |
 | Python (MicroPython) | NOT STARTED | richiede l'integrazione del runtime come libreria (modello dei file di script definito) |
@@ -223,6 +231,7 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Liste statistiche (List 1–26 e sottonomi dalla v1.11.0, record v7) | TESTED ON HOST |
 | Stato di GRAPH (20 funzioni, V-Window, Setup, memorie V-Window e grafiche, SKETCH) e di TABLE (range, variabile, tipo, righe) — record v4 | TESTED ON HOST |
 | Record v5 (v1.9.0): 3D Graph e archivio dei file; lettura dei record v4 della v1.8.0 | TESTED ON HOST |
+| Record v10 (v1.14.0): 3D Graph completo (funzioni, V-Window, Setup, zoom, 3D G-Mem, 3D V-Win); migrazione v1…v9 con le fixture v1.6.0…v1.13.1 | TESTED ON HOST |
 | Liste di 999 elementi e cronologia di 200 righe (Pico Plus 2 W) | TESTED ON HOST |
 | Lettura dei record v3 (GRAPH v1.8.0 prima di TABLE) | TESTED ON HOST |
 | Record oltre la capacità della flash: messaggio "Memoria flash piena" con la dimensione | TESTED ON HOST |

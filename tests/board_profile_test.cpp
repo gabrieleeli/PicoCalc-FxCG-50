@@ -28,7 +28,8 @@ void checkV180(const Workspace& ws) {
     CHECK(ws.chat.size() == 1 && ws.chat[0].text == "Ciao");
     // fields added in v1.9.0 (format 5) take their defaults
     CHECK(ws.settings.fileStore == Settings::FileStore::MicroSd);
-    CHECK(ws.graph3d.model.z[0] == "sin(x)cos(y)" && ws.graph3d.model.grid == 40);
+    // v1.14.0 (record v10): the 3D Graph list starts empty as on the fx-CG50, grid 25 points
+    CHECK(ws.graph3d.set.fns[0].kind == g3d::Kind::None && ws.graph3d.set.window.xgrid == 25);
 }
 } // namespace
 
@@ -121,16 +122,18 @@ int main() {
         checkV180(ws);
         // saved again in the current format (7 since v1.11.0) and read back with the new fields
         ws.settings.fileStore = Settings::FileStore::Internal;
-        ws.graph3d.model.z[2] = "x*y"; ws.graph3d.model.selected[2] = true; ws.graph3d.yaw = 100;
+        ws.graph3d.set.fns[2].kind = g3d::Kind::Z; ws.graph3d.set.fns[2].expr[0] = "x*y"; ws.graph3d.set.fns[2].selected = true;
+        ws.graph3d.set.window.theta = 100;
         const auto blob = serializeWorkspace(ws);
-        CHECK(blob[4] == 9 && blob[5] == 0);
+        CHECK(blob[4] == 10 && blob[5] == 0);
         Workspace back;
         CHECK(deserializeWorkspace(blob.data(), blob.size(), back));
-        CHECK(back.settings.fileStore == Settings::FileStore::Internal && back.graph3d.model.z[2] == "x*y" && back.graph3d.yaw == 100);
+        CHECK(back.settings.fileStore == Settings::FileStore::Internal && back.graph3d.set.fns[2].expr[0] == "x*y" &&
+              back.graph3d.set.window.theta == 100);
         CHECK(back.lists[0] == ws.lists[0] && back.history.size() == 1);
         // corrupt 3D data is rejected like any other field
         Workspace bad = ws;
-        bad.graph3d.model.grid = 200;
+        bad.graph3d.set.window.xgrid = 200;
         const auto badBlob = serializeWorkspace(bad);
         Workspace sink;
         CHECK(!deserializeWorkspace(badBlob.data(), badBlob.size(), sink));

@@ -106,20 +106,41 @@ int main() {
         release();
         r.key(pckey::Esc); r.home();
 
-        // ---- 3D Graph: a grid that does not fit is halved, then Memory ERROR
+        // ---- 3D Graph: a lattice that does not fit is halved, then Memory ERROR
+        r.ws().graph3d.set.fns[0].kind = g3d::Kind::Z;
+        r.ws().graph3d.set.fns[0].expr[0] = "sin(x)cos(y)";
         r.type("j");
         exhaust();
         r.key(pckey::F6);
         r.settle();
         auto* g3 = r.active<app::Graph3DApp>();
         CHECK(g3 != nullptr);
-        if (g3) CHECK(r.error() ? r.errorTitle() == "Memory ERROR" : g3->grid() < 40);
+        if (g3) CHECK(r.error() ? r.errorTitle() == "Memory ERROR" : g3->points() < 25);
+        if (g3 && r.error()) CHECK(g3->retainedBytes() == 0);        // v1.14.0: nothing kept after the error
         r.closeError();
         release();
+        if (g3 && g3->screen() != app::Graph3DApp::Screen::List) r.key(pckey::Esc);
         r.key(pckey::F6); r.settle();
         if (g3) CHECK(!r.error() && g3->mesh(0).valid > 0);
         r.home();
         CHECK(g3 && g3->mesh(0).verts.empty());                      // released when leaving the mode
+        // v1.14.0: templates (a cylinder has three patches) and the painter's
+        // order under exhaustion: Memory ERROR or a smaller lattice, never a crash
+        {
+            g3d::Function cyl = g3d::emptyFunction(1);
+            cyl.kind = g3d::Kind::Cylinder; cyl.coef = {1, -1, 1, 0, 0};
+            r.ws().graph3d.set.fns[1] = cyl;
+            r.type("j");
+            exhaust();
+            r.key(pckey::F6);
+            r.settle();
+            if (g3) CHECK(r.error() ? r.errorTitle() == "Memory ERROR" && g3->retainedBytes() == 0 : g3->drawn());
+            r.closeError();
+            release();
+            r.home();
+            CHECK(g3 && g3->retainedBytes() == 0);
+            r.ws().graph3d.set = g3d::GraphSet{};
+        }
 
         // ---- legacy editors and the natural editor keep their data on failure
         MatrixEditor me;

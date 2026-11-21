@@ -365,9 +365,9 @@ int main() {
         const auto at = std::search(blob.begin(), blob.end(), pattern, pattern + 24);
         CHECK(at != blob.end());
         if (at != blob.end()) {
-            // v5 appends the file store and the 3D Graph block at the end
-            std::size_t tail = 2 + 6 * 8 + 1 + 3 * 4;
-            for (const auto& z : w3.graph3d.model.z) tail += 3 + z.size();
+            // v5 appends the file store (v10: the 3D Graph block of v5 is no longer
+            // written there)
+            std::size_t tail = 1;
             // v6 appends the Input/Output mode, 55 empty Mat/Vct/answer memories
             // and the (empty) list of collection results of the history
             tail += 1 + 55 + 2;
@@ -382,6 +382,9 @@ int main() {
             // list files (26 empty lists and names each), 20 empty function memories and
             // strings, the 24 Dyna/Recursion/TVM variables and no history extras
             tail += 3 + 2 * 11 + 6 * (26 * 2 + 26 * 2) + 20 * 2 + 20 * 2 + 24 * 8 + 2 + 55 + 2;   // + 55 flag dei decimali, formula an+1
+            // v10 appends the 3D Graph state: the encoded set, the zoom, the 3D V-Win
+            // bits and the six windows, the twenty (empty) 3D G-Mem
+            tail += 4 + g3d::encode(w3.graph3d.set).size() + 4 + 1 + 6 * (4 + g3d::encodeWindow(g3d::Window{}).size()) + 20 * 4;
             blob.resize(blob.size() - tail);
             // ... and the version 1-7 EQUATION block (doubles) goes back before the chat count
             std::vector<std::uint8_t> legacy;

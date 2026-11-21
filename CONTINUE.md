@@ -1,11 +1,13 @@
 # CONTINUE — punto di ripresa del progetto PicoCalc FX-CG50 AI
 
 Documento di checkpoint per riprendere lo sviluppo esattamente da qui.
-Ultimo aggiornamento: **v1.13.1 — versione di correzione della v1.13.0**
-(revisione completa, 18 errori corretti con un test ciascuno, nessuna funzione
-nuova), branch **`main`**, tag `v1.13.1` creato dal workflow
-`.github/workflows/release.yml`. Rapporti: `docs/reports/ERRORI_v1.13.1.md`
-(elenco degli errori e problemi aperti), `docs/reports/SVILUPPO_v1.13.1.md`;
+Ultimo aggiornamento: **v1.14.0 — completamento totale di 3D Graph** (parità
+con la fx-CG50, capitolo 16 del manuale; record del workspace v10), branch
+**`main`**, tag `v1.14.0` creato dal workflow `.github/workflows/release.yml`.
+Rapporti: `docs/reports/ANALISI_FONTI_v1.14.0.md` (fonti e tabella di
+parità iniziale), `docs/reports/SVILUPPO_v1.14.0.md` (tabella finale, test,
+memoria), guida `docs/GRAPH3D.md`; v1.13.1 (correzioni):
+`docs/reports/ERRORI_v1.13.1.md`, `docs/reports/SVILUPPO_v1.13.1.md`;
 v1.13.0 (Run-Matrix): `docs/reports/ANALISI_FONTI_v1.13.0.md`, `docs/reports/SVILUPPO_v1.13.0.md`;
 v1.12.0 (EQUATION): `docs/reports/SVILUPPO_v1.12.0.md`, guida `docs/EQUATION.md`; v1.11.0: `docs/reports/SVILUPPO_v1.11.0.md`; v1.10.0:
 `docs/reports/SVILUPPO_v1.10.0.md`; v1.9.0:
@@ -15,12 +17,13 @@ v1.12.0 (EQUATION): `docs/reports/SVILUPPO_v1.12.0.md`, guida `docs/EQUATION.md`
 
 | Branch | Contenuto | Regola |
 |---|---|---|
-| **`main`** | **v1.13.1** (tag `v1.13.1`): v1.13.0 + correzioni (ERRORI_v1.13.1) | si continua qui |
-| tag `v1.13.0` (`a72d901`), `v1.12.0` (`51691de`), `v1.11.0` (`f6933fd`), `v1.10.0` (`dfdb08b`), `v1.9.0` (`bb2bdee`) | versioni precedenti su `main` | non spostare |
+| **`main`** | **v1.14.0** (tag `v1.14.0`): v1.13.1 + 3D Graph completo (record v10) | si continua qui |
+| tag `v1.13.1` (`62b3f8f`), `v1.13.0` (`a72d901`), `v1.12.0` (`51691de`), `v1.11.0` (`f6933fd`), `v1.10.0` (`dfdb08b`), `v1.9.0` (`bb2bdee`) | versioni precedenti su `main` | non spostare |
 | `version/v1.5.4`, `version/v1.6.0`, `version/v1.7.0`, `version/v1.8.0` | snapshot storici, uno per versione | non modificare |
 
-I branch di lavoro della v1.13.1 (`claude/intelligent-galileo-xc0332`) e della
-v1.13.0 (`claude/run-matrix-completamento-tbi679`) hanno commit intermedi;
+I branch di lavoro della v1.14.0 (`ccr-d10cca3d-ioq9ea`), della v1.13.1
+(`claude/intelligent-galileo-xc0332`) e della v1.13.0
+(`claude/run-matrix-completamento-tbi679`) hanno commit intermedi;
 `main` riceve un solo commit per versione (fast-forward), quindi quei branch
 possono essere eliminato dopo la pubblicazione, come i
 duplicati della 1.9.0 elencati nel rapporto del consolidamento (l'ambiente
@@ -28,6 +31,23 @@ di sviluppo rifiuta l'eliminazione dei branch remoti e il push dei tag:
 HTTP 403). Un solo branch per versione; mai force-push.
 
 ## 1. Stato attuale
+
+**v1.14.0** (sopra la v1.13.1): **3D Graph** con ogni voce della tabella di
+parità presente o documentata come differenza inevitabile
+(`docs/reports/SVILUPPO_v1.14.0.md` §5–§6): modelli Line (EXPRESS, VECTOR,
+P&V, POINTS), Plane (EXPRESS, VECTOR, POINTS), Sphere (FACTOR, EXPAND),
+Cylinder, Cone con le condizioni «Invalid Setting»; Z=, Param (S, T), Rot X,
+Rot Y; lista con SELECT/DELETE/TYPE/3D-GMEM/DRAW e FORMAT; V-Window con
+Xgrid/Ygrid, S/T, θ/φ, INITIAL e 3D-VMEM; SET UP (Axes, Box, Label,
+Plot/LineCol…); rotazione, ROTATE, ZOOM e viste, SKETCH, PICTURE, CAPTURE,
+TRACE, G-Solve CROSS/INTSECT/RELATION; z-buffer condiviso in PSRAM, pittore
+senza, taglio esatto al box, calcolo progressivo con AC. Nuovi moduli
+`graph3d_model` (puro) e `graph3d` (disegno), controller in
+`src/apps/graph3d_app.cpp` e `src/apps/graph3d_plot.cpp`. Record del
+workspace **v10** (fixture nuova `workspace_v1_13_1_graph3d.inc` generata con i
+sorgenti della v1.13.1). Numeri di test e firmware:
+`docs/reports/SVILUPPO_v1.14.0.md` §4 e `docs/BUILD_STATUS.md`.
+**Nessuna prova su hardware**: `docs/HARDWARE_TEST_v1.14.0.md` (HW-170…HW-189).
 
 **v1.13.1** (sopra la v1.13.0): versione di correzione. Revisione completa
 (test, ASan/UBSan bloccante, TSan, cppcheck, GCC con warning extra,
@@ -91,19 +111,28 @@ Stato della v1.9.0 (invariato dove non indicato):
   SYSTEM → F2 DIAG (righe `[DIAG]` anche sulla seriale USB).
 - GRAPH: `docs/GRAPH_PARITY.md`; **parità completa con la fx-CG50 non
   raggiunta**. TABLE completa tranne Dual Screen (`docs/TABLE.md`).
-- 3D Graph: superfici z = f(x, y) Z1–Z3 (screenshot 40–43).
+- 3D Graph: completo dalla v1.14.0 (screenshot 40–43 e 88–104, `docs/GRAPH3D.md`).
 - Memoria e flash della Plus: `docs/PICO_PLUS_2W.md`; formato del record:
-  versione 9 (`docs/STORAGE.md`).
+  versione 10 (`docs/STORAGE.md`).
 
-## 2. Cosa è stato fatto nell'ultima sessione (v1.13.1)
+## 2. Cosa è stato fatto nell'ultima sessione (v1.14.0)
+
+| Area | Contenuto |
+|---|---|
+| Git | partenza da `main` = `62b3f8f` (tag v1.13.1), nessun avanzamento di `main` durante il lavoro; commit intermedi sul branch `ccr-d10cca3d-ioq9ea`; un solo commit su `main` in fast-forward; tag e release dal workflow |
+| Fonti | manuale software fx-CG50 v3.60 (PDF Casio), capitolo 16 letto con le schermate; analisi e tabella di parità in `ANALISI_FONTI_v1.14.0.md` prima del codice |
+| Modello | `include/graph3d_model.hpp`, `src/graph3d_model.cpp`: tipi, moduli, colori, V-Window, Setup, validazione, geometria, INTSECT/RELATION, codifica |
+| Disegno | `include/graph3d.hpp`, `src/graph3d.cpp` riscritti: reticoli di ogni tipo, taglio al box, proiezione θ/φ, z-buffer/pittore, sezioni |
+| Modalità | `src/apps/graph3d_app.cpp`, `src/apps/graph3d_plot.cpp`: tutte le schermate del capitolo 16 |
+| Workspace | record v10, conversione v5–v9; MEMORY con 3D G-Mem e 3D V-Win |
+| Test | `graph3d_v114_test` (nuova), `graph3d_test` portata, `oom_test`, `architecture_test`, `limits_smoke`; fuzzing `fuzz_graph3d` (un errore trovato e corretto); simulatore 40–43 e 88–104 |
+
+### Sessione precedente (v1.13.1)
 
 | Area | Contenuto |
 |---|---|
 | Git | partenza da `main` = `51691de` (v1.12.0, l'ultima release era la v1.11.0); durante la ricerca `main` è avanzato alla v1.13.0 (`a72d901`, poi pubblicata): branch portato in avanti e ricerca ripetuta sulla v1.13.0; un solo commit su `main` in fast-forward; tag e release dal workflow |
-| Ricerca | test dei due profili, ASan/UBSan, TSan, relay; cppcheck, GCC con `-Wshadow -Wconversion…`, clang-tidy; `-fstack-usage`; fuzzing (`tools/fuzz`); simulatore con confronto degli screenshot; manuale; documenti |
-| Correzioni | E01 workspace, E02/E03/E14/E15/E16 distribuzioni, E04 EQUATION, E05 nCr/nPr, E06 CSV, E07 scrittura atomica, E08/E09 Statistics, E10/E12 Ran# e Σ, E11 UBSan bloccante, E13/E18 documenti e screenshot, E17 VARS |
-| Test | `tests/fixes_v1131_test.cpp` (un gruppo per errore, fallisce con la v1.13.0) |
-| Strumenti | `tools/fuzz` (7 harness libFuzzer + `run_fuzz.sh`) |
+| Correzioni | E01–E18 di `docs/reports/ERRORI_v1.13.1.md`, ognuno con un gruppo di controlli in `tests/fixes_v1131_test.cpp`; `tools/fuzz` (7 harness) |
 
 ### Sessione precedente (v1.13.0)
 
@@ -119,10 +148,9 @@ Stato della v1.9.0 (invariato dove non indicato):
 
 ## 3. Funzionalità ancora da completare
 
-- Run-Matrix: nessuna voce mancante (le differenze inevitabili sono nel §6 di
-  `docs/reports/SVILUPPO_v1.13.0.md`).
+- Run-Matrix, EQUATION e 3D Graph: nessuna voce mancante (differenze inevitabili
+  nel §6 di `docs/reports/SVILUPPO_v1.13.0.md` e di `docs/reports/SVILUPPO_v1.14.0.md`).
 - Dual Screen (G+G, GtoT, T+G) e Graph to Table; FORMAT durante lo SKETCH.
-- 3D Graph: sfere, piani e rette parametriche della fx-CG50.
 - Modalità con solo modello dati: eActivity, Spreadsheet, Dyna Graph,
   Recursion, Conic Graphs, Program, Financial, Link, Geometry, Picture Plot
   (i dati che Run-Matrix legge da VARS sono già nel workspace); Python;
@@ -131,7 +159,7 @@ Stato della v1.9.0 (invariato dove non indicato):
 ## 4. Prossimi passaggi esatti
 
 1. **Collaudo fisico sulla PicoCalc con il Pimoroni Pico Plus 2 W**: HW-01…HW-36,
-   HW-40…HW-82, HW-90…HW-99, HW-100…HW-115, HW-120…HW-134, HW-140…HW-159 e HW-160…HW-169 (log USB dall'accensione, righe `[psram]`,
+   HW-40…HW-82, HW-90…HW-99, HW-100…HW-115, HW-120…HW-134, HW-140…HW-159, HW-160…HW-169 e HW-170…HW-189 (log USB dall'accensione, righe `[psram]`,
    `[flash]`, `[mem]`, `[DIAG]`, `[fault]`, foto). Ogni KO va riprodotto con un test e corretto;
    solo le voci provate passano a TESTED ON HARDWARE (data, modulo, revisione
    della scheda).
@@ -195,13 +223,14 @@ build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix_v112.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/equation.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph3d.txt
+build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph3d_v114.txt   # 3D Graph v1.14.0 (88-104)
 ```
 
 ```bash
 # Fuzzing leggero (v1.13.1): clang con libFuzzer (Ubuntu: libclang-rt-18-dev), ASan + UBSan
 CC=clang CXX=clang++ cmake -S tools/fuzz -B build/fuzz -G Ninja -DFXAI_TEST_BOARD=PICO_PLUS_2W
 cmake --build build/fuzz
-tools/fuzz/run_fuzz.sh build/fuzz 300       # secondi per harness; crash in build/fuzz/artifacts
+tools/fuzz/run_fuzz.sh build/fuzz 300       # secondi per harness (8 harness, v1.14.0: fuzz_graph3d); crash in build/fuzz/artifacts
 ```
 
 ```bash

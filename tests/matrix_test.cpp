@@ -342,7 +342,7 @@ int main() {
         runCalculation(w, "Identity(8)");
         runCalculation(w, "2+2");
         const auto bytes = serializeWorkspace(w);
-        CHECK(bytes[4] == 9 && bytes[5] == 0);
+        CHECK(bytes[4] == 10 && bytes[5] == 0);
         Workspace back;
         CHECK(deserializeWorkspace(bytes.data(), bytes.size(), back));
         CHECK(back.settings.inputMode == Settings::InputMode::Line);
@@ -370,7 +370,7 @@ int main() {
         CHECK(w.settings.angle == AngleMode::Degrees && w.settings.mixedFractions && w.settings.fileStore == Settings::FileStore::Internal);
         CHECK(w.settings.inputMode == Settings::InputMode::Math);              // valore predefinito
         CHECK(w.history.size() == 3 && w.memory.recall('B') == 7 && w.lists[0].size() == 3 && w.lists[1].size() == 3);
-        CHECK(w.functions[0].expr == "(x)^(2)-1" && w.graph3d.model.z[1] == "x*y" && w.chat.size() == 1);
+        CHECK(w.functions[0].expr == "(x)^(2)-1" && w.graph3d.set.fns[1].kind == g3d::Kind::Z && w.graph3d.set.fns[1].expr[0] == "x*y" && w.chat.size() == 1);
         CHECK(w.matrices.elements() == 0 && w.matrices.listAns.empty());
         for (const auto& h : w.history) CHECK(!isCollection(h));
         CHECK_EQ_STR(resultText(w.history[0], w.settings), "1/2");
@@ -379,7 +379,7 @@ int main() {
         CHECK_EQ_STR(resultText(w.history.back(), w.settings), "22.5");
         const auto bytes = serializeWorkspace(w);
         Workspace again;
-        CHECK(bytes[4] == 9 && deserializeWorkspace(bytes.data(), bytes.size(), again) && again.history.size() == 4);
+        CHECK(bytes[4] == 10 && deserializeWorkspace(bytes.data(), bytes.size(), again) && again.history.size() == 4);
         Workspace old;
         CHECK(deserializeWorkspace(kV180Record, sizeof kV180Record, old) && old.matrices.elements() == 0);   // v1.8.0, formato 4
     }

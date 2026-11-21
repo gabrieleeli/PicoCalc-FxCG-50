@@ -71,6 +71,8 @@ std::string stem(const std::string& name);                      // name without 
 // Folders used on the card.
 constexpr const char* GraphFolder = "PICOCALC/GRAPH";
 constexpr const char* PictFolder = "PICOCALC/PICT";
+// CAPTURE (SHIFT 7): the same folder as graphcmd::CaptureFolder of Run-Matrix (v1.14.0: also from 3D Graph).
+constexpr const char* CaptureFolder = "PICOCALC/CAPT";
 constexpr const char* ProjectExtension = ".pcgraph";
 constexpr const char* PictExtension = ".pcpict";
 constexpr const char* BmpExtension = ".bmp";

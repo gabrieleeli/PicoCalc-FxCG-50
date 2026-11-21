@@ -3,6 +3,7 @@
 #include "equation.hpp"
 #include "expression.hpp"
 #include "graph_model.hpp"
+#include "graph3d_model.hpp"
 #include "math_engine.hpp"
 #include "memory.hpp"
 #include "number_format.hpp"
@@ -178,11 +179,28 @@ struct EquationState {
 };
 struct ChatMessage { bool fromUser{}; std::string text; };
 
-// 3D Graph mode (record v5): functions Z1..Z3, 3D V-Window, grid and view.
+// 3D Graph mode (record v10, v1.14.0; manual chapter 16): the three graph
+// functions with selection and colours, the 3D View Window (with the view
+// angles θ and φ), the Setup items, the zoom factor of ZOOM IN/OUT and the
+// memories 3D G-Mem 1-20 and 3D V-Win 1-6. Records v5-v9 (surfaces Z1-Z3)
+// are converted when read.
 struct Graph3DState {
-    models::Graph3DModel model{};
-    float yaw{35.0F}, pitch{28.0F}, zoom{1.0F};
-    Graph3DState() { model.z[0] = "sin(x)cos(y)"; }
+    g3d::GraphSet set{};
+    float zoom{1.0F};
+    std::array<std::string, g3d::GraphMemories> gmem{};       // encoded GraphSet (g3d::encode), empty = free
+    std::array<g3d::Window, g3d::WindowMemories> vmem{};
+    std::uint8_t vmemUsed{0};                                 // bit k: 3D V-Win k+1 stored
+    std::size_t memoryBytes() const noexcept { std::size_t n = 0; for (const auto& m : gmem) n += m.size(); return n; }
+    // Back to the initial state in place (no ~2 KB temporary on the stack).
+    void reset() {
+        for (std::size_t i = 0; i < g3d::Functions; ++i) set.fns[i] = g3d::emptyFunction(i);
+        set.window = g3d::Window{};
+        set.setup = g3d::Setup{};
+        zoom = 1.0F;
+        for (auto& m : gmem) { m.clear(); m.shrink_to_fit(); }
+        vmem.fill(g3d::Window{});
+        vmemUsed = 0;
+    }
 };
 
 // Dati condivisi da tutte le applicazioni. Risolve anche le variabili che

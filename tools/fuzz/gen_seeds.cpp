@@ -1,7 +1,8 @@
-// v1.13.1 — // Corpus iniziale: record del workspace delle fixture (v1.6.0-v1.12.0), un record
+// v1.13.1 (v1.14.0: record v9 con dati 3D, record v10 e semi di fuzz_graph3d) — // Corpus iniziale: record del workspace delle fixture (v1.6.0-v1.12.0), un record
 // attuale ricco e un progetto .pcgraph. Uso: gen_seeds <cartella con ws/ e pcg/>.
 #include "workspace.hpp"
 #include "graph_file.hpp"
+#include "graph3d_model.hpp"
 #include "expression.hpp"
 #include <cstdio>
 #include <string>
@@ -29,10 +30,42 @@ static const unsigned char f11r[] = {
 static const unsigned char f12[] = {
 #include "fixtures/workspace_v1_12_0.inc"
 };
+static const unsigned char f1131[] = {
+#include "fixtures/workspace_v1_13_1_graph3d.inc"
+};
 int main(int, char** argv) {
     std::string out = argv[1];
     put(out + "/ws/f6", f6, sizeof f6); put(out + "/ws/f8", f8, sizeof f8); put(out + "/ws/f9", f9, sizeof f9);
     put(out + "/ws/f10", f10, sizeof f10); put(out + "/ws/f11", f11, sizeof f11); put(out + "/ws/f11r", f11r, sizeof f11r); put(out + "/ws/f12", f12, sizeof f12);
+    put(out + "/ws/f1131", f1131, sizeof f1131);
+    // v1.14.0: record v10 with every kind of 3D graph, 3D G-Mem and 3D V-Win; seeds of fuzz_graph3d
+    {
+        Workspace w3;
+        g3d::GraphSet& gs = w3.graph3d.set;
+        gs.fns[0].kind = g3d::Kind::Line; gs.fns[0].form = 3; gs.fns[0].coef = {0, 0, 0, 1, 1, 1};
+        gs.fns[1].kind = g3d::Kind::Plane; gs.fns[1].form = 1; gs.fns[1].coef = {1, 2, 0, 1, 1, 0, 0, 1, 1};
+        gs.fns[2].kind = g3d::Kind::Sphere; gs.fns[2].coef = {0, 0, 0, 2};
+        gs.window.theta = -45; gs.setup.label = false;
+        w3.graph3d.gmem[0] = g3d::encode(gs);
+        g3d::GraphSet g2 = gs;
+        g2.fns[0].kind = g3d::Kind::Z; g2.fns[0].form = 0; g2.fns[0].expr[0] = "sin(x)cos(y)";
+        g2.fns[1].kind = g3d::Kind::Param; g2.fns[1].form = 0; g2.fns[1].expr = {"cos(s)", "sin(s)", "t"};
+        g2.fns[2].kind = g3d::Kind::Cone; g2.fns[2].form = 0; g2.fns[2].coef = {1, -2, 2, 0, 0, 0, 0, 0, 0};
+        w3.graph3d.gmem[5] = g3d::encode(g2);
+        w3.graph3d.vmem[1].xgrid = 10; w3.graph3d.vmemUsed = 2; w3.graph3d.zoom = 1.5F;
+        const auto r3 = serializeWorkspace(w3); put(out + "/ws/graph3d", r3.data(), r3.size());
+        for (const auto* set : {&gs, &g2}) {
+            const std::string e = std::string(1, '\0') + g3d::encode(*set);
+            put(out + "/g3d/set" + std::to_string(set == &gs ? 0 : 1), e.data(), e.size());
+        }
+        g2.fns[0].kind = g3d::Kind::Cylinder; g2.fns[0].coef = {1, -1, 1, 0, 0, 0, 0, 0, 0}; g2.fns[0].expr[0].clear();
+        g2.fns[1].kind = g3d::Kind::Plane; g2.fns[1].form = 0; g2.fns[1].coef = {0, 0, 1, 0, 0, 0, 0, 0, 0}; g2.fns[1].expr = {};
+        g2.fns[2].kind = g3d::Kind::Line; g2.fns[2].form = 1; g2.fns[2].coef = {-1, -2, 1, 1, 1, 0, 0, 0, 0};
+        const std::string e2 = std::string(1, '\0') + g3d::encode(g2);
+        put(out + "/g3d/set2", e2.data(), e2.size());
+        const std::string win = std::string(1, '\2') + g3d::encodeWindow(gs.window);
+        put(out + "/g3d/win", win.data(), win.size());
+    }
     Workspace ws;
     auto b = serializeWorkspace(ws); put(out + "/ws/default", b.data(), b.size());
     // a rich workspace via current deserialization of v11 then edits
