@@ -122,7 +122,7 @@ all'avvio compare "Memory ERROR: PSRAM disabilitata, avvio solo in SRAM".
 | Categoria | Pico 2 W | Pico Plus 2 W | Note |
 |---|---|---|---|
 | **Persistenti** (record del workspace) | cronologia 40, liste 255 (1 530 elementi in tutte le 26 liste, v1.11.0); matrici: lato 40, 400 elementi per matrice, 1 200 in tutto | cronologia **200**, liste **999** (fx-CG50) e **20 000** elementi in tutte le 26 liste (v1.11.0); matrici: lato **999**, **10 000** elementi per matrice, **20 000** in tutto | fissi per scheda: un record salvato è sempre rileggibile. Se all'avvio il record non entra nella memoria libera (PSRAM disattivata) il firmware parte vuoto e **non salva** (v1.10.0) |
-| **RAM** (scelti a runtime dai pool presenti) | curve 6000/24 000 punti, PICT 96 KB, 3D griglia 24 senza z-buffer, nessuna cache dei layer | curve **40 000/400 000** punti, PICT **1 MB**, 3D griglia **128 con z-buffer**, cache dei layer di GRAPH | con la PSRAM disabilitata la Plus usa i valori del Pico 2 W |
+| **RAM** (scelti a runtime dai pool presenti) | curve 6000/24 000 punti, PICT 96 KB, 3D 25 punti per lato senza z-buffer, nessuna cache dei layer | curve **40 000/400 000** punti, PICT **1 MB**, 3D **50 punti per lato con z-buffer**, cache dei layer di GRAPH e del 3D | con la PSRAM disabilitata la Plus usa i valori del Pico 2 W |
 | **Strutturali** (stack, tempo CPU) | 320 token, 32 livelli, editor 12 livelli, budget di valutazione 16 KB | identici | protezione dello stack da 32 KB |
 
 Le chat AI restano a 30 messaggi e le richieste/risposte nei limiti del
@@ -194,16 +194,18 @@ Calcolate da `PICO_FLASH_SIZE_BYTES` in `cmake/fxai_board.cmake`, ripetute in
   passo sul PC, immagine identica al pixel (test `graphics_memory_test`); la
   cache vale solo per i tasti cursore e si invalida con qualunque altro tasto,
   con il disegno in corso o con un cambio di finestra/impostazioni.
-- **3D Graph** (modalità `J` del menu): fino a 3 superfici z=f(x,y), finestra
-  3D, rotazione e zoom; campionamento a passi nel `tick()` (tastiera sempre
-  reattiva), mesh e z-buffer in PSRAM con griglie fino a 128; senza PSRAM
-  algoritmo del pittore e griglia fino a 24. Ogni superficie ha la sua famiglia
-  di colore (Z1 blu, Z2 rosso, Z3 verde, come le relazioni di GRAPH) con la
-  luminosità legata all'altezza.
+- **3D Graph** (modalità `J` del menu, completo dalla v1.14.0,
+  [GRAPH3D.md](GRAPH3D.md)): fino a 3 grafici di ogni tipo della fx-CG50
+  (modelli Line, Plane, Sphere, Cylinder, Cone; Z=, Param, Rot X/Y);
+  calcolo a passi nel `tick()` (tastiera sempre reattiva, AC interrompe),
+  reticoli, z-buffer condiviso (rette comprese) e immagine della scena per
+  TRACE/SKETCH in PSRAM con 50 punti per lato (il limite del manuale); senza
+  PSRAM algoritmo del pittore e 25 punti per lato. Colori FORMAT (Area/Line
+  Color) per grafico, taglio esatto al box.
 
-![3D Graph: lista](screenshots/40_graph3d_list.png) ![3D Graph: due superfici](screenshots/41_graph3d_surfaces.png)
+![3D Graph: sfera](screenshots/90_graph3d_sphere.png) ![3D Graph: sfera, cilindro e cono](screenshots/96_graph3d_cylinder_cone.png)
 
-Screenshot del simulatore host (`tests/sim/graph3d.txt`, profilo Pico Plus 2 W
+Screenshot del simulatore host (`tests/sim/graph3d_v114.txt`, profilo Pico Plus 2 W
 con il pool PSRAM simulato), prodotti dallo stesso codice del firmware.
 
 ## 7. Stack, guasti e due core

@@ -1,6 +1,6 @@
 # Documentazione
 
-## Documenti attuali (v1.13.1)
+## Documenti attuali (v1.14.0)
 
 | Documento | Contenuto |
 |---|---|
@@ -13,6 +13,8 @@
 | [TABLE.md](TABLE.md) | TABLE: lista delle relazioni, variabile range/lista, tipi Y=/r=/Param, editing delle righe, LISTMEM, persistenza |
 | [PICO_PLUS_2W.md](PICO_PLUS_2W.md) | Pimoroni Pico Plus 2 W: schede supportate, mappa della memoria, driver PSRAM, pool e limiti, partizioni della flash, grafica, stack, build, diagnostica |
 | [EQUATION.md](EQUATION.md) | guida della modalità EQUATION (SIML, POLY, SOLVER, VARS › EQUATION, differenze dalla fx-CG50) |
+| [GRAPH3D.md](GRAPH3D.md) | guida della modalità 3D Graph (v1.14.0: modelli, Z=, Param, Rot, V-Window, Setup, TRACE, G-Solve, memorie, differenze dalla fx-CG50) |
+| [HARDWARE_TEST_v1.14.0.md](HARDWARE_TEST_v1.14.0.md) | collaudo del 3D Graph della v1.14.0 sulla PicoCalc fisica (tempi per tipo e griglia, z-buffer in PSRAM, pittore, Memory ERROR, AC, TRACE, G-Solve; HW-170…HW-189) |
 | [HARDWARE_TEST_v1.13.1.md](HARDWARE_TEST_v1.13.1.md) | collaudo delle correzioni della v1.13.1 sulla PicoCalc fisica (distribuzioni, nCr, Σ, EQUATION, CSV, salvataggio interrotto, VARS; HW-160…HW-169) |
 | [HARDWARE_TEST_v1.13.0.md](HARDWARE_TEST_v1.13.0.md) | collaudo delle novità della v1.13.0 sulla PicoCalc fisica (List File, CALC/PROB/CONVERT, PxlTest(, Draw…, StoPict, CAPTURE, CATALOG, ENG, Base-N; HW-140…HW-159) |
 | [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md) | collaudo delle novità della v1.12.0 (EQUATION, editor Math, SET UP, record v8; HW-120…HW-134) |
@@ -32,13 +34,13 @@
 | [ROADMAP.md](ROADMAP.md) | cosa manca e priorità |
 | [CHANGELOG.md](CHANGELOG.md) | cronologia delle versioni |
 | [SYMBOL_CHEATSHEET.md](SYMBOL_CHEATSHEET.md) | simboli e notazione (contenuto dell'app Symbols) |
-| [reports/](reports/) | errori e correzioni della v1.13.1 ([ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md), [SVILUPPO_v1.13.1.md](reports/SVILUPPO_v1.13.1.md)); rapporti di sessione (v1.7.0, GRAPH v1.8.0, collaudo e TABLE v1.8.0), del consolidamento della v1.9.0 ([CONSOLIDAMENTO_v1.9.0.md](reports/CONSOLIDAMENTO_v1.9.0.md)) della v1.10.0 ([ANALISI_FONTI_v1.10.0.md](reports/ANALISI_FONTI_v1.10.0.md), [SVILUPPO_v1.10.0.md](reports/SVILUPPO_v1.10.0.md)) della v1.11.0 ([ANALISI_FONTI_v1.11.0.md](reports/ANALISI_FONTI_v1.11.0.md), [SVILUPPO_v1.11.0.md](reports/SVILUPPO_v1.11.0.md)) della v1.12.0 ([ANALISI_FONTI_v1.12.0.md](reports/ANALISI_FONTI_v1.12.0.md), [SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md), EQUATION) e della v1.13.0 ([ANALISI_FONTI_v1.13.0.md](reports/ANALISI_FONTI_v1.13.0.md), [SVILUPPO_v1.13.0.md](reports/SVILUPPO_v1.13.0.md), con la tabella di parità finale di Run-Matrix) |
+| [reports/](reports/) | completamento del 3D Graph della v1.14.0 ([ANALISI_FONTI_v1.14.0.md](reports/ANALISI_FONTI_v1.14.0.md), [SVILUPPO_v1.14.0.md](reports/SVILUPPO_v1.14.0.md), con la tabella di parità finale); errori e correzioni della v1.13.1 ([ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md), [SVILUPPO_v1.13.1.md](reports/SVILUPPO_v1.13.1.md)); rapporti di sessione (v1.7.0, GRAPH v1.8.0, collaudo e TABLE v1.8.0), del consolidamento della v1.9.0 ([CONSOLIDAMENTO_v1.9.0.md](reports/CONSOLIDAMENTO_v1.9.0.md)) della v1.10.0 ([ANALISI_FONTI_v1.10.0.md](reports/ANALISI_FONTI_v1.10.0.md), [SVILUPPO_v1.10.0.md](reports/SVILUPPO_v1.10.0.md)) della v1.11.0 ([ANALISI_FONTI_v1.11.0.md](reports/ANALISI_FONTI_v1.11.0.md), [SVILUPPO_v1.11.0.md](reports/SVILUPPO_v1.11.0.md)) della v1.12.0 ([ANALISI_FONTI_v1.12.0.md](reports/ANALISI_FONTI_v1.12.0.md), [SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md), EQUATION) e della v1.13.0 ([ANALISI_FONTI_v1.13.0.md](reports/ANALISI_FONTI_v1.13.0.md), [SVILUPPO_v1.13.0.md](reports/SVILUPPO_v1.13.0.md), con la tabella di parità finale di Run-Matrix) |
 | [releases/](releases/) | note delle GitHub Release (usate dal workflow di pubblicazione) |
 | [../CONTINUE.md](../CONTINUE.md) | stato e istruzioni per riprendere lo sviluppo |
 
 ## Versioni e branch
 
-Un solo branch per versione. `main` è la versione corrente (1.13.1); le versioni
+Un solo branch per versione. `main` è la versione corrente (1.14.0); le versioni
 precedenti hanno un branch storico `version/<n>` che non va modificato. Gli
 altri branch ancora presenti su GitHub (`version/v1.9.0`, `release/1.9.0`,
 `claude/*`, `ccr-*`) sono duplicati interamente contenuti in `main`, da

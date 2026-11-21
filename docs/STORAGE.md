@@ -4,7 +4,7 @@ Il firmware usa tre memorie con ruoli diversi.
 
 | Memoria | Contenuto | Modulo |
 |---|---|---|
-| Flash interna, **record del workspace** (due slot A/B) | impostazioni, variabili, Ans, cronologia Run-Matrix, liste, funzioni e Setup di GRAPH, memorie V-Window e grafiche, SKETCH, TABLE, coefficienti, conversazioni AI, **3D Graph**, archivio scelto per i file | `storage.hpp/.cpp`, `workspace.cpp` |
+| Flash interna, **record del workspace** (due slot A/B) | impostazioni, variabili, Ans, cronologia Run-Matrix, liste, funzioni e Setup di GRAPH, memorie V-Window e grafiche, SKETCH, TABLE, coefficienti, conversazioni AI, **3D Graph** (funzioni, V-Window, Setup, 3D G-Mem, 3D V-Win), archivio scelto per i file | `storage.hpp/.cpp`, `workspace.cpp` |
 | Flash interna, **LittleFS** (v1.9.0) | file utente interni: progetti GRAPH `.pcgraph`, immagini `.pcpict`, `.bmp`, file CSV di liste e matrici (v1.11.0) | `flash_fs.hpp/.cpp`, `third_party/littlefs` |
 | microSD della PicoCalc | progetti GRAPH `.pcgraph`, immagini `.pcpict`, esportazioni `.bmp`, file CSV (v1.11.0) | `file_store`, `fatfs_store`, `sd_card`, `sd_spi_pico.cpp`, `csv_io` |
 
@@ -68,7 +68,10 @@ restano intatti. Un ID non riconosciuto lascia la mappa della build.
 Due slot con CRC-32 e numero di sequenza: si scrive sempre lo slot più
 vecchio, quindi un'interruzione durante la scrittura lascia valido l'altro
 (test di interruzione in ogni punto in `storage_test`). Il record è alla
-**versione 9** (v1.13.0): aggiunge in coda List File, Sub Name e tipo
+**versione 10** (v1.14.0, completamento di 3D Graph): il blocco 3D della
+versione 5 non è più scritto in mezzo al record e il nuovo stato del 3D Graph
+va in coda (formato sotto); i record v5–v9 sono convertiti. La **versione 9**
+(v1.13.0) aggiunge in coda List File, Sub Name e tipo
 dell'ultima regressione, le variabili r e θ, le liste degli altri List File,
 function memory, Str, le variabili di Dyna/Recursion/TVM e la formula an+1,
 le celle decimali delle memorie e, per le righe della cronologia, ENG, i
@@ -93,8 +96,11 @@ sono nei test (`tests/fixtures/workspace_v1_8_0.inc`,
 la migrazione v6→v7 è provata da `lists_csv_test`), come il record v7 generato
 dai sorgenti della v1.11.0 (`tests/fixtures/workspace_v1_11_0.inc`, migrazione
 v7→v8 in `equation_v112_test`; `tests/fixtures/workspace_v1_11_0_run_matrix.inc`,
-v7→v9 in `run_matrix_v112_test`) e il record v9 generato dai sorgenti della v1.13.0
-(`tests/fixtures/workspace_v1_12_0.inc`, migrazione v8→v9 in `run_matrix_v112_test`);
+v7→v9 in `run_matrix_v112_test`), il record v9 generato dai sorgenti della v1.13.0
+(`tests/fixtures/workspace_v1_12_0.inc`, migrazione v8→v9 in `run_matrix_v112_test`)
+e il record v9 con dati 3D non predefiniti generato dai sorgenti della v1.13.1
+(`tests/fixtures/workspace_v1_13_1_graph3d.inc`; la migrazione v1…v9 → v10 di
+tutte le fixture è in `graph3d_v114_test`);
 le 6 funzioni della v1.6.0 diventano Y1–Y6 e la griglia booleana diventa Grid
 On/Off; una V-Window che non supera i controlli viene corretta o sostituita da
 quella iniziale, senza scartare il resto dei dati.
@@ -182,6 +188,38 @@ caricato, ma il record v9 salvato subito dopo era rifiutato all'avvio
 successivo (workspace azzerato). Il formato non cambia (versione 9); i record
 validi si leggono come prima (fixture v1.6.0–v1.12.0); il fuzzing
 (`tools/fuzz/fuzz_workspace.cpp`) controlla l'andata e ritorno di ogni record accettato.
+
+### Blocco della versione 10 (v1.14.0, 3D Graph)
+
+In coda al blocco della versione 9; dalla versione 10 il blocco 3D della
+versione 5 (dopo il byte dell'archivio dei file) non viene più scritto.
+
+| Campo | Contenuto |
+|---|---|
+| `u32` n, n byte | stato del 3D Graph codificato con `g3d::encode` (≤ 16 KB, sotto) |
+| `f32` | zoom (0,05–20) |
+| `u8` | 3D V-Win usate (bit k = memoria k+1, < 64) |
+| 6 × (`u32` n, n byte) | 3D V-Win 1–6 (`g3d::encodeWindow`) |
+| 20 × (`u32` n, n byte) | 3D G-Mem 1–20 (`g3d::encode`, vuota = libera; in tutto ≤ 12 KB sul Pico 2 W, 64 KB sulla Plus) |
+
+`g3d::encode` (`graph3d_model.cpp`): `u8` formato (1); per ognuna delle tre
+funzioni `u8` tipo (0 nessuno, 1 Z=, 2 Param, 3 Rot X, 4 Rot Y, 5 Line,
+6 Plane, 7 Sphere, 8 Cylinder, 9 Cone), `u8` selezione, `u8` modulo dei
+coefficienti, `u8` Line Color, `u8` Area Color, 3 stringhe (`u16` + byte, ≤
+1000), 9 × `f64` coefficienti; poi la finestra (12 × `f64`: X, Y, Z, S, T
+min/max, θ, φ; 4 × `u8`: Xgrid, Ygrid, Sgrid, Tgrid) e il Setup (`u8` Axes
+1 | Box 2 | Label 4, `u8` Plot/LineCol). `g3d::encodeWindow` è `u8` formato (1)
+più la stessa finestra. La lettura controlla ogni campo con le regole del
+manuale (modelli validi secondo 16-10…16-12, colori non entrambi Clear, finestra
+valida, Param con tre espressioni, lunghezze, budget): un record non valido è
+rifiutato per intero.
+
+Conversione dei record v5–v9: le superfici Z1–Z3 diventano grafici Z= con la
+stessa selezione (righe vuote: nessun grafico), la finestra X/Y/Z resta, la
+griglia in celle (5–128) diventa Xgrid = Ygrid = celle + 1 punti (al più 50),
+yaw e pitch diventano θ = −(yaw + 90°) e φ = 90° − pitch (la stessa
+orientazione), lo zoom resta. Con valori oltre 1E98 (accettati dalla v1.9.0)
+si usa la finestra iniziale con la stessa vista.
 
 ## File CSV (v1.11.0)
 

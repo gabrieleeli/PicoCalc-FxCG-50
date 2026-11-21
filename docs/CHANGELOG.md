@@ -1,5 +1,71 @@
 # Changelog
 
+## v1.14.0 — completamento totale di 3D Graph
+
+Base: tag `v1.13.1` (commit `62b3f8f` = `main`). Il **3D Graph** raggiunge la
+parità con la fx-CG50 (capitolo 16 del manuale software, OS 3.x): ogni voce
+della tabella di parità è presente o è una differenza inevitabile
+documentata. Analisi: [reports/ANALISI_FONTI_v1.14.0.md](reports/ANALISI_FONTI_v1.14.0.md);
+rapporto e tabella finale: [reports/SVILUPPO_v1.14.0.md](reports/SVILUPPO_v1.14.0.md);
+guida: [GRAPH3D.md](GRAPH3D.md). **Nessuna prova su hardware fisico**:
+procedura [HARDWARE_TEST_v1.14.0.md](HARDWARE_TEST_v1.14.0.md) (HW-170…HW-189).
+
+### Nuovo
+- **Tipi di grafico**: modelli Line (EXPRESS, VECTOR, P&V, POINTS), Plane
+  (EXPRESS, VECTOR, POINTS), Sphere (FACTOR, EXPAND), Cylinder, Cone con le
+  condizioni «Invalid Setting» del manuale; input diretto Z=, Param (Xst,
+  Yst, Zst in S e T), Rot X e Rot Y (solidi di rotazione); fino a tre grafici
+  di tipo qualsiasi nella stessa scena.
+- **Lista**: `1:`…`3:` con il `:` evidenziato, SELECT, DELETE con conferma,
+  TYPE e ←/→, schermata Select Template, 3D-GMEM STORE/RECALL 1–20, DRAW o
+  EXE, FORMAT con Line Color e Area Color (Clear compreso).
+- **V-Window 3D**: X/Y/Z, Xgrid/Ygrid (2–50), S/T con Sgrid/Tgrid, Angle θ e
+  φ in gradi, INITIAL, 3D-VMEM 1–6, «Out of Domain» e «Invalid Setting».
+- **SET UP** della modalità: Axes, Box, Label, Plot/LineCol, Input/Output,
+  Angle, Display; tasti • e , sul grafico.
+- **Grafico**: rotazione con i tasti (θ e φ della V-Window), ROTATE
+  automatico (due giri, AC), ZOOM IN/OUT/VIEW-X/VIEW-Y/VIEW-Z/ORIGINAL,
+  SKETCH (Cls, Plot, Text), PICTURE STORE (Pict 1–20), CAPTURE (SHIFT 7),
+  G⇔T; superficie nell'Area Color con il reticolo nel Line Color, scatola,
+  etichette e indicatore degli assi.
+- **TRACE** su ogni tipo con X/Y/Z, Next/Back e finestra delle coordinate.
+- **G-Solve**: CROSS (sezioni analitiche X/Y/Z, UP/DOWN, viste), INTSECT
+  (retta–retta, retta–piano, piano–piano; NOT FOUND, INFINITE) e RELATION
+  (intersecanti, perpendicolari, parallele, sghembe, coincidenti…).
+- **MEMORY**: cancellazione separata di 3D Graph, 3D G-Mem e 3D V-Win.
+
+### Motore e memoria
+- `graph3d_model` (nuovo, puro): modello, validazione, geometria canonica,
+  INTSECT/RELATION analitici, codifica delle G-Mem e del record.
+- `graph3d` (riscritto): reticoli di ogni tipo, taglio esatto al box,
+  proiezione θ/φ, z-buffer condiviso da superfici, reticoli e rette (PSRAM)
+  o pittore (SRAM), sezioni CROSS; calcolo progressivo interrotto da AC;
+  immagine della scena in PSRAM per TRACE/SKETCH.
+- Limiti: 50 punti per lato con la PSRAM, 25 senza; 3D G-Mem 64 KB / 12 KB;
+  Memory ERROR senza memoria trattenuta.
+
+### Workspace
+- **Record v10**: il blocco 3D della versione 5 non è più scritto in mezzo al
+  record; il nuovo stato del 3D Graph va in coda. I record v5–v9 vengono
+  convertiti (Z1–Z3 → grafici Z=, griglia in punti, yaw/pitch → θ/φ con la
+  stessa orientazione). Fixture nuova `tests/fixtures/workspace_v1_13_1_graph3d.inc`
+  generata con i sorgenti della v1.13.1.
+
+### Test e strumenti
+- `tests/graph3d_v114_test.cpp` (535 controlli per profilo), `graph3d_test`
+  portato alla nuova API, `oom_test`, `architecture_test` (gruppo 3D),
+  `limits_smoke`; fuzzing `tools/fuzz/fuzz_graph3d.cpp` (ha trovato una
+  conversione di NaN in `int` con coordinate enormi, corretta con un test);
+  simulatore `tests/sim/graph3d_v114.txt` (screenshot 88–104) e
+  `tests/sim/graph3d.txt` (40–43 rigenerati).
+
+### Cambiamenti di comportamento
+- La lista del 3D Graph è vuota al primo avvio (prima Z1 = sin(x)cos(y)).
+- EXE sulla lista disegna (come la fx-CG50); per modificare una riga ←/→ o
+  TYPE; digitando su una riga vuota o Z= si apre l'input di Z= (estensione).
+- La griglia è il numero di punti (2–50) per asse; prima celle 5–128.
+- AUTO sull'intervallo z è in OPTN › Z-AUTO (estensione).
+
 ## v1.13.1 — versione di correzione
 
 Base: tag `v1.13.0` (commit `a72d901` = `main`). **Nessuna funzione nuova**:

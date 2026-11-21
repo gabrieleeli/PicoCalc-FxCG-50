@@ -10,9 +10,26 @@ Plus 2 W** (RP2350B, 8 MB di PSRAM, 16 MB di flash); profilo alternativo:
 > ogni modalità è reimplementata in modo indipendente. La documentazione Casio è
 > usata solo come riferimento di comportamento.
 
-![Menu principale](docs/screenshots/01_main_menu.png) ![Run-Matrix](docs/screenshots/12_run_matrix_exact.png) ![Matrici](docs/screenshots/46_run_matrix_matrices.png) ![Comandi grafici](docs/screenshots/61_graph_commands.png) ![CATALOG](docs/screenshots/79_catalog.png) ![Base-N](docs/screenshots/60_base_n.png) ![Equation](docs/screenshots/70_equation_poly_complex.png) ![Graph](docs/screenshots/22_graph_multi.png) ![3D Graph](docs/screenshots/41_graph3d_surfaces.png)
+![Menu principale](docs/screenshots/01_main_menu.png) ![Run-Matrix](docs/screenshots/12_run_matrix_exact.png) ![Matrici](docs/screenshots/46_run_matrix_matrices.png) ![Comandi grafici](docs/screenshots/61_graph_commands.png) ![CATALOG](docs/screenshots/79_catalog.png) ![Base-N](docs/screenshots/60_base_n.png) ![Equation](docs/screenshots/70_equation_poly_complex.png) ![Graph](docs/screenshots/22_graph_multi.png) ![3D Graph](docs/screenshots/90_graph3d_sphere.png) ![3D Graph: INTSECT](docs/screenshots/93_graph3d_intsect.png) ![3D Graph: CROSS](docs/screenshots/97_graph3d_cross.png)
 
-## Stato (v1.13.1)
+## Stato (v1.14.0)
+
+La **v1.14.0** porta il **3D Graph** alla parità con la fx-CG50 (capitolo 16
+del manuale, tabella voce per voce in
+[docs/reports/SVILUPPO_v1.14.0.md](docs/reports/SVILUPPO_v1.14.0.md), guida
+[docs/GRAPH3D.md](docs/GRAPH3D.md)): modelli **Line**, **Plane**, **Sphere**,
+**Cylinder**, **Cone** con tutti i moduli di input e le condizioni «Invalid
+Setting», grafici **Z=**, **Param** (S, T), **Rot X**/**Rot Y**; lista con
+SELECT/DELETE/TYPE/**3D-GMEM**/DRAW e **FORMAT** (Line/Area Color);
+**V-Window 3D** con Xgrid/Ygrid, S/T e gli angoli **θ/φ**, INITIAL e
+**3D-VMEM**; **SET UP** con Axes, Box, Label; rotazione con i tasti e
+**ROTATE** automatico, **ZOOM** con VIEW-X/Y/Z e ORIGINAL, **SKETCH**,
+**PICTURE**, **TRACE** con le coordinate, **G-Solve** **CROSS**, **INTSECT**
+(NOT FOUND, INFINITE) e **RELATION**; z-buffer condiviso da tutti i grafici
+nella PSRAM della Plus, taglio esatto al box. Nuovo record del workspace
+**v10** (i record v1–v9 si leggono e i dati 3D vengono convertiti).
+Novità: [docs/CHANGELOG.md](docs/CHANGELOG.md) · fonti:
+[docs/reports/ANALISI_FONTI_v1.14.0.md](docs/reports/ANALISI_FONTI_v1.14.0.md).
 
 La **v1.13.1** è una versione di correzione della v1.13.0, senza funzioni
 nuove: revisione completa (test, sanitizer, analisi statica, fuzzing,
@@ -52,10 +69,10 @@ fonti: [docs/reports/ANALISI_FONTI_v1.13.0.md](docs/reports/ANALISI_FONTI_v1.13.
 | | Stato |
 |---|---|
 | Compilazione UF2 (Pico SDK 2.2.0) per Pimoroni Pico Plus 2 W e per Pico 2 W | ✅ entrambe compilano, nessun warning; cartelle e UF2 separati per scheda |
-| Test automatici host | ✅ 46 test per ciascun profilo di scheda: 44 suite C++ (12 223 controlli sulla Plus e 12 217 sul Pico 2 W, più le ≈ 334 000 verifiche di integrità dello stress dell'allocatore su due thread) e l'interoperabilità FAT/exFAT con fsck e mtools (41); tutti superati anche con AddressSanitizer/UBSan (UBSan bloccante dalla v1.13.1), allocatore su due thread con ThreadSanitizer; fuzzing con libFuzzer in `tools/fuzz`; gli stessi test girano su GitHub Actions a ogni push |
+| Test automatici host | ✅ @TESTS@ test per ciascun profilo di scheda: @SUITES@ suite C++ (@PLUS@ controlli sulla Plus e @P2W@ sul Pico 2 W, più le ≈ 334 000 verifiche di integrità dello stress dell'allocatore su due thread) e l'interoperabilità FAT/exFAT con fsck e mtools (41); tutti superati anche con AddressSanitizer/UBSan (UBSan bloccante dalla v1.13.1), allocatore su due thread con ThreadSanitizer; fuzzing con libFuzzer in `tools/fuzz`; gli stessi test girano su GitHub Actions a ogni push |
 | Test relay AI | ✅ 15 test (SDK ufficiali contro API simulate, TLS reale in loopback) |
-| Parità con la fx-CG50 | Run-Matrix (v1.13.0) ed EQUATION (v1.12.0): ✅ ogni voce della tabella di parità presente o differenza inevitabile documentata ([Run-Matrix](docs/reports/SVILUPPO_v1.13.0.md#5-tabella-di-parit%C3%A0-finale), [EQUATION](docs/reports/SVILUPPO_v1.12.0.md#4-tabella-di-parità-finale)); ❌ **non completa** per le altre modalità — GRAPH in [docs/GRAPH_PARITY.md](docs/GRAPH_PARITY.md), elenco in [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md) |
-| **Prova su PicoCalc fisica** | ❌ **non ancora eseguita**, né con il Pico Plus 2 W né con il Pico 2 W: display, tastiera, flash, PSRAM, microSD, Wi-Fi e TLS vanno collaudati con [docs/HARDWARE_TEST_v1.13.1.md](docs/HARDWARE_TEST_v1.13.1.md), [v1.13.0](docs/HARDWARE_TEST_v1.13.0.md), [v1.12.0](docs/HARDWARE_TEST_v1.12.0.md), [v1.11.0](docs/HARDWARE_TEST_v1.11.0.md), [v1.10.0](docs/HARDWARE_TEST_v1.10.0.md), [v1.9.0](docs/HARDWARE_TEST_v1.9.0.md) e [v1.8.0](docs/HARDWARE_TEST_v1.8.0.md), diagnostica SYSTEM → DIAG |
+| Parità con la fx-CG50 | Run-Matrix (v1.13.0), EQUATION (v1.12.0) e 3D Graph (v1.14.0): ✅ ogni voce della tabella di parità presente o differenza inevitabile documentata ([Run-Matrix](docs/reports/SVILUPPO_v1.13.0.md#5-tabella-di-parit%C3%A0-finale), [EQUATION](docs/reports/SVILUPPO_v1.12.0.md#4-tabella-di-parità-finale), [3D Graph](docs/reports/SVILUPPO_v1.14.0.md#5-tabella-di-parità-finale)); ❌ **non completa** per le altre modalità — GRAPH in [docs/GRAPH_PARITY.md](docs/GRAPH_PARITY.md), elenco in [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md) |
+| **Prova su PicoCalc fisica** | ❌ **non ancora eseguita**, né con il Pico Plus 2 W né con il Pico 2 W: display, tastiera, flash, PSRAM, microSD, Wi-Fi e TLS vanno collaudati con [docs/HARDWARE_TEST_v1.14.0.md](docs/HARDWARE_TEST_v1.14.0.md), [v1.13.1](docs/HARDWARE_TEST_v1.13.1.md), [v1.13.0](docs/HARDWARE_TEST_v1.13.0.md), [v1.12.0](docs/HARDWARE_TEST_v1.12.0.md), [v1.11.0](docs/HARDWARE_TEST_v1.11.0.md), [v1.10.0](docs/HARDWARE_TEST_v1.10.0.md), [v1.9.0](docs/HARDWARE_TEST_v1.9.0.md) e [v1.8.0](docs/HARDWARE_TEST_v1.8.0.md), diagnostica SYSTEM → DIAG |
 
 Dettagli: [docs/BUILD_STATUS.md](docs/BUILD_STATUS.md) · stato per funzione:
 [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md) · scheda e memoria:
@@ -70,7 +87,7 @@ Dettagli: [docs/BUILD_STATUS.md](docs/BUILD_STATUS.md) · stato per funzione:
 | Matrici e vettori (Mat/Vct A–Z, Ans) | lato fino a 999, 10 000 elementi per matrice, 20 000 in tutto | lato fino a 40, 400 elementi per matrice, 1 200 in tutto |
 | Punti delle curve GRAPH | 400 000 per schermata (40 000 per grafico), layer statici in cache durante TRACE | 24 000 (6000 per grafico) |
 | Immagini PICT, poligoni pieni | 1 MB, 4096 vertici | 96 KB, 256 vertici |
-| 3D Graph | griglia fino a 128, z-buffer | griglia 24, algoritmo del pittore |
+| 3D Graph | 50 punti per lato (come la fx-CG50), z-buffer, immagine della scena per TRACE | 25 punti per lato, algoritmo del pittore |
 | Flash | firmware 4 MB, archivio interno LittleFS ≈ 11 MB, workspace 2 × 512 KB | firmware 2 MB, LittleFS ≈ 1,9 MB, workspace 2 × 64 KB |
 
 Se la PSRAM non supera il self-test all'avvio il firmware parte comunque, con i
@@ -85,9 +102,9 @@ viene riconosciuto (capacità reale della flash) e non scrive oltre il chip.
 | 2 | **Statistics** | **List 1–26** con i sottonomi (riga SUB) e i file **CSV** (OPTN), fino a 999 elementi per lista sulla Pico Plus 2 W (255 sul Pico 2 W), SET XList/YList, 1-Var/2-Var, 9 regressioni (ax+b, Med-Med, X², X³, X⁴, Log, Exp, ab^x, Power) con grafico e copia in GRAPH, scatter/xyLine/istogramma/box plot, distribuzioni (normale, binomiale, Poisson, t, χ², F), test Z/t e intervalli |
 | 5 | **Graph** | Y1–Y20: Y=, r=, parametriche, X=, 8 tipi di disequazioni (Union/Intsect), intervalli, sovrapposizioni [A=…], grafici da lista, funzioni composte; TRACE, ZOOM (13 funzioni), V-Window con memorie, SKETCH, G-SOLVE (ROOT, MAX, MIN, Y-ICEPT, INTSECT, Y-CAL, X-CAL, ∫dx anche tra radici/intersezioni), Modify, memorie grafiche, PICT e sfondo, progetti `.pcgraph` sulla microSD o nella flash interna — vedi [docs/GRAPH_PARITY.md](docs/GRAPH_PARITY.md) |
 | 7 | **Table** | tabelle di Y=, r= e parametriche da Start/End/Step o da una lista (fino a 999 righe), derivate, EDIT e ROW DELETE/INSERT/ADD, LISTMEM, GPH-CON/GPH-PLT — vedi [docs/TABLE.md](docs/TABLE.md) |
-| J | **3D Graph** | superfici z = f(x, y) Z1–Z3 con colori per funzione, finestra 3D (x, y, z), griglia 5–128, rotazione con le frecce e zoom senza ricalcolo, AUTO sull'intervallo z, VIEW iniziale; calcolo progressivo con avanzamento, z-buffer con la PSRAM e algoritmo del pittore senza; salvato nel workspace — vedi [docs/PICO_PLUS_2W.md](docs/PICO_PLUS_2W.md#6-grafica) |
+| J | **3D Graph** | parità con la fx-CG50 (v1.14.0, [docs/GRAPH3D.md](docs/GRAPH3D.md)): fino a 3 grafici fra modelli Line, Plane, Sphere, Cylinder, Cone e Z=, Param, Rot X/Y; FORMAT, 3D-GMEM, V-Window con θ/φ e 3D-VMEM, SET UP, rotazione e ROTATE, ZOOM e viste, TRACE, SKETCH, G-Solve CROSS/INTSECT/RELATION, PICTURE; z-buffer con la PSRAM, pittore senza
 | A | **Equation** | SIML 2–6 incognite e POLY grado 2–6 con coefficienti esatti e complessi, soluzioni esatte, ×k, Infinitely Many Solutions con la formula, Complex Mode; SOLVER su qualsiasi variabile (Lower/Upper, Lft/Rgt); VARS › SimRes/PlyRes; disequazioni (estensione) — [docs/EQUATION.md](docs/EQUATION.md) |
-| F | **Memory** | uso della memoria, cancellazione selettiva (anche delle funzioni 3D e di matrici e vettori), salvataggio |
+| F | **Memory** | uso della memoria, cancellazione selettiva (anche di 3D Graph, 3D G-Mem, 3D V-Win, matrici e vettori), salvataggio |
 | G | **System** | Input/Output (Math/Line), angolo, formato display, modo complesso, frazioni, retroilluminazione, archivio dei file (microSD o flash interna), Wi-Fi, relay AI; INFO (SRAM, PSRAM) e DIAG (memoria, PSRAM, allocatore su 2 core, flash, LCD, microSD, flash interna, GRAPH) |
 | K | **Conversion** | conversioni metriche (10 grandezze) |
 | M | **AI Chat** | conversazione con Claude o ChatGPT tramite relay HTTPS |
@@ -169,7 +186,7 @@ Senza rete tutte le funzioni matematiche restano disponibili.
 [GRAPH_PARITY](docs/GRAPH_PARITY.md) · [GRAPH_ENGINE](docs/GRAPH_ENGINE.md) ·
 [STORAGE](docs/STORAGE.md) · [PCGRAPH_FORMAT](docs/PCGRAPH_FORMAT.md) ·
 [TABLE](docs/TABLE.md) · [PICO_PLUS_2W](docs/PICO_PLUS_2W.md) ·
-[EQUATION](docs/EQUATION.md) · [ERRORI v1.13.1](docs/reports/ERRORI_v1.13.1.md) · [HARDWARE_TEST v1.13.1](docs/HARDWARE_TEST_v1.13.1.md) · [v1.13.0](docs/HARDWARE_TEST_v1.13.0.md) · [v1.12.0](docs/HARDWARE_TEST_v1.12.0.md) · [v1.11.0](docs/HARDWARE_TEST_v1.11.0.md) · [v1.10.0](docs/HARDWARE_TEST_v1.10.0.md) · [v1.9.0](docs/HARDWARE_TEST_v1.9.0.md) · [v1.8.0](docs/HARDWARE_TEST_v1.8.0.md) ·
+[EQUATION](docs/EQUATION.md) · [GRAPH3D](docs/GRAPH3D.md) · [ERRORI v1.13.1](docs/reports/ERRORI_v1.13.1.md) · [HARDWARE_TEST v1.14.0](docs/HARDWARE_TEST_v1.14.0.md) · [v1.13.1](docs/HARDWARE_TEST_v1.13.1.md) · [v1.13.0](docs/HARDWARE_TEST_v1.13.0.md) · [v1.12.0](docs/HARDWARE_TEST_v1.12.0.md) · [v1.11.0](docs/HARDWARE_TEST_v1.11.0.md) · [v1.10.0](docs/HARDWARE_TEST_v1.10.0.md) · [v1.9.0](docs/HARDWARE_TEST_v1.9.0.md) · [v1.8.0](docs/HARDWARE_TEST_v1.8.0.md) ·
 [GRAPHICS_ENGINE](docs/GRAPHICS_ENGINE.md) · [MATH_ENGINE](docs/MATH_ENGINE.md) ·
 [AI_INTEGRATION](docs/AI_INTEGRATION.md) · [TESTING](docs/TESTING.md) ·
 [ROADMAP](docs/ROADMAP.md) · [CHANGELOG](docs/CHANGELOG.md) ·

@@ -1,6 +1,10 @@
-# Roadmap — dopo la v1.13.1
+# Roadmap — dopo la v1.14.0
 
-La v1.13.1 corregge gli errori trovati nella revisione completa della v1.13.0
+La v1.14.0 completa il **3D Graph** (capitolo 16 del manuale fx-CG50: modelli
+Line, Plane, Sphere, Cylinder, Cone, grafici Z=, Param, Rot X/Y, V-Window con
+θ e φ, Setup, FORMAT, 3D G-Mem e V-Mem, rotazione e viste, TRACE, G-Solve
+CROSS/INTSECT/RELATION; [GRAPH3D.md](GRAPH3D.md),
+[reports/SVILUPPO_v1.14.0.md](reports/SVILUPPO_v1.14.0.md)). La v1.13.1 corregge gli errori trovati nella revisione completa della v1.13.0
 ([reports/ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md)); restano aperti i
 punti A1–A6 di quel documento (A2: precisione di HypergeoPD con argomenti
 tutti grandi; A3: risultati sotto 1E−99 in Run-Matrix da verificare su una
@@ -9,8 +13,9 @@ nell'equazione, Time Out solo dopo un calcolo lungo).
 
 Il progetto **non** ha la parità con la Casio fx-CG50 e non va presentato come
 tale: le tabelle sotto elencano ciò che manca. Fanno eccezione **Run-Matrix**
-(dalla v1.13.0, [reports/SVILUPPO_v1.13.0.md](reports/SVILUPPO_v1.13.0.md)) ed
-**EQUATION** (dalla v1.12.0, [reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md)),
+(dalla v1.13.0, [reports/SVILUPPO_v1.13.0.md](reports/SVILUPPO_v1.13.0.md)),
+**EQUATION** (dalla v1.12.0, [reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md))
+e **3D Graph** (dalla v1.14.0, [reports/SVILUPPO_v1.14.0.md](reports/SVILUPPO_v1.14.0.md)),
 con ogni voce della tabella di parità presente o documentata come differenza
 inevitabile. Il documento storico
 `archive/CG50_PARITY_ROADMAP.md` descrive gli obiettivi delle versioni precedenti.
@@ -119,7 +124,7 @@ Stato e progetto di ogni modalità in [APPLICATIONS_ARCHITECTURE.md](APPLICATION
 | Financial | schermate di TVM, flussi di cassa e ammortamento (le funzioni di calcolo sono in `calc_library` dalla v1.13.0 e Run-Matrix le usa) |
 | Spreadsheet, eActivity, Program | modelli pronti; l'area file su microSD esiste (servizio Files, v1.8.0); Program richiede l'interprete |
 | Geometry, Picture Plot | modelli pronti |
-| 3D Graph | disponibile dalla v1.9.0 per z = f(x, y); mancano sfere, piani, rette e superfici parametriche della fx-CG50, TRACE sulla superficie |
+| 3D Graph | **parità completata nella v1.14.0** ([GRAPH3D.md](GRAPH3D.md)); differenze inevitabili: griglia ≤ 25 e pittore senza PSRAM, tasti della PicoCalc; collaudo su hardware (HW-170…HW-189) |
 | Link | trasferimento del record del workspace via USB seriale (formato proprio) |
 | Python | MicroPython come libreria con heap separato |
 | E-CON4 | non realizzabile (data logger esterno); al più import CSV nelle liste |

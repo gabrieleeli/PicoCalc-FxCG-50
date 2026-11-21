@@ -1,10 +1,10 @@
-# Test — v1.13.1 (versione di correzione: un test per ogni errore di ERRORI_v1.13.1, UBSan bloccante, fuzzing; v1.13.0: completamento totale di Run-Matrix)
+# Test — v1.14.0 (completamento totale di 3D Graph: `graph3d_v114_test`, record v10, fuzzing del 3D; v1.13.1: un test per ogni errore di ERRORI_v1.13.1, UBSan bloccante)
 
 ## Cosa viene provato e dove
 
 | Livello | Strumento | Stato |
 |---|---|---|
-| Logica portabile (motore, editor, app, grafici, tabelle, 3D, file, storage, memoria, protocollo AI) | test host C++ (CTest), **per entrambi i profili di scheda** (`FXAI_TEST_BOARD=PICO_PLUS_2W` e `PICO2W`) | eseguito: 44 suite; 12 223 controlli (Plus) / 12 217 (Pico 2 W) più ≈ 333 000 verifiche dello stress dell'allocatore (`mem_pools_smoke`) |
+| Logica portabile (motore, editor, app, grafici, tabelle, 3D, file, storage, memoria, protocollo AI) | test host C++ (CTest), **per entrambi i profili di scheda** (`FXAI_TEST_BOARD=PICO_PLUS_2W` e `PICO2W`) | eseguito: @SUITES@ suite; @PLUS@ controlli (Plus) / @P2W@ (Pico 2 W) più ≈ 333 000 verifiche dello stress dell'allocatore (`mem_pools_smoke`) |
 | Integrazione continua | GitHub Actions (`.github/workflows/release.yml`, `ubuntu-24.04`) | a ogni push: test host dei due profili, ASan/UBSan, TSan, relay, firmware dei due moduli, pacchetto |
 | Architettura (registro ↔ sorgenti ↔ firmware) | `architecture_test` | eseguito |
 | Stessi test con AddressSanitizer + UBSan | `--sanitize` (dalla v1.13.1 UBSan è bloccante: `-fno-sanitize-recover=undefined`) | eseguito su entrambi i profili |
@@ -12,14 +12,14 @@
 | Memoria esaurita con `operator new` instradato nei pool | `oom_test` (SRAM simulata limitata, senza PSRAM) | eseguito |
 | PSRAM | pool PSRAM simulato sul PC (arena TLSF; 8 MB nei test di sistema e nel simulatore), self-test con modelli di guasto | eseguito; il chip APS6404L reale non è provato |
 | Flash interna | modello NOR (`storage::RamFlash`: erase a 0xFF, program che azzera bit, interruzione dopo n byte) per il record A/B e per LittleFS | eseguito; la flash reale non è provata |
-| Interfaccia | simulatore host + screenshot PNG | eseguito (`docs/screenshots/`: Run-Matrix 12–19, 44–51 e 52–61, EQUATION 08 e 62–76, GRAPH/TABLE 06, 07, 20–37, 3D Graph 40–43) |
+| Interfaccia | simulatore host + screenshot PNG | eseguito (`docs/screenshots/`: Run-Matrix 12–19, 44–51 e 52–61, EQUATION 08 e 62–76, GRAPH/TABLE 06, 07, 20–37, 3D Graph 40–43 e 88–104) |
 | microSD (protocollo SD in SPI + FatFs) | scheda SD simulata nei test host | eseguito (`sd_fatfs_test`); bus SPI0 reale non provato |
 | Interoperabilità FAT/exFAT | `sd_interop_test` (immagini con mkfs.fat/mkfs.exfat, fsck, mtools) | eseguito: 41 controlli |
 | Relay AI | `unittest` Python con SDK ufficiali e API simulate, TLS in loopback | eseguito: 15 test |
 | Compilazione firmware RP2350 | Pico SDK 2.2.0, `scripts/build.sh --board pico_plus_2w` e `--board pico2w` | eseguita, nessun warning, `picotool info` verificato ([BUILD_STATUS.md](BUILD_STATUS.md)) |
 | Stack sul target | `-fstack-usage` su tutto il firmware | eseguito nella v1.13.1: frame massimo 2 016 byte (`SystemApp::enter`) su 32 KB; valutatore ricorsivo ≤ 328 byte per livello, limitato dal budget di 16 KB |
-| Fuzzing (v1.13.1) | libFuzzer + ASan + UBSan (`tools/fuzz`, `run_fuzz.sh`): parser e valutatori, forma esatta contro decimale, workspace con andata e ritorno, CSV, `.pcgraph`, EQUATION, sequenze di tasti | eseguito sul profilo Plus (conteggi in [reports/SVILUPPO_v1.13.1.md](reports/SVILUPPO_v1.13.1.md)) |
-| Collaudo fisico | procedure [HARDWARE_TEST_v1.13.1.md](HARDWARE_TEST_v1.13.1.md), [HARDWARE_TEST_v1.13.0.md](HARDWARE_TEST_v1.13.0.md), [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md), [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md), [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md), [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) e [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md), SYSTEM → DIAG | **non eseguito: in attesa dei risultati dal dispositivo** |
+| Fuzzing (v1.13.1, v1.14.0) | libFuzzer + ASan + UBSan (`tools/fuzz`, `run_fuzz.sh`): parser e valutatori, forma esatta contro decimale, workspace con andata e ritorno (anche record v10), CSV, `.pcgraph`, EQUATION, sequenze di tasti; **`fuzz_graph3d`** (insiemi delle 3D G-Mem con geometria, sezioni e disegno, espressioni Z=/Param, finestre) | eseguito sul profilo Plus (conteggi in [reports/SVILUPPO_v1.13.1.md](reports/SVILUPPO_v1.13.1.md) e [reports/SVILUPPO_v1.14.0.md](reports/SVILUPPO_v1.14.0.md)) |
+| Collaudo fisico | procedure [HARDWARE_TEST_v1.14.0.md](HARDWARE_TEST_v1.14.0.md), [HARDWARE_TEST_v1.13.1.md](HARDWARE_TEST_v1.13.1.md), [HARDWARE_TEST_v1.13.0.md](HARDWARE_TEST_v1.13.0.md), [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md), [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md), [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md), [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) e [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md), SYSTEM → DIAG | **non eseguito: in attesa dei risultati dal dispositivo** |
 
 Quattro livelli distinti, mai confusi nella documentazione:
 **test host** (logica compilata dallo stesso sorgente del firmware ed eseguita
@@ -93,7 +93,8 @@ errore, non solo il primo.
 | oom_test (v1.9.0: 18) | 24 | 24 | "Memory ERROR" con `operator new` instradato nei pool e SRAM limitata (condizioni del Pico 2 W): Run-Matrix, autosalvataggio rimandato e ripreso da solo, GRAPH, 3D (griglia ridotta o errore), editor; stato intatto e nessuna perdita di memoria; v1.10.0: avvio con un record più grande della memoria libera (nessuna terminazione, salvataggi sospesi, dati in flash intatti) |
 | graphics_memory_test **nuova** | 23 | 23 | poligoni pieni oltre i 32 vertici, copie di layer e invalidate, regioni sporche per scheda, budget PICT, 20 parametriche dense disegnate per intero con la PSRAM, cache dei layer di GRAPH identica al pixel |
 | internal_fs_test **nuova** | 197 | 197 | LittleFS su flash NOR simulata: contratto `files::FileSystem` come FatFs, partizione piena, interruzione di alimentazione durante `writeAtomic`, rimontaggio senza riformattare, progetti GRAPH nell'archivio interno |
-| graph3d_test **nuova** | 111 | 111 | motore 3D (campionamento, poli e domini, proiezione, z-buffer e pittore, rotazione, colori per superficie) e modalità 3D Graph (lista, editor, V-Window, campionamento incrementale, rotazione/zoom senza ricalcolo, AUTO, persistenza, budget di memoria con e senza PSRAM) |
+| graph3d_test (v1.9.0: 111; portata alla v1.14.0) | 88 | 88 | motore 3D (campionamento incrementale, buchi, z-buffer e pittore, due superfici con lo stesso test di profondità, taglio al box, rotazione θ/φ, colori) e modalità (lista, input Z=, V-Window, calcolo nei tick, rotazione e zoom senza ricalcolo, ORIGINAL, persistenza, profili con e senza PSRAM) |
+| graph3d_v114_test **nuova v1.14.0** | @G114@ | @G114@ | un gruppo per voce della tabella di parità del 3D Graph: V-Window (Out of Domain, Invalid Setting, normalizzazione di θ/φ), modelli e loro «Invalid Setting», conversioni dei moduli, codifica delle G-Mem, INTSECT/RELATION con gli esempi del manuale, sezioni CROSS, taglio al box (nessun pixel fuori dall'involucro del box), z-buffer condiviso con le rette, proiezione e viste, colori FORMAT, coordinate enormi (fuzzing), memoria esaurita, record v10 e migrazione delle fixture v1.6.0…v1.13.1, tutta la modalità dalla tastiera su entrambi i profili |
 | system_diag_test **nuova** | 15 | 12 | SYSTEM → DIAG completa (MEM, PSR, ALC, FLS, LCD, SD, INT, GPH) con la memoria della scheda; Plus con PSRAM fallita; pagina INFO; "Archivio file"; riga del chip della flash; kernel di stress dell'allocatore |
 | **Totale** | **12 223** + ≈ 333 000 dello stress + 41 dello script | **12 217** + ≈ 333 000 + 41 | 0 errori, con e senza sanitizer (ASan + UBSan bloccante); `mem_pools_tsan` con ThreadSanitizer |
 
@@ -112,6 +113,25 @@ un record v7 generato con i sorgenti della v1.11.0 (tag `v1.11.0`, commit
 sottonomi, Hex, comandi grafici), e `tests/fixtures/workspace_v1_12_0.inc`, un
 record v8 generato con i sorgenti della v1.12.0 (commit `51691de` di `main`,
 con i dati di EQUATION), per le migrazioni v7→v9 e v8→v9.
+`graph3d_v114_test` legge tutte le fixture (v1.6.0, v1.8.0, v1.9.0, v1.10.0,
+v1.11.0, v1.12.0) e `tests/fixtures/workspace_v1_13_1_graph3d.inc`, un record
+v9 generato con i sorgenti della v1.13.1 (tag `v1.13.1`, commit `62b3f8f`)
+prima di ogni modifica della v1.14.0, con funzioni 3D, finestra, vista e
+griglia non predefinite: migrazione v1…v9 → v10 e conservazione
+dell'orientazione della vista.
+
+v1.14.0: @TESTS@ test per profilo (@SUITES@ suite C++, lo stress dell'allocatore e
+l'interoperabilità FAT/exFAT): @PLUS@ controlli sulla Plus e @P2W@ sul Pico 2 W;
+si aggiunge `graph3d_v114_test` (@G114@ controlli). Test esistenti adattati solo
+ai cambiamenti voluti della v1.14.0: record alla versione 10 (controlli del
+byte di versione in `matrix_test`, `lists_csv_test`, `equation_v112_test`,
+`run_matrix_v112_test`, `board_profile_test`; la «versione futura» diventa
+11; in `table_test` la lunghezza della coda del record), modello del 3D
+(`Graph3DState`: lista vuota al primo avvio, griglia in punti 2–50) in
+`board_profile_test`, `lists_csv_test`, `matrix_test`, `limits_smoke`,
+`architecture_test` e `oom_test`; `graph3d_test` portata alla nuova API con le
+stesse verifiche (le espressioni dell'editor naturale sono nella forma
+canonica `(x)^(2)`). Nessuna verifica è stata tolta senza sostituirla.
 
 v1.13.1: 46 test per profilo (44 suite C++, lo stress dell'allocatore e
 l'interoperabilità FAT/exFAT): 12 223 controlli sulla Plus e 12 217 sul Pico 2 W;
@@ -193,8 +213,9 @@ Gli script degli screenshot sono `tests/sim/run_matrix.txt` (Run-Matrix 12–19)
 CLIP, cursore sull'errore, modalità Line: 44–51), `tests/sim/run_matrix_v111.txt`
 (List 1–26 e sottonomi, CSV, MatAns, celle esatte, Line con ⌟ e INS,
 risultato scorrevole, Eng, Simp, Base-N, comandi grafici: 52–61),
-`tests/sim/graph.txt` (GRAPH e TABLE 06, 07, 20–37) e `tests/sim/graph3d.txt`
-(3D Graph 40–43) e `tests/sim/run_matrix_v112.txt` (SolveN e FMin, OPTN,
+`tests/sim/graph.txt` (GRAPH e TABLE 06, 07, 20–37), `tests/sim/graph3d.txt`
+(3D Graph 40–43, rigenerati nella v1.14.0), `tests/sim/graph3d_v114.txt` (3D Graph
+v1.14.0: 88–104) e `tests/sim/run_matrix_v112.txt` (SolveN e FMin, OPTN,
 CATALOG, distribuzioni, CONVERT, modelli d²/dx² e Σ, istruzioni multiple,
 VARS STAT, Graph Y>, G∫dx, ENG: 77–87). Il simulatore scrive PNG non compressi: prima di copiarli in
 `docs/screenshots` vanno compressi senza perdita (nella v1.11.0: palette PNG
@@ -208,6 +229,7 @@ build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix_v111.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/run_matrix_v112.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph3d.txt
+build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph3d_v114.txt
 ```
 
 Il simulatore usa una scheda microSD in RAM (16 MB) oppure, con

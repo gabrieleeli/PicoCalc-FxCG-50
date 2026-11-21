@@ -447,11 +447,39 @@ int main() {
         lf.area = g3d::Color::Magenta;
         g3d::itemColors(lf, wi);
         CHECK(wi.fill == g3d::color565(g3d::Color::Magenta));                         // the Line uses the Area Color
+        // fuzzing (v1.14.0): a tiny window with huge coordinates does not overflow
+        // into NaN (shading, projection): rendered without undefined behaviour
+        {
+            g3d::Window tiny;
+            tiny.xmin = 0; tiny.xmax = 1e-300; tiny.ymin = -1e97; tiny.ymax = 1e97; tiny.zmin = 0; tiny.zmax = 1e-300;
+            CHECK(g3d::validate(tiny).empty());
+            g3d::Mesh hm;
+            g3d::sample(hm, [](double u, double v, g3d::Vec3& o) { o = {u * 1e29, v * 1e29, (u - v) * 1e29}; return true; }, {-1, 1, -1, 1}, 4, 4);
+            g3d::Item hi;
+            hi.patches[0] = &hm; hi.patchCount = 1; hi.hasFill = hi.hasWire = true; hi.fill = 0x001F; hi.wire = 0;
+            for (bool zbuffer : {true, false}) {
+                c.clear(0xFFFF);
+                CHECK(g3d::render(c, &hi, 1, tiny, g3d::Setup{}, g3d::Camera{}, vp, zbuffer).ok);
+            }
+            double nx, ny, nz;
+            g3d::Projector(tiny, g3d::Camera{}, vp).normalize({1e29, 0, -1e29}, nx, ny, nz);
+            CHECK(std::isfinite(nx) && std::isfinite(ny) && std::isfinite(nz));
+        }
         // a lattice that does not fit throws std::bad_alloc and stays empty
-        g3d::Mesh huge;
-        bool oom = false;
-        try { g3d::beginSample(huge, 1u << 20, 1u << 20); } catch (const std::bad_alloc&) { oom = true; }
-        CHECK(oom && huge.verts.empty() && huge.nu == 0);
+        // (bounded simulated SRAM without PSRAM, as on the Pico 2 W: the pool
+        // refuses the request instead of the host malloc)
+        mem::testing::simulateSram(256u * 1024u);
+        mem::testing::simulatePsram(0);
+        {
+            g3d::Mesh huge;
+            bool oom = false;
+            try { g3d::beginSample(huge, 300, 300); } catch (const std::bad_alloc&) { oom = true; }   // 1.4 MB
+            CHECK(oom && huge.verts.empty() && huge.nu == 0);
+            g3d::Mesh fits;
+            CHECK_NOTHROW(g3d::beginSample(fits, 25, 25));
+            CHECK(fits.verts.size() == 625);
+        }
+        mem::testing::reset();
         CHECK(std::string(files::CaptureFolder) == graphcmd::CaptureFolder);
     }
 

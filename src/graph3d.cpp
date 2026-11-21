@@ -143,6 +143,7 @@ void lineZ(gfx::Canvas& c, const std::uint16_t* zb, const gfx::Rect& vp, ScreenP
     }
 }
 std::uint16_t shade(std::uint16_t c, double k) noexcept {
+    if (!std::isfinite(k)) k = 1.0;                       // degenerate normal (fuzzing: huge coordinates)
     k = std::clamp(k, 0.0, 1.0);
     const auto r = static_cast<int>(((c >> 11) & 31) * k), g = static_cast<int>(((c >> 5) & 63) * k), b = static_cast<int>((c & 31) * k);
     return static_cast<std::uint16_t>((r << 11) | (g << 5) | b);
@@ -324,7 +325,10 @@ Projector::Projector(const Window& w, const Camera& cam, gfx::Rect viewport) noe
     ox_ = w.xmin; oy_ = w.ymin; oz_ = w.zmin;
 }
 void Projector::normalize(Vec3 p, double& nx, double& ny, double& nz) const noexcept {
-    nx = (p.x - ox_) * sx_ - 1.0; ny = (p.y - oy_) * sy_ - 1.0; nz = (p.z - oz_) * sz_ - 1.0;
+    // Far outside the box (or not a number after an overflow): a finite point
+    // in the same direction, which the clipping discards or cuts exactly.
+    auto fix = [](double v) { return std::isnan(v) ? 1e12 : std::clamp(v, -1e12, 1e12); };
+    nx = fix((p.x - ox_) * sx_ - 1.0); ny = fix((p.y - oy_) * sy_ - 1.0); nz = fix((p.z - oz_) * sz_ - 1.0);
 }
 ScreenPoint Projector::fromNormalized(double nx, double ny, double nz) const noexcept {
     const Vec3 n{nx, ny, nz};
