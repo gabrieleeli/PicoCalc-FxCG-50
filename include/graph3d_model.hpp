@@ -143,7 +143,7 @@ void convertForm(Function& f, std::uint8_t form);
 struct Intersection {
     enum class Kind : std::uint8_t { Point, Line, NotFound, Infinite } kind{Kind::NotFound};
     Vec3 point{};             // Point; Line: a point of the line
-    Vec3 direction{};         // Line: direction (unit)
+    Vec3 direction{};         // Line: direction, largest component ±1
 };
 Intersection intersect(const Shape& a, const Shape& b);
 // G-Solve RELATION (16-19).

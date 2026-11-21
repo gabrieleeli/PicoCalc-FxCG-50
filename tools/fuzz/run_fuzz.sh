@@ -5,11 +5,11 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 B="$(cd "${1:?cartella di build}" && pwd)"; T="${2:-300}"
-C="$B/corpus"; mkdir -p "$C"/{expr,ws,csv,pcg,eq,ui}
+C="$B/corpus"; mkdir -p "$C"/{expr,ws,csv,pcg,eq,ui,g3d}
 "$B/gen_seeds" "$C"
 # Espressioni dalle stringhe dei test (primo byte: modo 0 = Comp).
 grep -ohE '"[^"\\]{2,80}"' "$ROOT"/tests/*_test.cpp | sort -u | head -3000 | sed 's/^"//; s/"$//' |
-  { i=0; while IFS= read -r l; do printf '\0%s' "$l" > "$C/expr/s$i"; printf '\2\0%s' "$l" > "$C/eq/q$i"; i=$((i+1)); done; }
+  { i=0; while IFS= read -r l; do printf '\0%s' "$l" > "$C/expr/s$i"; printf '\2\0%s' "$l" > "$C/eq/q$i"; printf '\1%s' "$l" > "$C/g3d/e$i"; i=$((i+1)); done; }
 printf '\0001,2,3\r\n4,5,6\r\n' > "$C/csv/a"; printf '\001"A";"B"\n1,5;2\n' > "$C/csv/b"
 printf '\001\012\000\001\012' > "$C/ui/a"
 run() {  # harness, cartella del corpus, lunghezza massima
@@ -19,5 +19,5 @@ run() {  # harness, cartella del corpus, lunghezza massima
   echo "$1: $(grep -E '^#[0-9]+:' "$B/$1.log" | tail -n 1)"
 }
 run fuzz_expr expr 300; run fuzz_exactdiff expr 200; run fuzz_workspace ws 10000; run fuzz_csv csv 30000
-run fuzz_pcgraph pcg 8000; run fuzz_equation eq 400; run fuzz_ui ui 300
+run fuzz_pcgraph pcg 8000; run fuzz_equation eq 400; run fuzz_ui ui 300; run fuzz_graph3d g3d 12000
 ls "$B"/artifacts/*/ 2>/dev/null

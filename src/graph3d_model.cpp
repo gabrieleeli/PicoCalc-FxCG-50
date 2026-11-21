@@ -392,7 +392,10 @@ Intersection intersect(const Shape& a0, const Shape& b0) {
         }
         r.kind = Intersection::Kind::Line;
         r.point = clean((cross(b.n, dir) * a.h + cross(dir, a.n) * b.h) * (1.0 / dot(dir, dir)), scale);
-        r.direction = clean(unit(dir), 1.0);
+        // Direction with its largest component equal to 1 in absolute value:
+        // (1,1,0) rather than (0.7071...,0.7071...,0) on the screen.
+        const double big = std::max({std::fabs(dir.x), std::fabs(dir.y), std::fabs(dir.z)});
+        r.direction = clean(dir * (1.0 / big), 1.0);
         return r;
     }
     return r;

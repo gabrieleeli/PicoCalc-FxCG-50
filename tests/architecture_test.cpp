@@ -222,6 +222,32 @@ int main() {
     // equazioni passano dal motore di Run-Matrix (parseExpression, evaluateAny,
     // evaluateExact) attraverso equation.hpp; nessuna lettura propria dei numeri,
     // nessun percorso numerico separato (la griglia CellGrid e i vecchi solutori in double).
+    // v1.14.0, 3D Graph: one parser and evaluator (CompiledExpression for the
+    // functions, evalNumber for the coefficients), the variables of the graph
+    // bound with EvalContext (no write to A-Z), the geometry in the pure model,
+    // controller and drawing separated from the model.
+    {
+        std::string code3d;
+        for (const char* const* src = appInfo(AppId::Graph3D).sources; *src; ++src) {
+            const std::string code = codeOnly(readFile(*src));
+            code3d += code;
+            for (const char* f : {"strtod", "atof", "stod(", "stof(", "sscanf", "istringstream", "parseExpression(", "memory.store(", "storeExact("})
+                ::testutil::report(code.find(f) == std::string::npos, "3D Graph: no own number parsing, no write to A-Z", *src, 0, f);
+        }
+        for (const char* r : {"CompiledExpression(", "evalNumber(", "g3d::shapeOf(", "g3d::intersect(", "g3d::relation(", "g3d::crossSection(",
+                              "g3d::render(", "g3d::validate(", "g3d::encode("})
+            ::testutil::report(code3d.find(r) != std::string::npos, "3D Graph uses the shared engine and the 3D library", "src/apps/graph3d_*.cpp", 0, r);
+        const std::string model = codeOnly(readFile("src/graph3d_model.cpp"));
+        for (const auto& inc : includesOf(model)) {
+            const bool allowed = inc == "graph3d_model.hpp" || inc.find('.') == std::string::npos;   // standard headers only
+            ::testutil::report(allowed, "graph3d_model is pure (no parser, workspace or graphics)", "src/graph3d_model.cpp", 0, inc);
+        }
+        const std::string lib = codeOnly(readFile("src/graph3d.cpp"));
+        for (const auto& inc : includesOf(lib))
+            ::testutil::report(inc == "graph3d.hpp" || inc == "font_renderer.hpp" || inc.find('.') == std::string::npos,
+                               "graph3d drawing library: no UI, app or workspace", "src/graph3d.cpp", 0, inc);
+        CHECK(codeOnly(readFile("src/workspace.cpp")).find("g3d::decode(") != std::string::npos);   // record v10 validated by the model
+    }
     {
         const char* noParsing[] = {"strtod", "atof", "stod(", "stof(", "sscanf", "istringstream", "evalNumber("};
         const char* legacy[] = {"CellGrid", "solveLinearSystem", "polynomialRoots", "solveEquation(", "Form "};

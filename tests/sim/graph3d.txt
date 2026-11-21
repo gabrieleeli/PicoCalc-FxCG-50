@@ -1,9 +1,14 @@
-# 3D Graph v1.9.0 screenshots (docs/screenshots/40-43), produced with the same
-# code as the firmware on the Pico Plus 2 W profile (PSRAM pool, z-buffer):
+# 3D Graph screenshots 40-43 (v1.9.0, regenerated with the v1.14.0 interface),
+# produced with the same code as the firmware on the Pico Plus 2 W profile
+# (PSRAM pool, z-buffer):
 #   build/host-pico_plus_2w/picocalc_sim docs/screenshots tests/sim/graph3d.txt
+# The new screens of v1.14.0 are in tests/sim/graph3d_v114.txt (88-104).
 #
-# ---- function list: Z1 = sin(x)cos(y) is the default, add Z2 = x^2/4 - y^2/4
+# ---- function list (empty, as the fx-CG50): typing on a row starts its Z= input
 type j
+type sin(x)cos(y)
+key EXE
+key F6
 key DOWN
 type x^2
 key RIGHT
@@ -11,8 +16,9 @@ type /4-y^2
 key RIGHT
 type /4
 key EXE
+key F6
 shot 40_graph3d_list.png
-# ---- draw: sampled step by step in tick(), then the coloured surfaces
+# ---- DRAW: computed step by step in tick(), then the coloured surfaces
 key F6
 wait 200
 wait 200
@@ -23,15 +29,20 @@ wait 200
 wait 200
 wait 200
 shot 41_graph3d_surfaces.png
-# ---- rotation and zoom reuse the samples (no new computation)
+# ---- rotation (θ and φ of the V-Window) and zoom reuse the lattices
 key LEFT
 key LEFT
 key LEFT
 key UP
-key F1
+type +
 shot 42_graph3d_rotated.png
-# ---- AUTO: the box follows the z range of the samples
-key F5
-key F4
+# ---- ZOOM ORIGINAL, then OPTN Z-AUTO: the box follows the z range of the lattices
+key F2
+key F6
+key F8
+key F3
+wait 200
+wait 200
+wait 200
 wait 200
 shot 43_graph3d_auto.png

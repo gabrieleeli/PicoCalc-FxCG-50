@@ -91,8 +91,12 @@ float edge(const ScreenPoint& a, const ScreenPoint& b, float px, float py) noexc
     return (b.x - a.x) * (py - a.y) - (b.y - a.y) * (px - a.x);
 }
 // Flat triangle with per-pixel depth test; visible runs become horizontal lines.
+bool sane(const ScreenPoint& p) noexcept {   // finite and small enough to be converted to int
+    return std::fabs(p.x) < 1e6F && std::fabs(p.y) < 1e6F && std::isfinite(p.depth);
+}
 void fillTriangleZ(gfx::Canvas& c, std::uint16_t* zb, const gfx::Rect& vp, const ScreenPoint& a, const ScreenPoint& b,
                    const ScreenPoint& d, std::uint16_t color) noexcept {
+    if (!sane(a) || !sane(b) || !sane(d)) return;
     const float area = edge(a, b, d.x, d.y);
     if (!(std::fabs(area) >= 1e-6F)) return;
     const int minX = std::max(vp.x, static_cast<int>(std::floor(std::min({a.x, b.x, d.x}))));
@@ -121,6 +125,7 @@ void fillTriangleZ(gfx::Canvas& c, std::uint16_t* zb, const gfx::Rect& vp, const
 // Line with an optional depth test (zb == nullptr: always drawn); width 1 or 2.
 void lineZ(gfx::Canvas& c, const std::uint16_t* zb, const gfx::Rect& vp, ScreenPoint a, ScreenPoint b, std::uint16_t color,
            int width, int bias) noexcept {
+    if (!sane(a) || !sane(b)) return;
     const float dx = b.x - a.x, dy = b.y - a.y;
     const int steps = std::max(1, static_cast<int>(std::ceil(std::max(std::fabs(dx), std::fabs(dy)))));
     if (steps > 4096) return;
@@ -265,8 +270,7 @@ std::size_t templatePatches(const Shape& s, const Window& w, std::size_t nu, std
                 if ((fa < 0 && fb > 0) || (fa > 0 && fb < 0)) add(A + (B - A) * (fa / (fa - fb)));
             }
         if (!any || !(u1 >= u0) || !(v1 >= v0)) return 0;
-        const double pu = std::max(1e-9, (u1 - u0) * 1e-6), pv = std::max(1e-9, (v1 - v0) * 1e-6);
-        out[0] = {{u0 - pu, u1 + pu, v0 - pv, v1 + pv}, nu, nv};
+        out[0] = {{u0, u1, v0, v1}, nu, nv};                         // exact section; the clipping keeps the boundary
         return 1;
     }
     case Kind::Sphere:
