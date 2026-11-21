@@ -144,7 +144,7 @@ SKETCH, i suffissi di unità angolare (°, ʳ, ᵍ) nelle espressioni. Elenco co
 
 | Funzione CG50 | Stato | Implementazione / note | Verifica |
 |---|---|---|---|
-| Comandi grafici in Run-Matrix (`Graph Y=`, `Graph r=`, `Graph(X,Y)=`, `Graph ∫`, ...) | NOT STARTED | richiedono il linguaggio dei programmi | — |
+| Comandi grafici in Run-Matrix (`Graph Y=`, `Graph r=`, `Graph(X,Y)=`, `Graph ∫`, ...) | TESTED ON SIMULATOR | v1.11.0 (`graph_commands`), completati nella v1.13.0; voce corretta nel recap della v1.14.0 (il conteggio della sintesi non è stato ricalcolato) | graph_cmd_v112_test, simulatore |
 | Sovrapposizione `[A=1,2,3]` (Overwrite Graph, max 10 valori) | TESTED ON HOST | colori in sequenza | graph_engine_test, graph_app_test |
 | Grafici da lista (List Graph, `List1`…`List6`) | TESTED ON HOST | liste di lunghezza diversa gestite | graph_engine_test |
 | Copia e incolla di una funzione sul grafico (Ctrl+V, max 10) | TESTED ON HOST | `pasteGraph` | graph_app_test |

@@ -148,7 +148,7 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Simplify Manual con la regola del m.c.m. per tutte le operazioni tra frazioni | TESTED ON HOST (v1.13.0) |
 | Base-N: Bin a 16 bit, variabili A–F in Hex, liste e matrici nella base | TESTED ON HOST (v1.13.0) |
 | ▶Simp con e senza fattore (F=n), Simplify Auto/Manual | TESTED ON SIMULATOR (v1.11.0) |
-| Simboli P, E e conversioni ►ENG/►ENG← | NOT STARTED |
+| Simboli P, E e conversioni ►ENG/►ENG← | TESTED ON SIMULATOR (v1.13.0; voce corretta nel recap della v1.14.0, vedi «ENG / ENG←» sopra) |
 | Base-N (letterali 0x/0b/0o, visualizzazione Hex/Bin/Oct) | TESTED ON HOST |
 | Modalità Base-N intera (Mode Dec/Hex/Bin/Oct, 32 bit in complemento a due) con And, Or, Xor, Xnor, Not, Neg e prefissi d h b o | TESTED ON SIMULATOR (v1.11.0) |
 | Sessagesimale (dms, °, visualizzazione DMS) | TESTED ON HOST |
@@ -183,7 +183,7 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Editor: round-trip testo ↔ albero esatto (corpus), parentesi implicite delle frazioni, testo Line minimo | TESTED ON HOST | v1.13.0 |
 | Statistics | TESTED ON SIMULATOR | List 1–26 con sottonomi (v1.11.0), SET XList/YList, CSV LOAD/SAVE·AS, 1/2-Var, 9 regressioni, grafici, DIST, test Z/t, intervalli |
 | Liste: file CSV su microSD e flash interna (separatore e decimale configurabili, scrittura atomica) | TESTED ON HOST | v1.11.0, anche con interruzione di alimentazione sulla flash interna |
-| Liste: List File 1–6 e riferimento per sottonome (`List "QTY"`) | NOT STARTED | |
+| Liste: List File 1–6 e riferimento per sottonome (`List "QTY"`) | TESTED ON HOST | v1.13.0 (vedi le righe di Run-Matrix; voce corretta nel recap della v1.14.0) |
 | Regressioni sinusoidale e logistica | NOT STARTED | |
 | Test χ², F, 2-campioni, ANOVA nell'interfaccia | NOT STARTED | ANOVA e t a 2 campioni esistono come API C++ |
 | Grafico a torta / a barre | NOT STARTED | |

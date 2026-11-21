@@ -38,6 +38,16 @@ successive si creano solo quando i rispettivi incrementi sono completati e
 verificati. La matrice di parità di GRAPH è in
 [GRAPH_PARITY.md](GRAPH_PARITY.md).
 
+## 0. Recap e fondamenta delle applicazioni
+
+Il recap della v1.14.0 con la parità modalità per modalità è in
+[reports/RECAP_v1.14.0.md](reports/RECAP_v1.14.0.md). Prima di realizzare le
+modalità mancanti, la v1.15.0 mette le basi comuni (budget per scheda, record
+v11 a sezioni estensibili, file tipizzati, guscio delle modalità, grafico 2D con
+Dual Screen, espressioni con variabili legate, lavoro a passi interrompibile,
+editor multiriga, nucleo dell'interprete, studio di MicroPython): prompt e
+ordine delle versioni successive in [PROMPT_BASI_APPLICAZIONI.md](PROMPT_BASI_APPLICAZIONI.md).
+
 ## 1. Collaudo su hardware (priorità massima, richiede la PicoCalc)
 
 Nessuna funzione è stata provata sulla PicoCalc, né con il Pimoroni Pico Plus 2 W

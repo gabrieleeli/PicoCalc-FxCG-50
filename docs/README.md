@@ -4,6 +4,8 @@
 
 | Documento | Contenuto |
 |---|---|
+| [reports/RECAP_v1.14.0.md](reports/RECAP_v1.14.0.md) | recap del progetto alla v1.14.0 e parità con la fx-CG50 modalità per modalità (3 complete, 2 quasi, 3 parziali, 10 con solo il modello, Python assente, E-CON4 non realizzabile) |
+| [PROMPT_BASI_APPLICAZIONI.md](PROMPT_BASI_APPLICAZIONI.md) | prompt della sessione v1.15.0 che mette le basi comuni per tutte le modalità mancanti, più un prompt breve per ogni modalità successiva |
 | [BUILD_STATUS.md](BUILD_STATUS.md) | ambiente di build, audit della v1.5.4, risultati di build e test, cosa non è verificato |
 | [FEATURE_MATRIX.md](FEATURE_MATRIX.md) | stato di ogni funzione (NOT STARTED … TESTED ON SIMULATOR … TESTED ON HARDWARE) |
 | [GRAPH_PARITY.md](GRAPH_PARITY.md) | GRAPH: audit della v1.7.0 e matrice di parità voce per voce con il capitolo 5 del manuale fx-CG50 |
@@ -48,7 +50,8 @@ eliminare ([rapporto](reports/CONSOLIDAMENTO_v1.9.0.md#16-branch-e-tag)).
 
 | Branch / tag | Contenuto |
 |---|---|
-| **`main`** (tag `v1.13.1`) | v1.13.1: versione di correzione della v1.13.0 (18 errori corretti, [ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md)) |
+| **`main`** (tag `v1.14.0`) | v1.14.0: completamento totale di 3D Graph (parità con la fx-CG50, capitolo 16, record v10) |
+| tag `v1.13.1` (commit `62b3f8f` di `main`) | v1.13.1: versione di correzione della v1.13.0 (18 errori corretti, [ERRORI_v1.13.1.md](reports/ERRORI_v1.13.1.md)) |
 | tag `v1.13.0` (commit `a72d901` di `main`) | v1.13.0: completamento totale di Run-Matrix (parità con la fx-CG50: List "nome" e List File, P/E ed ENG, Simplify Manual, Base-N completa, editor senza limite, tutti i comandi grafici, round trip Math/Line, CALC/PROB/STAT/CONVERT/TVM, CATALOG, CAPTURE, record v9) |
 | tag `v1.12.0` (commit `51691de` di `main`) | v1.12.0: completamento di EQUATION (SIML, POLY, SOLVER, VARS › EQUATION, record v8) |
 | tag `v1.11.0` (commit `f6933fd` di `main`) | v1.11.0: completamento di Run-Matrix (List 1–26, CSV, MatAns/ListAns, celle esatte e complesse, INS e ⌟ in Line, simboli ingegneristici, Simp, Base-N, comandi grafici) |
