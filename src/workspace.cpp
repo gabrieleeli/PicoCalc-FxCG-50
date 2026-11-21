@@ -38,7 +38,7 @@ void Workspace::resetAll() {
     for (auto& n : listNames) n.clear();
     equation = EquationState{};
     chat.clear();
-    graph3d = Graph3DState{};
+    graph3d.reset();
     matrices.clear();
     for (auto& f : listFiles) f = ListFileData{};
     for (auto& f : functionMemories) f.clear();
@@ -748,13 +748,13 @@ bool readLegacyGraph3D(Reader& r, Graph3DState& g3) {
     if (!(box[0] < box[1]) || !(box[2] < box[3]) || !(box[4] < box[5]) || grid < 5 || grid > 128) return false;
     for (std::size_t i = 0; i < g3d::Functions; ++i) if (sel[i] && z[i].empty()) return false;
     if (!std::isfinite(yaw) || !std::isfinite(pitch) || !(zoom > 0.05F && zoom < 20.0F)) return false;
-    Graph3DState out;
+    g3.reset();                                   // in place: no Graph3DState temporary on the stack
     for (std::size_t i = 0; i < g3d::Functions; ++i) {
-        g3d::Function& f = out.set.fns[i];
+        g3d::Function& f = g3.set.fns[i];
         if (z[i].empty()) continue;
-        f.kind = g3d::Kind::Z; f.expr[0] = z[i]; f.selected = sel[i];
+        f.kind = g3d::Kind::Z; f.expr[0] = std::move(z[i]); f.selected = sel[i];
     }
-    g3d::Window& w = out.set.window;
+    g3d::Window& w = g3.set.window;
     w.xmin = box[0]; w.xmax = box[1]; w.ymin = box[2]; w.ymax = box[3]; w.zmin = box[4]; w.zmax = box[5];
     w.xgrid = w.ygrid = std::clamp(grid + 1, g3d::MinGrid, g3d::MaxGrid);
     w.theta = g3d::normalizeTheta(-(static_cast<double>(yaw) + 90.0));
@@ -764,8 +764,7 @@ bool readLegacyGraph3D(Reader& r, Graph3DState& g3) {
         w = g3d::Window{};
         w.theta = theta; w.phi = phi;
     }
-    out.zoom = zoom;
-    g3 = std::move(out);
+    g3.zoom = zoom;
     return true;
 }
 } // namespace

@@ -191,6 +191,16 @@ struct Graph3DState {
     std::array<g3d::Window, g3d::WindowMemories> vmem{};
     std::uint8_t vmemUsed{0};                                 // bit k: 3D V-Win k+1 stored
     std::size_t memoryBytes() const noexcept { std::size_t n = 0; for (const auto& m : gmem) n += m.size(); return n; }
+    // Back to the initial state in place (no ~2 KB temporary on the stack).
+    void reset() {
+        for (std::size_t i = 0; i < g3d::Functions; ++i) set.fns[i] = g3d::emptyFunction(i);
+        set.window = g3d::Window{};
+        set.setup = g3d::Setup{};
+        zoom = 1.0F;
+        for (auto& m : gmem) { m.clear(); m.shrink_to_fit(); }
+        vmem.fill(g3d::Window{});
+        vmemUsed = 0;
+    }
 };
 
 // Dati condivisi da tutte le applicazioni. Risolve anche le variabili che

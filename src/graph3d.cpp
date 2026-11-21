@@ -378,6 +378,7 @@ RenderStats render(gfx::Canvas& canvas, const Item* items, std::size_t count, co
     if (vp.w <= 0 || vp.h <= 0) return st;
     std::pmr::memory_resource* heavy = mem::resource(mem::Policy::PREFER_PSRAM);
     const Projector proj(w, cam, vp);
+    P3 poly[16], tmp[16];                                 // clipped polygon (one pair for the whole frame)
     const gfx::Rect oldClip = canvas.clip();
     canvas.setClip(vp);
     const std::uint16_t boxColor = gfx::rgb888To565(40, 40, 40);
@@ -493,7 +494,6 @@ RenderStats render(gfx::Canvas& canvas, const Item* items, std::size_t count, co
                             const Proj& b = pv[b0 + tri[1]];
                             const Proj& c = pv[b0 + tri[2]];
                             if (a.code & b.code & c.code) continue;
-                            P3 poly[16], tmp[16];
                             poly[0] = normalized(m->verts[tri[0]]); poly[1] = normalized(m->verts[tri[1]]); poly[2] = normalized(m->verts[tri[2]]);
                             const std::uint16_t color = shaded(it.fill, poly[0], poly[1], poly[2]);
                             if ((a.code | b.code | c.code) == 0) {
@@ -595,7 +595,6 @@ RenderStats render(gfx::Canvas& canvas, const Item* items, std::size_t count, co
             const std::size_t nu = m.nu;
             const std::size_t idx[4] = {o.j * nu + o.i, o.j * nu + o.i + 1, (o.j + 1u) * nu + o.i + 1, (o.j + 1u) * nu + o.i};
             if (it.hasFill) {
-                P3 poly[16], tmp[16];
                 for (int k = 0; k < 4; ++k) poly[k] = normalized(m.verts[idx[k]]);
                 const std::uint16_t color = shaded(it.fill, poly[0], poly[1], poly[2]);
                 const std::size_t n = clipPolygon(poly, 4, tmp);
