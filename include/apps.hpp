@@ -757,6 +757,8 @@ public:
     bool autoRotating() const noexcept { return autoSteps_ > 0; }
     const g3d::Function& editing() const noexcept { return edit_; }   // function on the input screens
     int coefCell() const noexcept { return coefCell_; }
+    std::size_t retainedBytes() const noexcept;               // lattices, image cache and captures still allocated
+    bool layerCached() const noexcept { return layerValid_; }
     static constexpr gfx::Rect Viewport{0, ui::StatusH, ui::ScreenW, ui::ContentBottom - ui::StatusH};   // area of GRAPH
 
 private:

@@ -70,6 +70,14 @@ void Graph3DApp::releaseScene() noexcept {
     pictPending_ = 0; pictReady_ = false;
 }
 
+std::size_t Graph3DApp::retainedBytes() const noexcept {
+    std::size_t n = layer_.capacity() * sizeof(std::uint16_t);
+    for (const auto& ms : meshes_) for (const auto& m : ms) n += m.bytes();
+    if (!capture_.empty()) n += 1;
+    if (!picture_.empty()) n += 1;
+    return n;
+}
+
 void Graph3DApp::startDraw(Context& ctx) {
     Graph3DState& g3 = ctx.ws.graph3d;
     const g3d::Window& w = g3.set.window;
