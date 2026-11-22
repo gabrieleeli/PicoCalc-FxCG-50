@@ -122,7 +122,16 @@ le espressioni nel testo usavano U+E000/U+E001, che sono i simboli statistici
 x̂ e x̄ del font e del CATALOG (spostate a U+F8F0/U+F8F1); la barra F1–F6
 disegnava «?» al posto di «▷» (glifo assente, ora «▶»); la richiesta
 «Salvare il file?» mostrava «F6/EXIT: No» ma EXIT tornava al documento (ora
-EXIT = No, AC torna, come la fx-CG50 con 6 e AC).
+EXIT = No, AC torna, come la fx-CG50 con 6 e AC); una schermata aperta
+dalla modalità della striscia (Graph da un comando grafico di RUN) usciva dalla
+sessione con MENU (ora la sessione vale fino al ritorno all'eActivity, e la
+striscia RUN conserva anche le parti di Graph che i comandi grafici
+scrivono); **trovato dal fuzzing** (`fuzz_eactivity` in modalità «solo
+documenti»): una riga di testo letta da un file con un a capo lasciava un byte
+fuori da tutte le righe visive di `eact::wrap` (il cursore e AC non
+l'avrebbero raggiunto) — ora le righe di testo e i titoli delle strisce non
+ammettono caratteri di controllo (`eact::validLineText`) e le righe di Notes
+scritte sul PC ne vengono ripulite; i due input sono nel corpus.
 
 ## 6. Firmware e memoria
 
