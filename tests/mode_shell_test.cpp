@@ -41,7 +41,7 @@ int main() {
         b.set(&kRoot);
         const char* l[6];
         b.labels(false, l);
-        CHECK(std::string(l[0]) == "OPEN" && std::string(l[5]) == "\xE2\x96\xB7");   // ▷ con piu' pagine
+        CHECK(std::string(l[0]) == "OPEN" && std::string(l[5]) == "\xE2\x96\xB6");   // ▶ con piu' pagine
         CHECK(b.key(k(Key::F1), false) == AOpen && b.key(k(Key::F5), false) == ADelete);
         CHECK(b.key(k(Key::F3), false) == FKeyBar::Handled && b.inSubmenu());          // FILE
         b.labels(false, l);

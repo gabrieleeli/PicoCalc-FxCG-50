@@ -41,7 +41,7 @@ void FKeyBar::labels(bool shift, const char* out[6]) const noexcept {
     const FKeyPage* p = current(shift);
     for (int i = 0; i < 6; ++i) out[i] = p ? p->keys[i].label : nullptr;
     const FKeyMenu* m = depth_ ? stack_[depth_ - 1] : nullptr;
-    if (!shift && m && m->count > 1 && !out[5]) out[5] = "\xE2\x96\xB7";      // ▷: pagina seguente
+    if (!shift && m && m->count > 1 && !out[5]) out[5] = "\xE2\x96\xB6";      // ▶: pagina seguente (il font non ha ▷)
 }
 void FKeyBar::draw(gfx::Canvas& c, bool shift) const {
     const char* l[6];

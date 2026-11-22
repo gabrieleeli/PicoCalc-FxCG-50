@@ -1766,8 +1766,8 @@ void EActivityApp::key(Context& ctx, const KeyEvent& ev) {
     if (shell_.confirm.active() && shell_.confirm.tag() == TagSave) {   // Save? Si' / No / AC (10-23)
         switch (ev.key) {
         case Key::F1: case Key::Exe: shell_.confirm.close(); saveDocument(ctx, fileName_); closeDocument(ctx); return;
-        case Key::F6: shell_.confirm.close(); closeDocument(ctx); return;
-        case Key::AC: case Key::Exit: shell_.confirm.close(); return;
+        case Key::F6: case Key::Exit: shell_.confirm.close(); closeDocument(ctx); return;
+        case Key::AC: shell_.confirm.close(); return;
         default: return;
         }
     }

@@ -1,0 +1,163 @@
+# v1.16.0 (eActivity, manuale fx-CG50 capitolo 10): screenshot nuovi
+# (docs/screenshots/108-127), prodotti con lo stesso codice del firmware sul
+# profilo Pico Plus 2 W (il Pico 2 W disegna le stesse schermate):
+#   build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/eactivity.txt
+# (PNG non compressi: comprimerli senza perdita con tools/sim_compare.py --compress)
+#
+# ---- una schermata catturata da Run-Matrix (SHIFT 7), per la riga immagine
+type 1
+type 12/5+3
+key EXE
+key SHIFT
+type 7
+key EXE
+wait 2000
+key MENU
+# ---- elenco dei file vuoto, NEW
+type 3
+shot 108_eact_files_empty.png
+key F2
+type fisica
+shot 109_eact_new_name.png
+key EXE
+shot 110_eact_workspace_empty.png
+# ---- riga di testo con un'espressione Math (MATH › frazione)
+type Velocita' media: v = 
+key F6
+key F4
+key EXE
+type s
+key DOWN
+type t
+key EXE
+type  (spazio diviso tempo)
+shot 111_eact_text_math.png
+key EXE
+# ---- righe di calcolo (nucleo di Run-Matrix, forme esatte)
+type 120/8
+key F3
+key EXE
+type 1/3+1/6
+key EXE
+type sqrt(8)
+key EXE
+shot 112_eact_calc_lines.png
+# ---- COLOR › MARKER sulla prima riga
+key F6
+key F1
+key F1
+key HOME
+key F6
+key F5
+key F1
+key DOWN
+key DOWN
+key DOWN
+key EXE
+key RIGHT
+key RIGHT
+key RIGHT
+key RIGHT
+key RIGHT
+key RIGHT
+key RIGHT
+key RIGHT
+shot 113_eact_marker.png
+key F1
+# ---- MEMO › INSERT
+key F6
+key F6
+key F3
+key F1
+key DOWN
+key EXE
+type Moto rettilineo uniforme: lo spazio cresce in proporzione al tempo.
+shot 114_eact_memo_window.png
+key EXE
+# ---- STRIP: elenco dei tipi, titolo, striscia Graph (barra azzurra)
+key DOWN
+key F2
+shot 115_eact_strip_menu.png
+key DOWN
+key EXE
+type Grafico s(t)
+shot 116_eact_strip_title.png
+key EXE
+key EXE
+key EXIT
+type 3X
+key EXE
+key F6
+shot 117_eact_strip_graph.png
+key SHIFT
+type '
+shot 118_eact_doc_strip.png
+# ---- Notes
+key F2
+key DOWN
+key DOWN
+key DOWN
+key DOWN
+key DOWN
+key DOWN
+key DOWN
+key DOWN
+key DOWN
+key DOWN
+key EXE
+type Appunti
+key EXE
+key EXE
+type Il moto rettilineo uniforme ha velocita' costante: lo spazio percorso e' proporzionale al tempo trascorso.
+key EXE
+type Esempio: 
+key F4
+key EXE
+type 120
+key DOWN
+type 8
+key EXE
+type  = 15 m/s
+shot 119_eact_notes.png
+key EXIT
+# ---- CHAR, CAPACITY
+key DOWN
+key DOWN
+key F4
+key RIGHT
+key RIGHT
+shot 120_eact_char.png
+key EXIT
+key F1
+key F4
+shot 121_eact_capacity.png
+key EXIT
+# ---- riga immagine (CAPT01 da Run-Matrix)
+key F6
+key F1
+key F2
+key F5
+key F4
+shot 122_eact_picture_list.png
+key EXE
+shot 123_eact_picture.png
+# ---- MEMO › Catalog e uscita con "Salvare il file?"
+key F6
+key F1
+key F1
+key DOWN
+key DOWN
+key F6
+key F6
+key F3
+key F3
+shot 124_eact_memo_catalog.png
+key EXE
+key EXIT
+shot 125_eact_save_prompt.png
+key F1
+shot 126_eact_files_list.png
+key F5
+shot 127_eact_memo_list.png
+key EXIT
+key EXIT

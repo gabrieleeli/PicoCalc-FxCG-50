@@ -29,9 +29,10 @@ constexpr std::size_t MaxMemoBytes = 255;           // memo (10-12)
 constexpr std::size_t MaxStripTitleBytes = 16;      // titolo di una striscia (10-18)
 constexpr std::size_t MaxLines = 2000;
 constexpr std::uint16_t FormatVersion = 1;
-// Espressione Math in una riga di testo: U+E000 testo-lineare U+E001.
-constexpr const char* IslandStart = "\xEE\x80\x80";
-constexpr const char* IslandEnd = "\xEE\x80\x81";
+// Espressione Math in una riga di testo: U+F8F0 testo-lineare U+F8F1 (uso
+// privato; U+E000-E002 sono gia' i simboli statistici del font, x^ x- y-).
+constexpr const char* IslandStart = "\xEF\xA3\xB0";
+constexpr const char* IslandEnd = "\xEF\xA3\xB1";
 
 enum class LineKind : std::uint8_t { Text = 0, Calc = 1, Stop = 2, Picture = 3, Strip = 4 };
 
