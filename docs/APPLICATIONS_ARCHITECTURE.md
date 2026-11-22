@@ -1,4 +1,4 @@
-# Architettura delle applicazioni — v1.15.0
+# Architettura delle applicazioni — v1.16.0
 
 Questo documento descrive **come sono costruite tutte le modalità** (quelle
 disponibili e quelle future), quali servizi condivisi usano, quali dati si
@@ -40,6 +40,17 @@ sorgenti del firmware del Pico 2 W. Dopo il link `cmake/check_firmware_size.cmak
 fallisce se l'immagine supera la partizione o il margine della scheda o se la
 mappa del linker contiene un oggetto o un simbolo di una modalità/servizio
 esclusi.
+
+**Raspberry Pi Pico 2 W congelato alla v1.16.0.** Sul Pico 2 W le modalità
+Available sono quelle della v1.14.0 più eActivity; `architecture_test` fallisce
+se una versione successiva cambia questo insieme. Le milestone M3–M15
+aggiungono modalità solo alla Pimoroni Pico Plus 2 W (`boards::PicoPlus2W`);
+sul Pico 2 W sono ammesse solo correzioni di errori condivise. Per stare nella
+partizione di 2 MB con margine, sul Pico 2 W i sorgenti di eActivity e quelli
+fuori dai percorsi di calcolo e di disegno (record del workspace, file,
+impostazioni, relay AI) sono compilati con `-Os`
+(`FXAI_PICO2W_SIZE_SOURCES` in `cmake/fxai_sources.cmake`); il comportamento
+è lo stesso.
 
 La tabella è usata da launcher (icone, tasti, disponibilità), `AppManager`
 (schermata "non disponibile") e dal **test di architettura** (§7): se un
@@ -84,9 +95,9 @@ display) → `tick()` per lavoro periodico (rete) → `leave()`.
 | Servizio | Header | Usato da |
 |---|---|---|
 | Expression | `expression.hpp`, `expression_ast.hpp`, `calc_library.hpp` (v1.13.0: CONVERT, distribuzioni, PROB, TVM, nomi del CATALOG; funzioni pure senza stato) | tutte le modalità di calcolo: **un solo** parser e valutatore |
-| Exact | `exact.hpp` | Run-Matrix (frazioni, radicali, π), Equation (v1.12.0); previsto per eActivity, Program |
+| Exact | `exact.hpp` | Run-Matrix (frazioni, radicali, π), Equation (v1.12.0), eActivity (v1.16.0); previsto per Program |
 | Editor | `natural_editor.hpp`, `line_editor.hpp` | Run-Matrix, Graph, Equation (celle e Solver tramite `MathField`, v1.12.0), form |
-| MathRender | `math_renderer.hpp` | Run-Matrix, Graph, Symbols |
+| MathRender | `math_renderer.hpp` | Run-Matrix, Graph, Symbols, eActivity (espressioni nel testo, righe di calcolo) |
 | Format | `number_format.hpp` | tutte (Norm/Fix/Sci/Eng, complessi) |
 | Solvers | `solvers.hpp` | Equation (disequazioni, estensione); previsto per Financial e Conic |
 | EquationCore (v1.12.0) | `equation.hpp` | solo Equation: coefficienti esatti, SIML, POLY, SOLVER, visualizzazione delle soluzioni |
@@ -97,21 +108,22 @@ display) → `tick()` per lavoro periodico (rete) → `leave()`.
 | Storage | `storage.hpp` (via `Firmware`) | persistenza del workspace |
 | Units | `point_a.hpp` | Conversion |
 | Help | `cheatsheet.hpp` | Symbols |
-| RunCore | `run_matrix.hpp` | Run-Matrix; previsto per eActivity e Program (righe di calcolo) |
+| RunCore | `run_matrix.hpp` | Run-Matrix, Equation, eActivity (righe di calcolo, v1.16.0); previsto per Program |
 | GraphCmd (v1.11.0) | `graph_commands.hpp` | Run-Matrix: comandi grafici (Plot, F-Line, Graph Y=…) che scrivono V-Window, SKETCH e grafici dei comandi; li disegna Graph |
 | Models | `app_models.hpp` | modelli dati delle modalità future |
 | GraphCore | `graph_model.hpp`, `graph_engine.hpp`, `graph_solve.hpp`, `table_model.hpp` | Graph, Table; previsto per Dyna Graph, Recursion, Conic Graphs (campionamento, viewport, G-Solve) — [GRAPH_ENGINE.md](GRAPH_ENGINE.md) |
-| Files | `file_store.hpp`, `graph_file.hpp`, `pict.hpp` | Graph (progetti `.pcgraph`, immagini `.pcpict`, BMP sulla microSD); previsto per Picture Plot, Program, eActivity — [STORAGE.md](STORAGE.md) |
+| Files | `file_store.hpp`, `graph_file.hpp`, `pict.hpp` | Graph (progetti `.pcgraph`, immagini `.pcpict`, BMP sulla microSD), eActivity (righe immagine, cartelle); previsto per Picture Plot, Program — [STORAGE.md](STORAGE.md) |
 | Diag | `diagnostics.hpp` | System (SYSTEM → DIAG: memoria, PSRAM, allocatore, flash, LCD, microSD, flash interna, tempi di GRAPH sul dispositivo, log USB) |
 | Graph3D | `graph3d_model.hpp`, `graph3d.hpp`, `limits.hpp` | 3D Graph: modello puro (funzioni, modelli, V-Window, Setup, validazione del manuale, geometria analitica, INTSECT/RELATION, codifica delle G-Mem) e disegno (reticoli, taglio al box, proiezione θ/φ, z-buffer o pittore, sezioni CROSS), budget dalla memoria presente |
 | Hardware | `board_config.hpp`, `mem_pools.hpp`, `psram.hpp`, `limits.hpp`, `system_info.hpp`, `system_runtime.hpp` | System (INFO, "Archivio file", DIAG): scheda, pool di memoria, PSRAM, stack — [PICO_PLUS_2W.md](PICO_PLUS_2W.md) |
-| TypedFiles (v1.15.0, entrambe) | `typed_files.hpp` | MEMORY (vista per tipo); previsto per eActivity, Program, Spreadsheet, Python, Geometry, Picture Plot — [FILE_FORMATS.md](FILE_FORMATS.md) |
-| ModeShell (v1.15.0, entrambe) | `mode_shell.hpp` | TABLE; previsto per ogni modalità nuova: pila di schermate, barra F1–F6 da tabella, conferme, richieste, SET UP da tabella, VARS/CATALOG |
-| TextEdit (v1.15.0, entrambe) | `text_editor.hpp` | previsto per eActivity (testo, Notes, memo), Program, Python |
-| StepTask (v1.15.0, entrambe) | `step_task.hpp` | 3D Graph (calcolo progressivo); previsto per ricalcoli, esecuzioni e animazioni con AC → Break |
+| TypedFiles (v1.15.0, entrambe) | `typed_files.hpp` | MEMORY (vista per tipo), eActivity (`.pceact`, v1.16.0); previsto per Program, Spreadsheet, Python, Geometry, Picture Plot — [FILE_FORMATS.md](FILE_FORMATS.md) |
+| ModeShell (v1.15.0, entrambe) | `mode_shell.hpp` | TABLE, eActivity (barre a pagine e sottomenu, conferme, menu); previsto per ogni modalità nuova: pila di schermate, barra F1–F6 da tabella, conferme, richieste, SET UP da tabella, VARS/CATALOG |
+| TextEdit (v1.15.0, entrambe) | `text_editor.hpp` | eActivity (memo e DETAIL, v1.16.0); previsto per Program, Python |
+| StepTask (v1.15.0, entrambe) | `step_task.hpp` | 3D Graph (calcolo progressivo), eActivity (ricalcolo fino alla riga di stop, AC → Break); previsto per esecuzioni e animazioni |
 | Graph2D (v1.15.0, solo Plus) | `graph2d.hpp` | previsto per Dual Screen, Recursion, Dyna Graph, Conic, Financial, Picture Plot, Geometry |
 | Binding (v1.15.0, solo Plus) | `binding.hpp` | previsto per Recursion, Dyna, Financial, Spreadsheet (celle), Program (`fx::calc`) |
 | Interp (v1.15.0, solo Plus) | `program.hpp` | previsto per Program: sottoinsiemi interpretati di C, C++ e C# (decisione della v1.15.0) |
+| EActivityCore (v1.16.0, entrambe) | `eactivity.hpp`, `limits.hpp` | eActivity: documento, righe, testo con espressioni e a capo, 24 tipi di striscia, codifica `.pceact`, limite per scheda |
 
 Errori: il motore lancia `SyntaxError`, `MathError`, `NonRealError` con testi
 nello stile CG50; `AppManager` li mostra nella finestra di errore. Memoria:
@@ -134,6 +146,7 @@ nessuna allocazione dinamica nei percorsi ricorsivi; limiti espliciti
 | `Chat` | conversazione AI | AI Chat | AI Chat |
 | `Graph3D` | tre funzioni (tipo, modulo, espressioni, coefficienti, selezione, colori), V-Window 3D con θ/φ, Setup, zoom, 3D G-Mem 1–20, 3D V-Win 1–6 (record v10) | 3D Graph, Memory | 3D Graph, Memory |
 | `Matrices` (v1.10.0) | Mat A–Z, Vct A–Z, MatAns, VctAns, ListAns | Run-Matrix (calcoli ed editor MAT/VCT) | Run-Matrix, Memory |
+| `EActivity` (v1.16.0) | cartella e ultimo file dell'elenco; dati del menu principale durante un documento (memorie) o una striscia (parti), rimessi a posto al riavvio (sezione `0x0102`) | eActivity | eActivity |
 | `Strings` (v1.13.0) | Str 1–20, function memory f1–f20, variabili di modo (Dyna, Recursion, TVM) | Run-Matrix tramite `setString`, `setFunctionMemory`, `setRecursionFormula`, `storeSystemVariable` | Run-Matrix (VARS, `functionMemory` tramite `ServiceResolver`), GRAPH (DrawDyna/DrawR tramite `graph_commands`) |
 
 Memory e System (RESET) possono cancellare ogni sezione. Le variabili di altre
@@ -180,6 +193,7 @@ dell'utente (progetti GRAPH, immagini) sono sulla microSD o nella flash interna
 | Conversion | `ConversionApp` | conversioni di unità, risultato in Ans | Expression, Units | Settings, Memory | — |
 | AI Chat | `AiChatApp` | chat con Claude/ChatGPT tramite relay | Network, Editor | Settings, Chat | System |
 | Symbols | `SymbolsApp` | guida dei simboli | Help | — | — |
+| eActivity (v1.16.0, entrambe) | `EActivityApp` (`eactivity_app.cpp`) + nucleo `eactivity.cpp` | capitolo 10 della fx-CG50: elenco dei file e cartelle, righe di testo con espressioni Math, righe di calcolo (nucleo di Run-Matrix) e ricalcolo fino alla riga di stop, colori, marcatori, memo, immagini, strisce, Notes, memorie per file, SAVE/SAVE·AS/OPT/CAPACITY | Expression, Exact, Editor, MathRender, Format, Widgets, RunCore, Storage, Files, TypedFiles, ModeShell, TextEdit, StepTask, EActivityCore | Settings, Memory, Matrices, Lists (memorie del file), EActivity; le parti delle strisce solo con `encodeParts`/`decodeParts`/`resetPart` | Run-Matrix, Graph, Table, Statistics, Equation, 3D Graph (sessione da striscia del `Context`) |
 
 La separazione richiesta è rispettata e **verificata**: i grafici di funzioni
 sono solo in Graph (Table li apre con G-CON/G-PLT), quelli statistici solo in
@@ -194,13 +208,22 @@ Per ognuna: responsabilità, componenti UI necessari, servizi, modello dati
 I modelli **non** sono ancora nel record salvato: entreranno nel `Workspace`
 (con una nuova versione del formato) nella sessione che realizza la modalità.
 
-### eActivity — Planned
-- **Responsabilità**: documenti con righe di testo e righe di calcolo.
-- **UI**: editor di righe (testo con `LineEditor`, calcolo con `NaturalEditor`), elenco file.
-- **Servizi**: RunCore (stessa valutazione e forme esatte di Run-Matrix), Exact, MathRender, Storage.
-- **Modello**: `EActivityDocument { name, strips[] }`, `EActivityStrip { Text | Calculation, content }`.
-- **Dipendenze**: Run-Matrix (nucleo), Memory (variabili). Area file: servizio Files sulla microSD (v1.8.0).
-- **Test**: valutazione delle righe tramite `evaluateEntry`, serializzazione dei documenti.
+### Strisce di eActivity (v1.16.0): la sessione da striscia
+
+Una striscia apre un'altra modalità con i **propri dati**: eActivity salva le
+parti del workspace della modalità (`part::Graph`, `Table`, `Lists`,
+`Equation`, `Matrices`, `Graph3D`, `History`) nella sezione `0x0102`, carica
+quelle della striscia e chiama `Context::beginStrip(owner, target, entry)`.
+La modalità legge `Context::strip().entry` in `enter()` per aprire la
+schermata della striscia (grafico, lista, SOLVER, SIML/POLY, editor MAT/VCT,
+RUN in Math); la barra di stato è azzurra; `AppManager` riporta a eActivity con
+MENU, SHIFT ' e SHIFT , (cambio di applicazione), `Context::home()` (EXIT dalla
+schermata principale) fa lo stesso. Le modalità non conoscono eActivity: nessun
+`#include` né `AppId::EActivity` nei loro sorgenti, solo `stripentry`.
+Le modalità che arrivano dopo (Conic, Recursion, Dyna, Financial, Spreadsheet,
+Geometry, Picture Plot, solo sulla Plus) aggiungono le loro parti e la loro
+schermata d'ingresso: la striscia diventa disponibile da sola
+(`eact::stripAvailable`).
 
 ### Spreadsheet — Planned
 - **Responsabilità**: foglio A–Z × 999 righe, valori e formule `=A1+B2`, statistiche sulle colonne.

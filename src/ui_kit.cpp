@@ -18,7 +18,8 @@ static void batteryIcon(gfx::Canvas& c, int x, int y, int percent, bool charging
 }
 
 void statusBar(gfx::Canvas& c, const StatusInfo& s) {
-    c.verticalGradient(0, 0, ScreenW, StatusH - 1, gfx::rgb888To565(248, 249, 251), StatusBg);
+    if (s.strip) c.verticalGradient(0, 0, ScreenW, StatusH - 1, gfx::rgb888To565(226, 248, 252), gfx::rgb888To565(186, 234, 244));
+    else c.verticalGradient(0, 0, ScreenW, StatusH - 1, gfx::rgb888To565(248, 249, 251), StatusBg);
     c.hLine(0, StatusH - 1, ScreenW, StatusLine);
     int x = 4;
     if (s.shift) {

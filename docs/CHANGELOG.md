@@ -1,5 +1,66 @@
 # Changelog
 
+## v1.16.0 — eActivity su entrambe le schede; Raspberry Pi Pico 2 W congelato
+
+Base: `main` = `08a4e6a` (v1.15.0). Milestone **M2**: eActivity alla parità
+con il capitolo 10 del manuale fx-CG50 sul **Raspberry Pi Pico 2 W** e sulla
+**Pimoroni Pico Plus 2 W**. Con questa versione il Pico 2 W è **congelato**:
+le versioni successive aggiungono modalità solo alla Plus. Analisi:
+[reports/ANALISI_FONTI_v1.16.0.md](reports/ANALISI_FONTI_v1.16.0.md);
+rapporto: [reports/SVILUPPO_v1.16.0.md](reports/SVILUPPO_v1.16.0.md).
+**Nessuna prova su hardware fisico**: procedura
+[HARDWARE_TEST_v1.16.0.md](HARDWARE_TEST_v1.16.0.md) (HW-202…HW-219).
+
+### Nuovo
+- **eActivity** (MENU › 3), Available su entrambe le schede:
+  - elenco dei documenti `PICOCALC/EACT/*.pceact` con cartelle fino a tre
+    livelli; OPEN, NEW (nomi A–Z 0–9 { } ' ~), DELETE («Delete eActivity?»),
+    SEARCH («Not Found»), MEMO con JUMP, EDIT, DETAIL, DELETE, DEL-ALL;
+  - righe di **testo** (255 byte, a capo sulle parole, EXE a capo, A⇔a, CHAR,
+    AC sulla riga visualizzata) con **espressioni Math** incorporate (MATH e
+    modelli, senza a capo);
+  - righe di **calcolo** valutate dal nucleo di Run-Matrix (forme esatte, S⇔D
+    da OPTN) e **ricalcolo** delle righe seguenti fino alla riga di **stop**, a
+    passi, interrompibile con AC («Break»);
+  - INSERT (TEXT, CALC, STOP, PICTURE), DEL-LINE con conferma, JUMP,
+    SHIFT ↑/↓, COLOR › MARKER e › CHAR, **memo** (una per riga, colore,
+    Catalog, VIEW, DETAIL, «Only one memo allowed per line.»);
+  - **immagini** `.pcpict` di `PICOCALC/PICT` e `PICOCALC/CAPT` con FORMAT
+    (Line Style, Line Color, Clear);
+  - **strisce** (24 tipi del manuale): RUN, Graph, Graph Editor, Table
+    Editor, Stat Graph, List Editor, Solver, Notes, Matrix Editor, Vector
+    Editor, Simul Equation, Poly Equation, 3D Graph, 3D Graph Editor; ogni
+    striscia conserva i propri dati, la modalità si apre con la barra di stato
+    azzurra e torna con SHIFT ' o MENU; SHIFT , cambia applicazione; FILE ›
+    SIZE; le strisce di modalità non disponibili (o di versioni future) sono
+    conservate e mostrate «non disponibile»;
+  - memorie Mat/Vct/List **separate per documento** ('MAT/VCT, 'LIST);
+    SAVE, SAVE·AS con sovrascrittura, OPT, CAPACITY, «Salvare il file?»;
+  - limite del documento aperto: **24 KB** sul Pico 2 W, **256 KB** sulla
+    Plus; oltre, «Memory ERROR» e il documento resta com'era.
+- Record del workspace: sezione `0x0102` (cartella, ultimo file, dati del menu
+  principale durante un documento o una striscia, rimessi a posto dopo
+  un'interruzione di alimentazione). Formato del documento in
+  [FILE_FORMATS.md](FILE_FORMATS.md).
+- Codifica del workspace **per parti** (Graph, Table, Lists, Equation,
+  Matrices, Graph3D, History) con la garanzia forte.
+- Sessione da striscia nel `Context` (le modalità aprono la schermata della
+  striscia senza conoscere eActivity).
+
+### Cambiato
+- Barra F1–F6 a più pagine: «▶» per la pagina seguente (il font non ha «▷»).
+- Pico 2 W: eActivity e i sorgenti fuori dai percorsi di calcolo e di disegno
+  sono compilati con `-Os`; immagine più piccola della v1.15.0 nonostante
+  eActivity ([BUILD_STATUS.md](BUILD_STATUS.md)).
+- Errori della fx-CG50 come titolo della finestra: «Not Found», «No MEMO»,
+  «Invalid Name», «Break».
+
+### Test
+- `eactivity_test` (una prova per ogni voce E01–E56, due profili),
+  `fuzz_eactivity` (documenti e controller guidato da tasti); `architecture_test`
+  fallisce se le modalità Available del Pico 2 W cambiano dopo la v1.16.0;
+  20 screenshot nuovi (108–127), i 97 precedenti identici.
+
 ## v1.15.0 — fondamenta comuni delle modalità
 
 Base: `main` = `72d0921` (v1.14.0 + recap). Nessuna modalità nuova: le

@@ -4,6 +4,7 @@
 #include "graph_file.hpp"
 #include "graph3d_model.hpp"
 #include "expression.hpp"
+#include "eactivity.hpp"
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -79,6 +80,28 @@ int main(int, char** argv) {
         put(out + "/g3d/set2", e2.data(), e2.size());
         const std::string win = std::string(1, '\2') + g3d::encodeWindow(gs.window);
         put(out + "/g3d/win", win.data(), win.size());
+    }
+    // v1.16.0: documenti eActivity (decodifica: byte 0; controller: byte 1 + lunghezza) e record con la sezione 0x0102
+    {
+        eact::Document d;
+        d.lines.push_back(eact::Line::textLine("Testo " + eact::island("(1)/(2)") + " fine"));
+        d.lines.back().memo = {true, 2, "nota"};
+        d.lines.push_back(eact::Line::calcLine("1+2"));
+        eact::Line stop; stop.kind = eact::LineKind::Stop; d.lines.push_back(stop);
+        eact::Line pic; pic.kind = eact::LineKind::Picture; pic.text = "PICT01.pcpict"; d.lines.push_back(pic);
+        eact::Line st; st.kind = eact::LineKind::Strip; st.strip = 1; st.text = "Graph";
+        Workspace g; g.functions[0].expr = "x^2"; st.data = encodeParts(g, {part::Graph}); d.lines.push_back(st);
+        eact::Line notes; notes.kind = eact::LineKind::Strip; notes.strip = 10; notes.data = {'a', '\n', 'b'}; d.lines.push_back(notes);
+        d.memories = encodeParts(g, {part::Matrices, part::Lists});
+        const auto bytes = eact::encode(d);
+        std::string a(1, '\0'); a.append(bytes.begin(), bytes.end());
+        put(out + "/ea/doc", a.data(), a.size());
+        std::string c(1, '\1'); c += static_cast<char>(bytes.size() & 0xFF); c += static_cast<char>(bytes.size() >> 8);
+        c.append(bytes.begin(), bytes.end()); c += "\x0e\x14\x0e\x18\x01\x0e\x05";
+        put(out + "/ea/keys", c.data(), c.size());
+        Workspace we; we.eactivity.folder = "SCUOLA"; we.eactivity.lastFile = "FISICA.pceact";
+        we.eactivity.savedStrip = encodeParts(g, {part::Graph}); we.eactivity.savedMemories = d.memories;
+        const auto r = serializeWorkspace(we); put(out + "/ws/eactivity", r.data(), r.size());
     }
     Workspace ws;
     auto b = serializeWorkspace(ws); put(out + "/ws/default", b.data(), b.size());

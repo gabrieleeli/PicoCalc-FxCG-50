@@ -1,6 +1,7 @@
 #include "firmware.hpp"
 #include "apps.hpp"
 #include "expression.hpp"
+#include "features.hpp"
 #include <cstdio>
 #include <new>
 
@@ -20,6 +21,9 @@ struct Firmware::Apps {
     app::ConversionApp conversion;
     app::AiChatApp aiChat;
     app::Graph3DApp graph3d;
+#if FXAI_MODE_EACTIVITY
+    app::EActivityApp eactivity;    // v1.16.0, su entrambe le schede
+#endif
 };
 
 namespace { constexpr std::uint32_t AutosaveDelayMs = 2500; }
@@ -35,6 +39,10 @@ Firmware::Firmware(app::Platform& platform, storage::FlashDevice& flash, storage
         manager_.add(*a);
         apps_->launcher.setAvailability(static_cast<std::size_t>(a->id()), true);
     }
+#if FXAI_MODE_EACTIVITY
+    manager_.add(apps_->eactivity);
+    apps_->launcher.setAvailability(static_cast<std::size_t>(app::AppId::EActivity), true);
+#endif
 }
 Firmware::~Firmware() = default;
 

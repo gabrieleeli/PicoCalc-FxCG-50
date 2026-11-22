@@ -186,6 +186,10 @@ void Graph3DApp::enter(Context& ctx) {
     ask_.kind = Ask::Kind::None; confirmDelete_ = false;
     samplesValid_ = false; layerValid_ = false;
     message_.clear();
+    // v1.16.0: striscia 3D Graph di eActivity: la schermata del grafico (calcolo progressivo).
+    if (ctx.inStrip(AppId::Graph3D) && ctx.strip().entry == stripentry::Graph3D && !ctx.resuming()) {
+        try { startDraw(ctx); } catch (const std::bad_alloc&) { throw; } catch (const std::exception&) { screen_ = Screen::List; }
+    }
 }
 
 void Graph3DApp::leave(Context&) {

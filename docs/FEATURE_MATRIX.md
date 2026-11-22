@@ -1,5 +1,13 @@
-# Feature matrix — v1.15.0
+# Feature matrix — v1.16.0
 
+La v1.16.0 (milestone M2) porta **eActivity** alla parità con il capitolo 10
+del manuale fx-CG50 su **entrambe le schede**: ogni voce della tabella di
+parità è presente o è una differenza inevitabile documentata
+([reports/ANALISI_FONTI_v1.16.0.md](reports/ANALISI_FONTI_v1.16.0.md),
+[reports/SVILUPPO_v1.16.0.md](reports/SVILUPPO_v1.16.0.md)). Con questa
+versione il **Raspberry Pi Pico 2 W è congelato**: le versioni successive
+aggiungono modalità solo alla Pimoroni Pico Plus 2 W. Nessuna voce è provata
+su hardware ([HARDWARE_TEST_v1.16.0.md](HARDWARE_TEST_v1.16.0.md)).
 La v1.15.0 mette le **fondamenta comuni** delle modalità mancanti, senza
 modalità nuove: modalità e servizi per scheda, record del workspace **v11** a
 sezioni, file tipizzati e MEMORY › FILES, guscio comune (TABLE portata sopra),
@@ -222,7 +230,15 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Conversion | TESTED ON HOST | |
 | AI Chat (Claude / ChatGPT) | TESTED ON HOST | con trasporto simulato; rete reale da collaudare |
 | Symbols (guida) | TESTED ON HOST | |
-| eActivity, Spreadsheet, Dyna Graph, Recursion, Conic Graphs | IN PROGRESS | solo architettura e modello dati (`app_models.hpp`, testato); nessuna interfaccia; schermata "non disponibile" |
+| eActivity (v1.16.0, entrambe le schede): elenco dei file con cartelle (3 livelli), OPEN, NEW, DELETE («Delete eActivity?»), SEARCH («Not Found»), MEMO (JUMP, EDIT, DETAIL, DELETE, DEL-ALL, «No MEMO») | TESTED ON SIMULATOR | `eactivity_test` (due profili); screenshot 108, 109, 126, 127 |
+| eActivity: righe di testo (255 byte, a capo sulle parole, EXE a capo, AC sulla riga visualizzata, A⇔a, CHAR), espressioni Math nel testo (MATH, modelli, ← → dentro e fuori), TEXT ⇔ CALC | TESTED ON SIMULATOR | screenshot 110, 111, 120 |
+| eActivity: righe di calcolo con il nucleo di Run-Matrix (forme esatte, S⇔D da OPTN, scorrimento), ricalcolo delle righe seguenti fino alla riga di stop a passi con AC → Break | TESTED ON SIMULATOR | screenshot 112; `fuzz_eactivity` |
+| eActivity: INSERT (TEXT, CALC, STOP, PICTURE), DEL-LINE con conferma, JUMP (TOP, BOTTOM, PageUp, PageDown), SHIFT ↑/↓, barra di scorrimento | TESTED ON HOST | `eactivity_test` |
+| eActivity: COLOR › MARKER e › CHAR (SET, EXIT, più righe, non sul risultato); MEMO (INSERT con colore, finestra di 255 byte, icona, Catalog, VIEW, DETAIL, DELETE, «Only one memo allowed per line.») | TESTED ON SIMULATOR | screenshot 113, 114, 124 |
+| eActivity: immagini `.pcpict` di PICT e CAPT (selezione con bordo rosso, FORMAT con Line Style/Line Color/Clear, DELETE, «Image wrong size for insertion.») | TESTED ON SIMULATOR | screenshot 122, 123; differenza D1 |
+| eActivity: strisce (24 tipi, titolo di 16 caratteri, dati propri indipendenti dal menu principale, barra di stato azzurra, SHIFT ' e MENU tornano, SHIFT , cambia applicazione, FILE › SIZE, tipi non disponibili conservati); RUN, Graph, Graph Editor, Table Editor, Stat Graph, List Editor, Solver, Matrix/Vector Editor, Simul/Poly Equation, 3D Graph/3D Graph Editor, Notes | TESTED ON SIMULATOR | screenshot 115–119; Conics, Recur, Dynamic, Financial, SpreadSheet, Geometry, Picture Plot arrivano sulla Plus con le loro modalità; E-CON External |
+| eActivity: memorie Mat/Vct/List separate per file ('MAT/VCT, 'LIST), SAVE, SAVE·AS con sovrascrittura, OPT, CAPACITY, «Salvare il file?» Sì/No/AC, limite del documento 24 KB (Pico 2 W) / 256 KB (Plus) con «Memory ERROR» senza perdita | TESTED ON SIMULATOR | screenshot 121, 125; `eactivity_test` |
+| Spreadsheet, Dyna Graph, Recursion, Conic Graphs | IN PROGRESS | solo architettura e modello dati (`app_models.hpp`, testato); nessuna interfaccia; schermata "non disponibile"; solo Pimoroni Pico Plus 2 W (M3–M9) |
 | 3D Graph (v1.14.0): lista con SELECT/DELETE/TYPE/3D-GMEM/DRAW e FORMAT (Line/Area Color); modelli Line (EXPRESS, VECTOR, P&V, POINTS), Plane (EXPRESS, VECTOR, POINTS), Sphere (FACTOR, EXPAND), Cylinder, Cone con le condizioni «Invalid Setting»; Z=, Param (S, T), Rot X, Rot Y | TESTED ON SIMULATOR | `graph3d_v114_test`, `graph3d_test` (due profili); screenshot 88–96, 100, 103–104 |
 | 3D Graph: V-Window (X/Y/Z, Xgrid/Ygrid, S/T, θ/φ, INITIAL, 3D-VMEM, Out of Domain / Invalid Setting), Setup (Axes, Box, Label, Plot/LineCol, tasti • e ,) | TESTED ON SIMULATOR | `graph3d_v114_test`; screenshot 99, 101, 102 |
 | 3D Graph: rotazione con i tasti e ROTATE (due giri, AC), ZOOM IN/OUT/VIEW-X/Y/Z/ORIGINAL, SKETCH, PICTURE, CAPTURE, TRACE (Next/Back, coordinate), G-Solve CROSS / INTSECT / RELATION (NOT FOUND, INFINITE) | TESTED ON SIMULATOR | `graph3d_v114_test` (geometria analitica e modalità); screenshot 93–98 |
@@ -253,7 +269,9 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Record v11 (v1.15.0): coda di sezioni TLV, sezioni sconosciute o più nuove conservate e riscritte intatte, sezioni corrotte/troncate/duplicate rifiutate; lettura v1…v10 con le fixture v1.6.0…v1.14.0 | TESTED ON HOST |
 | File tipizzati (v1.15.0): cartelle per tipo, intestazione con versione e CRC, testo UTF-8, elenco/apri/salva/salva come/rinomina/elimina atomici su microSD e LittleFS, anche con interruzione di alimentazione | TESTED ON HOST |
 | MEMORY › FILES (v1.15.0): file per tipo con numero e spazio, eliminazione con conferma | TESTED ON SIMULATOR (screenshot 105–107) |
-| Programmi, file Python, documenti eActivity (contenuto) | NOT STARTED (formati dei contenitori pronti: [FILE_FORMATS.md](FILE_FORMATS.md)) |
+| Documenti eActivity `.pceact` (v1.16.0): righe, attributi, memo, risultati, strisce con le parti del workspace, memorie del file; tipi sconosciuti conservati; scrittura atomica | TESTED ON HOST (`eactivity_test`, `fuzz_eactivity`) |
+| Sezione `0x0102` del record (v1.16.0): cartella, ultimo file, dati del menu principale durante un documento o una striscia, rimessi a posto dopo un'interruzione | TESTED ON HOST (`eactivity_test`, `fuzz_workspace`) |
+| Programmi, file Python (contenuto) | NOT STARTED (formati dei contenitori pronti: [FILE_FORMATS.md](FILE_FORMATS.md)) |
 | Matrici e vettori salvati nel workspace (record v6) | TESTED ON HOST (v1.10.0) |
 | Matrici e liste come file CSV (manuale 2-48, 3-18) | TESTED ON HOST (v1.11.0) |
 | Record v9 (v1.13.0): List File, Sub Name, r e θ, Str, function memory, variabili Dyna/Recursion/TVM, celle decimali, ENG/◢/stringhe della cronologia; lettura dei record v7 della v1.11.0 (fixture) | TESTED ON HOST |

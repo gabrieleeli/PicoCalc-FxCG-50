@@ -6,7 +6,7 @@
 //    torna al menu principale; le schermate "modulo" come SET e SET UP
 //    tornano dove sono state aperte);
 //  * FKeyBar: barra F1-F6 da tabella, con sottomenu (EXIT risale), pagine
-//    (F6 "▷" passa alla pagina seguente) e la pagina di SHIFT;
+//    (F6 "▶" passa alla pagina seguente) e la pagina di SHIFT;
 //  * SelectList: lista di voci selezionabili con scorrimento;
 //  * ConfirmBox ("Eliminare...? F1/EXE Si', F6/EXIT No") e AskBox (richiesta
 //    di un valore con l'editor Math), disegnati come in TABLE dalla v1.8.0;

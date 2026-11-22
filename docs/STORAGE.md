@@ -257,9 +257,31 @@ Nella v1.15.0 nessuna modalità nuova è disponibile, quindi il firmware non
 scrive sezioni proprie (la coda è `u16 0`); il Pico 2 W e la Plus conservano
 comunque quelle che trovano.
 
+#### Sezione `0x0102` eActivity (v1.16.0, versione 1, entrambe le schede)
+
+Scritta solo quando c'è qualcosa da ricordare (cartella, ultimo file o dati
+salvati); un record senza questa sezione è quello di prima della v1.16.0.
+
+| Campo | Contenuto |
+|---|---|
+| `u16` n, n byte | cartella dell'elenco sotto `PICOCALC/EACT` (vuota = radice, al più 3 livelli) |
+| `u16` n, n byte | ultimo documento aperto (`NOME.pceact`) |
+| `u32` n, n byte | memorie Mat/Vct/List **del menu principale** mentre un documento è aperto (codifica a parti, [FILE_FORMATS.md](FILE_FORMATS.md)) |
+| `u32` n, n byte | parti del workspace **del documento** mentre una striscia è aperta |
+
+Con un documento aperto il workspace contiene le memorie del documento
+(manuale 10-9) e la sezione quelle del menu principale; con una striscia
+aperta il workspace contiene i dati della striscia e la sezione quelli che
+c'erano prima. Alla lettura del record i dati salvati vengono **rimessi a
+posto** (prima le parti della striscia, poi le memorie) e i due campi si
+svuotano: dopo un'interruzione di alimentazione si ritrovano i dati del menu
+principale; le modifiche non salvate del documento si perdono, come sulla
+fx-CG50. Un errore in questo ripristino non rende il record non valido.
+
 ## File delle modalità (v1.15.0)
 
-Tipi, cartelle, intestazione e regole dei nomi: [FILE_FORMATS.md](FILE_FORMATS.md).
+Tipi, cartelle, intestazione e regole dei nomi: [FILE_FORMATS.md](FILE_FORMATS.md)
+(dalla v1.16.0 anche il contenuto dei documenti eActivity `.pceact`).
 
 ## File CSV (v1.11.0)
 

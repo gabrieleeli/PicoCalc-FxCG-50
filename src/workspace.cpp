@@ -45,6 +45,7 @@ void Workspace::resetAll() {
     for (auto& t : strings) t.clear();
     modeVars = ModeVariables{};
     preservedSections.clear();
+    eactivity = EActivityState{};
 }
 
 // ---------------------------------------------------------------- matrici, vettori, liste
@@ -1220,6 +1221,410 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
     }
     if (!validateView(v).empty()) return false;
     out = std::move(ws);
+    return true;
+}
+
+// ---------------------------------------------------------------- v1.16.0: parti del workspace (F2.5)
+namespace {
+void writeView(Writer& w, const ViewWindow& v) { for (double d : {v.xmin, v.xmax, v.xscl, v.ymin, v.ymax, v.yscl, v.tmin, v.tmax, v.tstep}) w.f64(d); }
+void readView(Reader& r, ViewWindow& v) { for (double* d : {&v.xmin, &v.xmax, &v.xscl, &v.ymin, &v.ymax, &v.yscl, &v.tmin, &v.tmax, &v.tstep}) *d = r.f64(); }
+void writeExactForms(Writer& w, const CalcValue& v) {
+    const bool has = v.hasExact();
+    w.u8(has ? 1 : 0);
+    if (has) for (const exact::Value& e : v.exact) w.slot(ExactSlot{e, true, false});
+    const bool dec = has && v.anyDecimal();
+    w.u8(dec ? 1 : 0);
+    if (!dec) return;
+    for (std::size_t k = 0; k < v.size(); k += 8) {
+        std::uint8_t b = 0;
+        for (std::size_t j = 0; j < 8 && k + j < v.size(); ++j) if (v.decimalAt(k + j)) b = static_cast<std::uint8_t>(b | (1u << j));
+        w.u8(b);
+    }
+}
+bool readExactForms(Reader& r, CalcValue& v) {
+    const auto has = r.u8();
+    if (has > 1 || (has && (v.empty() || v.complex() || v.size() > CalcValue::ExactElements))) return false;
+    if (has) {
+        v.exact.resize(v.size());
+        for (std::size_t k = 0; k < v.size(); ++k) {
+            const ExactSlot slot = r.slot();
+            if (!r.ok || !slot.valid) return false;
+            v.exact[k] = slot.value;
+            if (!(std::abs(slot.value.toDouble() - v.re[k]) <= 1e-12 * std::max(1.0, std::abs(v.re[k])))) return false;
+        }
+    }
+    const auto dec = r.u8();
+    if (dec > 1 || (dec && !has)) return false;
+    if (dec) {
+        v.decimal.assign(v.size(), false);
+        for (std::size_t k = 0; k < v.size(); k += 8) {
+            const std::uint8_t b = r.u8();
+            for (std::size_t j = 0; j < 8 && k + j < v.size(); ++j) v.decimal[k + j] = (b >> j) & 1u;
+        }
+    }
+    return r.ok;
+}
+void writeHistoryPart(Writer& w, const std::vector<HistoryEntry>& history) {
+    w.u16(static_cast<std::uint16_t>(history.size()));
+    for (const HistoryEntry& h : history) {
+        w.str(h.expression); w.f64(h.value.real()); w.f64(h.value.imag()); w.str(h.error); w.u8(h.view);
+        w.slot(h.exact);
+        w.u8(static_cast<std::uint8_t>((h.numerical ? 1 : 0) | (h.flipMixed ? 2 : 0) | (h.command ? 4 : 0)));
+        w.u8(h.base); w.i64(h.fracNum); w.i64(h.fracDen); w.u32(h.simpFactor);
+        w.u8(static_cast<std::uint8_t>(h.engShift));
+        w.u8(static_cast<std::uint8_t>(std::min<std::size_t>(h.displays.size(), 255)));
+        for (std::size_t k = 0; k < h.displays.size() && k < 255; ++k) w.str(h.displays[k]);
+        w.str(h.text);
+        const auto& c = h.collection;
+        w.u8(c ? 1 : 0);
+        if (!c) continue;
+        w.value(c->value, !c->value.empty());
+        const bool exact = !c->value.empty() && c->exact.size() == c->value.size();
+        w.u8(static_cast<std::uint8_t>((exact ? 1 : 0) | (c->decimal ? 2 : 0)));
+        if (exact) for (const exact::Value& e : c->exact) w.slot(ExactSlot{e, true, false});
+    }
+}
+bool readHistoryPart(Reader& r, std::vector<HistoryEntry>& out) {
+    const auto n = r.u16();
+    if (!r.ok || n > Workspace::MaxHistory) return false;
+    out.clear();
+    for (std::uint16_t i = 0; i < n && r.ok; ++i) {
+        HistoryEntry h;
+        h.expression = r.str(); const double re = r.f64(), im = r.f64(); h.value = {re, im}; h.error = r.str(); h.view = r.u8();
+        h.exact = r.slot();
+        const auto flags = r.u8();
+        h.base = r.u8(); h.fracNum = r.i64(); h.fracDen = r.i64(); h.simpFactor = r.u32();
+        h.engShift = static_cast<std::int8_t>(r.u8());
+        const auto shown = r.u8();
+        for (std::uint8_t k = 0; k < shown && r.ok; ++k) h.displays.push_back(r.str());
+        h.text = r.str();
+        if (!r.ok || h.view > 10 || flags > 7 || h.base > 4 || h.fracDen < 0 || h.engShift < -40 || h.engShift > 40) return false;
+        h.numerical = (flags & 1) != 0; h.flipMixed = (flags & 2) != 0; h.command = (flags & 4) != 0;
+        const auto hasCollection = r.u8();
+        if (hasCollection > 1) return false;
+        if (hasCollection) {
+            auto c = std::make_shared<CollectionResult>();
+            if (!r.value(c->value, true) || c->value.rows == 0) return false;
+            const auto cf = r.u8(); if (cf > 3) return false;
+            c->decimal = (cf & 2) != 0;
+            if (cf & 1) {
+                if (c->value.empty()) return false;
+                c->exact.resize(c->value.size());
+                for (exact::Value& e : c->exact) { const ExactSlot slot = r.slot(); if (!r.ok || !slot.valid) return false; e = slot.value; }
+            }
+            h.collection = std::move(c);
+        }
+        out.push_back(std::move(h));
+    }
+    return r.ok;
+}
+struct GraphPart {
+    std::array<GraphFunction, MaxGraphFunctions> functions{};
+    ViewWindow view;
+    GraphSettings settings;
+    std::vector<SketchItem> sketch;
+    std::vector<CommandGraph> commandGraphs;
+};
+void writeGraphPart(Writer& w, const Workspace& ws) {
+    w.u8(static_cast<std::uint8_t>(ws.functions.size()));
+    for (const auto& f : ws.functions) {
+        w.str(f.expr); w.u8(static_cast<std::uint8_t>(f.type)); w.u8(f.selected ? 1 : 0); w.u8(f.color);
+        w.u8(static_cast<std::uint8_t>(f.style)); w.str(f.expr2);
+    }
+    writeView(w, ws.view);
+    const GraphSettings& gs = ws.graph.settings;
+    w.u8(static_cast<std::uint8_t>(gs.funcType));
+    w.u8(static_cast<std::uint8_t>((gs.plotDraw ? 1 : 0) | (gs.derivative ? 2 : 0) | (gs.coord ? 4 : 0) | (gs.label ? 8 : 0) |
+                                   (gs.graphFunc ? 16 : 0) | (gs.simulGraph ? 32 : 0) | (gs.ineqUnion ? 64 : 0)));
+    w.u8(static_cast<std::uint8_t>(gs.grid)); w.u8(static_cast<std::uint8_t>(gs.axes));
+    w.u8(static_cast<std::uint8_t>(gs.sketchLine)); w.u8(gs.plotColor);
+    w.f64(gs.xFactor); w.f64(gs.yFactor);
+    w.u8(gs.background); w.str(gs.backgroundFile); w.u8(gs.fade);
+    w.u16(static_cast<std::uint16_t>(ws.graph.sketch.size()));
+    for (const auto& sk : ws.graph.sketch) {
+        w.u8(static_cast<std::uint8_t>(sk.kind)); w.f64(sk.x0); w.f64(sk.y0); w.f64(sk.x1); w.f64(sk.y1);
+        w.u8(sk.color); w.u8(static_cast<std::uint8_t>(sk.style)); w.str(sk.text);
+        w.u16(static_cast<std::uint16_t>(sk.path.size())); for (float f : sk.path) w.f32(f);
+    }
+    w.u8(static_cast<std::uint8_t>(ws.graph.commandGraphs.size()));
+    for (const CommandGraph& cg : ws.graph.commandGraphs) {
+        w.u8(static_cast<std::uint8_t>(cg.type)); w.str(cg.expr); w.str(cg.expr2); w.u8(cg.color); w.u8(static_cast<std::uint8_t>(cg.style));
+    }
+}
+bool readGraphPart(Reader& r, GraphPart& g) {
+    if (r.u8() != g.functions.size()) return false;
+    for (auto& f : g.functions) {
+        f.expr = r.str(); const auto t = r.u8(); if (t >= GraphTypeCount) return false; f.type = static_cast<GraphType>(t);
+        f.selected = r.u8() != 0; f.color = r.u8(); if (f.color >= GraphColorCount) return false;
+        const auto st = r.u8(); if (st >= LineStyleCount) return false; f.style = static_cast<LineStyle>(st);
+        f.expr2 = r.str();
+        if (f.expr.size() > MaxGraphExpression || f.expr2.size() > MaxGraphExpression) return false;
+    }
+    readView(r, g.view);
+    if (!r.ok || !validateView(g.view).empty()) return false;
+    GraphSettings& gs = g.settings;
+    const auto ft = r.u8(); if (ft >= GraphTypeCount) return false; gs.funcType = static_cast<GraphType>(ft);
+    const auto flags = r.u8(); if (flags > 127) return false;
+    gs.plotDraw = flags & 1; gs.derivative = flags & 2; gs.coord = flags & 4; gs.label = flags & 8;
+    gs.graphFunc = flags & 16; gs.simulGraph = flags & 32; gs.ineqUnion = flags & 64;
+    const auto grid = r.u8(), axes = r.u8(), sk = r.u8(); if (grid > 2 || axes > 2 || sk >= LineStyleCount) return false;
+    gs.grid = static_cast<GridMode>(grid); gs.axes = static_cast<AxesMode>(axes); gs.sketchLine = static_cast<LineStyle>(sk);
+    gs.plotColor = r.u8(); if (gs.plotColor >= GraphColorCount) return false;
+    gs.xFactor = r.f64(); gs.yFactor = r.f64();
+    if (!(gs.xFactor > 0) || !(gs.yFactor > 0) || !std::isfinite(gs.xFactor) || !std::isfinite(gs.yFactor)) return false;
+    gs.background = r.u8(); gs.backgroundFile = r.str(); gs.fade = r.u8();
+    if (gs.background > BackgroundFile || gs.fade > 100) return false;
+    const auto sn = r.u16(); if (sn > MaxSketchItems) return false;
+    for (std::uint16_t i = 0; i < sn && r.ok; ++i) {
+        SketchItem s;
+        s.kind = static_cast<SketchItem::Kind>(r.u8());
+        s.x0 = r.f64(); s.y0 = r.f64(); s.x1 = r.f64(); s.y1 = r.f64();
+        s.color = r.u8(); const auto style = r.u8(); if (style >= LineStyleCount) return false; s.style = static_cast<LineStyle>(style);
+        s.text = r.str();
+        const auto pn = r.u16(); if (pn > 2 * MaxPenPoints) return false;
+        s.path.resize(pn); for (float& f : s.path) f = r.f32();
+        if (!r.ok || !validateSketch(s).empty()) return false;
+        g.sketch.push_back(std::move(s));
+    }
+    const auto graphs = r.u8(); if (graphs > MaxCommandGraphs) return false;
+    for (std::uint8_t k = 0; k < graphs && r.ok; ++k) {
+        CommandGraph cg;
+        const auto type = r.u8(); cg.expr = r.str(); cg.expr2 = r.str(); cg.color = r.u8(); const auto style = r.u8();
+        if (type >= GraphTypeCount || cg.color >= GraphColorCount || style >= LineStyleCount) return false;
+        cg.type = static_cast<GraphType>(type); cg.style = static_cast<LineStyle>(style);
+        if (cg.expr.empty() || cg.expr.size() > MaxGraphExpression || cg.expr2.size() > MaxGraphExpression) return false;
+        g.commandGraphs.push_back(std::move(cg));
+    }
+    return r.ok;
+}
+void writeEquationPart(Writer& w, const EquationState& e) {
+    w.u8(e.unknowns); for (const eq::Number& n : e.simultaneous) writeNumber(w, n);
+    w.u8(e.degree); for (const eq::Number& n : e.polynomial) writeNumber(w, n);
+    w.str(e.solverExpr); w.f64(e.solverLower); w.f64(e.solverUpper); w.u8(static_cast<std::uint8_t>(e.solverVariable));
+    w.u8(e.ineqDegree); w.u8(e.ineqRelation); for (const eq::Number& n : e.inequality) writeNumber(w, n);
+    w.value(e.simResult); writeExactForms(w, e.simResult);
+    w.value(e.polyResult); writeExactForms(w, e.polyResult);
+}
+bool readEquationPart(Reader& r, EquationState& e) {
+    e.unknowns = r.u8();
+    for (eq::Number& n : e.simultaneous) if (!r.number(n)) return false;
+    e.degree = r.u8();
+    for (eq::Number& n : e.polynomial) if (!r.number(n)) return false;
+    e.solverExpr = r.str(); e.solverLower = r.f64(); e.solverUpper = r.f64();
+    e.solverVariable = static_cast<char>(r.u8());
+    e.ineqDegree = r.u8(); e.ineqRelation = r.u8();
+    for (eq::Number& n : e.inequality) if (!r.number(n)) return false;
+    if (!r.ok || e.unknowns < 2 || e.unknowns > 6 || e.degree < 2 || e.degree > 6 || e.ineqDegree < 1 || e.ineqDegree > 6 || e.ineqRelation > 3) return false;
+    if (e.solverExpr.size() > limits::kEquationExpression || !std::isfinite(e.solverLower) || !std::isfinite(e.solverUpper) || !(e.solverLower < e.solverUpper)) return false;
+    if (e.solverVariable != 0 && (e.solverVariable < 'A' || e.solverVariable > 'Z')) return false;
+    auto result = [&](CalcValue& v, std::size_t maxRows, std::size_t maxCols) {
+        if (!r.value(v)) return false;
+        if (!v.empty() && (v.type != ValueType::Matrix || v.rows > maxRows || v.cols > maxCols)) return false;
+        return readExactForms(r, v);
+    };
+    return result(e.simResult, EquationState::MaxUnknowns, EquationState::MaxUnknowns + 1) && result(e.polyResult, EquationState::MaxDegree, 1);
+}
+void writeMatricesPart(Writer& w, const CollectionMemory& cm) {
+    for (const CalcValue& v : cm.mat) { w.value(v); writeExactForms(w, v); }
+    for (const CalcValue& v : cm.vct) { w.value(v); writeExactForms(w, v); }
+    for (const CalcValue* v : {&cm.matAns, &cm.vctAns, &cm.listAns}) { w.value(*v); writeExactForms(w, *v); }
+}
+bool readMatricesPart(Reader& r, CollectionMemory& cm) {
+    std::size_t exactCount = 0;
+    auto one = [&](CalcValue& v, ValueType expected) {
+        if (!r.value(v) || !readExactForms(r, v)) return false;
+        if (!v.empty() && v.type != expected && !(expected == ValueType::Vector && v.type == ValueType::Vector)) return false;
+        exactCount += v.exact.size();
+        return true;
+    };
+    for (CalcValue& v : cm.mat) if (!one(v, ValueType::Matrix)) return false;
+    for (CalcValue& v : cm.vct) if (!one(v, ValueType::Vector)) return false;
+    if (!one(cm.matAns, ValueType::Matrix) || !one(cm.vctAns, ValueType::Vector) || !one(cm.listAns, ValueType::List)) return false;
+    if (!cm.vctAns.empty() && !cm.vctAns.vectorShaped()) return false;
+    return cm.elements() <= limits::kMatrixStoreElements && exactCount <= limits::kExactStoreElements;
+}
+} // namespace
+
+std::vector<std::uint8_t> encodePart(const Workspace& ws, std::uint8_t which) {
+    Writer w;
+    w.u8(which);
+    switch (which) {
+    case part::History: writeHistoryPart(w, ws.history); break;
+    case part::Graph: writeGraphPart(w, ws); break;
+    case part::Table: {
+        const TableRange& t = ws.table;
+        w.f64(t.start); w.f64(t.end); w.f64(t.step);
+        w.u8(static_cast<std::uint8_t>(t.variable)); w.u8(t.list); w.u8(static_cast<std::uint8_t>(t.funcType)); w.u8(t.generated ? 1 : 0);
+        w.u16(static_cast<std::uint16_t>(t.rows.size())); for (double d : t.rows) w.f64(d);
+        break;
+    }
+    case part::Lists:
+        for (const auto& l : ws.lists) { w.u16(static_cast<std::uint16_t>(l.size())); for (double d : l) w.f64(d); }
+        for (const auto& n : ws.listNames) w.str(n);
+        break;
+    case part::Equation: writeEquationPart(w, ws.equation); break;
+    case part::Matrices: writeMatricesPart(w, ws.matrices); break;
+    case part::Graph3D: w.blob(g3d::encode(ws.graph3d.set)); w.f32(ws.graph3d.zoom); break;
+    default: throw std::invalid_argument("parte del workspace sconosciuta");
+    }
+    return std::move(w.out);
+}
+
+bool decodePart(Workspace& ws, std::uint8_t which, const std::uint8_t* data, std::size_t size) {
+    if (!data && size) return false;
+    Reader r{data, size};
+    if (r.u8() != which || !r.ok) return false;
+    switch (which) {
+    case part::History: {
+        std::vector<HistoryEntry> h;
+        if (!readHistoryPart(r, h) || r.i != r.n) return false;
+        ws.history.swap(h);
+        return true;
+    }
+    case part::Graph: {
+        auto g = std::make_unique<GraphPart>();
+        if (!readGraphPart(r, *g) || r.i != r.n) return false;
+        ws.functions = std::move(g->functions);
+        ws.view = g->view;
+        ws.graph.settings = std::move(g->settings);
+        ws.graph.sketch.swap(g->sketch);
+        ws.graph.commandGraphs.swap(g->commandGraphs);
+        return true;
+    }
+    case part::Table: {
+        TableRange t;
+        t.start = r.f64(); t.end = r.f64(); t.step = r.f64();
+        const std::uint8_t var = r.u8(), list = r.u8(), type = r.u8(), generated = r.u8();
+        if (!r.ok || var > 1 || list >= Workspace::ListCount || type >= GraphTypeCount) return false;
+        t.variable = static_cast<TableRange::Variable>(var); t.list = list; t.funcType = static_cast<GraphType>(type); t.generated = generated != 0;
+        if (t.funcType != GraphType::Y && t.funcType != GraphType::Polar && t.funcType != GraphType::Param) return false;
+        if (!std::isfinite(t.start) || !std::isfinite(t.end) || !std::isfinite(t.step)) return false;
+        const auto n = r.u16(); if (n > 999) return false;
+        t.rows.resize(n);
+        for (double& d : t.rows) { d = r.f64(); if (!std::isfinite(d)) return false; }
+        if (!r.ok || r.i != r.n) return false;
+        ws.table = std::move(t);
+        return true;
+    }
+    case part::Lists: {
+        std::array<std::vector<double>, Workspace::ListCount> lists{};
+        std::array<std::string, Workspace::ListCount> names{};
+        std::size_t total = 0;
+        for (auto& l : lists) {
+            const auto n = r.u16(); if (n > Workspace::MaxListLength) return false;
+            if (!r.need(static_cast<std::size_t>(n) * 8)) return false;
+            l.resize(n); for (double& d : l) { d = r.f64(); if (!std::isfinite(d)) return false; }
+            total += n;
+        }
+        for (auto& n : names) {
+            n = r.str();
+            if (n.size() > limits::kListNameLength) return false;
+            for (char ch : n) if (static_cast<unsigned char>(ch) < 0x20 || static_cast<unsigned char>(ch) > 0x7E || ch == '"') return false;
+        }
+        if (!r.ok || r.i != r.n) return false;
+        // budget comune di tutti i List File
+        std::size_t others = 0;
+        for (std::size_t f = 0; f < ws.listFiles.size(); ++f) if (f != ws.settings.listFile) others += ws.listFiles[f].elements();
+        if (total + others > Workspace::MaxListElements) return false;
+        ws.lists.swap(lists);
+        ws.listNames.swap(names);
+        return true;
+    }
+    case part::Equation: {
+        auto e = std::make_unique<EquationState>();
+        if (!readEquationPart(r, *e) || r.i != r.n) return false;
+        ws.equation = std::move(*e);
+        return true;
+    }
+    case part::Matrices: {
+        auto cm = std::make_unique<CollectionMemory>();
+        if (!readMatricesPart(r, *cm) || r.i != r.n) return false;
+        ws.matrices = std::move(*cm);
+        return true;
+    }
+    case part::Graph3D: {
+        auto set = std::make_unique<g3d::GraphSet>();
+        if (!g3d::decode(r.blob(MaxGraph3DSet), *set)) return false;
+        const float zoom = r.f32();
+        if (!r.ok || r.i != r.n || !(zoom >= 0.05F && zoom <= 20.0F)) return false;
+        ws.graph3d.set = *set;
+        ws.graph3d.zoom = zoom;
+        return true;
+    }
+    default: return false;
+    }
+}
+
+void resetPart(Workspace& ws, std::uint8_t which) {
+    switch (which) {
+    case part::History: ws.history.clear(); break;
+    case part::Graph:
+        for (std::size_t i = 0; i < ws.functions.size(); ++i) ws.functions[i] = emptyGraphFunction(i);
+        ws.view = ViewWindow{};
+        ws.graph.settings = GraphSettings{};
+        ws.graph.sketch.clear();
+        ws.graph.commandGraphs.clear();
+        break;
+    case part::Table: ws.table = TableRange{}; break;
+    case part::Lists: for (auto& l : ws.lists) l.clear(); for (auto& n : ws.listNames) n.clear(); break;
+    case part::Equation: ws.equation = EquationState{}; break;
+    case part::Matrices: ws.matrices.clear(); break;
+    case part::Graph3D:
+        for (std::size_t i = 0; i < g3d::Functions; ++i) ws.graph3d.set.fns[i] = g3d::emptyFunction(i);
+        ws.graph3d.set.window = g3d::Window{};
+        ws.graph3d.set.setup = g3d::Setup{};
+        ws.graph3d.zoom = 1.0F;
+        break;
+    default: break;
+    }
+}
+
+std::vector<std::uint8_t> encodeParts(const Workspace& ws, const std::vector<std::uint8_t>& parts) {
+    Writer w;
+    w.u8(static_cast<std::uint8_t>(parts.size()));
+    for (std::uint8_t p : parts) {
+        const auto bytes = encodePart(ws, p);
+        w.u8(p); w.u32(static_cast<std::uint32_t>(bytes.size()));
+        w.out.insert(w.out.end(), bytes.begin(), bytes.end());
+    }
+    return std::move(w.out);
+}
+
+std::vector<std::uint8_t> encodeHistoryEntries(const std::vector<HistoryEntry>& entries) {
+    Writer w;
+    writeHistoryPart(w, entries);
+    return std::move(w.out);
+}
+bool decodeHistoryEntries(const std::uint8_t* data, std::size_t size, std::vector<HistoryEntry>& out) {
+    Reader r{data, size};
+    std::vector<HistoryEntry> h;
+    if (!readHistoryPart(r, h) || r.i != r.n) return false;
+    out.swap(h);
+    return true;
+}
+
+bool decodeParts(Workspace& ws, const std::uint8_t* data, std::size_t size) {
+    Reader r{data, size};
+    const auto n = r.u8();
+    if (!r.ok || n > part::Count) return false;
+    struct Item { std::uint8_t id; const std::uint8_t* p; std::size_t len; };
+    std::vector<Item> items;
+    std::uint8_t seen = 0;
+    for (std::uint8_t k = 0; k < n; ++k) {
+        const auto id = r.u8();
+        const auto len = r.u32();
+        if (!r.ok || id == 0 || id >= part::Count || (seen & (1u << id)) || !r.need(len)) return false;
+        seen = static_cast<std::uint8_t>(seen | (1u << id));
+        items.push_back({id, r.p + r.i, len});
+        r.i += len;
+    }
+    if (r.i != r.n) return false;
+    // Tutto o niente: si prova su una copia delle parti, poi si applica.
+    auto probe = std::make_unique<Workspace>();
+    probe->settings.listFile = ws.settings.listFile;
+    probe->listFiles = ws.listFiles;
+    for (const Item& it : items) if (!decodePart(*probe, it.id, it.p, it.len)) return false;
+    for (const Item& it : items) (void)decodePart(ws, it.id, it.p, it.len);
     return true;
 }
 } // namespace fx

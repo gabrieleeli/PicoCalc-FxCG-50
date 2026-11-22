@@ -80,6 +80,17 @@ std::string cut(const std::string& s, std::size_t glyphs) {
 // ---------------------------------------------------------------- stato
 void EquationApp::enter(Context& ctx) {
     editing_ = false;
+    // v1.16.0: strisce Solver, Simul Equation e Poly Equation di eActivity.
+    if (ctx.inStrip(AppId::Equation) && !ctx.resuming()) {
+        const std::uint8_t e = ctx.strip().entry;
+        if (e == stripentry::Solver) { chooseMode(ctx, Mode::Solver); return; }
+        if (e == stripentry::SimulEquation || e == stripentry::PolyEquation) {
+            mode_ = e == stripentry::SimulEquation ? Mode::Simultaneous : Mode::Polynomial;
+            menuSel_ = static_cast<int>(mode_);
+            openCoefficients(ctx);
+            return;
+        }
+    }
     if (!ctx.resuming()) { screen_ = Screen::Menu; return; }
     // Ritorno dal SET UP: stessa schermata, con le nuove impostazioni.
     if (screen_ == Screen::SolverResult) screen_ = Screen::SolverTable;

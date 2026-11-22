@@ -13,7 +13,20 @@ const char* complexName(ComplexMode m) { return m == ComplexMode::Real ? "Real" 
 
 void Context::open(AppId id) { manager_.open(id); }
 const gfx::Canvas* Context::screen() const noexcept { return manager_.canvas_; }
-void Context::home() { manager_.home(); }
+void Context::home() {
+    // v1.16.0: dalla modalita' di una striscia si torna all'eActivity.
+    if (strip_.active && manager_.activeId_ != strip_.owner) { manager_.open(strip_.owner); return; }
+    manager_.home();
+}
+void Context::beginStrip(AppId owner, AppId target, std::uint8_t entry) {
+    strip_ = StripSession{true, owner, target, entry, false};
+    try {
+        manager_.open(target);
+    } catch (...) {
+        strip_ = StripSession{};
+        throw;
+    }
+}
 void Context::leaveSetup() {
     const AppId back = manager_.setupReturn_;
     manager_.setupReturn_ = AppId::MainMenu;
@@ -48,6 +61,8 @@ ui::StatusInfo Context::status(const char* title) const {
     s.battery = platform.batteryPercent();
     s.charging = platform.charging();
     s.shift = shift_;
+    // barra azzurra (manuale 10-20) anche nelle schermate aperte dalla modalita' della striscia
+    s.strip = strip_.active && manager_.activeId_ != strip_.owner;
     return s;
 }
 void Context::drawStatus(gfx::Canvas& c, const char* title) const { ui::statusBar(c, status(title)); }
@@ -106,7 +121,9 @@ void AppManager::showError(const char* what) {
     static const char* const kTitles[] = {"Can't Solve!", "Time Out", "No Variable", "Underflow", "No Solution", "Infinitely Many Solutions",
                                           "Complex Number In List", "Complex Number In Matrix", "Complex Number In Data",
                                           // v1.14.0 (3D Graph, Appendice α-12)
-                                          "Invalid Setting", "Out of Domain", "INTSECT requires", "RELATION requires"};
+                                          "Invalid Setting", "Out of Domain", "INTSECT requires", "RELATION requires",
+                                          // v1.16.0 (eActivity, Appendice α-6; Break del ricalcolo)
+                                          "Not Found", "No MEMO", "Invalid Name", "Break"};
     bool known = false;
     if (colon) for (const char* t : kTitles) known = known || (std::strncmp(what, t, std::strlen(t)) == 0 && what + std::strlen(t) == colon);
     if (colon && ((error && error < colon) || known)) {
@@ -125,7 +142,20 @@ void AppManager::key(const KeyEvent& ev) {
         errorTitle_.clear(); errorDetail_.clear();
         return;
     }
-    if (ev.is(Key::Menu) || (ev.is(Key::Exit) && ev.longPress)) { home(); return; }
+    // v1.16.0: dalla modalita' di una striscia MENU, SHIFT ' e SHIFT , tornano all'eActivity.
+    // (anche da una modalita' aperta da quella della striscia, es. Graph da Table)
+    const bool inStripApp = ctx_.strip_.active && activeId_ != ctx_.strip_.owner;
+    if (inStripApp && ctx_.shift_ && ev.key == Key::Char && (ev.ch == '\'' || ev.ch == ',')) {
+        ctx_.shift_ = false;
+        ctx_.strip_.switchRequested = ev.ch == ',';
+        open(ctx_.strip_.owner);
+        return;
+    }
+    if (ev.is(Key::Menu) || (ev.is(Key::Exit) && ev.longPress)) {
+        if (inStripApp) { open(ctx_.strip_.owner); return; }
+        home();
+        return;
+    }
     if (ev.is(Key::Shift)) { ctx_.shift_ = !ctx_.shift_; return; }
     if (ev.is(Key::Setup) && activeId_ != AppId::System && !(active_ && active_->ownsSetup())) {
         const AppId from = activeId_;

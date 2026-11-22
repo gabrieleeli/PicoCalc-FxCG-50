@@ -1,12 +1,12 @@
-# Test — v1.14.0 (completamento totale di 3D Graph: `graph3d_v114_test`, record v10, fuzzing del 3D; v1.13.1: un test per ogni errore di ERRORI_v1.13.1, UBSan bloccante)
+# Test — v1.16.0 (eActivity: `eactivity_test` E01–E56 sui due profili, `fuzz_eactivity`, screenshot 108–127, congelamento del Pico 2 W in `architecture_test`; v1.15.0: fondamenta comuni; v1.14.0: 3D Graph)
 
 ## Cosa viene provato e dove
 
 | Livello | Strumento | Stato |
 |---|---|---|
-| Logica portabile (motore, editor, app, grafici, tabelle, 3D, file, storage, memoria, protocollo AI) | test host C++ (CTest), **per entrambi i profili di scheda** (`FXAI_TEST_BOARD=PICO_PLUS_2W` e `PICO2W`) | eseguito: v1.15.0 53 suite sulla Plus e 50 sul Pico 2 W (le suite dei servizi solo Plus — `graph2d_test`, `binding_test`, `program_core_test` — si compilano solo dove c'è il servizio); conteggi in [reports/SVILUPPO_v1.15.0.md](reports/SVILUPPO_v1.15.0.md) |
-| Modalità e servizi per scheda (v1.15.0) | `architecture_test` (registro ⇔ definizioni ⇔ sorgenti compilati) e controllo della mappa del linker nel build del firmware | eseguito su entrambe le schede |
-| Screenshot | `tools/sim_compare.py` esegue tutti i `tests/sim/*.txt` e confronta ogni PNG con `docs/screenshots` pixel per pixel | eseguito: tutti identici, 3 nuovi (105–107) |
+| Logica portabile (motore, editor, app, grafici, tabelle, 3D, file, storage, memoria, protocollo AI) | test host C++ (CTest), **per entrambi i profili di scheda** (`FXAI_TEST_BOARD=PICO_PLUS_2W` e `PICO2W`) | eseguito: v1.16.0 54 suite sulla Plus e 51 sul Pico 2 W (le suite dei servizi solo Plus — `graph2d_test`, `binding_test`, `program_core_test` — si compilano solo dove c'è il servizio); conteggi in [reports/SVILUPPO_v1.16.0.md](reports/SVILUPPO_v1.16.0.md) |
+| Modalità e servizi per scheda (v1.15.0) | `architecture_test` (registro ⇔ definizioni ⇔ sorgenti compilati) e controllo della mappa del linker nel build del firmware; dalla v1.16.0 anche il **congelamento del Pico 2 W** (le modalità Available del Pico 2 W devono restare quelle della v1.16.0) | eseguito su entrambe le schede |
+| Screenshot | `tools/sim_compare.py` esegue tutti i `tests/sim/*.txt` e confronta ogni PNG con `docs/screenshots` pixel per pixel | eseguito: v1.16.0 tutti i 97 precedenti identici, 20 nuovi (108–127, eActivity) |
 | Integrazione continua | GitHub Actions (`.github/workflows/release.yml`, `ubuntu-24.04`) | a ogni push: test host dei due profili, ASan/UBSan, TSan, relay, firmware dei due moduli, pacchetto |
 | Architettura (registro ↔ sorgenti ↔ firmware) | `architecture_test` | eseguito |
 | Stessi test con AddressSanitizer + UBSan | `--sanitize` (dalla v1.13.1 UBSan è bloccante: `-fno-sanitize-recover=undefined`) | eseguito su entrambi i profili |
@@ -14,14 +14,14 @@
 | Memoria esaurita con `operator new` instradato nei pool | `oom_test` (SRAM simulata limitata, senza PSRAM) | eseguito |
 | PSRAM | pool PSRAM simulato sul PC (arena TLSF; 8 MB nei test di sistema e nel simulatore), self-test con modelli di guasto | eseguito; il chip APS6404L reale non è provato |
 | Flash interna | modello NOR (`storage::RamFlash`: erase a 0xFF, program che azzera bit, interruzione dopo n byte) per il record A/B e per LittleFS | eseguito; la flash reale non è provata |
-| Interfaccia | simulatore host + screenshot PNG | eseguito (`docs/screenshots/`: Run-Matrix 12–19, 44–51 e 52–61, EQUATION 08 e 62–76, GRAPH/TABLE 06, 07, 20–37, 3D Graph 40–43 e 88–104, MEMORY › FILES 105–107) |
+| Interfaccia | simulatore host + screenshot PNG | eseguito (`docs/screenshots/`: Run-Matrix 12–19, 44–51 e 52–61, EQUATION 08 e 62–76, GRAPH/TABLE 06, 07, 20–37, 3D Graph 40–43 e 88–104, MEMORY › FILES 105–107, eActivity 108–127) |
 | microSD (protocollo SD in SPI + FatFs) | scheda SD simulata nei test host | eseguito (`sd_fatfs_test`); bus SPI0 reale non provato |
 | Interoperabilità FAT/exFAT | `sd_interop_test` (immagini con mkfs.fat/mkfs.exfat, fsck, mtools) | eseguito: 41 controlli |
 | Relay AI | `unittest` Python con SDK ufficiali e API simulate, TLS in loopback | eseguito: 15 test |
 | Compilazione firmware RP2350 | Pico SDK 2.2.0, `scripts/build.sh --board pico_plus_2w` e `--board pico2w` | eseguita, nessun warning, `picotool info` verificato ([BUILD_STATUS.md](BUILD_STATUS.md)) |
 | Stack sul target | `-fstack-usage` su tutto il firmware | eseguito nella v1.13.1: frame massimo 2 016 byte (`SystemApp::enter`) su 32 KB; valutatore ricorsivo ≤ 328 byte per livello, limitato dal budget di 16 KB |
-| Fuzzing (v1.13.1, v1.14.0, v1.15.0) | libFuzzer + ASan + UBSan (`tools/fuzz`, `run_fuzz.sh`, `FUZZ_ONLY` per eseguire solo gli harness toccati): parser e valutatori (v1.15.0: anche celle e nomi legati), forma esatta contro decimale, workspace con andata e ritorno (anche record v11 con sezioni), CSV, `.pcgraph`, EQUATION, sequenze di tasti; `fuzz_graph3d`; v1.15.0: **`fuzz_typedfile`**, **`fuzz_texteditor`**, **`fuzz_program`** (solo Plus) | eseguito sul profilo Plus (conteggi in [reports/SVILUPPO_v1.13.1.md](reports/SVILUPPO_v1.13.1.md) e [reports/SVILUPPO_v1.14.0.md](reports/SVILUPPO_v1.14.0.md)) |
-| Collaudo fisico | procedure [HARDWARE_TEST_v1.15.0.md](HARDWARE_TEST_v1.15.0.md), [HARDWARE_TEST_v1.14.0.md](HARDWARE_TEST_v1.14.0.md), [HARDWARE_TEST_v1.13.1.md](HARDWARE_TEST_v1.13.1.md), [HARDWARE_TEST_v1.13.0.md](HARDWARE_TEST_v1.13.0.md), [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md), [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md), [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md), [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) e [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md), SYSTEM → DIAG | **non eseguito: in attesa dei risultati dal dispositivo** |
+| Fuzzing (v1.13.1, v1.14.0, v1.15.0) | libFuzzer + ASan + UBSan (`tools/fuzz`, `run_fuzz.sh`, `FUZZ_ONLY` per eseguire solo gli harness toccati): parser e valutatori (v1.15.0: anche celle e nomi legati), forma esatta contro decimale, workspace con andata e ritorno (anche record v11 con sezioni), CSV, `.pcgraph`, EQUATION, sequenze di tasti; `fuzz_graph3d`; v1.15.0: **`fuzz_typedfile`**, **`fuzz_texteditor`**, **`fuzz_program`** (solo Plus); v1.16.0: **`fuzz_eactivity`** (documenti `.pceact` e controller guidato da tasti; con `FXAI_FUZZ_EACT_DOCS=1` solo documenti, molto più veloce) | eseguito sul profilo Plus (conteggi in [reports/SVILUPPO_v1.13.1.md](reports/SVILUPPO_v1.13.1.md) e [reports/SVILUPPO_v1.14.0.md](reports/SVILUPPO_v1.14.0.md)) |
+| Collaudo fisico | procedure [HARDWARE_TEST_v1.16.0.md](HARDWARE_TEST_v1.16.0.md), [HARDWARE_TEST_v1.15.0.md](HARDWARE_TEST_v1.15.0.md), [HARDWARE_TEST_v1.14.0.md](HARDWARE_TEST_v1.14.0.md), [HARDWARE_TEST_v1.13.1.md](HARDWARE_TEST_v1.13.1.md), [HARDWARE_TEST_v1.13.0.md](HARDWARE_TEST_v1.13.0.md), [HARDWARE_TEST_v1.12.0.md](HARDWARE_TEST_v1.12.0.md), [HARDWARE_TEST_v1.11.0.md](HARDWARE_TEST_v1.11.0.md), [HARDWARE_TEST_v1.10.0.md](HARDWARE_TEST_v1.10.0.md), [HARDWARE_TEST_v1.9.0.md](HARDWARE_TEST_v1.9.0.md) e [HARDWARE_TEST_v1.8.0.md](HARDWARE_TEST_v1.8.0.md), SYSTEM → DIAG | **non eseguito: in attesa dei risultati dal dispositivo** |
 
 Quattro livelli distinti, mai confusi nella documentazione:
 **test host** (logica compilata dallo stesso sorgente del firmware ed eseguita
@@ -51,6 +51,7 @@ errore, non solo il primo.
 
 | Suite | Pico Plus 2 W | Pico 2 W | Contenuto |
 |---|---|---|---|
+| eactivity_test **nuova v1.16.0** | 289 | 289 | una prova per ogni voce E01–E56 della tabella di parità: nucleo (codifica `.pceact` con garanzia forte e tipi sconosciuti conservati, unità del testo, a capo, nomi, 24 strisce per scheda), parti del workspace (tutto o niente, ripristino dopo un'interruzione durante una striscia), controller dai tasti della PicoCalc (file e cartelle, testo con espressioni Math, calcoli e ricalcolo fino allo stop con Break, colori, memo, immagini con il bordo rosso, strisce con dati propri e barra azzurra, SHIFT ' e SHIFT ,, Notes, memorie per file, SAVE/SAVE·AS/OPT/CAPACITY, Save?, limite del documento con Memory ERROR, microSD estratta) |
 | workspace_v115_test **nuova v1.15.0** | 114 | 114 | record v11: le 8 fixture v1.6.0…v1.14.0 lette e riscritte identiche in v11, coda TLV vuota, sezioni sconosciute conservate in ordine e riscritte byte per byte (anche dopo altre modifiche), sezione nota decodificata, sezione nota più nuova conservata e vincente, versione più vecchia letta, dati non validi rifiutati, duplicate/fuori ordine/troncate in ogni punto/lunghezze oltre il record o oltre 4 MB/troppe sezioni/byte in più rifiutate senza toccare il workspace, RESET |
 | typed_files_test **nuova v1.15.0** | 434 | 430 | tabella dei tipi per scheda, regole dei nomi (manuale 10-5), intestazione (ogni byte alterato e ogni troncamento rifiutati, versione futura, tipo sbagliato), UTF-8 (forme troppo lunghe, surrogati, NUL), limiti; API su RamFileSystem (scheda assente, guasto di ogni operazione, interruzione dopo n byte: file vecchio o nuovo, scheda piena), su FatFs (RAM disk) e su LittleFS con interruzione di alimentazione; ricerca; FileDialog (regola, sovrascrittura Sì/No, ricerca, conferma); MEMORY › FILES dal firmware |
 | mode_shell_test **nuova v1.15.0** | 53 | 53 | pila di schermate, barra F1–F6 (sottomenu, EXIT, pagine ▷, SHIFT), lista, conferma (anche con errore nell'azione), richiesta, menu, disegno dei modali, SET UP da tabella, VARS e CATALOG dai resolver, TABLE sul guscio dal firmware (SET, SET UP, ritorno, DELETE, TYPE) |
@@ -229,7 +230,7 @@ Gli script degli screenshot sono `tests/sim/run_matrix.txt` (Run-Matrix 12–19)
 CLIP, cursore sull'errore, modalità Line: 44–51), `tests/sim/run_matrix_v111.txt`
 (List 1–26 e sottonomi, CSV, MatAns, celle esatte, Line con ⌟ e INS,
 risultato scorrevole, Eng, Simp, Base-N, comandi grafici: 52–61),
-`tests/sim/graph.txt` (GRAPH e TABLE 06, 07, 20–37), `tests/sim/graph3d.txt`
+`tests/sim/graph.txt` (GRAPH e TABLE 06, 07, 20–37), `tests/sim/foundations_v115.txt` (MEMORY › FILES 105–107), `tests/sim/eactivity.txt` (eActivity 108–127), `tests/sim/graph3d.txt`
 (3D Graph 40–43, rigenerati nella v1.14.0), `tests/sim/graph3d_v114.txt` (3D Graph
 v1.14.0: 88–104) e `tests/sim/run_matrix_v112.txt` (SolveN e FMin, OPTN,
 CATALOG, distribuzioni, CONVERT, modelli d²/dx² e Σ, istruzioni multiple,

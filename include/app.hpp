@@ -72,15 +72,43 @@ public:
     // Ultima schermata disegnata (CAPTURE di Run-Matrix, v1.12.0); nullptr prima del primo disegno.
     const gfx::Canvas* screen() const noexcept;
 
+    // v1.16.0: sessione da striscia di eActivity (manuale 10-18...10-21). La
+    // modalita' `target` e' aperta da una striscia del documento di `owner`:
+    // la barra di stato e' azzurra, EXIT dalla schermata principale, MENU e
+    // SHIFT ' tornano a `owner`, SHIFT , chiede di cambiare applicazione.
+    // `entry` dice alla modalita' quale schermata aprire (eact::StripKind).
+    struct StripSession {
+        bool active{false};
+        AppId owner{AppId::MainMenu};
+        AppId target{AppId::MainMenu};
+        std::uint8_t entry{0};
+        bool switchRequested{false};
+    };
+    const StripSession& strip() const noexcept { return strip_; }
+    bool inStrip(AppId self) const noexcept { return strip_.active && strip_.target == self; }
+    void beginStrip(AppId owner, AppId target, std::uint8_t entry);   // apre `target`
+    void endStrip() noexcept { strip_ = StripSession{}; }
+    void clearStripSwitch() noexcept { strip_.switchRequested = false; }
+
 private:
     friend class AppManager;
     AppManager& manager_;
     bool dirty_{};
     bool shift_{};
     bool resuming_{};
+    StripSession strip_{};
     std::string toast_;
     std::uint32_t toastUntil_{};
 };
+
+// v1.16.0: schermate d'ingresso delle strisce di eActivity (Context::strip().entry),
+// con i valori di eact::StripKind (controllati in src/eactivity.cpp).
+namespace stripentry {
+constexpr std::uint8_t Run = 0, Graph = 1, GraphEditor = 2, TableEditor = 3, StatGraph = 6, ListEditor = 7, Solver = 8,
+                       MatrixEditor = 11, VectorEditor = 12, SimulEquation = 13, PolyEquation = 14, Graph3D = 20, Graph3DEditor = 21;
+// LIST e MAT/VCT dal menu di eActivity (memorie del documento, nessuna striscia).
+constexpr std::uint8_t MemoryLists = 200, MemoryMatrices = 201, MemoryVectors = 202;
+} // namespace stripentry
 
 class App {
 public:

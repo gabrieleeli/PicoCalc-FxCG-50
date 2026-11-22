@@ -62,7 +62,9 @@ constexpr std::uint32_t StepTask   = 1u << 25;   // step_task.hpp    lavoro a pa
 constexpr std::uint32_t Graph2D    = 1u << 26;   // graph2d.hpp      grafico 2D condiviso, schermo diviso (solo Pico Plus 2 W)
 constexpr std::uint32_t Binding    = 1u << 27;   // binding.hpp      variabili legate, celle, dipendenze (solo Pico Plus 2 W)
 constexpr std::uint32_t Interp     = 1u << 28;   // program.hpp      nucleo dell'interprete C/C++/C# (solo Pico Plus 2 W)
-constexpr std::uint32_t Count      = 29;
+// ---- v1.16.0 (M2)
+constexpr std::uint32_t EActivityCore = 1u << 29;   // eactivity.hpp  documenti, righe, strisce, file .pceact (limite per scheda)
+constexpr std::uint32_t Count      = 30;
 } // namespace service
 
 // v1.15.0 (F1): schede su cui una modalita' o un servizio possono esistere.
@@ -91,7 +93,8 @@ constexpr std::uint32_t Graph     = 1u << 9;     // GRAPH Setup, V-Window/graph 
 constexpr std::uint32_t Graph3D   = 1u << 10;    // 3D Graph functions, 3D V-Window, Setup, 3D G-Mem / V-Mem
 constexpr std::uint32_t Matrices  = 1u << 11;    // Mat A-Z, Vct A-Z, MatAns, VctAns, ListAns
 constexpr std::uint32_t Strings   = 1u << 12;    // v1.12.0: Str 1-20, function memory f1-f20, variabili di Dyna/Recursion/TVM
-constexpr std::uint32_t Count     = 13;
+constexpr std::uint32_t EActivity = 1u << 13;    // v1.16.0: stato di eActivity (cartella, memorie salvate durante documenti e strisce)
+constexpr std::uint32_t Count     = 14;
 } // namespace data
 
 constexpr std::uint32_t linkTo(AppId id) noexcept { return 1u << static_cast<unsigned>(id); }

@@ -150,7 +150,7 @@ fxai_feature(SERVICE BINDING    BOARDS PICO_PLUS_2W SYMBOLS BindingResolver Depe
 fxai_feature(SERVICE INTERP     BOARDS PICO_PLUS_2W SYMBOLS 4prog SOURCES src/program_lang.cpp src/program_vm.cpp)
 # Modalita' non ancora realizzate (nessun sorgente fino alla loro milestone):
 # l'opzione esiste gia' perche' il registro dichiara su quali schede possono esistere.
-fxai_feature(MODE EACTIVITY    BOARDS PICO_PLUS_2W PICO2W)
+fxai_feature(MODE EACTIVITY    BOARDS PICO_PLUS_2W PICO2W SYMBOLS EActivityApp SOURCES src/eactivity.cpp src/apps/eactivity_app.cpp)
 fxai_feature(MODE SPREADSHEET  BOARDS PICO_PLUS_2W SYMBOLS SpreadsheetApp)
 fxai_feature(MODE DYNAGRAPH    BOARDS PICO_PLUS_2W SYMBOLS DynaGraphApp)
 fxai_feature(MODE RECURSION    BOARDS PICO_PLUS_2W SYMBOLS RecursionApp)
@@ -162,6 +162,16 @@ fxai_feature(MODE GEOMETRY     BOARDS PICO_PLUS_2W SYMBOLS GeometryApp)
 fxai_feature(MODE PICTUREPLOT  BOARDS PICO_PLUS_2W SYMBOLS PicturePlotApp)
 fxai_feature(MODE PYTHON       BOARDS PICO_PLUS_2W SYMBOLS PythonApp)
 list(APPEND FXAI_CORE_SOURCES ${FXAI_FEATURE_SOURCES})
+# v1.16.0: sorgenti ottimizzati per dimensione sul Raspberry Pi Pico 2 W
+# (CMakeLists.txt): eActivity e le parti che non stanno sui percorsi di calcolo
+# e di disegno (record del workspace, file, impostazioni, relay AI). Il
+# comportamento non cambia; il calcolo e i grafici restano a FXAI_OPT_LEVEL.
+set(FXAI_PICO2W_SIZE_SOURCES
+  ${FXAI_ROOT}/src/apps/eactivity_app.cpp ${FXAI_ROOT}/src/eactivity.cpp ${FXAI_ROOT}/src/text_editor.cpp
+  ${FXAI_ROOT}/src/workspace.cpp ${FXAI_ROOT}/src/workspace_sections.cpp ${FXAI_ROOT}/src/graph_file.cpp
+  ${FXAI_ROOT}/src/apps/graph_files.cpp ${FXAI_ROOT}/src/csv_io.cpp ${FXAI_ROOT}/src/typed_files.cpp
+  ${FXAI_ROOT}/src/apps/system_app.cpp ${FXAI_ROOT}/src/apps/memory_app.cpp ${FXAI_ROOT}/src/apps/ai_chat_app.cpp
+  ${FXAI_ROOT}/src/ai_protocol.cpp ${FXAI_ROOT}/src/apps/mode_shell.cpp)
 # Sorgenti compilati (relativi al repository), per architecture_test.
 set(FXAI_COMPILED_SOURCES)
 foreach(_s ${FXAI_CORE_SOURCES})
