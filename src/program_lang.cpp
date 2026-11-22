@@ -1052,7 +1052,8 @@ private:
                 ++p_;
                 pushString("\n");
             } else {
-                binary(precedence("<<") + 1);
+                Expr item = binary(precedence("<<") + 1);
+                discharge(item);
             }
             builtin(Fn::Print, 1);
             emit(Op::Pop, 0, 0);

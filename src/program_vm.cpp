@@ -592,8 +592,9 @@ int Machine::currentLine() const noexcept {
 }
 
 void Machine::runToEnd(std::size_t maxSteps) {
+    // Riprende anche una macchina in attesa di input (l'input potrebbe essere arrivato).
     step::Budget budget(maxSteps, 0, nullptr);
-    while (state_ != State::Done && state_ != State::Failed && state_ != State::WaitingInput) {
+    while (state_ != State::Done && state_ != State::Failed) {
         if (budget.exhausted()) throw Error("Time Out: il programma non termina", currentLine(), 0);
         (void)step(budget);
         if (state_ == State::WaitingInput) break;

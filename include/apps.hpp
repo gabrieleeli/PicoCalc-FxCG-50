@@ -6,6 +6,7 @@
 #include "line_editor.hpp"
 #include "app_widgets.hpp"
 #include "file_store.hpp"
+#include "typed_files.hpp"
 #include "graph_engine.hpp"
 #include "graph3d.hpp"
 #include "table_model.hpp"
@@ -655,11 +656,28 @@ private:
 class MemoryApp final : public App {
 public:
     AppId id() const override { return AppId::Memory; }
+    void enter(Context& ctx) override;
     void key(Context& ctx, const KeyEvent& ev) override;
     void draw(Context& ctx, gfx::Canvas& c) override;
+    // v1.15.0 (F3): vista dei file per tipo (F3 FILES): Data = dati del
+    // workspace, Types = tipi di file della scheda, Files = file di un tipo.
+    enum class Page : std::uint8_t { Data, Types, Files };
+    Page page() const noexcept { return page_; }
+    const std::vector<files::TypedEntry>& entries() const noexcept { return entries_; }
 private:
+    void openTypes(Context& ctx);
+    void openFiles(Context& ctx);
+    void filesKey(Context& ctx, const KeyEvent& ev);
+    void drawFiles(Context& ctx, gfx::Canvas& c);
     int selected_{0};
     int confirm_{-1};
+    Page page_{Page::Data};
+    std::vector<files::FileType> types_;
+    std::vector<std::pair<std::size_t, std::uint64_t>> typeUsage_;   // file e byte per tipo
+    std::string typeStatus_;
+    int typeSel_{0}, fileSel_{0};
+    std::vector<files::TypedEntry> entries_;
+    FileDialog dialog_;
 };
 
 class ConversionApp final : public App {

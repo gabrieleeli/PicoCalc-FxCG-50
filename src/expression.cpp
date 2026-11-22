@@ -2550,7 +2550,8 @@ private:
                 throw DimensionError("Dimension ERROR: "+std::string(calclib::displayName(t)?calclib::displayName(t):t.c_str())+" non disponibile");
             C out;
             D::load(stored,out,env);
-            out.type=ValueType::Matrix;
+            // v1.15.0 (F8): un intervallo di celle (range_a1_b5) e' una lista.
+            out.type=stored.type==ValueType::List?ValueType::List:ValueType::Matrix;
             return out;
         }
         if(isListName(t)){

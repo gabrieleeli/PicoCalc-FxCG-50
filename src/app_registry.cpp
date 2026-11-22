@@ -93,7 +93,7 @@ constexpr AppInfo kApps[AppCount] = {
      s::Widgets | s::Storage | Shell | s::StepTask, AllData, 0, nullptr, Plus},
     {AppId::Memory, "Memory", "F", rgb888To565(70, 110, 170), AppStatus::Available,
      "Gestione della memoria: uso, cancellazione selettiva, salvataggio del workspace",
-     nullptr, s::Widgets | s::Storage, AllData, 0, kMemorySrc},
+     nullptr, s::Widgets | s::Storage | s::Files | s::TypedFiles, AllData, 0, kMemorySrc},
     {AppId::System, "System", "G", rgb888To565(60, 130, 150), AppStatus::Available,
      "Impostazioni (SET UP), retroilluminazione, Wi-Fi, relay AI, informazioni su memoria e PSRAM, diagnostica e reset",
      nullptr, Ui | s::Network | s::Storage | s::Diag | s::Hardware, AllData /* RESET clears the whole workspace */, 0, kSystemSrc},

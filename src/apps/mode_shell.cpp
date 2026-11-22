@@ -180,7 +180,13 @@ std::vector<VarsItem> varsItems(const Context& ctx) {
     const NameResolver& names = ws;
     for (const char* const* n = systemVariableNames(); *n; ++n) {
         double v = 0;
-        if (names.resolve(*n, v)) out.push_back(VarsItem{std::string(*n) + " = " + std::to_string(v), *n});
+        try {
+            if (names.resolve(*n, v)) out.push_back(VarsItem{std::string(*n) + " = " + std::to_string(v), *n});
+        } catch (const std::bad_alloc&) {
+            throw;
+        } catch (...) {
+            // variabile senza valore ora (statistiche senza dati...): non in elenco
+        }
     }
     const CollectionResolver& coll = ws;
     for (int i = 0; i < CollectionResolver::Slots; ++i) {
