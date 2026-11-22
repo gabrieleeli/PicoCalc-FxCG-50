@@ -137,7 +137,7 @@ void MemoryApp::drawFiles(Context& ctx, gfx::Canvas& c) {
             const files::FileTypeInfo& t = files::fileType(types_[i]);
             char right[48];
             std::snprintf(right, sizeof right, "%u file, %lu byte", static_cast<unsigned>(typeUsage_[i].first), static_cast<unsigned long>(typeUsage_[i].second));
-            ui::listRow(c, top + 16 + static_cast<int>(i) * 21, 20, (std::string(t.name) + "  " + t.folder).c_str(), right, static_cast<int>(i) == typeSel_);
+            ui::listRow(c, top + 16 + static_cast<int>(i) * 21, 20, t.name, right, static_cast<int>(i) == typeSel_);
         }
         if (!typeStatus_.empty()) ui::text(c, 8, top + 16 + static_cast<int>(types_.size()) * 21 + 6, typeStatus_.c_str(), Error, font::Face::Small);
         const char* k[6] = {"OPEN", nullptr, nullptr, nullptr, nullptr, nullptr};

@@ -227,10 +227,10 @@ contesto «da striscia» (barra di stato azzurra, SHIFT , torna); al ritorno le
 sezioni aggiornate rientrano nella striscia e quelle salvate vengono
 ripristinate. Così i dati della striscia sono indipendenti da quelli delle
 modalità aperte dal menu principale, come dice il manuale (10-19). Le
-memorie Mat/Vct/List sono per file (10-9) con lo stesso meccanismo. Per farlo,
-F2 fornisce l'API `encodeSection`/`decodeSection` anche per le sezioni
-esistenti che le strisce del Pico 2 W usano (Functions+View+Graph, Table,
-Lists, Equation, Matrices, Graph3D, History).
+memorie Mat/Vct/List sono per file (10-9) con lo stesso meccanismo. La
+codifica per parti delle sezioni esistenti (Functions+View+Graph, Table,
+Lists, Equation, Matrices, Graph3D, History) si scrive nella M2, insieme alle
+strisce che la usano (decisione presa durante la M1).
 
 ### 5.4 File (F3)
 
@@ -325,7 +325,7 @@ Nessuna modalità nuova diventa Available in M1. Ogni voce ha almeno un test.
 | F2.2 | sezioni sconosciute e più nuove conservate e riscritte intatte | entrambe | `workspace_v115_test` |
 | F2.3 | sezioni corrotte, troncate, duplicate rifiutate senza toccare il workspace | entrambe | `workspace_v115_test`, `fuzz_workspace` |
 | F2.4 | lettura v1–v10 invariata, fixture `workspace_v1_14_0.inc` | entrambe | `workspace_v115_test` + test esistenti |
-| F2.5 | `encodeSection`/`decodeSection` delle sezioni esistenti (per le strisce) | entrambe | `workspace_v115_test` (round trip per sezione) |
+| F2.5 | ~~`encodeSection`/`decodeSection` delle sezioni esistenti (per le strisce)~~ → spostato alla M2 (v1.16.0), dove le strisce lo usano | entrambe | — |
 | F3.1 | tabella dei tipi per scheda (cartella, estensione, validatore, formato) | entrambe (EACT) / Plus | `typed_files_test` |
 | F3.2 | intestazione con versione e CRC; testo UTF-8 validato | entrambe | `typed_files_test`, `fuzz_typedfile` |
 | F3.3 | API elenco/apri/salva/salva come atomico/rinomina/elimina | entrambe | `typed_files_test` con `RamFileSystem` e guasti |

@@ -2,6 +2,7 @@
 // di conferme, richieste e moduli e' quello di TABLE dalla v1.8.0, cosi' le
 // modalita' portate sul guscio restano identiche al pixel.
 #include "mode_shell.hpp"
+#include "calc_library.hpp"
 #include "expression.hpp"
 #include "math_renderer.hpp"
 #include "workspace.hpp"
@@ -198,6 +199,16 @@ std::vector<VarsItem> varsItems(const Context& ctx) {
         CalcValue v;
         const std::string name = std::string("Mat ") + static_cast<char>('A' + i);
         if (coll.collection(CollectionResolver::Memory::Mat, i, v)) out.push_back(VarsItem{name, name});
+    }
+    return out;
+}
+
+std::vector<VarsItem> shellCatalog(const std::string& prefix) {
+    std::vector<VarsItem> out;
+    for (const calclib::CatalogEntry* e = calclib::catalog(); e && e->shown; ++e) {
+        const std::string shown = e->shown;
+        if (!prefix.empty() && shown.compare(0, prefix.size(), prefix) != 0) continue;
+        out.push_back(VarsItem{shown, e->insert ? e->insert : shown});
     }
     return out;
 }

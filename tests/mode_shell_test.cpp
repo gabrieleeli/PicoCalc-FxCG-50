@@ -148,6 +148,11 @@ int main() {
             matB = matB || v.insert == "Mat B";
         }
         CHECK(xmin && list3 && matB && !list1);
+        // CATALOG: lo stesso elenco di Run-Matrix (calc_library), filtrabile per prefisso
+        const auto all = shellCatalog();
+        const auto sins = shellCatalog("Cash_");
+        CHECK(all.size() > 30 && sins.size() == 4 && sins.size() < all.size());
+        for (const auto& c : sins) CHECK(c.label.compare(0, 5, "Cash_") == 0 && c.insert.compare(0, 5, "cash_") == 0);
     }
     // ---------------------------------------------------------------- F4.5 TABLE sul guscio
     {

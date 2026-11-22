@@ -1,4 +1,4 @@
-# Memorizzazione: flash interna e microSD (v1.9.0, v1.11.0, v1.12.0, v1.13.0)
+# Memorizzazione: flash interna e microSD (v1.9.0, v1.11.0, v1.12.0, v1.13.0, v1.15.0)
 
 Il firmware usa tre memorie con ruoli diversi.
 
@@ -68,7 +68,12 @@ restano intatti. Un ID non riconosciuto lascia la mappa della build.
 Due slot con CRC-32 e numero di sequenza: si scrive sempre lo slot più
 vecchio, quindi un'interruzione durante la scrittura lascia valido l'altro
 (test di interruzione in ogni punto in `storage_test`). Il record è alla
-**versione 10** (v1.14.0, completamento di 3D Graph): il blocco 3D della
+**versione 11** (v1.15.0, fondamenta comuni): i campi della versione 10
+restano identici e in coda c'è una **lista di sezioni TLV** (formato sotto);
+dalla v1.15.0 ogni modalità nuova aggiunge una sezione invece di una versione
+del formato, e le sezioni che un firmware non conosce (o di una versione più
+nuova) sono conservate e riscritte intatte. La **versione 10**
+(v1.14.0, completamento di 3D Graph): il blocco 3D della
 versione 5 non è più scritto in mezzo al record e il nuovo stato del 3D Graph
 va in coda (formato sotto); i record v5–v9 sono convertiti. La **versione 9**
 (v1.13.0) aggiunge in coda List File, Sub Name e tipo
@@ -100,7 +105,10 @@ v7→v9 in `run_matrix_v112_test`), il record v9 generato dai sorgenti della v1.
 (`tests/fixtures/workspace_v1_12_0.inc`, migrazione v8→v9 in `run_matrix_v112_test`)
 e il record v9 con dati 3D non predefiniti generato dai sorgenti della v1.13.1
 (`tests/fixtures/workspace_v1_13_1_graph3d.inc`; la migrazione v1…v9 → v10 di
-tutte le fixture è in `graph3d_v114_test`);
+tutte le fixture è in `graph3d_v114_test`) e il record v10 generato dai
+sorgenti della v1.14.0 (`tests/fixtures/workspace_v1_14_0.inc`, generatore in
+`tests/fixtures/gen_workspace_v1_14_0.cpp.txt`; la lettura di tutte le fixture
+v1…v10 e la riscrittura in v11 sono in `workspace_v115_test`);
 le 6 funzioni della v1.6.0 diventano Y1–Y6 e la griglia booleana diventa Grid
 On/Off; una V-Window che non supera i controlli viene corretta o sostituita da
 quella iniziale, senza scartare il resto dei dati.
@@ -220,6 +228,38 @@ griglia in celle (5–128) diventa Xgrid = Ygrid = celle + 1 punti (al più 50),
 yaw e pitch diventano θ = −(yaw + 90°) e φ = 90° − pitch (la stessa
 orientazione), lo zoom resta. Con valori oltre 1E98 (accettati dalla v1.9.0)
 si usa la finestra iniziale con la stessa vista.
+
+### Coda della versione 11 (v1.15.0): sezioni TLV
+
+In coda al blocco della versione 10.
+
+| Campo | Contenuto |
+|---|---|
+| `u16` | numero di sezioni (≤ 64) |
+| per sezione: `u16` | id (`0x0001`–`0x00FF` sezioni comuni, `0x0100` + AppId la sezione di una modalità) |
+| `u16` | versione della sezione |
+| `u32` n, n byte | dati (n ≤ 4 MB e dentro il record) |
+
+Regole (`serializeWorkspace`/`deserializeWorkspace`, `src/workspace.cpp`;
+codifiche in `src/workspace_sections.cpp`):
+- le sezioni sono scritte in ordine di id crescente; id ripetuti o fuori
+  ordine, lunghezze oltre il record o oltre 4 MB, più di 64 sezioni o byte in
+  più dopo l'ultima rendono il record **non valido** (si usa l'altro slot);
+- una sezione con id conosciuto e versione ≤ quella del firmware è decodificata
+  dalla sua codifica (dati non validi: record non valido);
+- una sezione **sconosciuta** o di una **versione più nuova** finisce in
+  `Workspace::preservedSections` e viene riscritta byte per byte; se una
+  codifica conosciuta ha lo stesso id, la sezione conservata più nuova vince
+  (i dati del firmware successivo non si perdono);
+- RESET (SYSTEM) cancella anche le sezioni conservate.
+
+Nella v1.15.0 nessuna modalità nuova è disponibile, quindi il firmware non
+scrive sezioni proprie (la coda è `u16 0`); il Pico 2 W e la Plus conservano
+comunque quelle che trovano.
+
+## File delle modalità (v1.15.0)
+
+Tipi, cartelle, intestazione e regole dei nomi: [FILE_FORMATS.md](FILE_FORMATS.md).
 
 ## File CSV (v1.11.0)
 

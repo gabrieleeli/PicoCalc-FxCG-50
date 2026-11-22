@@ -141,6 +141,9 @@ void drawFormScreen(gfx::Canvas& c, const std::string& title, const Form& form, 
 // CollectionResolver). Nessun elenco di variabili proprio delle modalita'.
 struct VarsItem { std::string label, insert; };
 std::vector<VarsItem> varsItems(const Context& ctx);
+// Voci del CATALOG (lo stesso elenco di Run-Matrix, calc_library): etichetta e
+// testo da inserire, filtrate per prefisso (vuoto: tutte).
+std::vector<VarsItem> shellCatalog(const std::string& prefix = {});
 
 // I modali di una modalita', nell'ordine in cui ricevono i tasti.
 struct ModeShell {

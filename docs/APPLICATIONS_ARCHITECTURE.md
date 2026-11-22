@@ -1,4 +1,4 @@
-# Architettura delle applicazioni — v1.14.0
+# Architettura delle applicazioni — v1.15.0
 
 Questo documento descrive **come sono costruite tutte le modalità** (quelle
 disponibili e quelle future), quali servizi condivisi usano, quali dati si
@@ -24,6 +24,22 @@ le 23 modalità del menu principale. Per ognuna dichiarano:
 | `data` | sezioni del `Workspace` a cui i sorgenti possono accedere (vedi §4) |
 | `links` | modalità che può aprire direttamente (es. Graph → Table) |
 | `sources` | file che la implementano |
+| `boards` (v1.15.0) | schede su cui la modalità può esistere: `boards::Both` o `boards::PicoPlus2W` |
+
+**Risoluzione per scheda (v1.15.0, F1).** `appInfo()` restituisce la voce
+risolta per la build: se la scheda non è in `boards`, o se l'opzione
+`FXAI_MODE_<NOME>` della modalità è spenta, la modalità è `Planned` senza
+sorgenti né collegamenti; sul Pico 2 W il testo è «Non disponibile sul
+Raspberry Pi Pico 2 W: richiede la Pimoroni Pico Plus 2 W (flash e RAM).»
+(`declaredAppInfo()` dà la voce come è scritta, per i test). Le opzioni sono
+in `cmake/fxai_sources.cmake` (`fxai_feature(MODE|SERVICE <NOME> BOARDS …
+SOURCES … SYMBOLS …)`), arrivano al codice come `FXAI_MODE_<NOME>=0/1` e
+`FXAI_SERVICE_<NOME>=0/1` (`include/features.hpp`) e decidono anche quali
+sorgenti si compilano: il profilo host del Pico 2 W compila esattamente i
+sorgenti del firmware del Pico 2 W. Dopo il link `cmake/check_firmware_size.cmake`
+fallisce se l'immagine supera la partizione o il margine della scheda o se la
+mappa del linker contiene un oggetto o un simbolo di una modalità/servizio
+esclusi.
 
 La tabella è usata da launcher (icone, tasti, disponibilità), `AppManager`
 (schermata "non disponibile") e dal **test di architettura** (§7): se un
@@ -89,6 +105,13 @@ display) → `tick()` per lavoro periodico (rete) → `leave()`.
 | Diag | `diagnostics.hpp` | System (SYSTEM → DIAG: memoria, PSRAM, allocatore, flash, LCD, microSD, flash interna, tempi di GRAPH sul dispositivo, log USB) |
 | Graph3D | `graph3d_model.hpp`, `graph3d.hpp`, `limits.hpp` | 3D Graph: modello puro (funzioni, modelli, V-Window, Setup, validazione del manuale, geometria analitica, INTSECT/RELATION, codifica delle G-Mem) e disegno (reticoli, taglio al box, proiezione θ/φ, z-buffer o pittore, sezioni CROSS), budget dalla memoria presente |
 | Hardware | `board_config.hpp`, `mem_pools.hpp`, `psram.hpp`, `limits.hpp`, `system_info.hpp`, `system_runtime.hpp` | System (INFO, "Archivio file", DIAG): scheda, pool di memoria, PSRAM, stack — [PICO_PLUS_2W.md](PICO_PLUS_2W.md) |
+| TypedFiles (v1.15.0, entrambe) | `typed_files.hpp` | MEMORY (vista per tipo); previsto per eActivity, Program, Spreadsheet, Python, Geometry, Picture Plot — [FILE_FORMATS.md](FILE_FORMATS.md) |
+| ModeShell (v1.15.0, entrambe) | `mode_shell.hpp` | TABLE; previsto per ogni modalità nuova: pila di schermate, barra F1–F6 da tabella, conferme, richieste, SET UP da tabella, VARS/CATALOG |
+| TextEdit (v1.15.0, entrambe) | `text_editor.hpp` | previsto per eActivity (testo, Notes, memo), Program, Python |
+| StepTask (v1.15.0, entrambe) | `step_task.hpp` | 3D Graph (calcolo progressivo); previsto per ricalcoli, esecuzioni e animazioni con AC → Break |
+| Graph2D (v1.15.0, solo Plus) | `graph2d.hpp` | previsto per Dual Screen, Recursion, Dyna Graph, Conic, Financial, Picture Plot, Geometry |
+| Binding (v1.15.0, solo Plus) | `binding.hpp` | previsto per Recursion, Dyna, Financial, Spreadsheet (celle), Program (`fx::calc`) |
+| Interp (v1.15.0, solo Plus) | `program.hpp` | previsto per Program: sottoinsiemi interpretati di C, C++ e C# (decisione della v1.15.0) |
 
 Errori: il motore lancia `SyntaxError`, `MathError`, `NonRealError` con testi
 nello stile CG50; `AppManager` li mostra nella finestra di errore. Memoria:
@@ -125,7 +148,12 @@ e le memorie Ans) e si assegnano solo con i metodi controllati del workspace
 Run-Matrix legge e scrive le liste di Statistics senza accedere a `ws.lists`.
 Non esistono sistemi di variabili separati per modalità.
 
-Persistenza: `serializeWorkspace()` (versione 10 dalla v1.14.0 con il 3D Graph
+Persistenza: `serializeWorkspace()` (versione 11 dalla v1.15.0 con la coda di
+sezioni TLV: ogni modalità realizzata dopo la v1.15.0 aggiunge la propria
+sezione `0x0100 + AppId` in `src/workspace_sections.cpp`, compilata solo sulle
+schede che hanno la modalità; le sezioni sconosciute o più nuove restano in
+`Workspace::preservedSections` e vengono riscritte intatte — [STORAGE.md](STORAGE.md);
+versione 10 dalla v1.14.0 con il 3D Graph
 completo in coda; versione 9 dalla v1.13.0 con List File,
 stringhe, function memory, variabili di modo, viste ENG/∠/a+bi e decimali
 delle celle; versione 8 dalla v1.12.0 con i dati di
@@ -266,9 +294,12 @@ con 5 errori; senza la modifica passa (468 controlli).
 ## 8. Come aggiungere una modalità
 
 1. Implementare il nucleo (logica senza UI) usando i servizi esistenti; test host.
-2. Spostare il modello da `app_models.hpp` nel `Workspace`, aggiungerlo alla
-   serializzazione con una nuova versione (mantenendo la lettura delle precedenti).
-3. Scrivere il controller in `src/apps/<nome>_app.cpp`, registrarlo in `Firmware`.
-4. Aggiornare la voce del registro (`status`, `services`, `data`, `links`, `sources`).
+2. Spostare il modello da `app_models.hpp` nel `Workspace` come **sezione TLV**
+   (v1.15.0: id `0x0100 + AppId`, codifica in `src/workspace_sections.cpp`,
+   versione della sezione propria; nessuna nuova versione del record).
+3. Scrivere il controller in `src/apps/<nome>_app.cpp` sul guscio comune
+   (`ModeShell`), registrarlo in `Firmware` sotto `FXAI_MODE_<NOME>`;
+   aggiungere i sorgenti a `fxai_feature(MODE <NOME> …)`.
+4. Aggiornare la voce del registro (`status`, `services`, `data`, `links`, `sources`, `boards`).
 5. `architecture_test` verifica che dichiarazioni e sorgenti coincidano.
 6. Aggiornare [FEATURE_MATRIX.md](FEATURE_MATRIX.md) e questo documento.

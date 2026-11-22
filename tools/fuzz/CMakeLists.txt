@@ -20,7 +20,12 @@ add_library(fxai_fuzz_core STATIC ${FXAI_CORE_SOURCES} ${FXAI_ROOT}/src/platform
 target_include_directories(fxai_fuzz_core PUBLIC ${FXAI_INCLUDE_DIR} ${FXAI_ROOT}/tests)
 target_compile_definitions(fxai_fuzz_core PUBLIC FXAI_VERSION_STRING="${FXAI_VERSION_STRING}" FXAI_FATFS_MKFS=1 ${FXAI_BOARD_DEFINE} ${FXAI_FEATURE_DEFINITIONS}
   LFS_NO_DEBUG=1 LFS_NO_WARN=1 LFS_NO_ERROR=1 LFS_NO_ASSERT=1)
-foreach(t fuzz_expr fuzz_exactdiff fuzz_workspace fuzz_csv fuzz_pcgraph fuzz_equation fuzz_ui fuzz_graph3d)
+set(FXAI_FUZZERS fuzz_expr fuzz_exactdiff fuzz_workspace fuzz_csv fuzz_pcgraph fuzz_equation fuzz_ui fuzz_graph3d
+  fuzz_typedfile fuzz_texteditor)                       # v1.15.0
+if("FXAI_SERVICE_INTERP=1" IN_LIST FXAI_FEATURE_DEFINITIONS)
+  list(APPEND FXAI_FUZZERS fuzz_program)                # v1.15.0, solo Pico Plus 2 W
+endif()
+foreach(t ${FXAI_FUZZERS})
   add_executable(${t} ${CMAKE_CURRENT_LIST_DIR}/${t}.cpp)
   target_link_libraries(${t} PRIVATE fxai_fuzz_core)
   target_link_options(${t} PRIVATE -fsanitize=fuzzer)
