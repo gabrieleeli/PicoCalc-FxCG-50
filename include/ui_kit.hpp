@@ -66,6 +66,7 @@ struct StatusInfo {
     bool shift{};
     bool wifi{};
     bool busy{};
+    bool strip{};                // v1.16.0: modalita' aperta da una striscia di eActivity (barra azzurra)
 };
 
 void clear(gfx::Canvas& c, std::uint16_t color = theme::Bg);

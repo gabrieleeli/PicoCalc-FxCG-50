@@ -39,7 +39,16 @@ FormField num(const char* label, const char* value) { return {label, value, Form
 FormField tail() { return {"\xCE\xBC", "\xE2\x89\xA0", FormField::Type::Choice, {"\xE2\x89\xA0", "<", ">"}, 0}; }
 } // namespace
 
-void StatisticsApp::enter(Context& ctx) { setupGrid(ctx); screen_ = Screen::Lists; menu_.close(); }
+void StatisticsApp::enter(Context& ctx) {
+    setupGrid(ctx); screen_ = Screen::Lists; menu_.close();
+    // v1.16.0: striscia Stat Graph di eActivity: il grafico delle liste XList/YList (Scatter).
+    if (ctx.inStrip(AppId::Statistics) && ctx.strip().entry == stripentry::StatGraph) {
+        const Settings& st = ctx.ws.settings;
+        graph_ = GraphKind::Scatter;
+        const auto& x = ctx.ws.lists[st.statXList];
+        if (!x.empty() && x.size() == ctx.ws.lists[st.statYList].size()) screen_ = Screen::Graph;
+    }
+}
 
 void StatisticsApp::setupGrid(Context& ctx) {
     auto& lists = ctx.ws.lists;
@@ -205,6 +214,9 @@ void StatisticsApp::key(Context& ctx, const KeyEvent& ev) {
     switch (screen_) {
     case Screen::Lists:
         if (grid_.editing()) { (void)grid_.key(ctx, ev); return; }
+        // v1.16.0: 'LIST di eActivity: solo i tasti di modifica delle liste (10-9), EXIT torna al documento.
+        if (ctx.inStrip(AppId::Statistics) && ctx.strip().entry == stripentry::MemoryLists &&
+            (ev.is(Key::F1) || ev.is(Key::F2) || ev.is(Key::F3) || ev.is(Key::F4))) return;
         switch (ev.key) {
         case Key::F1: menu_.show("GRAPH", graphMenu(ctx.ws.settings)); menuKind_ = 1; return;
         case Key::F2: menu_.show("CALC", calcMenu(ctx.ws.settings)); menuKind_ = 2; return;
@@ -428,6 +440,7 @@ void StatisticsApp::draw(Context& ctx, gfx::Canvas& c) {
         grid_.draw(ctx, c, top, bottom);
         const bool shift = ctx.shift();
         const char* keys[6] = {"GRAPH", "CALC", "TEST", "DIST", shift ? "SORT\xE2\x86\x93" : "SORT\xE2\x86\x91", "DEL-L"};
+        if (ctx.inStrip(AppId::Statistics) && ctx.strip().entry == stripentry::MemoryLists) keys[0] = keys[1] = keys[2] = keys[3] = nullptr;
         ui::softKeys(c, keys);
         break;
     }

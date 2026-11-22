@@ -7,6 +7,7 @@
 //  - RESET (resetAll) cancella anche le sezioni conservate.
 #include "run_matrix.hpp"
 #include "test_util.hpp"
+#include "features.hpp"
 #include "workspace.hpp"
 #include <cstring>
 #include <memory>
@@ -211,10 +212,10 @@ int main() {
         future[4] = 12;
         Workspace t;
         CHECK(!deserializeWorkspace(future.data(), future.size(), t));
-        // nessuna sezione di produzione nella v1.15.0 (le modalita' nuove arrivano dalla v1.16.0)
+        // v1.16.0: la prima sezione di produzione e' quella di eActivity (0x0102)
         std::size_t n = 99;
         (void)workspaceSectionCodecs(n);
-        CHECK(n == 0);
+        CHECK(n == (features::kEActivity ? 1u : 0u));
     }
     return testutil::finish("workspace_v115_test");
 }

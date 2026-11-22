@@ -29,6 +29,7 @@ const char* const kConversionSrc[] = {"src/apps/conversion_app.cpp", nullptr};
 const char* const kAiChatSrc[] = {"src/apps/ai_chat_app.cpp", nullptr};
 const char* const kSymbolsSrc[] = {"src/apps/symbols_app.cpp", nullptr};
 const char* const kGraph3DSrc[] = {"src/apps/graph3d_app.cpp", "src/apps/graph3d_plot.cpp", nullptr};
+const char* const kEActivitySrc[] = {"src/apps/eactivity_app.cpp", "src/eactivity.cpp", nullptr};
 
 constexpr AppInfo kApps[AppCount] = {
     {AppId::RunMatrix, "Run-Matrix", "1", rgb888To565(232, 96, 30), AppStatus::Available,
@@ -41,10 +42,15 @@ constexpr AppInfo kApps[AppCount] = {
     {AppId::Statistics, "Statistics", "2", rgb888To565(30, 160, 90), AppStatus::Available,
      "Liste 1-26 con sottonomi e file CSV, statistiche 1/2 variabili, regressioni, grafici statistici, distribuzioni, test e intervalli",
      nullptr, s::Expression | Ui | s::Stats | s::Storage | s::Files, d::Settings | d::Lists | d::Functions, 0, kStatisticsSrc},
-    {AppId::EActivity, "eActivity", "3", rgb888To565(220, 40, 140), AppStatus::Planned,
-     "Documenti con righe di testo e righe di calcolo valutate dal nucleo di Run-Matrix",
-     "Documenti misti testo/formule non ancora implementati.",
-     s::Expression | s::Exact | Ui | s::MathRender | s::RunCore | s::Storage | s::Models | Shell | s::TextEdit | s::StepTask, d::Settings | d::Memory, 0, nullptr},
+    {AppId::EActivity, "eActivity", "3", rgb888To565(220, 40, 140), AppStatus::Available,
+     "Documenti .pceact con righe di testo (espressioni Math, colori, marcatori, memo), righe di calcolo valutate dal nucleo di Run-Matrix con ricalcolo fino alla riga di stop, immagini PICT, strisce delle modalita' con i propri dati, Notes, memorie Mat/Vct/List per file",
+     nullptr,
+     s::Expression | s::Exact | Ui | s::MathRender | s::RunCore | s::Storage | s::Files | Shell | s::TextEdit | s::StepTask | s::EActivityCore,
+     // Matrices e Lists: le memorie del file (10-9); le parti delle strisce passano solo da
+     // encodeParts/decodeParts/resetPart del workspace.
+     d::Settings | d::Memory | d::Matrices | d::Lists | d::EActivity,
+     linkTo(AppId::RunMatrix) | linkTo(AppId::Graph) | linkTo(AppId::Table) | linkTo(AppId::Statistics) | linkTo(AppId::Equation) | linkTo(AppId::Graph3D),
+     kEActivitySrc},
     {AppId::Spreadsheet, "Spreadsheet", "4", rgb888To565(70, 150, 40), AppStatus::Planned,
      "Foglio A..Z x 999 righe con valori e formule (=A1+B2), statistiche sulle colonne",
      "Foglio di calcolo con formule e riferimenti non ancora implementato.",
@@ -150,6 +156,7 @@ const char* const kHStepTask[] = {"step_task.hpp", nullptr};
 const char* const kHGraph2D[] = {"graph2d.hpp", nullptr};
 const char* const kHBinding[] = {"binding.hpp", nullptr};
 const char* const kHInterp[] = {"program.hpp", nullptr};
+const char* const kHEActivity[] = {"eactivity.hpp", "limits.hpp", nullptr};
 const char* const kHHardware[] = {"board_config.hpp", "mem_pools.hpp", "psram.hpp", "limits.hpp", "system_info.hpp", "system_runtime.hpp", nullptr};
 const ServiceInfo kServices[service::Count] = {
     {s::Expression, "Expression", kHExpression}, {s::Exact, "Exact", kHExact}, {s::Editor, "Editor", kHEditor},
@@ -164,8 +171,9 @@ const ServiceInfo kServices[service::Count] = {
     {s::TextEdit, "TextEdit", kHTextEdit}, {s::StepTask, "StepTask", kHStepTask},
     {s::Graph2D, "Graph2D", kHGraph2D, Plus}, {s::Binding, "Binding", kHBinding, Plus},
     {s::Interp, "Interp", kHInterp, Plus},
+    {s::EActivityCore, "EActivityCore", kHEActivity},
 };
-const char* const kDataNames[data::Count] = {"settings", "memory", "history", "functions", "view", "table", "lists", "equation", "chat", "graph", "graph3d", "matrices", "strings"};
+const char* const kDataNames[data::Count] = {"settings", "memory", "history", "functions", "view", "table", "lists", "equation", "chat", "graph", "graph3d", "matrices", "strings", "eactivity"};
 // Membri e metodi del workspace che non hanno il nome di una sezione (v1.11.0).
 struct MemberSection { const char* member; std::uint32_t section; };
 const MemberSection kMembers[] = {

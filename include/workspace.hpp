@@ -234,6 +234,20 @@ struct SectionCodec {
 // Codifiche delle sezioni compilate in questa build (dipendono dalle modalita' della scheda).
 const SectionCodec* workspaceSectionCodecs(std::size_t& count) noexcept;
 
+// v1.16.0: stato di eActivity nel record (sezione 0x0102). Mentre un documento
+// e' aperto le memorie Mat/Vct/List del menu principale stanno in
+// savedMemories (il documento ha le sue, manuale 10-9); mentre una striscia e'
+// aperta le parti del workspace della sua modalita' stanno in savedStrip
+// (manuale 10-19). Al caricamento del record vengono rimesse a posto: dopo
+// un'interruzione si ritrovano i dati del menu principale.
+struct EActivityState {
+    std::string folder;                       // cartella dell'elenco (sotto PICOCALC/EACT, "" = radice)
+    std::string lastFile;                     // ultimo documento aperto
+    std::vector<std::uint8_t> savedMemories;  // encodeParts(Matrices, Lists) del menu principale
+    std::vector<std::uint8_t> savedStrip;     // encodeParts(...) del menu principale durante una striscia
+    bool empty() const noexcept { return folder.empty() && lastFile.empty() && savedMemories.empty() && savedStrip.empty(); }
+};
+
 // Dati condivisi da tutte le applicazioni. Risolve anche le variabili che
 // Run-Matrix legge dalle altre modalita' con VARS (V-Window, intervallo di
 // Table) e le matrici, i vettori e le liste citati in un'espressione.
@@ -275,6 +289,8 @@ struct Workspace final : NameResolver, CollectionResolver, ServiceResolver {
     // Sezioni del record non lette da questo firmware (id sconosciuto o versione
     // piu' nuova), in ordine di id: riscritte intatte al salvataggio.
     std::vector<RecordSection> preservedSections;
+    // ---- v1.16.0
+    EActivityState eactivity;
 
     Workspace();
     void resetAll();
@@ -344,4 +360,30 @@ std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws, const SectionC
 bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace& ws, const SectionCodec* codecs, std::size_t count);
 // Versione del formato del record scritta da questo firmware (11 dalla v1.15.0).
 std::uint16_t workspaceRecordVersion() noexcept;
+
+// v1.16.0 (F2.5): parti del workspace codificate da sole, per le strisce di
+// eActivity (i dati di una modalita' dentro un documento) e per le memorie
+// Mat/Vct/List di ogni documento. Formato proprio e compatto (non il record).
+namespace part {
+constexpr std::uint8_t History = 1;    // cronologia di Run-Matrix
+constexpr std::uint8_t Graph = 2;      // Y1-Y20, V-Window, Setup di Graph, SKETCH, grafici dei comandi
+constexpr std::uint8_t Table = 3;      // range, variabile, tipo e righe di Table
+constexpr std::uint8_t Lists = 4;      // List 1-26 e sottonomi del List File attivo
+constexpr std::uint8_t Equation = 5;   // coefficienti, Solver e soluzioni di EQUATION
+constexpr std::uint8_t Matrices = 6;   // Mat A-Z, Vct A-Z, MatAns, VctAns, ListAns
+constexpr std::uint8_t Graph3D = 7;    // le tre funzioni, la V-Window e il Setup del 3D Graph, lo zoom
+constexpr std::uint8_t Count = 8;
+} // namespace part
+std::vector<std::uint8_t> encodePart(const Workspace& ws, std::uint8_t part);
+// Sostituisce la parte con i dati; false (workspace invariato) se non sono validi.
+bool decodePart(Workspace& ws, std::uint8_t part, const std::uint8_t* data, std::size_t size);
+// Riporta la parte ai valori iniziali (striscia nuova, documento nuovo).
+void resetPart(Workspace& ws, std::uint8_t part);
+// Piu' parti insieme: u8 numero, poi per parte u8 id, u32 lunghezza, dati.
+std::vector<std::uint8_t> encodeParts(const Workspace& ws, const std::vector<std::uint8_t>& parts);
+// Tutto o niente: false (workspace invariato) se una parte non e' valida.
+bool decodeParts(Workspace& ws, const std::uint8_t* data, std::size_t size);
+// Righe della cronologia codificate da sole (risultati delle righe di calcolo di eActivity).
+std::vector<std::uint8_t> encodeHistoryEntries(const std::vector<HistoryEntry>& entries);
+bool decodeHistoryEntries(const std::uint8_t* data, std::size_t size, std::vector<HistoryEntry>& out);
 } // namespace fx

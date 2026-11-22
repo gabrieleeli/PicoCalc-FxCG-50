@@ -85,6 +85,12 @@ target_compile_definitions(${FXAI_TARGET} PRIVATE
 target_compile_options(${FXAI_TARGET} PRIVATE -${FXAI_OPT_LEVEL} -Wall -Wextra
   $<$<COMPILE_LANGUAGE:CXX>:-Wno-psabi> -fstack-usage)
 target_link_options(${FXAI_TARGET} PRIVATE "LINKER:--print-memory-usage")
+# v1.16.0: sul Raspberry Pi Pico 2 W (partizione di 2 MB, congelato alla v1.16.0)
+# il codice di eActivity e dei suoi servizi, che non disegna grafici, e'
+# ottimizzato per dimensione. La Plus resta interamente a ${FXAI_OPT_LEVEL}.
+if(FXAI_BOARD STREQUAL "PICO2W")
+  set_property(SOURCE ${FXAI_PICO2W_SIZE_SOURCES} APPEND PROPERTY COMPILE_OPTIONS -Os)
+endif()
 if(FXAI_ENABLE_LTO)
   # Whole-target LTO breaks the SDK's -Wl,--wrap mechanism (pico_stdio,
   # pico_float/double): only the application sources are LTO-compiled.

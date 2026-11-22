@@ -23,6 +23,7 @@
 #include <fstream>
 #include <functional>
 #include <map>
+#include <algorithm>
 #include <set>
 #include <sstream>
 #include <string>
@@ -195,13 +196,16 @@ int main() {
                 ::testutil::report((compiled.count(src) == 1) == serviceCompiled(sv.bit), "service sources compiled with the service", src.c_str(), 0, sv.name);
             }
         }
-        // Le funzioni della v1.14.0 restano identiche: stesso insieme di modalita'
-        // Available su entrambe le schede (nessuna modalita' nuova nella v1.15.0).
-        const std::set<AppId> v114 = {AppId::RunMatrix, AppId::Statistics, AppId::Graph, AppId::Table, AppId::Equation, AppId::Memory,
-                                      AppId::System, AppId::Graph3D, AppId::Conversion, AppId::AiChat, AppId::Symbols};
+        // v1.16.0: le modalita' della v1.14.0 piu' eActivity su entrambe le schede.
+        // Il Raspberry Pi Pico 2 W e' CONGELATO alla v1.16.0: questo controllo
+        // fallisce se una versione successiva cambia le sue modalita' Available.
+        // Sulla Pimoroni Pico Plus 2 W le milestone M3-M14 ne aggiungono altre.
+        const std::set<AppId> v116 = {AppId::RunMatrix, AppId::Statistics, AppId::EActivity, AppId::Graph, AppId::Table, AppId::Equation,
+                                      AppId::Memory, AppId::System, AppId::Graph3D, AppId::Conversion, AppId::AiChat, AppId::Symbols};
         std::set<AppId> available;
         for (std::size_t i = 0; i < AppCount; ++i) if (appInfoAt(i).status == AppStatus::Available) available.insert(appInfoAt(i).id);
-        CHECK(available == v114);
+        if (thisBoard() == boards::Pico2W) ::testutil::report(available == v116, "Pico 2 W frozen at v1.16.0 (Available modes)", "tests/architecture_test.cpp", 0, "Pico2W");
+        else CHECK(std::includes(available.begin(), available.end(), v116.begin(), v116.end()));
         // E-CON4 resta External su entrambe le schede.
         CHECK(appInfo(AppId::ECon4).status == AppStatus::External);
         // Il controllo sulla mappa del linker usa questi nomi (cmake/fxai_sources.cmake).

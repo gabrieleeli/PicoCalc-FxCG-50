@@ -277,10 +277,17 @@ void RunMatrixApp::enter(Context& ctx) {
     answers_.close();
     resultScroll_ = 0;
     syncInputMode(ctx);
+    // v1.16.0: striscia RUN (Math, manuale 10-17), Matrix/Vector Editor e MAT/VCT di eActivity.
+    if (ctx.inStrip(AppId::RunMatrix)) {
+        const std::uint8_t e = ctx.strip().entry;
+        if (e == stripentry::MatrixEditor || e == stripentry::MemoryMatrices) matrices_.open(ctx, false);
+        if (e == stripentry::VectorEditor || e == stripentry::MemoryVectors) matrices_.open(ctx, true);
+    }
 }
 void RunMatrixApp::leave(Context&) { if (editIndex_ >= 0) endEdit(true); editor_.cancelSelection(); editor_.cancelArgument(); }
 void RunMatrixApp::syncInputMode(Context& ctx) {
-    const bool line = ctx.ws.settings.inputMode == Settings::InputMode::Line;
+    // v1.16.0: la striscia RUN di eActivity usa sempre l'input/output Math (10-17).
+    const bool line = ctx.ws.settings.inputMode == Settings::InputMode::Line && !(ctx.inStrip(AppId::RunMatrix) && ctx.strip().entry == stripentry::Run);
     if (editor_.linear() != line) editor_.setLinear(line);
 }
 void RunMatrixApp::markError(const ErrorLocation& where) {
@@ -636,7 +643,15 @@ bool RunMatrixApp::browseKey(Context& ctx, const KeyEvent& ev) {
 void RunMatrixApp::key(Context& ctx, const KeyEvent& ev) {
     syncInputMode(ctx);
     // --- editor MAT/VCT (SHIFT 3) e schermate MatAns / ListAns
-    if (matrices_.isOpen()) { matrices_.key(ctx, ev); return; }
+    if (matrices_.isOpen()) {
+        matrices_.key(ctx, ev);
+        // v1.16.0: Matrix/Vector Editor e 'MAT/VCT di eActivity: chiuso l'editor si torna al documento.
+        if (!matrices_.isOpen() && ctx.inStrip(AppId::RunMatrix)) {
+            const std::uint8_t e = ctx.strip().entry;
+            if (e == stripentry::MatrixEditor || e == stripentry::VectorEditor || e == stripentry::MemoryMatrices || e == stripentry::MemoryVectors) ctx.home();
+        }
+        return;
+    }
     if (answers_.isOpen()) { answers_.key(ctx, ev); return; }
     // L'evidenziazione della causa di un errore dura fino al tasto successivo.
     editor_.clearErrorMark();

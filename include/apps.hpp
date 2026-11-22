@@ -14,10 +14,13 @@
 #include "statistics.hpp"
 #include "step_task.hpp"
 #include "mode_shell.hpp"
+#include "eactivity.hpp"
+#include "text_editor.hpp"
 #include <array>
 #include <string>
 #include <vector>
 
+namespace fx::math { struct Size; }
 namespace fx::app {
 
 void drawAppIcon(gfx::Canvas& c, AppId id, int x, int y, int w, int h, bool available);
@@ -208,6 +211,210 @@ private:
     NaturalEditor editor_;
     PopupMenu menu_;
     mutable int scroll_{0};
+};
+
+// eActivity (v1.16.0, manuale fx-CG50 capitolo 10): elenco dei documenti
+// (OPEN, NEW, DELETE, SEARCH, MEMO, cartelle) e workspace con righe di testo
+// (con espressioni Math), di calcolo (nucleo di Run-Matrix), di stop,
+// immagini e strisce che aprono le altre modalita' con i propri dati.
+// Nucleo puro in eactivity.hpp; i documenti sono file .pceact (typed_files).
+class EActivityApp final : public App {
+public:
+    AppId id() const override { return AppId::EActivity; }
+    void enter(Context& ctx) override;
+    void leave(Context& ctx) override;
+    void key(Context& ctx, const KeyEvent& ev) override;
+    void draw(Context& ctx, gfx::Canvas& c) override;
+    bool tick(Context& ctx) override;
+    enum class Screen : std::uint8_t { Files, Doc, Capacity, MemoList, MemoDetail, StripSize };
+    struct Item { std::string name, file; bool folder{false}; std::uint32_t size{0}; };
+    struct MemoRef { int line; std::uint8_t color; std::string text; };
+    // ---- stato per i test
+    Screen screen() const noexcept { return screen_; }
+    bool documentOpen() const noexcept { return open_; }
+    const eact::Document& document() const noexcept { return frames_.empty() ? empty_ : frames_.back().doc; }
+    const eact::Document& mainDocument() const noexcept { return frames_.empty() ? empty_ : frames_.front().doc; }
+    bool inNotes() const noexcept { return frames_.size() > 1; }
+    int line() const noexcept { return frames_.empty() ? 0 : frames_.back().cur; }
+    int firstLine() const noexcept { return frames_.empty() ? 0 : frames_.back().first; }
+    std::size_t textCursor() const noexcept { return textPos_; }
+    bool editingIsland() const noexcept { return island_; }
+    bool editingTitle() const noexcept { return titleEdit_; }
+    std::string inputText() const { return fieldLine_ || island_ ? (field_.empty() ? std::string() : field_.text()) : std::string(); }
+    bool modified() const noexcept { return modified_; }
+    bool lowerCase() const noexcept { return lower_; }
+    const std::string& fileName() const noexcept { return fileName_; }
+    const std::string& folder() const noexcept { return folder_; }
+    const std::string& message() const noexcept { return message_; }
+    const std::vector<Item>& items() const noexcept { return items_; }
+    int selected() const noexcept { return sel_; }
+    bool recalculating() const noexcept { return runner_.running(); }
+    int marking() const noexcept { return markMode_; }
+    bool memoOpen() const noexcept { return memoWindow_; }
+    bool charsOpen() const noexcept { return charOpen_; }
+    const std::vector<MemoRef>& memoList() const noexcept { return memos_; }
+    std::size_t documentBytes() const;
+private:
+    struct Frame {
+        eact::Document doc;
+        int cur{0}, first{0};
+        int stripLine{-1};                 // Notes: riga della striscia nel documento sotto
+    };
+    struct Row;
+    struct Pict { std::string name; pict::Image img; bool ok{false}; };
+    // memorie e limite
+    void suspend(Context& ctx);
+    void resume(Context& ctx);
+    bool fits() const;
+    [[noreturn]] static void memoryError();
+    // file
+    std::string directory() const;
+    files::FileSystem& store(Context& ctx);
+    void listFiles(Context& ctx);
+    eact::Document readDocument(Context& ctx, const std::string& file);
+    void writeDocument(Context& ctx, const std::string& file, const eact::Document& doc);
+    void loadDocument(Context& ctx, eact::Document doc, const std::string& file);
+    void openDocument(Context& ctx, const std::string& file);
+    void newDocument(Context& ctx, const std::string& stem);
+    void saveDocument(Context& ctx, const std::string& file);
+    void closeDocument(Context& ctx);
+    void exitDocument(Context& ctx);
+    std::vector<std::string> fileStems() const;
+    void nameDialog(const char* title, const std::string& initial, int purpose);
+    void filesKey(Context& ctx, const KeyEvent& ev);
+    void dialogKey(Context& ctx, const KeyEvent& ev);
+    // memo
+    void buildMemoList(const eact::Document& doc);
+    eact::Document& memoDocument();
+    void memoListKey(Context& ctx, const KeyEvent& ev);
+    void storeMemo(Context& ctx, bool remove);
+    void memoKey(Context& ctx, const KeyEvent& ev);
+    void detailKey(Context& ctx, const KeyEvent& ev);
+    // righe
+    Frame& frame();
+    eact::Document& doc();
+    eact::Line& current();
+    void enterLine(Context& ctx);
+    void leaveLine(Context& ctx);
+    void moveTo(Context& ctx, int line, bool atEnd);
+    void insertLine(Context& ctx, eact::Line line, bool below = false);
+    void deleteLine(Context& ctx);
+    void insertText(Context& ctx, const std::string& s);
+    void eraseText(std::size_t from, std::size_t to);
+    void joinLines(Context& ctx, int index);
+    void splitLine(Context& ctx);
+    std::vector<Row> textRows(const eact::Line& l, bool current);
+    math::Size islandSize(const std::string& text, std::size_t from, bool current);
+    static int measurePiece(const std::string& t, std::size_t a, std::size_t b, bool island, void* user);
+    ast::NodePtr tree(const std::string& expr);
+    void caretAt(const std::vector<Row>& rows, const std::string& text, std::size_t pos, int& row, int& x) const;
+    std::size_t positionAt(const Row& row, const std::string& text, int x) const;
+    void visualMove(Context& ctx, int dir);
+    void clearRow(Context& ctx);
+    void textKey(Context& ctx, const KeyEvent& ev);
+    void beginIsland(Context& ctx, std::size_t from, bool atEnd);
+    void insertIsland(Context& ctx);
+    void syncIsland(Context& ctx);
+    void commitIsland(Context& ctx, bool after);
+    bool fieldAtStart() const;
+    bool fieldAtEnd() const;
+    void islandKey(Context& ctx, const KeyEvent& ev);
+    void evaluateLine(Context& ctx, eact::Line& l);
+    void execute(Context& ctx);
+    void startRecalc(Context& ctx, std::size_t from);
+    void calcKey(Context& ctx, const KeyEvent& ev);
+    void stripKey(Context& ctx, const KeyEvent& ev);
+    void titleKey(Context& ctx, const KeyEvent& ev);
+    void showStripMenu(int tag);
+    void openStrip(Context& ctx, int index);
+    void returnFromStrip(Context& ctx);
+    void openMemoryEditor(Context& ctx, std::uint8_t entry);
+    void openNotes(Context& ctx, int index);
+    void closeNotes(Context& ctx);
+    const pict::Image* picture(Context& ctx, const std::string& file);
+    static void pictureSize(const pict::Image& img, int& w, int& h);
+    void openPictureList(Context& ctx);
+    void insertPicture(Context& ctx, const std::string& file);
+    void openFormat();
+    void startMark(Context& ctx, int mode, std::uint8_t value);
+    void markRange(int& l0, std::size_t& p0, int& l1, std::size_t& p1) const;
+    std::uint8_t shownAttr(int line, std::size_t byte, std::uint8_t stored) const;
+    void applyMark(Context& ctx);
+    void markKey(Context& ctx, const KeyEvent& ev);
+    void page(Context& ctx, int dir);
+    void ensureVisible(Context& ctx);
+    void docAction(Context& ctx, int action);
+    void menuChoice(Context& ctx, int tag, int choice);
+    void confirmed(Context& ctx, int tag);
+    void charKey(Context& ctx, const KeyEvent& ev);
+    void updateBar();
+    void docKey(Context& ctx, const KeyEvent& ev);
+    // disegno
+    int lineHeight(Context& ctx, int index, bool current);
+    void drawText(Context& ctx, gfx::Canvas& c, int index, int y, bool current);
+    void drawCalc(Context& ctx, gfx::Canvas& c, int index, int y, bool current);
+    void drawLine(Context& ctx, gfx::Canvas& c, int index, int y, int h, bool current);
+    void drawDoc(Context& ctx, gfx::Canvas& c);
+    void drawFiles(Context& ctx, gfx::Canvas& c);
+    void drawMemoList(Context& ctx, gfx::Canvas& c);
+    void drawMemoWindow(gfx::Canvas& c);
+    void drawChars(gfx::Canvas& c);
+
+    Screen screen_{Screen::Files};
+    std::vector<Frame> frames_;
+    eact::Document empty_;
+    std::string fileName_, folder_, message_;
+    bool modified_{false}, open_{false}, suspended_{false};
+    std::vector<Item> items_;
+    int sel_{0}, first_{0};
+    // riga corrente
+    std::size_t textPos_{0};
+    bool island_{false}, layoutCurrent_{false};
+    std::size_t islandFrom_{0}, islandTo_{0};
+    MathField field_;                      // riga di calcolo o espressione nel testo
+    bool fieldLine_{false};                // field_ contiene la riga di calcolo corrente
+    std::string fieldText_;                // testo della riga di calcolo quando vi si e' entrati
+    LineEditor title_{16};                 // titolo della striscia (16 caratteri, 10-18)
+    bool titleEdit_{false};
+    bool lower_{false};                    // A<->a
+    int markMode_{0};                      // 1 MARKER, 2 CHAR (10-10)
+    std::uint8_t markValue_{0};
+    int markLine_{0};
+    std::size_t markPos_{0};
+    // modali
+    ModeShell shell_;
+    const FKeyMenu* bar_{nullptr};
+    FileDialog dialog_;
+    int dialogFor_{0};
+    bool memoWindow_{false};
+    int memoLine_{-1};
+    std::uint8_t memoColor_{0};
+    TextEditor memoText_{eact::MaxMemoBytes, eact::MaxMemoBytes};
+    std::vector<MemoRef> memos_;
+    int memoSel_{0};
+    eact::Document memoDoc_;               // MEMO dall'elenco dei file
+    std::string memoFile_;
+    Screen memoReturn_{Screen::Files}, detailReturn_{Screen::Doc};
+    bool charOpen_{false};
+    int charPage_{0}, charSel_{0};
+    // strisce e memorie del documento
+    int stripLine_{-1};                    // striscia aperta (-2: LIST o MAT/VCT del documento)
+    std::vector<std::uint8_t> docMemories_;   // memorie del documento con eActivity lasciata (MENU)
+    // ricalcolo a passi (10-9)
+    struct Recalc final : step::Task {
+        EActivityApp* app{nullptr};
+        Context* ctx{nullptr};
+        bool step(step::Budget& budget) override;
+        std::size_t total() const override { return end - start; }
+        std::size_t done() const override { return next - start; }
+        std::size_t start{0}, next{0}, end{0};
+    };
+    Recalc recalc_;
+    step::Runner runner_;
+    // immagini e alberi delle espressioni gia' preparati
+    std::vector<Pict> picts_;
+    std::size_t pictBytes_{0};
+    std::vector<std::pair<std::string, ast::NodePtr>> trees_;
 };
 
 // EQUATION (fx-CG50, manuale 4-1...4-5): SIML (2-6 incognite), POLY (grado
