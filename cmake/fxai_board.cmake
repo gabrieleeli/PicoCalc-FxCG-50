@@ -50,6 +50,7 @@ if(_fxai_board_upper STREQUAL "PICO2W")
     set(_fxai_default_fw_partition 2097152)       # 2 MiB firmware partition
     set(_fxai_record_size 131072)                 # 2 x 64 KiB, v1.8.0 location (last 128 KiB)
     set(_fxai_record_tail_guard 0)                # saves are capped instead (see storage.hpp)
+    set(_fxai_fw_margin 32768)                    # v1.15.0: 32 KiB kept free for future fixes (image <= 2 064 384 B)
 elseif(_fxai_board_upper STREQUAL "PICO_PLUS_2W")
     set(_fxai_pico_board pimoroni_pico_plus2_w_rp2350)
     set(FXAI_BOARD_SUFFIX pico_plus_2w)
@@ -59,6 +60,7 @@ elseif(_fxai_board_upper STREQUAL "PICO_PLUS_2W")
     set(_fxai_default_fw_partition 4194304)       # 4 MiB firmware partition
     set(_fxai_record_size 1048576)                # 2 x 512 KiB
     set(_fxai_record_tail_guard 4096)             # last sector never written (RP2350-E10)
+    set(_fxai_fw_margin 419431)                   # v1.15.0: the image stays under 90 % of the partition
 else()
     message(FATAL_ERROR "Unknown FXAI_BOARD='${FXAI_BOARD}'. Valid values: ${_fxai_known_boards}")
 endif()
@@ -117,6 +119,9 @@ if(NOT _fxai_fw_rem EQUAL 0)
     message(FATAL_ERROR "FXAI_FIRMWARE_PARTITION_BYTES must be a multiple of 4096")
 endif()
 set(FXAI_FLASH_RECORD_SIZE ${_fxai_record_size})
+# v1.15.0: bytes of the firmware partition that the image must leave free
+# (checked as an error after every build, cmake/check_firmware_size.cmake).
+set(FXAI_FIRMWARE_MARGIN_BYTES ${_fxai_fw_margin} CACHE STRING "Firmware partition bytes that must stay free")
 math(EXPR FXAI_FLASH_RECORD_OFFSET "${FXAI_FLASH_SIZE_BYTES} - ${_fxai_record_tail_guard} - ${FXAI_FLASH_RECORD_SIZE}")
 math(EXPR FXAI_FLASH_BT_OFFSET     "${FXAI_FLASH_RECORD_OFFSET} - 8192")
 math(EXPR FXAI_FLASH_DIAG_OFFSET   "${FXAI_FIRMWARE_PARTITION_BYTES}")

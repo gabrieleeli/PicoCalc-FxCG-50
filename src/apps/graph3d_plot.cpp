@@ -58,6 +58,7 @@ bool periodicV(g3d::Kind k) { return k == g3d::Kind::RotX || k == g3d::Kind::Rot
 void Graph3DApp::stopSampling() noexcept {
     sampling_ = false;
     sampleGraph_ = samplePatch_ = sampleNext_ = 0;
+    runner_.reset();
 }
 
 void Graph3DApp::releaseScene() noexcept {
@@ -155,6 +156,7 @@ void Graph3DApp::startDraw(Context& ctx) {
     sampling_ = true;
     samplesValid_ = false;
     sampleGraph_ = samplePatch_ = sampleNext_ = 0;
+    runner_.start(*this, step::Runner::Config{PointsPerTick, 0});
     mode_ = Mode::View; sub_ = Sub::None;
     marks_.clear();
     message_.clear();
@@ -207,6 +209,42 @@ void Graph3DApp::finishSampling(Context& ctx) {
     while (sampling_) (void)tick(ctx);
 }
 
+// One step of the progressive computation (v1.15.0: run by step::Runner with
+// the v1.14.0 budget of PointsPerTick lattice points).
+bool Graph3DApp::step(step::Budget& budget) {
+    Context& ctx = *stepCtx_;
+    while (budget.remaining() > 0 && sampleGraph_ < g3d::Functions) {
+        const std::size_t g = sampleGraph_;
+        if (!active_[g] || samplePatch_ >= patchCount_[g]) { ++sampleGraph_; samplePatch_ = 0; sampleNext_ = 0; continue; }
+        const std::size_t patch = samplePatch_;
+        const g3d::PointFn fn = [this, &ctx, g, patch](double u, double v, g3d::Vec3& out) {
+            if (!g3d::isTemplate(shapes_[g].kind)) return pointOf(ctx, static_cast<int>(g), u, v, out);
+            return g3d::templatePoint(shapes_[g], patch, u, v, out);
+        };
+        const std::size_t before = sampleNext_;
+        const bool done = g3d::sampleStep(meshes_[g][patch], fn, specs_[g][patch].domain, sampleNext_, budget.remaining());
+        budget.consume(sampleNext_ - before);
+        if (done) { ++samplePatch_; sampleNext_ = 0; }
+    }
+    return sampleGraph_ >= g3d::Functions;
+}
+std::size_t Graph3DApp::total() const {
+    std::size_t total = 0;
+    for (std::size_t i = 0; i < g3d::Functions; ++i)
+        for (std::size_t p = 0; p < patchCount_[i]; ++p) if (active_[i]) total += meshes_[i][p].verts.size();
+    return total;
+}
+std::size_t Graph3DApp::done() const {
+    std::size_t done = 0;
+    for (std::size_t i = 0; i < g3d::Functions; ++i)
+        for (std::size_t p = 0; p < patchCount_[i]; ++p) {
+            if (!active_[i]) continue;
+            const std::size_t n = meshes_[i][p].verts.size();
+            done += i < sampleGraph_ || (i == sampleGraph_ && p < samplePatch_) ? n : (i == sampleGraph_ && p == samplePatch_ ? sampleNext_ : 0);
+        }
+    return done;
+}
+
 bool Graph3DApp::tick(Context& ctx) {
     bool redraw = false;
     if (memoryError_) {
@@ -233,21 +271,12 @@ bool Graph3DApp::tick(Context& ctx) {
         redraw = true;
     }
     if (sampling_) {
-        std::size_t budget = PointsPerTick;
-        while (budget > 0 && sampleGraph_ < g3d::Functions) {
-            const std::size_t g = sampleGraph_;
-            if (!active_[g] || samplePatch_ >= patchCount_[g]) { ++sampleGraph_; samplePatch_ = 0; sampleNext_ = 0; continue; }
-            const std::size_t patch = samplePatch_;
-            const g3d::PointFn fn = [this, &ctx, g, patch](double u, double v, g3d::Vec3& out) {
-                if (!g3d::isTemplate(shapes_[g].kind)) return pointOf(ctx, static_cast<int>(g), u, v, out);
-                return g3d::templatePoint(shapes_[g], patch, u, v, out);
-            };
-            const std::size_t before = sampleNext_;
-            const bool done = g3d::sampleStep(meshes_[g][patch], fn, specs_[g][patch].domain, sampleNext_, budget);
-            budget -= std::min(budget, sampleNext_ - before);
-            if (done) { ++samplePatch_; sampleNext_ = 0; }
-        }
-        if (sampleGraph_ >= g3d::Functions) {
+        stepCtx_ = &ctx;
+        if (!runner_.running()) runner_.start(*this, step::Runner::Config{PointsPerTick, 0});   // resumed after an error, as in v1.14.0
+        const step::Clock clock = [&ctx] { return ctx.now(); };
+        (void)runner_.tick(clock);
+        if (runner_.state() == step::State::Done) {
+            runner_.reset();
             sampling_ = false;
             samplesValid_ = true;
             ++dataGen_;

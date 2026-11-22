@@ -11,6 +11,8 @@
 #include "table_model.hpp"
 #include "pict.hpp"
 #include "statistics.hpp"
+#include "step_task.hpp"
+#include "mode_shell.hpp"
 #include <array>
 #include <string>
 #include <vector>
@@ -43,19 +45,6 @@ public:
     void draw(Context& ctx, gfx::Canvas& c) override;
 private:
     AppManager& manager_;
-};
-
-// Generic modal popup list used by OPTN / MATH / ZOOM / G-SOLVE menus.
-struct PopupMenu {
-    const char* title{};
-    std::vector<std::string> items;
-    int selected{0}, first{0};
-    bool open{false};
-    void show(const char* t, std::vector<std::string> list) { title = t; items = std::move(list); selected = 0; first = 0; open = true; }
-    void close() { open = false; }
-    // Returns the chosen index (>=0), -1 when still open, -2 when cancelled.
-    int key(const KeyEvent& ev);
-    void draw(gfx::Canvas& c) const;
 };
 
 // Editor MAT/VCT di Run-Matrix (fx-CG50 SHIFT 3 'MAT/VCT', manuale 2-42…2-48,
@@ -594,7 +583,7 @@ public:
     // Table relation list (manual 5-32), function editor, range form,
     // Setup, the number table (manual 5-33..5-35).
     enum class Screen : std::uint8_t { List, Edit, Set, Setup, Table };
-    Screen screen() const noexcept { return screen_; }
+    Screen screen() const noexcept { return static_cast<Screen>(shell_.screens.top()); }
     const std::vector<table::Column>& columns() const noexcept { return cols_; }
     int row() const noexcept { return row_; }
     int column() const noexcept { return col_; }        // -1: the variable column (x, θ, T)
@@ -617,13 +606,17 @@ private:
     void formKey(Context& ctx, const KeyEvent& ev);
     void beginEdit(Context& ctx, bool keep, char first = 0);
     void storeEdit(Context& ctx);
-    void menuChoice(Context& ctx, int choice);
+    void menuChoice(Context& ctx, int tag, int choice);
     void answer(Context& ctx);
     void openSet(Context& ctx);
     void openSetup(Context& ctx);
     void drawList(Context& ctx, gfx::Canvas& c);
     void drawTable(Context& ctx, gfx::Canvas& c);
-    Screen screen_{Screen::List}, formReturn_{Screen::List};
+    // v1.15.0 (F4): screens, F-key bar, confirmations, value prompts and
+    // menus come from the shared mode shell (same drawing as before).
+    ModeShell shell_;
+    Screen current() const noexcept { return static_cast<Screen>(shell_.screens.top()); }
+    void show(Screen s) noexcept { shell_.screens.reset(static_cast<int>(s)); }   // List <-> Table (root)
     int listRow_{0}, listFirst_{0};
     int row_{0}, col_{-1}, firstRow_{0}, firstCol_{0};
     // relation list editing
@@ -637,13 +630,6 @@ private:
     bool built_{false};
     std::string buildError_;
     Form form_;
-    PopupMenu menu_;
-    Menu menuKind_{Menu::None};
-    Ask ask_{Ask::None};
-    std::string askPrompt_;
-    NaturalEditor input_;
-    Confirm confirm_{Confirm::None};
-    std::string confirmText_;
 };
 
 class SystemApp final : public App {
@@ -721,7 +707,7 @@ private:
 // (TRACE/SKETCH) live in PSRAM on the Pico Plus 2 W; without PSRAM the
 // reduced profile is used (painter's algorithm, 25 points per side).
 // List and input screens: graph3d_app.cpp; graph screen: graph3d_plot.cpp.
-class Graph3DApp final : public App {
+class Graph3DApp final : public App, private step::Task {
 public:
     AppId id() const override { return AppId::Graph3D; }
     void enter(Context& ctx) override;
@@ -865,6 +851,13 @@ private:
     g3d::Window drawnWindow_{};                               // window of the computed lattices
     bool sampling_{false}, samplesValid_{false}, zbuffer_{false};
     std::size_t sampleGraph_{0}, samplePatch_{0}, sampleNext_{0}, points_{0};
+    // v1.15.0 (F6): the progressive computation runs on the shared StepTask
+    // runner, 600 lattice points per step as in v1.14.0.
+    step::Runner runner_;
+    Context* stepCtx_{nullptr};                               // context of the running computation
+    bool step(step::Budget& budget) override;
+    std::size_t total() const override;
+    std::size_t done() const override;
     double originalTheta_{20}, originalPhi_{70};
     std::uint32_t dataGen_{0};
     std::pmr::vector<std::uint16_t> layer_{mem::resource(mem::Policy::PREFER_PSRAM)};

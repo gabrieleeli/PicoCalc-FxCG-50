@@ -203,6 +203,37 @@ struct Graph3DState {
     }
 };
 
+// v1.15.0 (record v11): una sezione della coda TLV del record (id, versione
+// della sezione, dati). Le sezioni che questo firmware non conosce, o che sono
+// di una versione piu' nuova di quella che sa leggere, restano qui e vengono
+// riscritte intatte: un firmware piu' vecchio, o il Pico 2 W, non perde i dati
+// delle modalita' che non ha (docs/STORAGE.md).
+struct RecordSection {
+    std::uint16_t id{};
+    std::uint16_t version{};
+    std::vector<std::uint8_t> data;
+    bool operator==(const RecordSection& o) const noexcept { return id == o.id && version == o.version && data == o.data; }
+};
+namespace section {
+// 0x0001-0x00FF: sezioni comuni; 0x0100 + AppId: la sezione di una modalita'.
+constexpr std::uint16_t ModeBase = 0x0100;
+constexpr std::size_t MaxSections = 64;                     // sezioni di un record
+constexpr std::size_t MaxSectionBytes = 4u * 1024u * 1024u; // una sezione (il record e' comunque limitato dallo slot)
+} // namespace section
+struct Workspace;
+// Codifica di una sezione conosciuta da questo firmware (src/workspace_sections.cpp).
+struct SectionCodec {
+    std::uint16_t id;
+    std::uint16_t version;                                   // versione scritta (e la piu' nuova che sa leggere)
+    // false: nulla da salvare (la sezione non viene scritta).
+    bool (*present)(const Workspace& ws);
+    void (*encode)(const Workspace& ws, std::vector<std::uint8_t>& out);
+    // Legge una versione <= `version`; false = dati non validi (il record viene rifiutato).
+    bool (*decode)(Workspace& ws, std::uint16_t version, const std::uint8_t* data, std::size_t size);
+};
+// Codifiche delle sezioni compilate in questa build (dipendono dalle modalita' della scheda).
+const SectionCodec* workspaceSectionCodecs(std::size_t& count) noexcept;
+
 // Dati condivisi da tutte le applicazioni. Risolve anche le variabili che
 // Run-Matrix legge dalle altre modalita' con VARS (V-Window, intervallo di
 // Table) e le matrici, i vettori e le liste citati in un'espressione.
@@ -240,6 +271,10 @@ struct Workspace final : NameResolver, CollectionResolver, ServiceResolver {
     // Servizio di GRAPH per PxlTest( (non salvato): 1 se il pixel della schermata
     // del grafico e' acceso. Lo registra l'app GRAPH; senza, PxlTest( da' 0.
     std::function<int(int, int)> pixelProbe;
+    // ---- v1.15.0 (record v11)
+    // Sezioni del record non lette da questo firmware (id sconosciuto o versione
+    // piu' nuova), in ordine di id: riscritte intatte al salvataggio.
+    std::vector<RecordSection> preservedSections;
 
     Workspace();
     void resetAll();
@@ -304,4 +339,9 @@ struct Workspace final : NameResolver, CollectionResolver, ServiceResolver {
 std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws);
 // Returns false (and leaves ws untouched) for corrupt or incompatible data.
 bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace& ws);
+// Le stesse funzioni con un insieme di codifiche esplicito (test della coda TLV).
+std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws, const SectionCodec* codecs, std::size_t count);
+bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace& ws, const SectionCodec* codecs, std::size_t count);
+// Versione del formato del record scritta da questo firmware (11 dalla v1.15.0).
+std::uint16_t workspaceRecordVersion() noexcept;
 } // namespace fx

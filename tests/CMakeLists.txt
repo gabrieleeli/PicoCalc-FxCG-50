@@ -32,7 +32,7 @@ find_package(Threads REQUIRED)
 add_library(fxai_core STATIC ${FXAI_CORE_SOURCES})
 target_include_directories(fxai_core PUBLIC ${FXAI_INCLUDE_DIR})
 target_compile_definitions(fxai_core PUBLIC FXAI_VERSION_STRING="${FXAI_VERSION_STRING}" FXAI_FATFS_MKFS=1
-  ${FXAI_BOARD_DEFINE} LFS_NO_DEBUG=1 LFS_NO_WARN=1 LFS_NO_ERROR=1 LFS_NO_ASSERT=1)
+  ${FXAI_BOARD_DEFINE} ${FXAI_FEATURE_DEFINITIONS} LFS_NO_DEBUG=1 LFS_NO_WARN=1 LFS_NO_ERROR=1 LFS_NO_ASSERT=1)
 target_link_libraries(fxai_core PUBLIC Threads::Threads)
 
 add_library(fxai_host_board STATIC ${FXAI_ROOT}/src/platform/host/board_host.cpp ${FXAI_ROOT}/src/platform/host/file_disk.cpp)
@@ -75,6 +75,9 @@ endforeach()
 
 # The architecture test reads the sources it checks.
 target_compile_definitions(architecture_test PRIVATE FXAI_SOURCE_ROOT="${FXAI_ROOT}")
+# v1.15.0 (F1): sorgenti compilati per questa scheda, confrontati con il registro.
+string(REPLACE ";" "," _fxai_compiled "${FXAI_COMPILED_SOURCES}")
+target_compile_definitions(architecture_test PRIVATE FXAI_COMPILED_SOURCES="${_fxai_compiled}")
 
 # ThreadSanitizer build of the allocator stress (two threads on the same pools).
 # TSan cannot be combined with ASan: run_host_tests.sh --tsan uses its own build.

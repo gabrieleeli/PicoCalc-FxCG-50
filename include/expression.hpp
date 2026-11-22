@@ -191,6 +191,22 @@ ast::NodePtr parseExpression(const std::string& expression, unsigned integerBase
 // ran_list, ran_samp, prob_p..prob_t, num_rnd, distribuzioni, x_hat, y_hat,
 // s_dev, stat_var, funzioni TVM, pxl_test, f_1..f_20 (function memory).
 
+// v1.15.0 (F8): opzioni dello stesso lexer e dello stesso parser.
+//  * cellReferences: A1..Z999 (anche $A$1) diventano la variabile "cell_a1"
+//    (risolta da NameResolver) e A1:B5 l'intervallo "range_a1_b5" (una lista
+//    da CollectionResolver::special), come nelle formule di Spreadsheet.
+//  * boundNames: nomi scelti dal chiamante (le variabili di un programma,
+//    sensibili alle maiuscole) restano una parola sola: "raggio" diventa la
+//    variabile "var_raggio", risolta da NameResolver (bind::BindingResolver).
+struct ParseOptions {
+    unsigned integerBase{0};
+    bool cellReferences{false};
+    const std::vector<std::string>* boundNames{nullptr};
+};
+ast::NodePtr parseExpression(const std::string& expression, const ParseOptions& options);
+bool isCellVariableName(const std::string& lowerName) noexcept;   // "cell_b12"
+bool isCellRangeName(const std::string& lowerName) noexcept;      // "range_a1_b5"
+
 // Valore di una frazione come e' stata scritta con Simplify Manual (v1.12.0):
 // le operazioni tra interi e frazioni non riducono il risultato (somma e
 // differenza sul minimo comune multiplo dei denominatori, prodotto e

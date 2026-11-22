@@ -1,13 +1,20 @@
-# Post-build firmware size check (invoked with cmake -P).
+# Post-build firmware checks (invoked with cmake -P).
 #   -DFXAI_BIN=<image.bin> -DFXAI_ELF=<image.elf> -DFXAI_SIZE_TOOL=<arm-none-eabi-size>
 #   -DFXAI_LIMIT=<firmware partition bytes> -DFXAI_FLASH=<total flash bytes>
 #   -DFXAI_BOARD=<board name>
+#   -DFXAI_MARGIN=<bytes of the partition that must stay free>          (v1.15.0)
+#   -DFXAI_MAP=<linker map>                                             (v1.15.0)
+#   -DFXAI_EXCLUDED_OBJECTS=<a.cpp.o|b.cpp.o>  -DFXAI_EXCLUDED_SYMBOLS=<Name|Name>
 #
 # The .bin image is exactly what occupies flash from offset 0, so its size is
 # compared with the firmware partition that ends where the diagnostic sector
-# and LittleFS begin. Exceeding the partition is reported as a warning (the
-# image would overwrite the file system area when flashed); exceeding the
-# physical flash is a hard error.
+# and LittleFS begin. Since v1.15.0 every check is an ERROR, not a warning:
+#  * the image exceeds the physical flash or the firmware partition (it would
+#    overwrite the file system area when flashed);
+#  * the image leaves less than FXAI_MARGIN bytes of the partition free
+#    (Pico 2 W: 32 KiB kept for future fixes; Pico Plus 2 W: 10 %);
+#  * the linker map of the image contains an object file or a symbol of a mode
+#    or a service that is excluded on this board (cmake/fxai_sources.cmake).
 
 if(NOT EXISTS "${FXAI_BIN}")
     message(FATAL_ERROR "Firmware image not found: ${FXAI_BIN}")
@@ -16,7 +23,10 @@ file(SIZE "${FXAI_BIN}" _size)
 math(EXPR _pct "(${_size} * 100) / ${FXAI_LIMIT}")
 math(EXPR _kib "${_size} / 1024")
 math(EXPR _limit_kib "${FXAI_LIMIT} / 1024")
-math(EXPR _soft "(${FXAI_LIMIT} * 90) / 100")
+if(NOT DEFINED FXAI_MARGIN OR FXAI_MARGIN STREQUAL "")
+    set(FXAI_MARGIN 0)
+endif()
+math(EXPR _budget "${FXAI_LIMIT} - ${FXAI_MARGIN}")
 
 if(FXAI_SIZE_TOOL AND EXISTS "${FXAI_ELF}")
     execute_process(COMMAND "${FXAI_SIZE_TOOL}" -A "${FXAI_ELF}" OUTPUT_VARIABLE _sections ERROR_QUIET)
@@ -38,12 +48,39 @@ if(FXAI_SIZE_TOOL AND EXISTS "${FXAI_ELF}")
     message(STATUS "[${FXAI_BOARD}] static SRAM (.data/.bss/.ram sections): ${_sram} bytes (${_sram_kib} KiB) of 520 KiB")
 endif()
 
-message(STATUS "[${FXAI_BOARD}] firmware image ${_size} bytes (${_kib} KiB) = ${_pct}% of the ${_limit_kib} KiB firmware partition")
+message(STATUS "[${FXAI_BOARD}] firmware image ${_size} bytes (${_kib} KiB) = ${_pct}% of the ${_limit_kib} KiB firmware partition"
+               " (budget ${_budget} B, margin ${FXAI_MARGIN} B)")
 if(_size GREATER FXAI_FLASH)
     message(FATAL_ERROR "[${FXAI_BOARD}] firmware (${_size} B) exceeds the physical flash (${FXAI_FLASH} B)")
 elseif(_size GREATER FXAI_LIMIT)
-    message(WARNING "[${FXAI_BOARD}] firmware (${_size} B) exceeds the firmware partition (${FXAI_LIMIT} B): "
-                    "it overlaps the diagnostic sector/LittleFS. Increase FXAI_FIRMWARE_PARTITION_BYTES.")
-elseif(_size GREATER _soft)
-    message(WARNING "[${FXAI_BOARD}] firmware uses more than 90% of its partition (${_size}/${FXAI_LIMIT} B)")
+    message(FATAL_ERROR "[${FXAI_BOARD}] firmware (${_size} B) exceeds the firmware partition (${FXAI_LIMIT} B): "
+                        "it would overlap the diagnostic sector/LittleFS.")
+elseif(_size GREATER _budget)
+    message(FATAL_ERROR "[${FXAI_BOARD}] firmware (${_size} B) leaves less than ${FXAI_MARGIN} B of the "
+                        "${FXAI_LIMIT} B partition free (budget ${_budget} B)")
+endif()
+
+# Excluded modes and services must not reach the image (v1.15.0).
+if(FXAI_MAP AND EXISTS "${FXAI_MAP}")
+    file(READ "${FXAI_MAP}" _map)
+    string(FIND "${_map}" "Linker script and memory map" _start)
+    if(_start GREATER -1)
+        string(SUBSTRING "${_map}" ${_start} -1 _map)
+    endif()
+    string(REPLACE "|" ";" _objects "${FXAI_EXCLUDED_OBJECTS}")
+    string(REPLACE "|" ";" _symbols "${FXAI_EXCLUDED_SYMBOLS}")
+    set(_checked 0)
+    foreach(_name IN LISTS _objects _symbols)
+        if(_name STREQUAL "")
+            continue()
+        endif()
+        math(EXPR _checked "${_checked} + 1")
+        string(FIND "${_map}" "${_name}" _hit)
+        if(_hit GREATER -1)
+            message(FATAL_ERROR "[${FXAI_BOARD}] excluded mode/service found in the image: ${_name} (${FXAI_MAP})")
+        endif()
+    endforeach()
+    message(STATUS "[${FXAI_BOARD}] linker map: ${_checked} excluded objects/symbols, none in the image")
+elseif(FXAI_MAP)
+    message(FATAL_ERROR "[${FXAI_BOARD}] linker map not found: ${FXAI_MAP}")
 endif()

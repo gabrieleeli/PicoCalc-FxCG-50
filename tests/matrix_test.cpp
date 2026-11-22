@@ -342,7 +342,7 @@ int main() {
         runCalculation(w, "Identity(8)");
         runCalculation(w, "2+2");
         const auto bytes = serializeWorkspace(w);
-        CHECK(bytes[4] == 10 && bytes[5] == 0);
+        CHECK(bytes[4] == 11 && bytes[5] == 0);
         Workspace back;
         CHECK(deserializeWorkspace(bytes.data(), bytes.size(), back));
         CHECK(back.settings.inputMode == Settings::InputMode::Line);
@@ -379,7 +379,7 @@ int main() {
         CHECK_EQ_STR(resultText(w.history.back(), w.settings), "22.5");
         const auto bytes = serializeWorkspace(w);
         Workspace again;
-        CHECK(bytes[4] == 10 && deserializeWorkspace(bytes.data(), bytes.size(), again) && again.history.size() == 4);
+        CHECK(bytes[4] == 11 && deserializeWorkspace(bytes.data(), bytes.size(), again) && again.history.size() == 4);
         Workspace old;
         CHECK(deserializeWorkspace(kV180Record, sizeof kV180Record, old) && old.matrices.elements() == 0);   // v1.8.0, formato 4
     }

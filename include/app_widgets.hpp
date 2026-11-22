@@ -7,6 +7,20 @@
 
 namespace fx::app {
 
+// Generic modal popup list used by OPTN / MATH / ZOOM / G-SOLVE menus.
+struct PopupMenu {
+    const char* title{};
+    std::vector<std::string> items;
+    int selected{0}, first{0};
+    bool open{false};
+    void show(const char* t, std::vector<std::string> list) { title = t; items = std::move(list); selected = 0; first = 0; open = true; }
+    void close() { open = false; }
+    // Returns the chosen index (>=0), -1 when still open, -2 when cancelled.
+    int key(const KeyEvent& ev);
+    void draw(gfx::Canvas& c) const;
+};
+
+
 // Store for user files chosen in SYSTEM ("Archivio file"): the microSD card
 // or LittleFS on the internal flash. nullptr when the build has neither.
 files::FileSystem* userFiles(Context& ctx);
@@ -90,27 +104,51 @@ private:
     mutable int firstRow_{0}, firstCol_{0};
 };
 
-// Finestra per i file CSV (v1.11.0): elenco dei file da aprire (LOAD) o nome
-// da scrivere (SAVE·AS, 8 caratteri al massimo, come la fx-CG50).
+// Finestra per i file (v1.11.0 per i CSV; v1.15.0, F3: dialogo unico di tutti i
+// file tipizzati): elenco dei file da aprire (LOAD/OPEN), nome da scrivere
+// (SAVE·AS, con la regola dei nomi del tipo e la conferma di sovrascrittura),
+// ricerca per prefisso (SEARCH della fx-CG50) e conferma Si'/No (DELETE).
+// Con i valori predefiniti e' esattamente la finestra dei CSV della v1.11.0.
 class FileDialog {
 public:
-    enum class Mode : std::uint8_t { None, Open, SaveAs };
+    enum class Mode : std::uint8_t { None, Open, SaveAs, Confirm, Search };
     void openList(std::string title, std::vector<std::string> names);
     void openName(std::string title, const std::string& initial);
-    void close() noexcept { mode_ = Mode::None; }
+    // v1.15.0: domanda Si'/No (F1 o EXE: 1; F6, EXIT o AC: -1).
+    void openConfirm(std::string title, std::string question);
+    // v1.15.0: testo da cercare all'inizio dei nomi; EXE restituisce 1 con name() = testo.
+    void openSearch(std::string title);
+    void close() noexcept { mode_ = Mode::None; overwrite_ = false; }
     bool active() const noexcept { return mode_ != Mode::None; }
     Mode mode() const noexcept { return mode_; }
     // 1: scelta fatta (name()), -1: annullato, 0: ancora aperto.
     int key(const KeyEvent& ev);
     const std::string& name() const noexcept { return chosen_; }
     void draw(gfx::Canvas& c) const;
+    // ---- v1.15.0: opzioni (restano finche' non vengono cambiate)
+    void setExtension(std::string extension) { extension_ = std::move(extension); }   // mostrata dopo i nomi dell'elenco
+    void setEmptyText(std::string text) { empty_ = std::move(text); }
+    // Caratteri ammessi nel nome, maiuscole/minuscole e lunghezza (predefiniti: A-Z a-z 0-9 _ -, 8).
+    void setNameRule(std::function<bool(char)> allowed, std::function<char(char)> caseMap, std::size_t maxLength);
+    // Nomi gia' presenti: SAVE·AS di uno di questi chiede "Sovrascrivere?" prima di restituire 1.
+    void setExisting(std::vector<std::string> names) { existing_ = std::move(names); }
+    bool overwriting() const noexcept { return overwrite_; }  // il nome scelto esiste e l'utente ha confermato
+    int selectedIndex() const noexcept { return selected_; }
+    void select(int index) noexcept { selected_ = index; }
 private:
     Mode mode_{Mode::None};
-    std::string title_, chosen_;
+    std::string title_, chosen_, question_;
     std::vector<std::string> names_;
     int selected_{0};
     mutable int first_{0};
     LineEditor editor_{8};
+    std::string extension_{".csv"};
+    std::string empty_{"Nessun file CSV nella cartella"};
+    std::function<bool(char)> allowed_;
+    std::function<char(char)> caseMap_;
+    std::size_t maxLength_{8};
+    std::vector<std::string> existing_;
+    bool overwrite_{false}, asking_{false};
 };
 
 } // namespace fx::app

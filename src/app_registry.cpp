@@ -2,6 +2,8 @@
 // sources: tests/architecture_test.cpp fails when a mode uses a service,
 // a workspace section or a link that is not declared here.
 #include "app_registry.hpp"
+#include "board_config.hpp"
+#include "features.hpp"
 #include "graphics_engine.hpp"
 #include <string_view>
 
@@ -12,6 +14,9 @@ namespace s = service;
 namespace d = data;
 constexpr std::uint32_t AllData = (1u << data::Count) - 1;
 constexpr std::uint32_t Ui = s::Widgets | s::Editor | s::Format;
+// v1.15.0: guscio comune e file tipizzati, previsti per ogni modalita' nuova.
+constexpr std::uint32_t Shell = s::ModeShell | s::TypedFiles;
+constexpr std::uint8_t Plus = boards::PicoPlus2W;
 
 const char* const kRunMatrixSrc[] = {"src/apps/run_matrix_app.cpp", "src/apps/matrix_editor.cpp", "src/apps/answer_view.cpp", "src/run_matrix.cpp", nullptr};
 const char* const kStatisticsSrc[] = {"src/apps/statistics_app.cpp", nullptr};
@@ -25,7 +30,7 @@ const char* const kAiChatSrc[] = {"src/apps/ai_chat_app.cpp", nullptr};
 const char* const kSymbolsSrc[] = {"src/apps/symbols_app.cpp", nullptr};
 const char* const kGraph3DSrc[] = {"src/apps/graph3d_app.cpp", "src/apps/graph3d_plot.cpp", nullptr};
 
-const AppInfo kApps[AppCount] = {
+constexpr AppInfo kApps[AppCount] = {
     {AppId::RunMatrix, "Run-Matrix", "1", rgb888To565(232, 96, 30), AppStatus::Available,
      "Calcoli e risultati: input Math o Line, risultati esatti e decimali, matrici, vettori e liste con l'editor MAT/VCT e i CSV, schermate MatAns/ListAns, cronologia modificabile, variabili, Base-N intera, simboli ingegneristici, Simp, DMS, comandi grafici disegnati da Graph",
      nullptr, s::Expression | s::Exact | Ui | s::MathRender | s::MathCore | s::RunCore | s::Storage | s::Files | s::GraphCmd,
@@ -39,11 +44,11 @@ const AppInfo kApps[AppCount] = {
     {AppId::EActivity, "eActivity", "3", rgb888To565(220, 40, 140), AppStatus::Planned,
      "Documenti con righe di testo e righe di calcolo valutate dal nucleo di Run-Matrix",
      "Documenti misti testo/formule non ancora implementati.",
-     s::Expression | s::Exact | Ui | s::MathRender | s::RunCore | s::Storage | s::Models, d::Settings | d::Memory, 0, nullptr},
+     s::Expression | s::Exact | Ui | s::MathRender | s::RunCore | s::Storage | s::Models | Shell | s::TextEdit | s::StepTask, d::Settings | d::Memory, 0, nullptr},
     {AppId::Spreadsheet, "Spreadsheet", "4", rgb888To565(70, 150, 40), AppStatus::Planned,
      "Foglio A..Z x 999 righe con valori e formule (=A1+B2), statistiche sulle colonne",
      "Foglio di calcolo con formule e riferimenti non ancora implementato.",
-     s::Expression | Ui | s::Stats | s::Storage | s::Models, d::Settings | d::Memory | d::Lists, 0, nullptr},
+     s::Expression | Ui | s::Stats | s::Storage | s::Models | Shell | s::TextEdit | s::StepTask | s::Graph2D | s::Binding, d::Settings | d::Memory | d::Lists, 0, nullptr, Plus},
     {AppId::Graph, "Graph", "5", rgb888To565(60, 70, 200), AppStatus::Available,
      "Grafici Y=, r=, parametrici, X=, disequazioni (Y1..Y20); trace, zoom, V-Window, sketch, G-Solve, modify, memorie, PICT, progetti .pcgraph su microSD",
      nullptr, s::Expression | Ui | s::MathRender | s::Storage | s::GraphCore | s::Files,
@@ -52,32 +57,32 @@ const AppInfo kApps[AppCount] = {
     {AppId::DynaGraph, "Dyna Graph", "6", rgb888To565(40, 110, 220), AppStatus::Planned,
      "Famiglie di grafici al variare di un coefficiente (Start/End/Pitch), sulla V-Window di Graph",
      "Grafici dinamici con parametro variabile non ancora implementati.",
-     s::Expression | Ui | s::MathRender | s::Storage | s::Models, d::Settings | d::Memory | d::View, 0, nullptr},
+     s::Expression | Ui | s::MathRender | s::Storage | s::Models | Shell | s::StepTask | s::Graph2D | s::Binding, d::Settings | d::Memory | d::View, 0, nullptr, Plus},
     {AppId::Table, "Table", "7", rgb888To565(120, 70, 200), AppStatus::Available,
      "Tabelle di Y=, r= e parametriche (Y1..Y20) da range o lista, derivate, EDIT/ROW, LISTMEM; GPH-CON/GPH-PLT verso Graph",
-     nullptr, s::Expression | Ui | s::MathRender | s::Storage | s::GraphCore, d::Settings | d::Memory | d::Functions | d::View | d::Table | d::Lists | d::Graph,
+     nullptr, s::Expression | Ui | s::MathRender | s::Storage | s::GraphCore | s::ModeShell, d::Settings | d::Memory | d::Functions | d::View | d::Table | d::Lists | d::Graph,
      linkTo(AppId::Graph), kTableSrc},
     {AppId::Recursion, "Recursion", "8", rgb888To565(40, 60, 160), AppStatus::Planned,
      "Successioni an, an+1, an+2 (fino a tre), tabelle, grafici e diagrammi di fase",
      "Successioni ricorsive an+1 non ancora implementate.",
-     s::Expression | Ui | s::Storage | s::Models, d::Settings | d::Memory | d::View, 0, nullptr},
+     s::Expression | Ui | s::Storage | s::Models | Shell | s::StepTask | s::Graph2D | s::Binding, d::Settings | d::Memory | d::View, 0, nullptr, Plus},
     {AppId::ConicGraphs, "Conic Graphs", "9", rgb888To565(30, 140, 170), AppStatus::Planned,
      "Parabole, circonferenze, ellissi e iperboli in forma cartesiana, polare e parametrica",
      "Grafici di coniche non ancora implementati.",
-     s::Expression | Ui | s::Solvers | s::Storage | s::Models, d::Settings | d::View, 0, nullptr},
+     s::Expression | Ui | s::Solvers | s::Storage | s::Models | Shell | s::Graph2D, d::Settings | d::View, 0, nullptr, Plus},
     {AppId::Equation, "Equation", "A", rgb888To565(240, 140, 20), AppStatus::Available,
      "SIML (2-6 incognite) e POLY (grado 2-6) con coefficienti esatti e complessi, soluzioni esatte, molteplicita' e Infinitely Many Solutions; SOLVER su qualsiasi variabile con Lower/Upper; disequazioni (estensione)",
      nullptr, s::Expression | s::Exact | Ui | s::MathRender | s::RunCore | s::Solvers | s::Storage | s::EquationCore,
      d::Settings | d::Memory | d::Equation, 0, kEquationSrc},
     {AppId::Program, "Program", "B", rgb888To565(170, 160, 20), AppStatus::Planned,
-     "Programmi con un linguaggio proprio (non il codice Casio) che usano il motore e il workspace",
-     "Linguaggio di programmazione non ancora implementato.",
-     s::Expression | s::Exact | s::RunCore | Ui | s::Storage | s::Models,
-     d::Settings | d::Memory | d::Lists | d::Functions | d::View, 0, nullptr},
+     "Programmi in C, C++ e C# (sottoinsiemi interpretati, decisione della v1.15.0) che usano il motore, i comandi grafici e il workspace",
+     "Interprete dei programmi C, C++ e C# non ancora integrato in una modalita'.",
+     s::Expression | s::Exact | s::RunCore | Ui | s::Storage | s::Models | Shell | s::TextEdit | s::StepTask | s::Graph2D | s::Binding | s::Interp | s::GraphCmd,
+     d::Settings | d::Memory | d::Lists | d::Functions | d::View, 0, nullptr, Plus},
     {AppId::Financial, "Financial", "C", rgb888To565(230, 190, 20), AppStatus::Planned,
      "Interesse semplice e composto (TVM), flussi di cassa, ammortamento, conversioni di tasso",
      "Calcoli finanziari (TVM, interessi) non ancora implementati.",
-     s::Expression | Ui | s::Solvers | s::Storage | s::Models, d::Settings | d::Memory, 0, nullptr},
+     s::Expression | Ui | s::Solvers | s::Storage | s::Models | Shell | s::Graph2D | s::Binding, d::Settings | d::Memory, 0, nullptr, Plus},
     {AppId::ECon4, "E-CON4", "D", rgb888To565(130, 40, 180), AppStatus::External,
      "Acquisizione dati da sensori esterni (data logger)",
      "Richiede un data logger esterno e il suo protocollo: non supportato dalla PicoCalc.",
@@ -85,7 +90,7 @@ const AppInfo kApps[AppCount] = {
     {AppId::Link, "Link", "E", rgb888To565(70, 140, 140), AppStatus::Planned,
      "Trasferimento del workspace (formato proprio con CRC) via USB seriale verso un PC",
      "Trasferimento dati via USB/seriale non ancora implementato; il protocollo Link Casio non e' supportato.",
-     s::Widgets | s::Storage, AllData, 0, nullptr},
+     s::Widgets | s::Storage | Shell | s::StepTask, AllData, 0, nullptr, Plus},
     {AppId::Memory, "Memory", "F", rgb888To565(70, 110, 170), AppStatus::Available,
      "Gestione della memoria: uso, cancellazione selettiva, salvataggio del workspace",
      nullptr, s::Widgets | s::Storage, AllData, 0, kMemorySrc},
@@ -95,21 +100,21 @@ const AppInfo kApps[AppCount] = {
     {AppId::Geometry, "Geometry", "H", rgb888To565(50, 110, 210), AppStatus::Planned,
      "Costruzioni geometriche (punti, rette, circonferenze, poligoni) e misure",
      "Costruzioni geometriche interattive non ancora implementate.",
-     s::Expression | Ui | s::MathCore | s::Storage | s::Models, d::Settings | d::Memory, 0, nullptr},
+     s::Expression | Ui | s::MathCore | s::Storage | s::Models | Shell | s::StepTask | s::Graph2D, d::Settings | d::Memory, 0, nullptr, Plus},
     {AppId::PicturePlot, "Picture Plot", "I", rgb888To565(40, 170, 80), AppStatus::Planned,
      "Punti su un'immagine di sfondo, liste di coordinate e regressioni",
      "Picture Plot non ancora implementato.",
-     s::Expression | Ui | s::Stats | s::Storage | s::Models, d::Settings | d::Lists | d::View, 0, nullptr},
+     s::Expression | Ui | s::Stats | s::Storage | s::Models | Shell | s::Graph2D, d::Settings | d::Lists | d::View, 0, nullptr, Plus},
     {AppId::Graph3D, "3D Graph", "J", rgb888To565(70, 60, 190), AppStatus::Available,
      "Fino a 3 grafici: modelli Line, Plane, Sphere, Cylinder, Cone, Z=, Param, Rot X/Y; V-Window 3D, Setup, FORMAT, 3D G-Mem e V-Mem, rotazione, zoom e viste, TRACE, G-Solve (CROSS, INTSECT, RELATION), SKETCH, PICTURE; z-buffer in PSRAM",
-     nullptr, s::Expression | Ui | s::MathRender | s::Storage | s::Files | s::Graph3D, d::Settings | d::Memory | d::Graph3D, 0, kGraph3DSrc},
+     nullptr, s::Expression | Ui | s::MathRender | s::Storage | s::Files | s::Graph3D | s::StepTask, d::Settings | d::Memory | d::Graph3D, 0, kGraph3DSrc},
     {AppId::Conversion, "Conversion", "K", rgb888To565(220, 90, 120), AppStatus::Available,
      "Conversioni di unita' (10 grandezze, prefissi SI); il risultato va in Ans",
      nullptr, s::Expression | Ui | s::Units, d::Settings | d::Memory, 0, kConversionSrc},
     {AppId::Python, "Python", "L", rgb888To565(40, 120, 180), AppStatus::Planned,
      "Script MicroPython con heap separato e output sul display",
      "Runtime MicroPython non integrato in questa build.",
-     s::Widgets | s::Storage | s::Models, d::Settings, 0, nullptr},
+     s::Widgets | s::Storage | s::Models | Shell | s::TextEdit | s::StepTask | s::Graph2D, d::Settings, 0, nullptr, Plus},
     {AppId::AiChat, "AI Chat", "M", rgb888To565(0, 150, 200), AppStatus::Available,
      "Conversazione con Claude o ChatGPT tramite relay HTTPS (nessuna chiave sul dispositivo)",
      nullptr, s::Widgets | s::Editor | s::Network | s::Storage, d::Settings | d::Chat, linkTo(AppId::System), kAiChatSrc},
@@ -138,6 +143,13 @@ const char* const kHDiag[] = {"diagnostics.hpp", nullptr};
 const char* const kHGraph3D[] = {"graph3d.hpp", "graph3d_model.hpp", "limits.hpp", nullptr};
 const char* const kHGraphCmd[] = {"graph_commands.hpp", nullptr};
 const char* const kHEquation[] = {"equation.hpp", nullptr};
+const char* const kHTypedFiles[] = {"typed_files.hpp", nullptr};
+const char* const kHModeShell[] = {"mode_shell.hpp", nullptr};
+const char* const kHTextEdit[] = {"text_editor.hpp", nullptr};
+const char* const kHStepTask[] = {"step_task.hpp", nullptr};
+const char* const kHGraph2D[] = {"graph2d.hpp", nullptr};
+const char* const kHBinding[] = {"binding.hpp", nullptr};
+const char* const kHInterp[] = {"program.hpp", nullptr};
 const char* const kHHardware[] = {"board_config.hpp", "mem_pools.hpp", "psram.hpp", "limits.hpp", "system_info.hpp", "system_runtime.hpp", nullptr};
 const ServiceInfo kServices[service::Count] = {
     {s::Expression, "Expression", kHExpression}, {s::Exact, "Exact", kHExact}, {s::Editor, "Editor", kHEditor},
@@ -148,6 +160,10 @@ const ServiceInfo kServices[service::Count] = {
     {s::GraphCore, "GraphCore", kHGraphCore}, {s::Files, "Files", kHFiles}, {s::Diag, "Diag", kHDiag},
     {s::Graph3D, "Graph3D", kHGraph3D}, {s::Hardware, "Hardware", kHHardware}, {s::GraphCmd, "GraphCmd", kHGraphCmd},
     {s::EquationCore, "EquationCore", kHEquation},
+    {s::TypedFiles, "TypedFiles", kHTypedFiles}, {s::ModeShell, "ModeShell", kHModeShell},
+    {s::TextEdit, "TextEdit", kHTextEdit}, {s::StepTask, "StepTask", kHStepTask},
+    {s::Graph2D, "Graph2D", kHGraph2D, Plus}, {s::Binding, "Binding", kHBinding, Plus},
+    {s::Interp, "Interp", kHInterp, Plus},
 };
 const char* const kDataNames[data::Count] = {"settings", "memory", "history", "functions", "view", "table", "lists", "equation", "chat", "graph", "graph3d", "matrices", "strings"};
 // Membri e metodi del workspace che non hanno il nome di una sezione (v1.11.0).
@@ -164,6 +180,64 @@ const MemberSection kMembers[] = {
 };
 } // namespace
 
+namespace {
+// ---- v1.15.0 (F1): risoluzione per scheda e per opzioni della build
+constexpr bool compiledFlag(AppId id) noexcept {
+    switch (id) {
+    case AppId::EActivity: return features::kEActivity;
+    case AppId::Spreadsheet: return features::kSpreadsheet;
+    case AppId::DynaGraph: return features::kDynaGraph;
+    case AppId::Recursion: return features::kRecursion;
+    case AppId::ConicGraphs: return features::kConicGraphs;
+    case AppId::Program: return features::kProgram;
+    case AppId::Financial: return features::kFinancial;
+    case AppId::Link: return features::kLink;
+    case AppId::Geometry: return features::kGeometry;
+    case AppId::PicturePlot: return features::kPicturePlot;
+    case AppId::Python: return features::kPython;
+    default: return true;                  // modalita' della v1.14.0 ed estensioni: sempre compilate
+    }
+}
+constexpr std::uint8_t kThisBoard = board::config::kIsPicoPlus2W ? boards::PicoPlus2W : boards::Pico2W;
+constexpr const char* kBoardMissing = "Non disponibile sul Raspberry Pi Pico 2 W: richiede la Pimoroni Pico Plus 2 W (flash e RAM).";
+constexpr AppInfo resolve(AppInfo a) noexcept {
+    if ((a.boards & kThisBoard) == 0) {
+        if (a.status != AppStatus::External) a.status = AppStatus::Planned;
+        a.missing = kBoardMissing;
+        a.sources = nullptr;
+        a.links = 0;
+    } else if (!compiledFlag(a.id) && a.status == AppStatus::Available) {
+        a.status = AppStatus::Planned;
+        a.missing = "Modalita' esclusa da questa build (opzione FXAI_MODE disattivata).";
+        a.sources = nullptr;
+        a.links = 0;
+    }
+    return a;
+}
+struct ResolvedApps {
+    AppInfo items[AppCount];
+    constexpr ResolvedApps() : items{} { for (std::size_t i = 0; i < AppCount; ++i) items[i] = resolve(kApps[i]); }
+};
+constexpr ResolvedApps kResolved{};
+} // namespace
+
+const char* const kNotOnThisBoard = kBoardMissing;
+std::uint8_t thisBoard() noexcept { return kThisBoard; }
+bool modeCompiled(AppId id) noexcept { return compiledFlag(id); }
+const AppInfo& declaredAppInfo(std::size_t index) noexcept { return kApps[index < AppCount ? index : 0]; }
+bool serviceCompiled(std::uint32_t bit) noexcept {
+    switch (bit) {
+    case service::TypedFiles: return features::kTypedFiles;
+    case service::ModeShell: return features::kModeShell;
+    case service::TextEdit: return features::kTextEdit;
+    case service::StepTask: return features::kStepTask;
+    case service::Graph2D: return features::kGraph2D;
+    case service::Binding: return features::kBinding;
+    case service::Interp: return features::kInterp;
+    default: return true;
+    }
+}
+
 std::uint32_t dataSectionOfMember(const char* member) noexcept {
     if (!member) return 0;
     const std::string_view m(member);
@@ -174,9 +248,9 @@ std::uint32_t dataSectionOfMember(const char* member) noexcept {
 
 const AppInfo& appInfo(AppId id) noexcept {
     const auto i = static_cast<std::size_t>(id);
-    return kApps[i < AppCount ? i : 0];
+    return kResolved.items[i < AppCount ? i : 0];
 }
-const AppInfo& appInfoAt(std::size_t index) noexcept { return kApps[index < AppCount ? index : 0]; }
+const AppInfo& appInfoAt(std::size_t index) noexcept { return kResolved.items[index < AppCount ? index : 0]; }
 const ServiceInfo& serviceInfo(std::size_t index) noexcept { return kServices[index < service::Count ? index : 0]; }
 const char* dataSectionName(std::size_t index) noexcept { return kDataNames[index < data::Count ? index : 0]; }
 const char* statusName(AppStatus s) noexcept {

@@ -251,12 +251,37 @@ void CellGrid::draw(Context& ctx, gfx::Canvas& c, int top, int bottom) const {
 // ------------------------------------------------------------------ FileDialog
 void FileDialog::openList(std::string title, std::vector<std::string> names) {
     mode_ = Mode::Open; title_ = std::move(title); names_ = std::move(names); selected_ = 0; first_ = 0; chosen_.clear();
+    overwrite_ = asking_ = false;
 }
 void FileDialog::openName(std::string title, const std::string& initial) {
     mode_ = Mode::SaveAs; title_ = std::move(title); editor_.set(initial); chosen_.clear();
+    overwrite_ = asking_ = false;
+}
+void FileDialog::openConfirm(std::string title, std::string question) {
+    mode_ = Mode::Confirm; title_ = std::move(title); question_ = std::move(question); chosen_.clear();
+    overwrite_ = asking_ = false;
+}
+void FileDialog::openSearch(std::string title) {
+    mode_ = Mode::Search; title_ = std::move(title); editor_.set(""); chosen_.clear();
+    overwrite_ = asking_ = false;
+}
+void FileDialog::setNameRule(std::function<bool(char)> allowed, std::function<char(char)> caseMap, std::size_t maxLength) {
+    allowed_ = std::move(allowed); caseMap_ = std::move(caseMap); maxLength_ = maxLength == 0 ? 8 : maxLength;
+    editor_ = LineEditor{maxLength_};
 }
 int FileDialog::key(const KeyEvent& ev) {
     if (mode_ == Mode::None) return -1;
+    if (mode_ == Mode::Confirm || asking_) {                       // Si'/No (anche "Sovrascrivere?")
+        if (ev.is(Key::F1) || ev.is(Key::Exe)) {
+            if (asking_) { asking_ = false; overwrite_ = true; }
+            mode_ = Mode::None; return 1;
+        }
+        if (ev.is(Key::F6) || ev.is(Key::Exit) || ev.is(Key::AC)) {
+            if (asking_) { asking_ = false; return 0; }             // torna al nome (manuale 10-22)
+            mode_ = Mode::None; return -1;
+        }
+        return 0;
+    }
     if (ev.is(Key::Exit) || ev.is(Key::AC)) { mode_ = Mode::None; return -1; }
     if (mode_ == Mode::Open) {
         const int n = static_cast<int>(names_.size());
@@ -271,25 +296,49 @@ int FileDialog::key(const KeyEvent& ev) {
     }
     if (ev.is(Key::Exe) || ev.is(Key::F1)) {
         if (editor_.empty()) return 0;
-        chosen_ = editor_.text(); mode_ = Mode::None; return 1;
+        chosen_ = editor_.text();
+        if (mode_ == Mode::SaveAs && std::find(existing_.begin(), existing_.end(), chosen_) != existing_.end()) {
+            asking_ = true;                                         // "Sovrascrivere?" (Si'/No)
+            return 0;
+        }
+        mode_ = Mode::None; return 1;
     }
-    // Il nome: lettere, cifre, _ e - (fx-CG50: 8 caratteri).
-    if (ev.is(Key::Char) && !ev.ctrl && !(std::isalnum(static_cast<unsigned char>(ev.ch)) || ev.ch == '_' || ev.ch == '-')) return 0;
+    if (ev.is(Key::Char) && !ev.ctrl) {
+        // Il nome: lettere, cifre, _ e - (fx-CG50: 8 caratteri), oppure la regola del tipo (v1.15.0).
+        const bool ok = allowed_ ? allowed_(ev.ch) : (std::isalnum(static_cast<unsigned char>(ev.ch)) || ev.ch == '_' || ev.ch == '-');
+        if (!ok || editor_.text().size() >= maxLength_) return 0;
+        if (caseMap_) {
+            KeyEvent mapped = ev;
+            mapped.ch = caseMap_(ev.ch);
+            (void)editor_.key(mapped);
+            return 0;
+        }
+    }
     (void)editor_.key(ev);
     return 0;
 }
 void FileDialog::draw(gfx::Canvas& c) const {
     if (mode_ == Mode::None) return;
+    if (mode_ == Mode::Confirm || asking_) {
+        const gfx::Rect box{20, 100, ui::ScreenW - 40, 76};
+        ui::panel(c, box, Bg, Warn);
+        ui::text(c, box.x + 8, box.y + 5, title_.c_str(), Accent, font::Face::Small);
+        ui::textFit(c, box.x + 8, box.y + 26, asking_ ? std::string("Sovrascrivere ") + chosen_ + "?" : question_, box.w - 16, Ink);
+        ui::text(c, box.x + 8, box.y + box.h - 20, "F1/EXE: S\xC3\xAC   F6/EXIT: No", Muted, font::Face::Small);
+        return;
+    }
     const gfx::Rect box{20, 70, ui::ScreenW - 40, mode_ == Mode::Open ? 176 : 70};
     ui::panel(c, box, Bg, Ink);
     ui::text(c, box.x + 8, box.y + 5, title_.c_str(), Accent, font::Face::Small);
-    if (mode_ == Mode::SaveAs) {
-        ui::text(c, box.x + 8, box.y + 26, "Nome:", Ink);
+    if (mode_ == Mode::SaveAs || mode_ == Mode::Search) {
+        ui::text(c, box.x + 8, box.y + 26, mode_ == Mode::Search ? "Cerca:" : "Nome:", Ink);
         editor_.draw(c, box.x + 60, box.y + 26, box.w - 70, Ink, true);
-        ui::text(c, box.x + 8, box.y + 50, "EXE salva, EXIT annulla (max 8 caratteri)", Muted, font::Face::Small);
+        if (mode_ == Mode::Search) ui::text(c, box.x + 8, box.y + 50, "EXE cerca dall'inizio del nome, EXIT annulla", Muted, font::Face::Small);
+        else if (maxLength_ == 8) ui::text(c, box.x + 8, box.y + 50, "EXE salva, EXIT annulla (max 8 caratteri)", Muted, font::Face::Small);
+        else ui::text(c, box.x + 8, box.y + 50, ("EXE salva, EXIT annulla (max " + std::to_string(maxLength_) + " caratteri)").c_str(), Muted, font::Face::Small);
         return;
     }
-    if (names_.empty()) { ui::text(c, box.x + 8, box.y + 30, "Nessun file CSV nella cartella", Muted); return; }
+    if (names_.empty()) { ui::text(c, box.x + 8, box.y + 30, empty_.c_str(), Muted); return; }
     const int rowH = 18, top = box.y + 22, visible = (box.h - 26) / rowH;
     if (selected_ < first_) first_ = selected_;
     if (selected_ >= first_ + visible) first_ = selected_ - visible + 1;
@@ -297,7 +346,7 @@ void FileDialog::draw(gfx::Canvas& c) const {
         const int idx = first_ + i, y = top + i * rowH;
         const bool sel = idx == selected_;
         if (sel) c.rect(box.x + 2, y, box.w - 4, rowH, Select, true);
-        ui::text(c, box.x + 10, y + 1, (names_[static_cast<std::size_t>(idx)] + ".csv").c_str(), sel ? SelectInk : Ink);
+        ui::text(c, box.x + 10, y + 1, (names_[static_cast<std::size_t>(idx)] + extension_).c_str(), sel ? SelectInk : Ink);
     }
     ui::scrollBar(c, box.x + box.w - 4, top, visible * rowH, static_cast<int>(names_.size()), visible, first_);
 }

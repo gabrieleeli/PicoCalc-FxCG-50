@@ -18,7 +18,7 @@ add_compile_options(-fsanitize=fuzzer-no-link,address,undefined -fno-sanitize-re
 add_link_options(-fsanitize=address,undefined)
 add_library(fxai_fuzz_core STATIC ${FXAI_CORE_SOURCES} ${FXAI_ROOT}/src/platform/host/board_host.cpp ${FXAI_ROOT}/src/platform/host/file_disk.cpp)
 target_include_directories(fxai_fuzz_core PUBLIC ${FXAI_INCLUDE_DIR} ${FXAI_ROOT}/tests)
-target_compile_definitions(fxai_fuzz_core PUBLIC FXAI_VERSION_STRING="${FXAI_VERSION_STRING}" FXAI_FATFS_MKFS=1 ${FXAI_BOARD_DEFINE}
+target_compile_definitions(fxai_fuzz_core PUBLIC FXAI_VERSION_STRING="${FXAI_VERSION_STRING}" FXAI_FATFS_MKFS=1 ${FXAI_BOARD_DEFINE} ${FXAI_FEATURE_DEFINITIONS}
   LFS_NO_DEBUG=1 LFS_NO_WARN=1 LFS_NO_ERROR=1 LFS_NO_ASSERT=1)
 foreach(t fuzz_expr fuzz_exactdiff fuzz_workspace fuzz_csv fuzz_pcgraph fuzz_equation fuzz_ui fuzz_graph3d)
   add_executable(${t} ${CMAKE_CURRENT_LIST_DIR}/${t}.cpp)
