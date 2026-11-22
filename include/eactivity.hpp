@@ -105,6 +105,9 @@ std::size_t prevUnit(const std::string& text, std::size_t pos) noexcept;
 bool islandAt(const std::string& text, std::size_t pos, std::string& expr, std::size_t& end);
 std::string island(const std::string& expr);
 bool validText(const std::string& text) noexcept;   // isole chiuse, niente isole annidate, UTF-8
+// Testo di una riga o di un titolo: validText e nessun carattere di controllo
+// (una riga finisce all'a capo, manuale 10-11: l'a capo non sta nella riga).
+bool validLineText(const std::string& text) noexcept;
 
 // Righe di testo in pezzi da disegnare: testo semplice o espressione; a capo
 // solo tra le parole del testo (le espressioni non vanno a capo, 10-7).

@@ -15,10 +15,11 @@ printf '\001\012\000\001\012' > "$C/ui/a"; printf '3\201\012' > "$C/ui/eact"
 # FUZZ_ONLY="fuzz_a fuzz_b" esegue solo gli harness elencati (v1.15.0: quelli nuovi o toccati).
 run() {  # harness, cartella del corpus, lunghezza massima
   if [[ -n "${FUZZ_ONLY:-}" && " ${FUZZ_ONLY} " != *" $1 "* ]]; then return 0; fi
-  mkdir -p "$B/artifacts/$1"
+  local log="${4:-$1}"
+  mkdir -p "$B/artifacts/$log"
   "$B/$1" "$C/$2" -fork=1 -ignore_crashes=1 -ignore_timeouts=1 -max_len="$3" -timeout=20 -rss_limit_mb=3000 \
-    -max_total_time="$T" -artifact_prefix="$B/artifacts/$1/" > "$B/$1.log" 2>&1 || true
-  echo "$1: $(grep -E '^#[0-9]+:' "$B/$1.log" | tail -n 1)"
+    -max_total_time="$T" -artifact_prefix="$B/artifacts/$log/" > "$B/$log.log" 2>&1 || true
+  echo "$log: $(grep -E '^#[0-9]+:' "$B/$log.log" | tail -n 1)"
 }
 # v1.15.0: celle e nomi legati (primo byte 0x40/0x80), file tipizzati, editor di testo, programmi C/C++/C#
 printf '\100A1+Sum(A1:B3)' > "$C/expr/cells"; printf '\200raggio^2+x' > "$C/expr/bound"
@@ -32,5 +33,6 @@ run fuzz_expr expr 300; run fuzz_exactdiff expr 200; run fuzz_workspace ws 10000
 run fuzz_pcgraph pcg 8000; run fuzz_equation eq 400; run fuzz_ui ui 300; run fuzz_graph3d g3d 12000
 run fuzz_typedfile tf 4000; run fuzz_texteditor te 600
 [ -x "$B/fuzz_program" ] && run fuzz_program prog 2000
-run fuzz_eactivity ea 6000                              # v1.16.0
+run fuzz_eactivity ea 6000                              # v1.16.0: documenti e controller
+FXAI_FUZZ_EACT_DOCS=1 run fuzz_eactivity ea 30000 fuzz_eactivity_docs   # solo documenti .pceact
 ls "$B"/artifacts/*/ 2>/dev/null

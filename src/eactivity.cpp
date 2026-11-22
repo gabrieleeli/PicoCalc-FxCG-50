@@ -166,6 +166,11 @@ bool validText(const std::string& t) noexcept {
     return !inside;
 }
 
+bool validLineText(const std::string& t) noexcept {
+    for (char c : t) if (static_cast<unsigned char>(c) < 0x20 || c == 0x7F) return false;
+    return validText(t);
+}
+
 std::vector<std::vector<Piece>> wrap(const std::string& text, int width,
                                      int (*measure)(const std::string&, std::size_t, std::size_t, bool, void*), void* user) {
     // Parole: sequenze senza spazi; un'espressione e' una parola a se'.
@@ -265,11 +270,11 @@ bool decode(const std::uint8_t* data, std::size_t size, Document& out) {
         l.text = in.str(4000);
         if (!in.ok) return false;
         switch (l.kind) {
-        case LineKind::Text: if (l.text.size() > MaxTextLineBytes || !validText(l.text)) return false; break;
+        case LineKind::Text: if (l.text.size() > MaxTextLineBytes || !validLineText(l.text)) return false; break;
         case LineKind::Calc: if (l.text.size() > limits::kEquationExpression * 4 || !files::validUtf8Text(reinterpret_cast<const std::uint8_t*>(l.text.data()), l.text.size())) return false; break;
         case LineKind::Stop: if (!l.text.empty()) return false; break;
         case LineKind::Picture: if (!l.text.empty() && !files::validName(files::stem(l.text), 8)) return false; break;
-        case LineKind::Strip: if (l.text.size() > MaxStripTitleBytes || !validText(l.text)) return false; break;
+        case LineKind::Strip: if (l.text.size() > MaxStripTitleBytes || !validLineText(l.text)) return false; break;
         }
         if (l.kind == LineKind::Text || l.kind == LineKind::Calc) { if (!readAttr(in, l.text.size(), l.attr)) return false; }
         const auto memo = in.u8();

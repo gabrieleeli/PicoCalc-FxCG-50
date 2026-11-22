@@ -6,6 +6,8 @@
 //  * primo byte dispari: un documento qualunque (u16 lunghezza + byte) aperto
 //    nel controller e modificato con una sequenza di tasti (come fuzz_ui):
 //    nessun crash, il documento resta entro il limite della scheda.
+// Con FXAI_FUZZ_EACT_DOCS=1 ogni input e' un documento (la parte lenta del
+// controller, che riavvia il firmware a ogni input, e' saltata).
 #include "app_rig.hpp"
 #include "eactivity.hpp"
 #include "limits.hpp"
@@ -27,7 +29,8 @@ const std::uint8_t kKeys[] = {
 }
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* d, size_t n) {
     if (n < 1) return 0;
-    if ((d[0] & 1) == 0) {
+    static const bool docsOnly = std::getenv("FXAI_FUZZ_EACT_DOCS") != nullptr;
+    if ((d[0] & 1) == 0 || docsOnly) {
         eact::Document doc;
         if (!eact::decode(d + 1, n - 1, doc)) return 0;
         const auto again = eact::encode(doc);
@@ -35,7 +38,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* d, size_t n) {
         if (!eact::decode(again.data(), again.size(), back) || eact::encode(back) != again) { std::fprintf(stderr, "ROUNDTRIP\n"); std::abort(); }
         for (const eact::Line& l : doc.lines) {
             if (l.kind != eact::LineKind::Text) continue;
-            if (!eact::validText(l.text)) { std::fprintf(stderr, "INVALID TEXT\n"); std::abort(); }
+            if (!eact::validLineText(l.text)) { std::fprintf(stderr, "INVALID TEXT\n"); std::abort(); }
             for (std::size_t p = 0; p < l.text.size();) {
                 const std::size_t q = eact::nextUnit(l.text, p);
                 if (q <= p || eact::prevUnit(l.text, q) != p) { std::fprintf(stderr, "UNITS\n"); std::abort(); }

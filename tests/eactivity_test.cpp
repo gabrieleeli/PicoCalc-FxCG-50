@@ -125,6 +125,10 @@ int main() {
         bad.lines[0].attr.assign(bad.lines[0].text.size(), 0);
         const auto open = eact::encode(bad);
         CHECK(!eact::decode(open.data(), open.size(), t));                  // espressione non chiusa
+        bad = d; bad.lines[0].text = "\nriga"; bad.lines[0].attr.assign(5, 0);
+        const auto newline = eact::encode(bad);
+        CHECK(!eact::decode(newline.data(), newline.size(), t));            // a capo dentro una riga (trovato dal fuzzing)
+        CHECK(!eact::validLineText("a\tb") && eact::validLineText("a b") && !eact::validLineText("a\x7F"));
         // E13: unita' del testo (un'espressione e' un'unita'), validText
         const std::string s = "a" + eact::island("x^2") + "b";
         CHECK(eact::nextUnit(s, 1) == s.size() - 1 && eact::prevUnit(s, s.size() - 1) == 1);

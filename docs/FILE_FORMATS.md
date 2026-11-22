@@ -63,7 +63,7 @@ Ogni riga:
 | Campo | Contenuto |
 |---|---|
 | `u8` tipo | 0 testo, 1 calcolo, 2 stop, 3 immagine, 4 striscia |
-| `str` testo | testo (≤ 255 byte), espressione (testo lineare canonico del parser), nome del file dell'immagine, titolo della striscia (≤ 16 byte); vuoto per lo stop |
+| `str` testo | testo (≤ 255 byte, senza caratteri di controllo: l'a capo separa le righe), espressione (testo lineare canonico del parser), nome del file dell'immagine, titolo della striscia (≤ 16 byte); vuoto per lo stop |
 | attributi (testo e calcolo) | `u16` sequenze, ciascuna `u8` attributo + `u16` lunghezza in byte del testo; attributo = colore del testo (bit 0–3: 0 nero, 1 blu, 2 rosso, 3 magenta, 4 verde, 5 ciano, 6 giallo) + marcatore (bit 4–7: 0 nessuno, 1 magenta, 2 verde, 3 ciano, 4 giallo) |
 | `u8` memo | 0/1; se 1: `u8` colore (0–6) e `str` testo (≤ 255 byte). Solo su righe di testo e di calcolo (10-11) |
 | calcolo | `blob` risultato: una voce di cronologia di Run-Matrix (`encodeHistoryEntries`), vuoto se non calcolata |

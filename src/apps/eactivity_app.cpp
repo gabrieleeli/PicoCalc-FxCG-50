@@ -934,7 +934,7 @@ void EActivityApp::textKey(Context& ctx, const KeyEvent& ev) {
             if (ev.ch == 'c' || ev.ch == 'C') { ctx.textClipboard = l.text; ctx.toast("Copiato"); }
             else if ((ev.ch == 'v' || ev.ch == 'V') && !ctx.textClipboard.empty()) {
                 std::string s = ctx.textClipboard.substr(0, ctx.textClipboard.find('\n'));
-                if (eact::validText(s)) insertText(ctx, s);
+                if (eact::validLineText(s)) insertText(ctx, s);
             }
             return;
         }
@@ -1164,7 +1164,7 @@ void EActivityApp::titleKey(Context& ctx, const KeyEvent& ev) {
     case Key::Exe: case Key::Up: case Key::Down: {
         std::string t = title_.text();
         while (t.size() > eact::MaxStripTitleBytes) t.erase(eact::prevUnit(t, t.size()));
-        if (!eact::validText(t)) t.clear();
+        if (!eact::validLineText(t)) t.clear();
         if (t != l.text) {
             const std::string before = l.text;
             l.text = t;
@@ -1279,7 +1279,10 @@ void EActivityApp::openNotes(Context& ctx, int index) {
             notes.doc.lines.push_back(Line::textLine(row.substr(0, cut)));
             row.erase(0, cut);
         }
+        // testo scritto sul PC: senza caratteri di controllo (\r, tabulazioni) e con le espressioni chiuse
+        row.erase(std::remove_if(row.begin(), row.end(), [](char c) { return static_cast<unsigned char>(c) < 0x20 || c == 0x7F; }), row.end());
         if (!eact::validText(row)) row = plainExpression(row);
+        if (!eact::validLineText(row)) row.clear();
         notes.doc.lines.push_back(Line::textLine(std::move(row)));
         if (b >= text.size()) break;
         a = b + 1;
