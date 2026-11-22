@@ -8,6 +8,38 @@
 #include "memory.hpp"
 #include "number_format.hpp"
 #include "value.hpp"
+#include "features.hpp"
+// v1.17.0: lo stato delle modalita' Base (solo Pimoroni Pico Plus 2 W).
+#if FXAI_MODE_SPREADSHEET
+#include "spreadsheet.hpp"
+#endif
+#if FXAI_MODE_DYNAGRAPH
+#include "dyna.hpp"
+#endif
+#if FXAI_MODE_RECURSION
+#include "recursion.hpp"
+#endif
+#if FXAI_MODE_CONICGRAPHS
+#include "conic.hpp"
+#endif
+#if FXAI_MODE_FINANCIAL
+#include "financial.hpp"
+#endif
+#if FXAI_MODE_PROGRAM
+#include "program_mode.hpp"
+#endif
+#if FXAI_MODE_LINK
+#include "link_protocol.hpp"
+#endif
+#if FXAI_MODE_GEOMETRY
+#include "geometry.hpp"
+#endif
+#if FXAI_MODE_PICTUREPLOT
+#include "picture_plot.hpp"
+#endif
+#if FXAI_MODE_PYTHON
+#include "python_port.hpp"
+#endif
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -230,6 +262,10 @@ struct SectionCodec {
     void (*encode)(const Workspace& ws, std::vector<std::uint8_t>& out);
     // Legge una versione <= `version`; false = dati non validi (il record viene rifiutato).
     bool (*decode)(Workspace& ws, std::uint16_t version, const std::uint8_t* data, std::size_t size);
+#if FXAI_BOARD_PICO_PLUS_2W
+    // v1.17.0: valori iniziali della modalita' (resetPart delle strisce, sezione isolata).
+    void (*reset)(Workspace& ws) = nullptr;
+#endif
 };
 // Codifiche delle sezioni compilate in questa build (dipendono dalle modalita' della scheda).
 const SectionCodec* workspaceSectionCodecs(std::size_t& count) noexcept;
@@ -291,6 +327,44 @@ struct Workspace final : NameResolver, CollectionResolver, ServiceResolver {
     std::vector<RecordSection> preservedSections;
     // ---- v1.16.0
     EActivityState eactivity;
+    // ---- v1.17.0 (solo Pimoroni Pico Plus 2 W, record v12): stato delle modalita' Base.
+#if FXAI_MODE_SPREADSHEET
+    sheet::State sheet;
+#endif
+#if FXAI_MODE_DYNAGRAPH
+    dyna::State dyna;
+#endif
+#if FXAI_MODE_RECURSION
+    rec::State recursion;
+#endif
+#if FXAI_MODE_CONICGRAPHS
+    conic::State conic;
+#endif
+#if FXAI_MODE_FINANCIAL
+    fin::State financial;
+#endif
+#if FXAI_MODE_PROGRAM
+    progmode::State program;
+#endif
+#if FXAI_MODE_LINK
+    link::State link;
+#endif
+#if FXAI_MODE_GEOMETRY
+    geo::State geometry;
+#endif
+#if FXAI_MODE_PICTUREPLOT
+    pplot::State pictplot;
+#endif
+#if FXAI_MODE_PYTHON
+    py::State python;
+#endif
+#if FXAI_BOARD_PICO_PLUS_2W
+    // Record v12: sezioni di modalita' danneggiate trovate all'ultima lettura e
+    // isolate (la modalita' e' ripartita dai valori iniziali). Non salvato.
+    std::vector<std::uint16_t> damagedSections;
+    // Firma del record letto (scheda e versione del firmware che l'ha scritto; v12).
+    std::string recordOrigin;
+#endif
 
     Workspace();
     void resetAll();
@@ -358,8 +432,16 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
 // Le stesse funzioni con un insieme di codifiche esplicito (test della coda TLV).
 std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws, const SectionCodec* codecs, std::size_t count);
 bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace& ws, const SectionCodec* codecs, std::size_t count);
-// Versione del formato del record scritta da questo firmware (11 dalla v1.15.0).
+// Versione del formato del record scritta da questo firmware (11 dalla v1.15.0;
+// 12 sulla Pimoroni Pico Plus 2 W dalla v1.17.0, il Pico 2 W congelato resta a 11).
 std::uint16_t workspaceRecordVersion() noexcept;
+#if FXAI_BOARD_PICO_PLUS_2W
+// v1.17.0: scrittura di un record v11 (test della migrazione v11 -> v12).
+std::vector<std::uint8_t> serializeWorkspaceV11(const Workspace& ws);
+std::vector<std::uint8_t> serializeWorkspaceV11(const Workspace& ws, const SectionCodec* codecs, std::size_t count);
+// Nome della modalita' di una sezione 0x0100 + AppId (avviso delle sezioni isolate).
+const char* sectionModeName(std::uint16_t id) noexcept;
+#endif
 
 // v1.16.0 (F2.5): parti del workspace codificate da sole, per le strisce di
 // eActivity (i dati di una modalita' dentro un documento) e per le memorie
@@ -373,6 +455,9 @@ constexpr std::uint8_t Equation = 5;   // coefficienti, Solver e soluzioni di EQ
 constexpr std::uint8_t Matrices = 6;   // Mat A-Z, Vct A-Z, MatAns, VctAns, ListAns
 constexpr std::uint8_t Graph3D = 7;    // le tre funzioni, la V-Window e il Setup del 3D Graph, lo zoom
 constexpr std::uint8_t Count = 8;
+// v1.17.0 (solo Plus): la sezione di una modalita' Base come parte (strisce di
+// eActivity delle modalita' nuove): id ModeBase + AppId, la codifica della sezione.
+constexpr std::uint8_t ModeBase = 0x40;
 } // namespace part
 std::vector<std::uint8_t> encodePart(const Workspace& ws, std::uint8_t part);
 // Sostituisce la parte con i dati; false (workspace invariato) se non sono validi.

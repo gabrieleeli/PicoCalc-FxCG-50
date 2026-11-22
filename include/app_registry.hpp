@@ -7,6 +7,7 @@
 // checks the sources against these declarations, so the separation between
 // applications (graphs only in GRAPH, statistics only in STATISTICS, ...) is
 // enforced rather than just documented.
+#include "board_config.hpp"
 #include <cstddef>
 #include <cstdint>
 
@@ -24,8 +25,14 @@ enum class AppStatus : std::uint8_t {
     Available,      // controller registered in the firmware (functions: docs/FEATURE_MATRIX.md)
     Planned,        // responsibilities, services and data model defined; controller not written yet
     External,       // depends on hardware or a proprietary protocol the PicoCalc does not have
+    // v1.17.0: aperta e usabile (controller registrato) ma senza la parita'
+    // completa con il manuale: nel menu si apre come una Available con un
+    // piccolo segno sull'icona; `missing` dice cosa manca alla parita'.
+    Base,
 };
 const char* statusName(AppStatus status) noexcept;
+// v1.17.0: la modalita' ha un controller e si apre (Available o Base).
+constexpr bool isOpen(AppStatus status) noexcept { return status == AppStatus::Available || status == AppStatus::Base; }
 
 // Shared services: each exists once and every mode uses the same instance of the engine.
 namespace service {
@@ -64,7 +71,16 @@ constexpr std::uint32_t Binding    = 1u << 27;   // binding.hpp      variabili l
 constexpr std::uint32_t Interp     = 1u << 28;   // program.hpp      nucleo dell'interprete C/C++/C# (solo Pico Plus 2 W)
 // ---- v1.16.0 (M2)
 constexpr std::uint32_t EActivityCore = 1u << 29;   // eactivity.hpp  documenti, righe, strisce, file .pceact (limite per scheda)
+#if FXAI_BOARD_PICO_PLUS_2W
+// ---- v1.17.0 (solo Pimoroni Pico Plus 2 W): il nucleo proprio di una modalita'
+// Base (foglio, coniche, TVM...). Ogni modalita' puo' includere solo l'header
+// del PROPRIO nucleo (modeCoreHeaders), non quello di un'altra modalita'.
+constexpr std::uint32_t ModeCore   = 1u << 30;
+constexpr std::uint32_t Count      = 31;
+#else
+constexpr std::uint32_t ModeCore   = 0;          // Pico 2 W congelato: nessuna modalita' nuova
 constexpr std::uint32_t Count      = 30;
+#endif
 } // namespace service
 
 // v1.15.0 (F1): schede su cui una modalita' o un servizio possono esistere.
@@ -94,7 +110,25 @@ constexpr std::uint32_t Graph3D   = 1u << 10;    // 3D Graph functions, 3D V-Win
 constexpr std::uint32_t Matrices  = 1u << 11;    // Mat A-Z, Vct A-Z, MatAns, VctAns, ListAns
 constexpr std::uint32_t Strings   = 1u << 12;    // v1.12.0: Str 1-20, function memory f1-f20, variabili di Dyna/Recursion/TVM
 constexpr std::uint32_t EActivity = 1u << 13;    // v1.16.0: stato di eActivity (cartella, memorie salvate durante documenti e strisce)
-constexpr std::uint32_t Count     = 14;
+// v1.17.0: lo stato delle modalita' Base, solo sulla Pimoroni Pico Plus 2 W (sul
+// Pico 2 W congelato i bit valgono 0 e le sezioni non esistono).
+#if FXAI_BOARD_PICO_PLUS_2W
+#define FXAI_PLUS_DATA(n) (1u << (n))
+#else
+#define FXAI_PLUS_DATA(n) 0u
+#endif
+constexpr std::uint32_t Sheet       = FXAI_PLUS_DATA(14);   // foglio di Spreadsheet aperto
+constexpr std::uint32_t Dyna        = FXAI_PLUS_DATA(15);   // funzione e impostazioni di Dyna Graph
+constexpr std::uint32_t Recursion   = FXAI_PLUS_DATA(16);   // formule e impostazioni di Recursion
+constexpr std::uint32_t Conic       = FXAI_PLUS_DATA(17);   // modello e coefficienti di Conic Graphs
+constexpr std::uint32_t Financial   = FXAI_PLUS_DATA(18);   // impostazioni e dati di Financial
+constexpr std::uint32_t Program     = FXAI_PLUS_DATA(19);   // ultimo programma di Program
+constexpr std::uint32_t Link        = FXAI_PLUS_DATA(20);   // ultimo trasferimento di Link
+constexpr std::uint32_t Geometry    = FXAI_PLUS_DATA(21);   // costruzione aperta di Geometry
+constexpr std::uint32_t PicturePlot = FXAI_PLUS_DATA(22);   // sfondo e punti di Picture Plot
+constexpr std::uint32_t Python      = FXAI_PLUS_DATA(23);   // ultimo script di Python
+#undef FXAI_PLUS_DATA
+constexpr std::uint32_t Count     = FXAI_BOARD_PICO_PLUS_2W ? 24 : 14;
 } // namespace data
 
 constexpr std::uint32_t linkTo(AppId id) noexcept { return 1u << static_cast<unsigned>(id); }
@@ -130,6 +164,11 @@ const AppInfo& declaredAppInfo(std::size_t index) noexcept;
 // Valore della definizione FXAI_MODE_<NOME> della modalita' (1 per le modalita'
 // che non hanno un'opzione: quelle della v1.14.0 e le estensioni).
 bool modeCompiled(AppId id) noexcept;
+#if FXAI_BOARD_PICO_PLUS_2W
+// v1.17.0: header del nucleo proprio della modalita' (service::ModeCore),
+// nullptr-terminato; nessuno per le modalita' che non ne hanno.
+const char* const* modeCoreHeaders(AppId id) noexcept;
+#endif
 
 struct ServiceInfo {
     std::uint32_t bit;

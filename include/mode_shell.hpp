@@ -18,6 +18,7 @@
 // menu. TABLE e' la prima modalita' portata sul guscio (screenshot identici).
 #include "app_widgets.hpp"
 #include "natural_editor.hpp"
+#include "typed_files.hpp"
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -163,4 +164,46 @@ struct ModeShell {
     void drawModals(gfx::Canvas& c) const;      // menu, richiesta, conferma
 };
 
+#if FXAI_BOARD_PICO_PLUS_2W
+// ---- v1.17.0 (solo Pimoroni Pico Plus 2 W): FILE delle modalita' Base.
+// OPEN, SAVE·AS (con la conferma di sovrascrittura) e DELETE dei file
+// tipizzati del tipo della modalita' sul FileDialog comune, nell'archivio
+// scelto in SYSTEM (microSD o flash interna). Gli errori diventano MathError
+// con il messaggio della fx-CG50 ("Data ERROR", "Memory ERROR").
+class TypedFileMenu {
+public:
+    explicit TypedFileMenu(files::FileType type) noexcept : type_(type) {}
+    enum class Purpose : std::uint8_t { None, Open, SaveAs, Delete };
+    void openList(Context& ctx, Purpose purpose = Purpose::Open);   // elenco dei file del tipo
+    void openSaveAs(Context& ctx, const std::string& currentStem);
+    bool active() const noexcept { return dialog_.active(); }
+    Purpose purpose() const noexcept { return purpose_; }
+    // 1: scelta fatta (file() con l'estensione), -1: annullata, 0: ancora aperto.
+    int key(const KeyEvent& ev);
+    void draw(gfx::Canvas& c) const { dialog_.draw(c); }
+    const std::string& file() const noexcept { return file_; }
+    std::vector<std::uint8_t> load(Context& ctx, const std::string& file) const;
+    void save(Context& ctx, const std::string& file, const std::vector<std::uint8_t>& payload) const;
+    void remove(Context& ctx, const std::string& file) const;
+    static std::string stem(const std::string& file);
+private:
+    files::FileType type_;
+    FileDialog dialog_;
+    Purpose purpose_{Purpose::None};
+    std::string file_;
+    std::vector<std::string> names_;
+};
+// Riquadro del titolo di una schermata delle modalita' Base (sotto la barra di stato).
+void drawModeHeader(gfx::Canvas& c, const std::string& text);
+// Campi dei moduli (Form) delle modalita' Base.
+inline FormField numberField(std::string label, std::string text) { FormField f; f.label = std::move(label); f.text = std::move(text); return f; }
+inline FormField textField(std::string label, std::string text) { FormField f = numberField(std::move(label), std::move(text)); f.type = FormField::Type::Text; return f; }
+inline FormField choiceField(std::string label, std::vector<std::string> choices, int choice) {
+    FormField f; f.label = std::move(label); f.type = FormField::Type::Choice; f.choices = std::move(choices); f.choice = choice;
+    if (choice >= 0 && static_cast<std::size_t>(choice) < f.choices.size()) f.text = f.choices[static_cast<std::size_t>(choice)];
+    return f;
+}
+// Numero con 10 cifre significative ("%.10G"), per i campi dei moduli.
+std::string formNumber(double v);
+#endif
 } // namespace fx::app

@@ -1,5 +1,96 @@
 # Changelog
 
+## v1.17.0 — base di tutte le modalità
+
+Base: `main` = `eb2338a` (v1.16.0). Ogni modalità del registro si apre, fa il
+suo lavoro principale, salva e rimette a posto il suo stato ed esce senza
+perdite di memoria. Sulla **Pimoroni Pico Plus 2 W** arrivano dieci modalità
+nel nuovo stato **Base** (aperte e usabili, parità con la fx-CG50 non ancora
+completa). Il **Raspberry Pi Pico 2 W resta congelato** alla v1.16.0 (solo una
+correzione condivisa). Dalla v1.18.0 una modalità per versione arriva alla
+parità completa, a partire da Statistics. Analisi:
+[reports/ANALISI_FONTI_v1.17.0.md](reports/ANALISI_FONTI_v1.17.0.md);
+rapporto: [reports/SVILUPPO_v1.17.0.md](reports/SVILUPPO_v1.17.0.md).
+**Nessuna prova su hardware fisico**: procedura
+[HARDWARE_TEST_v1.17.0.md](HARDWARE_TEST_v1.17.0.md) (HW-220…HW-245).
+
+### Nuovo
+- **Stato Base** nel registro (`AppStatus::Base`, `isOpen()`): la modalità si
+  apre come una Available, con un triangolo ambra sull'icona e «EXE: apri
+  (base)»; Available resta riservato alla parità completa.
+- Dieci modalità **Base**, solo sulla Pimoroni Pico Plus 2 W, ognuna sul guscio
+  comune con la sua sezione del record, il suo tipo di file in MEMORY › FILES e
+  le operazioni lunghe interrompibili con AC:
+  - **Spreadsheet** (MENU › 4): celle A1…Z999, numeri, testi, formule `=` con
+    riferimenti relativi e assoluti e intervalli (Sum, Mean, Min, Max,
+    Median…), ricalcolo automatico a passi, «Circular ERROR», EDIT › COPY,
+    CUT, PASTE, FILL, CLEAR su blocchi, colonna ↔ List, file `.pcsheet`
+    ([SPREADSHEET.md](SPREADSHEET.md));
+  - **Dyna Graph** (MENU › 6): funzione con un coefficiente variabile,
+    Start/End/Pitch di VARS › DYNA, animazione sulla V-Window di Graph con tre
+    velocità, Cont/Stop, file `.pcdyna` ([DYNA_GRAPH.md](DYNA_GRAPH.md));
+  - **Recursion** (MENU › 8): an+1 e an+2 con a0/a1, tabella con Σan, grafico
+    dei punti e ragnatela; la formula an+1 della v1.13.0 resta la stessa
+    variabile; file `.pcrecur` ([RECURSION.md](RECURSION.md));
+  - **Conic Graphs** (MENU › 9): parabole, circonferenza, ellisse, iperboli;
+    disegno, TRACE, G-SOLVE (vertice, fuoco, centro, raggio, asintoti,
+    eccentricità); file `.pcconic` ([CONIC_GRAPHS.md](CONIC_GRAPHS.md));
+  - **Program** (MENU › B): programmi C, C++ e C# sul nucleo della v1.15.0,
+    elenco, NEW con il modello del dialetto, editor con la sintassi colorata,
+    RUN con input e AC, errori con riga, colonna e cursore, grafici in Graph;
+    file `.pcprog` (dialetto nella prima riga) e `.c/.cpp/.cs` ([PROGRAM.md](PROGRAM.md));
+  - **Financial** (MENU › C): interesse semplice e composto sulle variabili
+    di VARS › TVM (BGN/END), flussi di cassa (NPV, IRR, PBP, NFV),
+    ammortamento, conversione dei tassi, giorni tra due date, →Ans; file
+    `.pcfin` ([FINANCIAL.md](FINANCIAL.md));
+  - **Link** (MENU › E): invio e ricezione su USB seriale del workspace e dei
+    file in pacchetti `.pclink` (trame con CRC-32, conferme, ritrasmissione,
+    Time Out, AC), APPLY con conferma; strumento **`tools/picocalc_link.py`**
+    per il PC (send, receive, list) ([LINK.md](LINK.md));
+  - **Geometry** (MENU › H): punti, segmenti, rette, circonferenze, poligoni;
+    selezione, MOVE, MEASURE, ZOOM, PAN; file `.pcgeo` ([GEOMETRY.md](GEOMETRY.md));
+  - **Picture Plot** (MENU › I): sfondo `.pcpict`, punti numerati con il
+    cursore, List 1/List 2, regressione di Statistics sopra lo sfondo; file
+    `.pcplot` ([PICTURE_PLOT.md](PICTURE_PLOT.md));
+  - **Python** (MENU › L): **MicroPython v1.24.1** (licenza MIT,
+    `third_party/micropython`), SHELL con blocchi e cronologia, script `.py`,
+    `input()`, AC → KeyboardInterrupt, esecuzione a passi su una pila propria,
+    heap separato (512 KB in PSRAM, 48 KB in SRAM), modulo `casioplot`
+    ([PYTHON.md](PYTHON.md)).
+- Record del workspace **v12** (solo Plus): firma di scheda e versione, CRC-32
+  per sezione; una sezione di modalità danneggiata viene isolata (la modalità
+  riparte dai valori iniziali con «Data ERROR: dati danneggiati di …») invece
+  di rendere illeggibile il record; migrazione dal record v11 della v1.16.0
+  ([STORAGE.md](STORAGE.md)).
+- Strisce dell'eActivity Conics, Recur, Dynamic Graph, Financial,
+  SpreadSheet, Geometry e Picture Plot disponibili sulla Plus (parti `0x40 +
+  AppId`).
+- Servizio **ModeCore** (nuclei puri delle modalità Base, `mode_codec.hpp`);
+  `ui::TypedFileMenu` e campi dei moduli nel guscio comune; porta USB seriale
+  nella piattaforma (`Platform::serialPort`, solo Plus).
+
+### Corretto
+- Conversion non segnava Ans da salvare: un risultato portato in Ans si
+  perdeva con un riavvio prima di un altro salvataggio (trovato da
+  `apps_init_test`; correzione condivisa con il Pico 2 W).
+
+### Cambiato
+- Tipi di file della Plus: Spreadsheet usa `.pcsheet` (prima `.sheet`, mai
+  scritto), Program apre anche `.pcprog`; nuovi tipi Dyna Graph, Recursion,
+  Conic Graphs, Financial e Link ([FILE_FORMATS.md](FILE_FORMATS.md)). Il
+  Pico 2 W tiene la tabella della v1.16.0.
+- La schermata «non disponibile» di E-CON4 sostituisce lo screenshot 19 (le
+  modalità aperte non hanno più quella schermata); MEMORY › FILES e il menu
+  delle strisce mostrano i tipi nuovi della Plus (screenshot 105, 106, 115).
+
+### Test
+- `apps_init_test` (due profili): ogni modalità aperta in sette casi
+  d'inizializzazione con sei controlli, comprese le perdite dell'allocatore.
+- `base_modes_test`, `base_flow_test`, `workspace_v117_test`, `link_tool_test`
+  (solo Plus); fuzzer `fuzz_sheet`, `fuzz_link`, `fuzz_modes`, `fuzz_python`;
+  `architecture_test` controlla lo stato Base, ModeCore e il congelamento del
+  Pico 2 W; 20 screenshot nuovi (128–147).
+
 ## v1.16.0 — eActivity su entrambe le schede; Raspberry Pi Pico 2 W congelato
 
 Base: `main` = `08a4e6a` (v1.15.0). Milestone **M2**: eActivity alla parità

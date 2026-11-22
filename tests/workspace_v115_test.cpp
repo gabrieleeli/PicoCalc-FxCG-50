@@ -14,6 +14,18 @@
 
 using namespace fx;
 
+// v1.17.0: questa suite prova il formato v11. La Plus scrive la v12 dalla
+// v1.17.0: qui si usa il suo scrittore v11 (tests/workspace_v117_test.cpp prova la v12).
+namespace {
+#if FXAI_BOARD_PICO_PLUS_2W
+std::vector<std::uint8_t> writeV11(const Workspace& w) { return serializeWorkspaceV11(w); }
+std::vector<std::uint8_t> writeV11(const Workspace& w, const SectionCodec* c, std::size_t n) { return serializeWorkspaceV11(w, c, n); }
+#else
+std::vector<std::uint8_t> writeV11(const Workspace& w) { return serializeWorkspace(w); }
+std::vector<std::uint8_t> writeV11(const Workspace& w, const SectionCodec* c, std::size_t n) { return serializeWorkspace(w, c, n); }
+#endif
+} // namespace
+
 namespace {
 const std::uint8_t kV160[] = {
 #include "fixtures/workspace_v1_6_0.inc"
@@ -88,11 +100,11 @@ int main() {
             CHECK(deserializeWorkspace(f.data, f.size, *ws));
             CHECK(ws->preservedSections.empty());
             // riscritto nel formato v11 e riletto: identico byte per byte alla seconda scrittura
-            const auto v11 = serializeWorkspace(*ws);
+            const auto v11 = writeV11(*ws);
             CHECK(v11[4] == 11 && v11[5] == 0);
             auto back = std::make_unique<Workspace>();
             CHECK(deserializeWorkspace(v11.data(), v11.size(), *back));
-            CHECK(serializeWorkspace(*back) == v11);
+            CHECK(writeV11(*back) == v11);
         }
         // il contenuto della fixture della v1.14.0
         auto ws = std::make_unique<Workspace>();
@@ -104,13 +116,13 @@ int main() {
         CHECK(ws->strings[0] == "HELLO");
         CHECK(ws->graph3d.set.fns[0].kind == g3d::Kind::Z && ws->graph3d.set.fns[0].expr[0] == "x^2-y^2" && ws->graph3d.set.window.theta == 30);
         CHECK(ws->equation.solverExpr == "x^2=2" && ws->modeVars.dynaStart == 2);
-        CHECK(workspaceRecordVersion() == 11);
+        CHECK(workspaceRecordVersion() == (FXAI_BOARD_PICO_PLUS_2W ? 12 : 11));
     }
 
     // ---------------------------------------------------------------- F2.1/F2.2 coda TLV
     Workspace base;
     base.memory.store('C', 3);
-    const auto empty = serializeWorkspace(base);
+    const auto empty = writeV11(base);
     CHECK(empty[empty.size() - 2] == 0 && empty[empty.size() - 1] == 0);          // nessuna sezione: u16 0
     {
         // sezioni sconosciute: conservate in ordine e riscritte intatte
@@ -120,11 +132,11 @@ int main() {
         CHECK(ws.preservedSections.size() == 3 && ws.preservedSections[1].id == 0x0105 && ws.preservedSections[1].version == 3);
         CHECK(ws.preservedSections[1].data == std::vector<std::uint8_t>({0, 1, 2}) && ws.preservedSections[2].data.empty());
         CHECK(ws.memory.recall('C') == 3);
-        CHECK(serializeWorkspace(ws) == rec);                                         // riscritto identico
+        CHECK(writeV11(ws) == rec);                                         // riscritto identico
         // dopo una modifica del resto del workspace le sezioni restano
         ws.memory.store('D', 4);
         Workspace again;
-        const auto rec2 = serializeWorkspace(ws);
+        const auto rec2 = writeV11(ws);
         CHECK(deserializeWorkspace(rec2.data(), rec2.size(), again) && again.preservedSections == ws.preservedSections && again.memory.recall('D') == 4);
         // RESET cancella tutto, anche le sezioni dei firmware successivi
         again.resetAll();
@@ -134,7 +146,7 @@ int main() {
         // sezione conosciuta: decodificata; scritta solo se presente
         gProbe = Probe{7, "eact"};
         Workspace ws;
-        const auto rec = serializeWorkspace(ws, kProbe, 1);
+        const auto rec = writeV11(ws, kProbe, 1);
         gProbe = Probe{};
         Workspace back;
         CHECK(deserializeWorkspace(rec.data(), rec.size(), back, kProbe, 1));
@@ -143,11 +155,11 @@ int main() {
         Workspace older;
         CHECK(deserializeWorkspace(rec.data(), rec.size(), older));
         CHECK(older.preservedSections.size() == 1 && older.preservedSections[0].id == 0x0150 && older.preservedSections[0].version == 2);
-        CHECK(serializeWorkspace(older) == rec);
+        CHECK(writeV11(older) == rec);
         // nulla da salvare: nessuna sezione
         gProbe = Probe{};
-        const auto none = serializeWorkspace(ws, kProbe, 1);
-        CHECK(none == serializeWorkspace(ws));
+        const auto none = writeV11(ws, kProbe, 1);
+        CHECK(none == writeV11(ws));
         // versione piu' nuova di quella conosciuta: conservata, non decodificata, e vince sulla codifica
         const auto newer = withTail(empty, {sec(0x0150, 5, std::string("\x09" "future", 7))});
         gProbe = Probe{1, "now"};
@@ -155,7 +167,7 @@ int main() {
         CHECK(deserializeWorkspace(newer.data(), newer.size(), nw, kProbe, 1));
         CHECK(gProbe.counter == 1 && gProbe.text == "now");                           // non toccata
         CHECK(nw.preservedSections.size() == 1 && nw.preservedSections[0].version == 5);
-        const auto out = serializeWorkspace(nw, kProbe, 1);
+        const auto out = writeV11(nw, kProbe, 1);
         CHECK(out == newer);                                                          // i dati nuovi non si perdono
         // versione piu' vecchia leggibile: decodificata
         const auto older2 = withTail(empty, {sec(0x0150, 1, std::string("\x03" "old", 4))});
@@ -209,13 +221,16 @@ int main() {
     // ---------------------------------------------------------------- versioni future del formato principale
     {
         auto future = empty;
-        future[4] = 12;
+        future[4] = static_cast<std::uint8_t>(workspaceRecordVersion() + 1);
         Workspace t;
         CHECK(!deserializeWorkspace(future.data(), future.size(), t));
         // v1.16.0: la prima sezione di produzione e' quella di eActivity (0x0102)
         std::size_t n = 99;
         (void)workspaceSectionCodecs(n);
-        CHECK(n == (features::kEActivity ? 1u : 0u));
+        // v1.17.0: sulla Plus anche le sezioni delle modalita' Base compilate.
+        const std::size_t base = features::kSpreadsheet + features::kDynaGraph + features::kRecursion + features::kConicGraphs + features::kProgram +
+                                 features::kFinancial + features::kLink + features::kGeometry + features::kPicturePlot + features::kPython;
+        CHECK(n == (features::kEActivity ? 1u : 0u) + base);
     }
     return testutil::finish("workspace_v115_test");
 }

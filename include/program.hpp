@@ -62,6 +62,10 @@ public:
     }
     virtual double getVariable(char letter) { (void)letter; return 0; }   // A-Z
     virtual void setVariable(char letter, double value) { (void)letter; (void)value; }
+    // v1.17.0: List 1-26 (indice da 1, come List 1[n]); errori come MathError.
+    virtual double getListItem(int list, int index) { (void)list; (void)index; return 0; }
+    virtual void setListItem(int list, int index, double value) { (void)list; (void)index; (void)value; }
+    virtual int listSize(int list) { (void)list; return 0; }
 };
 
 class Program;                                          // bytecode compilato (opaco)
@@ -106,6 +110,9 @@ public:
     double calc(const std::string& expression, const std::vector<std::pair<std::string, double>>& locals) override;
     double getVariable(char letter) override;
     void setVariable(char letter, double value) override;
+    double getListItem(int list, int index) override;
+    void setListItem(int list, int index, double value) override;
+    int listSize(int list) override;
     std::string output;
     std::vector<std::string> input;
     std::vector<std::string> commands;                  // comandi grafici eseguiti

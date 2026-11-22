@@ -320,6 +320,10 @@ const Builtin kBuiltins[] = {
     {"fx_viewwindow", Fn::FxViewWindow, 6, 6}, {"fx_plot", Fn::FxPlot, 2, 2}, {"fx_line", Fn::FxLine, 4, 4}, {"fx_circle", Fn::FxCircle, 3, 3},
     {"fx_text", Fn::FxText, 3, 3}, {"fx_graphy", Fn::FxGraphY, 1, 1}, {"fx_vertical", Fn::FxVertical, 1, 1}, {"fx_horizontal", Fn::FxHorizontal, 1, 1},
     {"fx_locate", Fn::FxLocate, 3, 3}, {"fx_clrtext", Fn::FxClrText, 0, 0}, {"fx_getkey", Fn::FxGetKey, 0, 0}, {"fx_command", Fn::FxCommand, 1, 1},
+    // v1.17.0: liste del workspace (List 1-26): elemento (da 1), assegnazione, lunghezza.
+    {"fx::getList", Fn::FxGetList, 2, 2}, {"fx::setList", Fn::FxSetList, 3, 3}, {"fx::listSize", Fn::FxListSize, 1, 1},
+    {"Fx.GetList", Fn::FxGetList, 2, 2}, {"Fx.SetList", Fn::FxSetList, 3, 3}, {"Fx.ListSize", Fn::FxListSize, 1, 1},
+    {"fx_getlist", Fn::FxGetList, 2, 2}, {"fx_setlist", Fn::FxSetList, 3, 3}, {"fx_listsize", Fn::FxListSize, 1, 1},
 };
 const Builtin* findBuiltin(const std::string& name) {
     for (const Builtin& b : kBuiltins) if (name == b.name) return &b;

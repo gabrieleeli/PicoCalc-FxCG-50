@@ -1,5 +1,19 @@
-# Feature matrix — v1.16.0
+# Feature matrix — v1.17.0
 
+La v1.17.0 è la **base di tutte le modalità**: ogni modalità del registro si
+apre, fa il suo lavoro principale, salva e rimette a posto il suo stato ed
+esce senza perdite di memoria (`apps_init_test` su tutte le modalità aperte,
+due profili). Sulla **Pimoroni Pico Plus 2 W** arrivano dieci modalità nello
+stato **Base** del registro (aperte e usabili, parità con la fx-CG50 non
+ancora completa; icona con il triangolo ambra): Spreadsheet, Dyna Graph,
+Recursion, Conic Graphs, Financial, Program, Link, Geometry, Picture Plot e
+Python (MicroPython), con il record del workspace **v12**
+([reports/ANALISI_FONTI_v1.17.0.md](reports/ANALISI_FONTI_v1.17.0.md),
+[reports/SVILUPPO_v1.17.0.md](reports/SVILUPPO_v1.17.0.md)). Il **Raspberry
+Pi Pico 2 W resta congelato alla v1.16.0** (stesse modalità, solo correzioni
+condivise). Dalla v1.18.0 una modalità per versione arriva alla parità
+completa, a partire da Statistics. Nessuna voce è provata su hardware
+([HARDWARE_TEST_v1.17.0.md](HARDWARE_TEST_v1.17.0.md)).
 La v1.16.0 (milestone M2) porta **eActivity** alla parità con il capitolo 10
 del manuale fx-CG50 su **entrambe le schede**: ogni voce della tabella di
 parità è presente o è una differenza inevitabile documentata
@@ -56,6 +70,13 @@ Stati (in italiano tra parentesi):
 | **TESTED ON HARDWARE** (testata su hardware) | provata sulla PicoCalc fisica |
 | **COMPLETE** | testata su hardware e con la funzionalità CG50 corrispondente completa |
 
+Stato del **registro** delle modalità (`AppStatus`, diverso dallo stato di
+verifica qui sopra): **Available** = parità con la fx-CG50 raggiunta (secondo
+la tabella di parità della sua versione); **Base** (v1.17.0) = la modalità si
+apre ed è usabile, con le funzioni principali, ma la parità non è completa
+(icona con il triangolo ambra, «EXE: apri (base)»); **Planned** = schermata
+«non disponibile»; **External** = richiede hardware esterno (E-CON4).
+
 Nessuna voce è TESTED ON HARDWARE: la PicoCalc fisica non è stata usata (né
 con il Pico 2 W né con il Pimoroni Pico Plus 2 W). "TESTED ON HOST" vale per
 entrambi i profili di scheda: la suite gira con `FXAI_TEST_BOARD=PICO_PLUS_2W`
@@ -101,6 +122,8 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Funzione | Stato |
 |---|---|
 | Menu principale a icone (23 modalità, accesso diretto 1–9/A–N) | TESTED ON SIMULATOR (accesso diretto verificato da architecture_test) |
+| Segno delle modalità Base (triangolo ambra sull'icona, «EXE: apri (base)»; solo Pimoroni Pico Plus 2 W) | TESTED ON SIMULATOR (v1.17.0, screenshot 128) |
+| Inizializzazione di ogni modalità aperta: avvio a freddo, dopo SYSTEM › RESET, record v11 valido/corrotto/troncato, solo SRAM, memoria quasi esaurita (Memory ERROR senza crash), microSD assente/presente; barra F1–F6, uscita con MENU e dalle strisce, nessuna perdita dell'allocatore, stato dopo uscita, rientro e riavvio | TESTED ON HOST (v1.17.0, `apps_init_test`, due profili) |
 | Registro delle modalità (stato, servizi, dati, collegamenti) e test di architettura | TESTED ON HOST |
 | Barra di stato (angolo, display, complessi, Frac Result, batteria, Wi-Fi, SHIFT) | TESTED ON SIMULATOR |
 | Tasti funzione F1–F6 stile CG50, SHIFT one-shot | TESTED ON HOST |
@@ -238,14 +261,22 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | eActivity: immagini `.pcpict` di PICT e CAPT (selezione con bordo rosso, FORMAT con Line Style/Line Color/Clear, DELETE, «Image wrong size for insertion.») | TESTED ON SIMULATOR | screenshot 122, 123; differenza D1 |
 | eActivity: strisce (24 tipi, titolo di 16 caratteri, dati propri indipendenti dal menu principale, barra di stato azzurra, SHIFT ' e MENU tornano, SHIFT , cambia applicazione, FILE › SIZE, tipi non disponibili conservati); RUN, Graph, Graph Editor, Table Editor, Stat Graph, List Editor, Solver, Matrix/Vector Editor, Simul/Poly Equation, 3D Graph/3D Graph Editor, Notes | TESTED ON SIMULATOR | screenshot 115–119; Conics, Recur, Dynamic, Financial, SpreadSheet, Geometry, Picture Plot arrivano sulla Plus con le loro modalità; E-CON External |
 | eActivity: memorie Mat/Vct/List separate per file ('MAT/VCT, 'LIST), SAVE, SAVE·AS con sovrascrittura, OPT, CAPACITY, «Salvare il file?» Sì/No/AC, limite del documento 24 KB (Pico 2 W) / 256 KB (Plus) con «Memory ERROR» senza perdita | TESTED ON SIMULATOR | screenshot 121, 125; `eactivity_test` |
-| Spreadsheet, Dyna Graph, Recursion, Conic Graphs | IN PROGRESS | solo architettura e modello dati (`app_models.hpp`, testato); nessuna interfaccia; schermata "non disponibile"; solo Pimoroni Pico Plus 2 W (M3–M9) |
 | 3D Graph (v1.14.0): lista con SELECT/DELETE/TYPE/3D-GMEM/DRAW e FORMAT (Line/Area Color); modelli Line (EXPRESS, VECTOR, P&V, POINTS), Plane (EXPRESS, VECTOR, POINTS), Sphere (FACTOR, EXPAND), Cylinder, Cone con le condizioni «Invalid Setting»; Z=, Param (S, T), Rot X, Rot Y | TESTED ON SIMULATOR | `graph3d_v114_test`, `graph3d_test` (due profili); screenshot 88–96, 100, 103–104 |
 | 3D Graph: V-Window (X/Y/Z, Xgrid/Ygrid, S/T, θ/φ, INITIAL, 3D-VMEM, Out of Domain / Invalid Setting), Setup (Axes, Box, Label, Plot/LineCol, tasti • e ,) | TESTED ON SIMULATOR | `graph3d_v114_test`; screenshot 99, 101, 102 |
 | 3D Graph: rotazione con i tasti e ROTATE (due giri, AC), ZOOM IN/OUT/VIEW-X/Y/Z/ORIGINAL, SKETCH, PICTURE, CAPTURE, TRACE (Next/Back, coordinate), G-Solve CROSS / INTSECT / RELATION (NOT FOUND, INFINITE) | TESTED ON SIMULATOR | `graph3d_v114_test` (geometria analitica e modalità); screenshot 93–98 |
 | 3D Graph: z-buffer condiviso in PSRAM (pittore senza PSRAM), taglio esatto al box, calcolo progressivo con AC, Memory ERROR senza memoria trattenuta, cache dell'immagine per TRACE | TESTED ON SIMULATOR | `graph3d_v114_test`, `graph3d_test`, `oom_test`, `limits_smoke`; fuzzing `tools/fuzz/fuzz_graph3d.cpp` |
-| Program, Financial, Link, Geometry, Picture Plot | IN PROGRESS | solo modello dati; schermata "non disponibile" |
+| Spreadsheet (v1.17.0, Base, solo Plus): griglia A1…Z999 con larghezze, numeri, testi e formule `=` con riferimenti relativi/assoluti e intervalli, ricalcolo automatico a passi (AC → Break), Circular ERROR, EDIT › COPY/CUT/PASTE/FILL/CLEAR su blocchi, LIST › colonna ↔ List, file `.pcsheet` | TESTED ON SIMULATOR | `base_modes_test`, `base_flow_test`, `fuzz_sheet`; screenshot 129, 130; [SPREADSHEET.md](SPREADSHEET.md) |
+| Dyna Graph (v1.17.0, Base, solo Plus): funzione con un coefficiente variabile, Start/End/Pitch, animazione sulla V-Window di Graph con tre velocità, Stop/Repeat, AC; variabili VARS › DYNA della v1.13.0 | TESTED ON SIMULATOR | screenshot 131, 132; [DYNA_GRAPH.md](DYNA_GRAPH.md) |
+| Recursion (v1.17.0, Base, solo Plus): an+1 e an+2 con a0/a1, Start/End, tabella a passi con Σan, grafico dei punti e ragnatela (WEB); formula della v1.13.0 conservata | TESTED ON SIMULATOR | screenshot 133–135; [RECURSION.md](RECURSION.md) |
+| Conic Graphs (v1.17.0, Base, solo Plus): parabole (due), circonferenza, ellisse, iperbole (due) con A, B, H, K, R; disegno, TRACE, G-SOLVE (vertice, fuoco, centro, raggio, asintoti, eccentricità) | TESTED ON SIMULATOR | screenshot 136–138; [CONIC_GRAPHS.md](CONIC_GRAPHS.md) |
+| Financial (v1.17.0, Base, solo Plus): interesse semplice e composto (TVM sulle variabili di VARS › TVM, BGN/END), flussi di cassa (NPV, IRR, PBP, NFV), ammortamento PM1…PM2, conversione dei tassi, giorni tra due date; →Ans | TESTED ON SIMULATOR | `fuzz_modes`; screenshot 139, 140; [FINANCIAL.md](FINANCIAL.md) |
+| Program (v1.17.0, Base, solo Plus): elenco dei programmi `.pcprog` (C, C++, C#) e `.c/.cpp/.cs`, NEW con modello per dialetto, editor con colori della sintassi, RUN sul nucleo della v1.15.0 con input, AC, errori con riga e colonna e cursore; comandi grafici in Graph; liste con `fx::` | TESTED ON SIMULATOR | screenshot 141, 142; [PROGRAM.md](PROGRAM.md) |
+| Link (v1.17.0, Base, solo Plus): invio e ricezione su USB seriale di workspace e file tipizzati in pacchetti `.pclink` (trame con CRC, conferme, ritrasmissione, AC, Time Out), APPLY con conferma; strumento `tools/picocalc_link.py` per il PC | TESTED ON SIMULATOR | `base_modes_test` (porta in memoria), `link_tool_test` (andata e ritorno con il PC), `fuzz_link`; screenshot 143; USB reale da collaudare (HW-235…HW-238); [LINK.md](LINK.md) |
+| Geometry (v1.17.0, Base, solo Plus): punti, segmenti, rette, circonferenze, poligoni; selezione, MOVE, MEASURE (lunghezze, angoli, equazioni, aree, perimetri), ZOOM, PAN, file `.pcgeo` | TESTED ON SIMULATOR | screenshot 144; [GEOMETRY.md](GEOMETRY.md) |
+| Picture Plot (v1.17.0, Base, solo Plus): sfondo `.pcpict`, punti numerati con il cursore (fino a 999), coordinate in List 1/List 2, regressione di Statistics sopra lo sfondo, file `.pcplot` | TESTED ON SIMULATOR | screenshot 145; [PICTURE_PLOT.md](PICTURE_PLOT.md) |
+| Python (v1.17.0, Base, solo Plus): MicroPython v1.24.1 vero (interi grandi, `math`, eccezioni), SHELL con blocchi e cronologia, script `.py` con l'editor di testo, `input()`, AC → KeyboardInterrupt, esecuzione a passi su una pila propria (coroutine), heap separato 512 KB PSRAM / 48 KB SRAM, `casioplot` | TESTED ON SIMULATOR | `base_modes_test`, `fuzz_python`; screenshot 146, 147; pila e MSPLIM sul dispositivo da collaudare (HW-241…HW-243); [PYTHON.md](PYTHON.md) |
+| Statistics (fase 1 della v1.17.0) | TESTED ON SIMULATOR | solo inizializzazione (`apps_init_test`); parità completa nella v1.18.0 |
 | E-CON4 | NOT STARTED | richiede un data logger esterno: non realizzabile sulla PicoCalc (stato External) |
-| Python (MicroPython) | NOT STARTED | richiede l'integrazione del runtime come libreria (modello dei file di script definito) |
 
 ## Persistenza
 
@@ -271,7 +302,9 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | MEMORY › FILES (v1.15.0): file per tipo con numero e spazio, eliminazione con conferma | TESTED ON SIMULATOR (screenshot 105–107) |
 | Documenti eActivity `.pceact` (v1.16.0): righe, attributi, memo, risultati, strisce con le parti del workspace, memorie del file; tipi sconosciuti conservati; scrittura atomica | TESTED ON HOST (`eactivity_test`, `fuzz_eactivity`) |
 | Sezione `0x0102` del record (v1.16.0): cartella, ultimo file, dati del menu principale durante un documento o una striscia, rimessi a posto dopo un'interruzione | TESTED ON HOST (`eactivity_test`, `fuzz_workspace`) |
-| Programmi, file Python (contenuto) | NOT STARTED (formati dei contenitori pronti: [FILE_FORMATS.md](FILE_FORMATS.md)) |
+| Programmi `.pcprog` e script `.py` (v1.17.0, solo Plus): testo UTF-8 nel file tipizzato, dialetto nella prima riga | TESTED ON HOST (`base_modes_test`, `base_flow_test`) |
+| File `.pcsheet`, `.pcdyna`, `.pcrecur`, `.pcconic`, `.pcfin`, `.pcgeo`, `.pcplot`, `.pclink` (v1.17.0, solo Plus) | TESTED ON HOST (`base_modes_test`, `fuzz_sheet`, `fuzz_modes`, `fuzz_link`) |
+| Record v12 (v1.17.0, solo Plus): firma della scheda e della versione, CRC per sezione, sezioni `0x0100 + AppId` delle dieci modalità (`0x0103`, `0x0105`, `0x0107`, `0x0108`, `0x010A`, `0x010B`, `0x010D`, `0x0110`, `0x0111`, `0x0114`), sezione danneggiata isolata con avviso all'avvio, migrazione dal record v11 della v1.16.0 (fixture); parti delle modalità nelle strisce dell'eActivity | TESTED ON HOST (`workspace_v117_test`, `apps_init_test`, `fuzz_workspace`) |
 | Matrici e vettori salvati nel workspace (record v6) | TESTED ON HOST (v1.10.0) |
 | Matrici e liste come file CSV (manuale 2-48, 3-18) | TESTED ON HOST (v1.11.0) |
 | Record v9 (v1.13.0): List File, Sub Name, r e θ, Str, function memory, variabili Dyna/Recursion/TVM, celle decimali, ENG/◢/stringhe della cronologia; lettura dei record v7 della v1.11.0 (fixture) | TESTED ON HOST |

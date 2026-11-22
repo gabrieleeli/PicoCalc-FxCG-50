@@ -97,5 +97,7 @@ key OPTN
 shot 18_run_matrix_optn.png
 key EXIT
 key MENU
-type c
+# v1.17.0: Financial (tasto C) e' una modalita' Base sulla Plus; la schermata
+# "non disponibile" si mostra con E-CON4 (tasto D, External).
+type d
 shot 19_mode_not_available.png

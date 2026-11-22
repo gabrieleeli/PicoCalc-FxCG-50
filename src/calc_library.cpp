@@ -379,6 +379,57 @@ double margin(double costPrice, double sellPrice) { need(sellPrice != 0, "Sell<>
 double daysPrd(double m1, double d1, double y1, double m2, double d2, double y2) {
     return static_cast<double>(dayNumber(m2, d2, y2) - dayNumber(m1, d1, y1));
 }
+#if FXAI_BOARD_PICO_PLUS_2W
+// v1.17.0: BGN = END con il pagamento capitalizzato di un periodo, PMT·(1+i).
+double cmpdSolve(int unknown, double n, double rate, double pv, double pmt, double fv, double py, double cy, bool begin) {
+    if (unknown == 1) {
+        if (!begin) return cmpdI(n, pv, pmt, fv, py, cy);
+        need(n > 0, "n>0");
+        auto f = [&](double i) { double a = 0, b = 0; tvmFactors(n, i, a, b); return pv + a * (1 + i) * pmt + b * fv; };
+        double i = 0.01;
+        for (int k = 0; k < 100; ++k) {
+            const double y = f(i), h = std::max(1e-7, std::abs(i) * 1e-6);
+            const double d = (f(i + h) - f(i - h)) / (2 * h);
+            if (!std::isfinite(d) || d == 0) break;
+            const double next = i - y / d;
+            if (!std::isfinite(next) || next <= -1) break;
+            if (std::abs(next - i) < 1e-14) return rateFromPeriod(next, py, cy);
+            i = next;
+        }
+        if (std::abs(f(i)) < 1e-8 * std::max(1.0, std::abs(pv) + std::abs(fv) + std::abs(pmt))) return rateFromPeriod(i, py, cy);
+        throw MathError("Iteration ERROR: I% non trovato");
+    }
+    const double g = begin ? 1 + periodRate(rate, py, cy) : 1;
+    switch (unknown) {
+    case 0: return cmpdN(rate, pv, pmt * g, fv, py, cy);
+    case 2: return cmpdPV(n, rate, pmt * g, fv, py, cy);
+    case 3: return cmpdPMT(n, rate, pv, fv, py, cy) / g;
+    case 4: return cmpdFV(n, rate, pv, pmt * g, py, cy);
+    default: throw MathError("Argument ERROR: variabile TVM");
+    }
+}
+double amortizationAt(int kind, double pm1, double pm2, double rate, double pv, double pmt, double py, double cy, bool begin) {
+    if (!begin) return amortization(kind, pm1, pm2, rate, pv, pmt, py, cy);
+    need(integral(pm1) && integral(pm2) && pm1 >= 1 && pm2 >= pm1 && pm2 <= 9999, "1<=PM1<=PM2<=9999");
+    const double i = periodRate(rate, py, cy);
+    // Pagamento all'inizio: la prima rata non ha interessi (tutta capitale).
+    double bal = pv, sumInt = 0, sumPrn = 0, int1 = 0, prn1 = 0;
+    for (int k = 1; k <= static_cast<int>(pm2); ++k) {
+        const double in = k == 1 ? 0.0 : -bal * i;
+        const double pr = pmt - in;
+        bal = k == 1 ? bal + pmt : bal * (1 + i) + pmt;
+        if (k == static_cast<int>(pm1)) { int1 = in; prn1 = pr; }
+        if (k >= static_cast<int>(pm1)) { sumInt += in; sumPrn += pr; }
+    }
+    switch (kind) {
+    case 0: return bal;
+    case 1: return int1;
+    case 2: return prn1;
+    case 3: return sumInt;
+    default: return sumPrn;
+    }
+}
+#endif
 
 // ---------------------------------------------------------------- nomi
 namespace {

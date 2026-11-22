@@ -1,54 +1,65 @@
 # CONTINUE — punto di ripresa del progetto PicoCalc FX-CG50 AI
 
 Documento di checkpoint per riprendere lo sviluppo esattamente da qui.
-Ultimo aggiornamento: **v1.16.0 — eActivity su entrambe le schede** (milestone
-**M2** del piano M0…M15), branch **`main`**, tag `v1.16.0` creato dal workflow
-`.github/workflows/release.yml`. Rapporti: `docs/reports/ANALISI_FONTI_v1.16.0.md`
-(capitolo 10, progetto, tabella di parità E01–E56 prima del codice),
-`docs/reports/SVILUPPO_v1.16.0.md` (parità finale con le prove, differenze,
-test, firmware). M0/M1: `ANALISI_FONTI_v1.15.0.md`, `SVILUPPO_v1.15.0.md`.
+Ultimo aggiornamento: **v1.17.0 — base di tutte le modalità**, branch
+**`main`**, tag `v1.17.0` creato dal workflow `.github/workflows/release.yml`.
+Rapporti: `docs/reports/ANALISI_FONTI_v1.17.0.md` (fonti, stato Base, casi
+d'inizializzazione, progetto delle dieci modalità e del record v12, domande e
+risposte prima del codice), `docs/reports/SVILUPPO_v1.17.0.md` (fase 1, fase 2,
+test, firmware, cancello). Versioni precedenti: `ANALISI_FONTI_v1.15.0.md`,
+`SVILUPPO_v1.15.0.md`, `ANALISI_FONTI_v1.16.0.md`, `SVILUPPO_v1.16.0.md`.
 
-> **Pico 2 W congelato alla v1.16.0.** Dalla v1.17.0 nessuna funzione,
-> schermata o crescita dell'immagine sul Raspberry Pi Pico 2 W, salvo
-> correzioni di errori condivise. Immagine finale del Pico 2 W:
-> **1 944 212 byte** (budget 2 064 384 B). `architecture_test` fallisce se
-> cambia l'insieme delle modalità Available del Pico 2 W.
+> **Pico 2 W congelato alla v1.16.0.** Nessuna funzione, schermata o crescita
+> dell'immagine sul Raspberry Pi Pico 2 W, salvo correzioni di errori
+> condivise (nella v1.17.0: Conversion che non segnava Ans da salvare, +16 B).
+> `architecture_test` fallisce se cambia l'insieme delle modalità aperte del
+> Pico 2 W o se una modalità Base vi compare. Le modalità nuove sono solo per
+> la Pimoroni Pico Plus 2 W. Budget del Pico 2 W: immagine ≤ 2 064 384 B.
 
-## 0. Piano delle milestone (dal prompt di sviluppo della v1.15.0)
+## 0. Piano (dalla v1.17.0)
 
-Ogni milestone è una versione con il cancello completo (test su entrambi i
-profili anche `--sanitize --tsan`, fuzzing ≥ 300 s per harness nuovo o
-toccato, simulatore con gli screenshot vecchi identici, firmware delle due
-schede senza warning e nei budget, relay 15/15, documentazione) e **un solo
+La v1.17.0 è la **base**: ogni modalità del registro si apre, fa il suo lavoro
+principale, salva e rimette a posto lo stato ed esce senza perdite
+(`apps_init_test`). Da qui **una modalità per versione arriva alla parità
+completa** con la fx-CG50 e passa ad **Available** (stato riservato alla
+parità completa); le modalità ancora incomplete sono **Base** (si aprono, con
+il triangolo ambra sull'icona). Ogni versione ha il cancello completo (test su
+entrambi i profili anche `--sanitize --tsan`, fuzzing ≥ 300 s per harness
+nuovo o toccato, simulatore con gli screenshot vecchi identici, firmware delle
+due schede senza warning e nei budget, relay 15/15, documentazione) e **un solo
 commit su `main`** in fast-forward («PicoCalc FxCG-50 v<ver>: <contenuto>»).
 
-| Milestone | Versione | Contenuto | Stato |
-|---|---|---|---|
-| M0 | — | analisi e cancello sulla v1.14.0 | **fatta** (`ANALISI_FONTI_v1.15.0.md`) |
-| M1 | v1.15.0 | fondamenta comuni F1–F9 | **fatta** |
-| M2 | v1.16.0 | eActivity su entrambe le schede; Pico 2 W congelato | **fatta** |
-| **M3** | **v1.17.0** | **Statistics completa (cap. 6), solo Plus** | **PROSSIMA** |
-| M4…M15 | v1.18.0…v1.29.0 | solo Pimoroni Pico Plus 2 W: Dual Screen, Recursion, Dyna, Conic, Financial, Spreadsheet, Program (C/C++/C#), Picture Plot, Geometry, Memory/System/Link, Python, chiusura | da fare |
+| Versione | Contenuto | Stato |
+|---|---|---|
+| v1.15.0 | fondamenta comuni F1–F9 | **fatta** |
+| v1.16.0 | eActivity su entrambe le schede; Pico 2 W congelato | **fatta** |
+| v1.17.0 | base di tutte le modalità: stato Base, `apps_init_test`, record v12, dieci modalità Base sulla Plus | **fatta** |
+| **v1.18.0** | **Statistics alla parità completa (cap. 6)**, solo Plus; **Distribution** (cap. 18) entra come modalità Base | **PROSSIMA** |
+| v1.19.0… | una modalità per versione: Graph/Table (Dual Screen), Recursion, Dyna Graph, Conic Graphs, Financial, Spreadsheet, Program, Picture Plot, Geometry, Memory/System/Link, Python, Distribution, chiusura | proposta in `docs/ROADMAP.md`, da confermare a ogni versione |
 
-Regole fisse: manuale fx-CG50 v3.60 solo come descrizione del comportamento;
-`ANALISI_FONTI_v<ver>.md` con la tabella di parità **prima** del codice; un test
-per voce; una modalità è Available solo con la tabella completa; nessun
-«TESTED ON HARDWARE» senza prova fisica; HARDWARE_TEST con numerazione
-continua (ultima usata: **HW-219**). Budget del Pico 2 W: immagine ≤ 2 064 384 B
-(controllo bloccante), documento eActivity aperto ≤ 24 KB
-(`limits::kEActivityDocumentBytes`), record ≤ 59,75 KB. Plus: < 90 % della
-partizione da 4 MB (controllo bloccante).
+Regole fisse: manuale fx-CG50 v3.60 solo come descrizione del comportamento
+(niente codice, grafica o testi copiati da Casio); `ANALISI_FONTI_v<ver>.md`
+con la tabella di parità **prima** del codice; un test per voce; una modalità è
+Available solo con la tabella completa; nessun «TESTED ON HARDWARE» senza prova
+fisica; HARDWARE_TEST con numerazione continua (ultima usata: **HW-245**).
+Plus: immagine < 90 % della partizione da 4 MB (controllo bloccante).
 
 ### Decisioni prese
 
-- **Program** (risposta dell'utente in M0: «usa il c, c++ e c#»): sottoinsiemi
-  interpretati di C, C++ e C# (nucleo F9 pronto, `include/program.hpp`); la
-  modalità arriva nella M10. Se l'interpretazione non è quella voluta va
-  chiarito con l'utente prima della M10.
-- **Distribution** (cap. 18 della fx-CG50, OS 3.40+): non è nel registro né nel
-  piano; **chiedere all'utente** se aggiungerla (probabilmente con la M3).
-- F2.5 (codifica per parti delle sezioni esistenti del workspace): fatta nella
-  M2 (`encodeParts`/`decodeParts`/`resetPart`).
+- **Program**: sottoinsiemi interpretati di C, C++ e C# (confermato
+  nella v1.17.0); file `.pcprog` con `// pcprog: <dialetto>` nella prima riga,
+  `.c/.cpp/.cs` apribili.
+- **Python**: MicroPython vero (porta `embed` v1.24.1, MIT) in
+  `third_party/micropython`, solo Plus; coroutine con pila propria (ucontext
+  sul PC, cambio di contesto Cortex-M33 con MSPLIM sul dispositivo), heap
+  separato 512 KB PSRAM / 48 KB SRAM, AC → KeyboardInterrupt.
+- **Distribution**: entra nel registro nella v1.18.0 come Base, insieme alla
+  parità di Statistics (risposta Q1 della v1.17.0).
+- **Record v12 solo sulla Plus** (firma e CRC per sezione, sezione danneggiata
+  isolata); il Pico 2 W scrive ancora la v11. Limite noto: un firmware ≤ v1.16.0
+  non legge un record v12 (`docs/STORAGE.md`).
+- Link: protocollo proprio a trame con CRC-32 su USB CDC
+  (`Platform::serialPort`), pacchetti `.pclink`, `tools/picocalc_link.py`.
 - Espressioni Math nelle righe di testo di eActivity: testo lineare tra
   U+F8F0 e U+F8F1 (U+E000–E002 sono simboli statistici del font).
 - Pico 2 W: `-Os` per eActivity e per i sorgenti fuori dai percorsi di calcolo
@@ -56,56 +67,70 @@ partizione da 4 MB (controllo bloccante).
 
 ## 1. Stato attuale
 
-**v1.16.0** (sopra la v1.15.0): **eActivity Available su entrambe le schede**
-alla parità con il capitolo 10 (ogni voce E01–E56 presente o differenza
-inevitabile D1–D7): elenco dei file e cartelle, righe di testo con espressioni
-Math, colori, marcatori, memo, righe di calcolo con il nucleo di Run-Matrix e
-ricalcolo fino alla riga di stop (StepTask, AC = Break), immagini `.pcpict`,
-strisce con dati propri (sessione da striscia del `Context`, barra azzurra,
-SHIFT ' e SHIFT ,), Notes, memorie Mat/Vct/List per documento, limite del
-documento 24 KB / 256 KB. Record v11 con la sezione `0x0102`. Guida
-`docs/EACTIVITY.md`; numeri in `docs/reports/SVILUPPO_v1.16.0.md` e
+**v1.17.0** (sopra la v1.16.0): tutte le modalità del registro si aprono tranne
+E-CON4 (External). Sulla **Pimoroni Pico Plus 2 W** dieci modalità **Base**:
+Spreadsheet, Dyna Graph, Recursion, Conic Graphs, Program, Financial, Link,
+Geometry, Picture Plot, Python; ognuna su `ModeShell` con il suo nucleo puro
+(servizio ModeCore), la sua sezione `0x0100 + AppId` del record v12, il suo
+tipo di file in MEMORY › FILES, le operazioni lunghe in `step::Task` con AC; le
+strisce di eActivity delle modalità della Plus sono disponibili. Cosa manca a
+ogni modalità per la parità: campo `missing` del registro
+(`src/app_registry.cpp`) e `docs/FEATURE_MATRIX.md`. Guide:
+`docs/SPREADSHEET.md`, `DYNA_GRAPH.md`, `RECURSION.md`, `CONIC_GRAPHS.md`,
+`FINANCIAL.md`, `PROGRAM.md`, `LINK.md`, `GEOMETRY.md`, `PICTURE_PLOT.md`,
+`PYTHON.md`. Numeri in `docs/reports/SVILUPPO_v1.17.0.md` e
 `docs/BUILD_STATUS.md`. **Nessuna prova su hardware**:
-`docs/HARDWARE_TEST_v1.16.0.md` (HW-202…HW-219).
+`docs/HARDWARE_TEST_v1.17.0.md` (HW-220…HW-245).
 
-## 2. Prossima sessione: M3 = v1.17.0 Statistics completa (solo Plus)
+## 2. Prossima sessione: v1.18.0 = Statistics alla parità completa (solo Plus)
 
 1. `git fetch origin main`; branch di sessione da `main`.
-2. **Chiedere all'utente** se aggiungere **Distribution** (cap. 18, OS 3.40+)
-   e, prima della M10, confermare Program in C/C++/C#.
-3. `docs/reports/ANALISI_FONTI_v1.17.0.md` con la tabella di parità del
-   capitolo 6 (Statistics): editor delle liste completo (pagine dei menu,
-   SORT, DEL, DEL-ALL, INS, ADD, sottonomi, CSV), tutti i grafici (Scatter,
-   xyLine, NPP, istogramma, box plot, normale, barre, torta, regressioni con
-   tutti i tipi incluse sinusoidale e logistica), CALC 1/2-Var e regressioni
-   con i residui, TEST (Z, t, χ², F, 2-campioni, ANOVA a una e due vie),
-   INTR, DIST complete; poi codice **solo sulla Plus** (`boards::PicoPlus2W`
-   per le funzioni nuove: il Pico 2 W resta quello della v1.16.0).
-4. Ogni funzione nuova di Statistics sulla Plus deve lasciare identici gli
-   screenshot e il comportamento del Pico 2 W (profilo host PICO2W) e la sua
-   immagine (≤ 1 944 212 B, nessuna crescita salvo correzioni).
-5. Strisce di eActivity delle modalità nuove: aggiungere le parti del
-   workspace e la schermata d'ingresso (`stripentry`), poi
-   `eact::stripAvailable` le rende disponibili da sola (solo sulla Plus).
+2. `docs/reports/ANALISI_FONTI_v1.18.0.md` con la tabella di parità del
+   capitolo 6 (Statistics) **prima del codice**: editor delle liste completo
+   (pagine dei menu, SORT, DEL, DEL-ALL, INS, ADD, sottonomi, CSV), tutti i
+   grafici (Scatter, xyLine, NPP, istogramma, box plot, normale, barre, torta,
+   regressioni con tutti i tipi incluse sinusoidale e logistica), CALC 1/2-Var
+   e regressioni con i residui, TEST (Z, t, χ², F, 2 campioni, ANOVA a una e
+   due vie), INTR, DIST complete; più il progetto di **Distribution**
+   (cap. 18) come modalità Base (registro, sezione, tipo di file se serve).
+3. Codice delle funzioni nuove **solo sulla Plus** (`#if FXAI_BOARD_PICO_PLUS_2W`
+   con il codice della v1.16.0 nell'`#else`, come nella v1.17.0): Statistics
+   resta Available sul Pico 2 W con le funzioni della v1.16.0, schermate e
+   immagine identiche (≤ 1 944 228 B salvo correzioni condivise).
+4. Statistics sulla Plus resta Available (lo è dalla v1.8.0) ma deve avere la
+   tabella di parità completa alla fine della v1.18.0; `architecture_test`
+   controlla che le modalità della v1.16.0 restino Available sulla Plus.
+5. `apps_init_test` copre da solo Distribution appena è nel registro come
+   Base; aggiungere i suoi casi a `base_modes_test`/`base_flow_test`.
 
-## 3. Cosa è stato fatto nelle ultime sessioni (M0, M1, M2)
+## 3. Cosa è stato fatto nelle ultime sessioni (v1.15.0, v1.16.0, v1.17.0)
 
 | Area | Contenuto |
 |---|---|
-| Git | partenza da `main` = `72d0921`; commit intermedi su `claude/fervent-albattani-hepkis`; un solo commit su `main` in fast-forward; tag e release dal workflow |
-| M0 | manuale v3.60 scaricato e capitoli verificati; cancello sulla v1.14.0 (47/47 per profilo anche con i sanitizer, relay 15/15, 94 screenshot identici, firmware 1 948 024 / 1 939 180 B senza warning); `tools/map_sizes.py`, `tools/sim_compare.py`; fixture `workspace_v1_14_0.inc`; domanda su Program |
-| M2 | eActivity: `include/eactivity.hpp`, `src/eactivity.cpp`, `src/apps/eactivity_app.cpp`; parti del workspace e sezione `0x0102`; sessione da striscia; schermate d'ingresso in Run-Matrix, Graph, Statistics, Equation, 3D Graph; `eactivity_test` (E01–E56), `fuzz_eactivity`, screenshot 108–127; `-Os` sul Pico 2 W; congelamento in `architecture_test` |
-| M1 | F1–F9 (sopra); test `workspace_v115_test`, `typed_files_test`, `mode_shell_test`, `text_editor_test`, `step_task_test`, `graph2d_test`, `binding_test`, `program_core_test`; fuzzing `fuzz_typedfile`, `fuzz_texteditor`, `fuzz_program`, `fuzz_workspace` e `fuzz_expr` aggiornati; screenshot 105–107 |
+| Git (v1.17.0) | partenza da `main` = `eb2338a` (v1.16.0); commit intermedi su `claude/eager-lamport-9fht7w`; un solo commit su `main` in fast-forward; tag e release dal workflow |
+| v1.17.0 fase 0 | `ANALISI_FONTI_v1.17.0.md`; risposte: Distribution nella v1.18.0, Program C/C++/C#, MicroPython vero, record v12 solo Plus |
+| v1.17.0 fase 1 | `tests/apps_init_test.cpp` (casi C1–C7, controlli K1–K6, due profili, `mem_new` per le perdite); errore trovato e corretto: Conversion non segnava Ans da salvare |
+| v1.17.0 fase 2 | `AppStatus::Base`, segno nel launcher; record v12 (`src/workspace.cpp`, `src/workspace_sections.cpp`); nuclei `src/{spreadsheet,dyna,recursion,conic,financial,program_mode,link_protocol,geometry,picture_plot,python_port}.cpp` e controller `src/apps/*_app.cpp`; `mode_codec.hpp`; `TypedFileMenu`; MicroPython in `third_party/micropython`; `tools/picocalc_link.py`; test `base_modes_test`, `base_flow_test`, `workspace_v117_test`, `link_tool_test`; fuzzer `fuzz_sheet`, `fuzz_link`, `fuzz_modes`, `fuzz_python`; screenshot 128–147 |
+| v1.16.0 | eActivity: `include/eactivity.hpp`, `src/eactivity.cpp`, `src/apps/eactivity_app.cpp`; parti del workspace e sezione `0x0102`; sessione da striscia; `eactivity_test` (E01–E56), `fuzz_eactivity`, screenshot 108–127; `-Os` sul Pico 2 W; congelamento in `architecture_test` |
+| v1.15.0 | F1–F9; test `workspace_v115_test`, `typed_files_test`, `mode_shell_test`, `text_editor_test`, `step_task_test`, `graph2d_test`, `binding_test`, `program_core_test`; fuzzing `fuzz_typedfile`, `fuzz_texteditor`, `fuzz_program`; screenshot 105–107 |
 
 ## 4. Collaudo fisico
 
-Resta prioritario appena la PicoCalc è disponibile: HW-01…HW-219 (log USB
+Resta prioritario appena la PicoCalc è disponibile: HW-01…HW-245 (log USB
 dall'accensione, righe `[psram]`, `[flash]`, `[mem]`, `[DIAG]`, `[fault]`,
-foto). Ogni KO va riprodotto con un test e corretto; solo le voci provate
-passano a TESTED ON HARDWARE (data, modulo, revisione della scheda).
+foto). Per la v1.17.0 in particolare: la coroutine di Python sul Cortex-M33
+(cambio di contesto, MSPLIM, KeyboardInterrupt, RecursionError senza
+`[fault]`), Link sulla USB CDC con `tools/picocalc_link.py`, l'aggiornamento
+del record v11 → v12 e il ritorno alla v1.16.0. Ogni KO va riprodotto con un
+test e corretto; solo le voci provate passano a TESTED ON HARDWARE (data,
+modulo, revisione della scheda).
 
 ## 5. Problemi noti / da verificare
 
+- v1.17.0: la pila della coroutine di Python (24 KB, margine 4 KB) e il cambio
+  di contesto Cortex-M33 sono provati solo sul PC (ucontext con ASan);
+  Link solo con `tests/link_peer` sul PC (nessuna USB CDC reale);
+  un firmware ≤ v1.16.0 non legge il record v12 della Plus.
 - Problemi aperti della revisione v1.13.1 (A1–A6 di `docs/reports/ERRORI_v1.13.1.md`):
   record illeggibile dopo il ritorno a un firmware precedente, precisione di
   HypergeoPD con argomenti tutti grandi, risultati sotto 1E−99 in Run-Matrix
@@ -167,13 +192,29 @@ build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph3d.txt
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph3d_v114.txt   # 3D Graph v1.14.0 (88-104)
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/foundations_v115.txt # MEMORY › FILES (105-107)
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/eactivity.txt        # eActivity v1.16.0 (108-127)
+build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/base_v117.txt        # modalità Base v1.17.0 (128-147)
+```
+
+```bash
+# Link con il PC (v1.17.0): prove di andata e ritorno e uso con la PicoCalc
+python3 tools/test_picocalc_link.py build/host-pico_plus_2w/link_peer
+python3 tools/picocalc_link.py receive --port /dev/ttyACM0 -o ws.pclink
+python3 tools/picocalc_link.py send --port /dev/ttyACM0 HI.py CONTI.pcsheet
+python3 tools/picocalc_link.py list ws.pclink
+```
+
+```bash
+# MicroPython (v1.17.0): rigenerare third_party/micropython/micropython_embed
+# dopo ogni modifica di mpconfigport.h o dei moduli (genhdr dipende dalla configurazione)
+git clone --depth 1 --branch v1.24.1 https://github.com/micropython/micropython.git /tmp/micropython
+make -C third_party/micropython MICROPYTHON_TOP=/tmp/micropython
 ```
 
 ```bash
 # Fuzzing leggero (v1.13.1): clang con libFuzzer (Ubuntu: libclang-rt-18-dev), ASan + UBSan
 CC=clang CXX=clang++ cmake -S tools/fuzz -B build/fuzz -G Ninja -DFXAI_TEST_BOARD=PICO_PLUS_2W
 cmake --build build/fuzz
-tools/fuzz/run_fuzz.sh build/fuzz 300       # secondi per harness (12 harness dalla v1.16.0); crash in build/fuzz/artifacts
+tools/fuzz/run_fuzz.sh build/fuzz 300       # secondi per harness (16 harness dalla v1.17.0); crash in build/fuzz/artifacts
 FUZZ_ONLY="fuzz_workspace fuzz_program" tools/fuzz/run_fuzz.sh build/fuzz 300   # solo gli harness nuovi o toccati
 ```
 

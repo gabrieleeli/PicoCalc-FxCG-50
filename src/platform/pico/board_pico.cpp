@@ -15,6 +15,7 @@
 //          [reg, percent | 0x80 when charging]; writes use reg | 0x80.
 // Everything in this file still requires validation on a physical PicoCalc.
 #include "board_port.hpp"
+#include "link_protocol.hpp"
 #include "board_config.hpp"
 #include "flash_fs.hpp"
 #include "mem_pools.hpp"
@@ -428,6 +429,34 @@ std::size_t firmwareBytes() noexcept {
     return static_cast<std::size_t>(reinterpret_cast<std::uintptr_t>(&__flash_binary_end) - XIP_BASE);
 }
 fx::net::ChatTransport* chatTransport() { return picoChatTransport(); }
+#if FXAI_BOARD_PICO_PLUS_2W
+namespace {
+// v1.17.0 (Link): la USB seriale di pico_stdio_usb. Lettura non bloccante con
+// getchar_timeout_us(0); scrittura con putchar_raw (nessuna conversione di
+// "\n" in "\r\n"). Le righe di log sulla stessa porta non disturbano: il
+// protocollo di Link si risincronizza da solo (trame con CRC).
+class UsbSerialPort final : public fx::link::Port {
+public:
+    std::size_t read(std::uint8_t* buf, std::size_t max) override {
+        std::size_t n = 0;
+        while (n < max) {
+            const int c = getchar_timeout_us(0);
+            if (c == PICO_ERROR_TIMEOUT || c < 0) break;
+            buf[n++] = static_cast<std::uint8_t>(c);
+        }
+        return n;
+    }
+    void write(const std::uint8_t* data, std::size_t size) override {
+        for (std::size_t i = 0; i < size; ++i) putchar_raw(data[i]);
+        stdio_flush();
+    }
+};
+} // namespace
+fx::link::Port* serialPort() {
+    static UsbSerialPort port;
+    return &port;
+}
+#endif
 const char* name() { return board::config::kIsPicoPlus2W ? "PicoCalc / Pico Plus 2 W" : "PicoCalc / Pico 2 W"; }
 std::size_t lastFlushBytes() { return lastBytes; }
 } // namespace board

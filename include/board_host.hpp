@@ -3,6 +3,7 @@
 #include <string>
 namespace fx::net { class ChatTransport; }
 namespace fx::files { class FileSystem; }
+namespace fx::link { class Port; }
 namespace storage { class FlashDevice; }
 
 // Host-only extensions of the board interface (simulator and tests).
@@ -16,4 +17,5 @@ void setChatTransport(fx::net::ChatTransport* transport);   // tests: inject a m
 void setFileSystem(fx::files::FileSystem* fs);              // tests: replace the RAM card (nullptr: none)
 fx::files::FileSystem& ramCard();                            // the default RAM card
 void setLegacyStorage(storage::FlashDevice* device);         // tests: v1.8.0 record to migrate
+void setSerialPort(fx::link::Port* port);                    // v1.17.0 tests: canale di Link (nullptr: nessuno)
 } // namespace board::host

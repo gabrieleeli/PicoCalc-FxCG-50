@@ -10,6 +10,7 @@ namespace fx::files { class FileSystem; }
 // Board support interface. Implemented by src/platform/pico/board_pico.cpp for
 // the PicoCalc (RP2350) and by src/platform/host/board_host.cpp for host tests
 // and the screenshot simulator.
+namespace fx::link { class Port; }
 namespace board {
 void init();
 gfx::Canvas& graphics() noexcept;
@@ -55,6 +56,11 @@ fx::files::FileSystem* fileSystem();
 // LittleFS on the internal flash partition (both ports; nullptr if unusable).
 fx::files::FileSystem* internalFileSystem();
 const char* name();
+#if FXAI_BOARD_PICO_PLUS_2W
+// v1.17.0 (Link, solo Plus): la USB seriale come canale di Link (USB CDC sul
+// dispositivo, il tubo dei test sul PC); nullptr se non c'e'.
+fx::link::Port* serialPort();
+#endif
 // Statistics for the System app (bytes sent to the LCD by the last present()).
 std::size_t lastFlushBytes();
 } // namespace board

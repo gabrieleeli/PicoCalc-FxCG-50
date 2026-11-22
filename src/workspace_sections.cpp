@@ -56,6 +56,62 @@ bool eactDecode(Workspace& ws, std::uint16_t, const std::uint8_t* d, std::size_t
     ws.eactivity = std::move(e);
     return true;
 }
+#if FXAI_BOARD_PICO_PLUS_2W
+// ---- v1.17.0 (solo Pimoroni Pico Plus 2 W): le sezioni delle modalita' Base.
+// Ognuna e' la codifica dello stato del nucleo della modalita' (versione 1);
+// vuota (= valori iniziali) non viene scritta. La stessa codifica serve le
+// strisce di eActivity (parti ModeBase + AppId) e i file "a stato" (.pcdyna...).
+constexpr std::uint16_t modeId(app::AppId a) { return static_cast<std::uint16_t>(section::ModeBase + static_cast<std::uint16_t>(a)); }
+#define FXAI_MODE_CODEC(NS, MEMBER, APP)                                                                                              \
+    {modeId(app::AppId::APP), 1, [](const Workspace& ws) { NS::State d; NS::reset(d); return !(ws.MEMBER == d); },                  \
+     [](const Workspace& ws, std::vector<std::uint8_t>& out) { NS::encode(ws.MEMBER, out); },                                        \
+     [](Workspace& ws, std::uint16_t, const std::uint8_t* d, std::size_t n) { return NS::decode(ws.MEMBER, d, n); },                 \
+     [](Workspace& ws) { NS::reset(ws.MEMBER); }}
+const SectionCodec kCodecs[] = {
+#if FXAI_MODE_EACTIVITY
+    {EActivityId, 1, eactPresent, eactEncode, eactDecode},
+#endif
+#if FXAI_MODE_SPREADSHEET
+    FXAI_MODE_CODEC(sheet, sheet, Spreadsheet),
+#endif
+#if FXAI_MODE_DYNAGRAPH
+    FXAI_MODE_CODEC(dyna, dyna, DynaGraph),
+#endif
+#if FXAI_MODE_RECURSION
+    FXAI_MODE_CODEC(rec, recursion, Recursion),
+#endif
+#if FXAI_MODE_CONICGRAPHS
+    FXAI_MODE_CODEC(conic, conic, ConicGraphs),
+#endif
+#if FXAI_MODE_PROGRAM
+    FXAI_MODE_CODEC(progmode, program, Program),
+#endif
+#if FXAI_MODE_FINANCIAL
+    FXAI_MODE_CODEC(fin, financial, Financial),
+#endif
+#if FXAI_MODE_LINK
+    FXAI_MODE_CODEC(link, link, Link),
+#endif
+#if FXAI_MODE_GEOMETRY
+    FXAI_MODE_CODEC(geo, geometry, Geometry),
+#endif
+#if FXAI_MODE_PICTUREPLOT
+    FXAI_MODE_CODEC(pplot, pictplot, PicturePlot),
+#endif
+#if FXAI_MODE_PYTHON
+    FXAI_MODE_CODEC(py, python, Python),
+#endif
+    {0, 0, nullptr, nullptr, nullptr},   // segnaposto (non contato)
+};
+} // namespace
+
+const SectionCodec* workspaceSectionCodecs(std::size_t& count) noexcept {
+    // v1.16.0: eActivity (su entrambe le schede, se la modalita' e' compilata);
+    // v1.17.0: le modalita' Base della Plus. Gli id sono in ordine crescente.
+    count = sizeof kCodecs / sizeof kCodecs[0] - 1;
+    return count ? kCodecs : nullptr;
+}
+#else   // Pico 2 W congelato: la tabella della v1.16.0
 const SectionCodec kCodecs[] = {
     {EActivityId, 1, eactPresent, eactEncode, eactDecode},
 };
@@ -66,4 +122,11 @@ const SectionCodec* workspaceSectionCodecs(std::size_t& count) noexcept {
     count = features::kEActivity ? sizeof kCodecs / sizeof kCodecs[0] : 0;
     return count ? kCodecs : nullptr;
 }
+#endif
+#if FXAI_BOARD_PICO_PLUS_2W
+const char* sectionModeName(std::uint16_t id) noexcept {
+    if (id < section::ModeBase || id >= section::ModeBase + app::AppCount) return "?";
+    return app::appInfo(static_cast<app::AppId>(id - section::ModeBase)).name;
+}
+#endif
 } // namespace fx

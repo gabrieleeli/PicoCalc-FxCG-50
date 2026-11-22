@@ -157,7 +157,8 @@ int main() {
         CHECK(eact::stripAvailable(StripKind::Run) && eact::stripAvailable(StripKind::Graph) && eact::stripAvailable(StripKind::Notes) &&
               eact::stripAvailable(StripKind::Graph3D) && eact::stripAvailable(StripKind::SimulEquation));
         CHECK(!eact::stripAvailable(StripKind::EConTop) && !eact::stripAvailable(StripKind::EConResult));          // D5
-        CHECK(!eact::stripAvailable(StripKind::ConicsGraph) && !eact::stripAvailable(StripKind::SpreadSheet));     // E46: dalla M7/M9 sulla Plus
+        // E46: le strisce delle modalita' nuove esistono solo sulla Plus (v1.17.0, modalita' Base)
+        CHECK(eact::stripAvailable(StripKind::ConicsGraph) == features::kConicGraphs && eact::stripAvailable(StripKind::SpreadSheet) == features::kSpreadsheet);
         CHECK(!eact::stripAvailable(static_cast<StripKind>(200)));
         // E52/E53: limite del documento per scheda (D3)
         CHECK(limits::kEActivityDocumentBytes == (board::config::kIsPicoPlus2W ? 256u * 1024u : 24u * 1024u));
@@ -720,9 +721,9 @@ int main() {
         CHECK(rig.fw.apps().activeId() == AppId::Graph && rig.fw.apps().context().status("x").strip);
         rig.key(pk::Tab);
         CHECK(rig.fw.apps().activeId() == AppId::EActivity && !rig.fw.apps().context().strip().active && rig.ws().functions[0].expr == "X^2");
-        // E47: striscia non disponibile su questa scheda
+        // E47: striscia non disponibile su questa scheda (E-CON Top: E-CON4 e' External)
         t.F(2);
-        for (int i = 0; i < static_cast<int>(StripKind::SpreadSheet); ++i) t.down();
+        for (int i = 0; i < static_cast<int>(StripKind::EConTop); ++i) t.down();
         t.exe();
         CHECK(rig.error() && rig.errorDetail().find("non disponibile") != std::string::npos);
         rig.closeError();

@@ -359,7 +359,11 @@ int main() {
         // a version 3 record (v1.8.0 before TABLE): the table block without the new fields
         Workspace w3;
         w3.table.start = -3.25; w3.table.end = 3.75; w3.table.step = 0.125;
+#if FXAI_BOARD_PICO_PLUS_2W
+        auto blob = serializeWorkspaceV11(w3);                   // la riduzione qui sotto parte dal formato v11
+#else
         auto blob = serializeWorkspace(w3);
+#endif
         std::uint8_t pattern[24];
         std::memcpy(pattern, &w3.table.start, 8); std::memcpy(pattern + 8, &w3.table.end, 8); std::memcpy(pattern + 16, &w3.table.step, 8);
         const auto at = std::search(blob.begin(), blob.end(), pattern, pattern + 24);

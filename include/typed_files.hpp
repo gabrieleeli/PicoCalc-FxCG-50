@@ -10,6 +10,7 @@
 // (elenco, apri, salva, salva come, rinomina, elimina) sopra files::FileSystem
 // (microSD o LittleFS): ogni scrittura passa da writeAtomic. Formati:
 // docs/FILE_FORMATS.md.
+#include "board_config.hpp"
 #include "file_store.hpp"
 #include <cstddef>
 #include <cstdint>
@@ -18,7 +19,13 @@
 
 namespace fx::files {
 
+#if FXAI_BOARD_PICO_PLUS_2W
+// v1.17.0 (solo Plus): i file "a stato" delle modalita' Base (la sezione della
+// modalita' in un file) e i pacchetti di Link.
+enum class FileType : std::uint8_t { EActivity = 0, Program, Spreadsheet, Python, Geometry, PicturePlot, DynaGraph, Recursion, Conic, Financial, Link, Count };
+#else
 enum class FileType : std::uint8_t { EActivity = 0, Program, Spreadsheet, Python, Geometry, PicturePlot, Count };
+#endif
 constexpr std::size_t FileTypeCount = static_cast<std::size_t>(FileType::Count);
 
 struct FileTypeInfo {

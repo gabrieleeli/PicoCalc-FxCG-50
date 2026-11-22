@@ -1,4 +1,4 @@
-# Memorizzazione: flash interna e microSD (v1.9.0, v1.11.0, v1.12.0, v1.13.0, v1.15.0)
+# Memorizzazione: flash interna e microSD (v1.9.0, v1.11.0, v1.12.0, v1.13.0, v1.15.0, v1.17.0)
 
 Il firmware usa tre memorie con ruoli diversi.
 
@@ -277,6 +277,60 @@ posto** (prima le parti della striscia, poi le memorie) e i due campi si
 svuotano: dopo un'interruzione di alimentazione si ritrovano i dati del menu
 principale; le modifiche non salvate del documento si perdono, come sulla
 fx-CG50. Un errore in questo ripristino non rende il record non valido.
+
+### Versione 12 (v1.17.0, solo Pimoroni Pico Plus 2 W): firma e CRC per sezione
+
+La Plus scrive la versione **12**; il Raspberry Pi Pico 2 W, congelato, scrive
+ancora la versione 11. Differenze dalla versione 11:
+
+| Posizione | Campo | Contenuto |
+|---|---|---|
+| subito dopo `u16` versione | `u16` n, n byte | **firma** del firmware che ha scritto il record: `"<scheda> <versione>"`, per esempio `pico_plus_2w 1.17.0` (≤ 64 byte; `Workspace::recordOrigin` dopo la lettura) |
+| coda TLV, per sezione, dopo `u32` n | `u32` | **CRC-32** dei dati della sezione |
+
+Sezioni delle modalità Base (id `0x0100 + AppId`, versione 1, codifiche in
+`src/workspace_sections.cpp` con `include/mode_codec.hpp`; contenuto dei campi
+come nei file, [FILE_FORMATS.md](FILE_FORMATS.md)):
+
+| Id | Modalità | Contenuto |
+|---|---|---|
+| `0x0103` | Spreadsheet | celle del foglio aperto, cursore, prima riga e colonna visibili, nome del file, ricalcolo automatico |
+| `0x0105` | Dyna Graph | funzione, coefficiente, tipo, velocità (Start/End/Pitch restano le variabili di modo della v1.13.0) |
+| `0x0107` | Recursion | tipo, formula an+2, Σan (an+1, Start, End, a0, a1 restano nelle variabili di modo) |
+| `0x0108` | Conic Graphs | modello e coefficienti |
+| `0x010A` | Program | ultimo file, riga e colonna del cursore, dialetto dei programmi nuovi |
+| `0x010B` | Financial | BGN/END, SMPL, flussi di cassa, PM1/PM2, CNVT, date (le variabili TVM restano in VARS › TVM) |
+| `0x010D` | Link | ultimo pacchetto ricevuto e statistiche |
+| `0x0110` | Geometry | oggetti, vista, nome del file |
+| `0x0111` | Picture Plot | sfondo, finestra, punti, regressione, nome del file |
+| `0x0114` | Python | ultimo script, ultime 20 righe della SHELL |
+
+Una modalità scrive la sua sezione solo quando lo stato è diverso da quello
+iniziale. Regole di lettura in più rispetto alla versione 11:
+- una sezione con il **CRC sbagliato**, o con il CRC giusto ma che la sua
+  codifica non accetta, viene **isolata**: non entra nel workspace, la
+  modalità riparte dai valori iniziali, l'id va in `Workspace::damagedSections`
+  e all'avvio compare «Data ERROR: dati danneggiati di <modalità>: ripartono
+  dai valori iniziali»; il record viene riscritto senza la sezione al primo
+  salvataggio. Le altre sezioni e il blocco fisso si leggono normalmente;
+- gli errori di struttura (id fuori ordine, lunghezze oltre il record, byte in
+  più) rendono ancora non valido l'intero record (si usa l'altro slot);
+- un record v11 della v1.16.0 si legge come prima (migrazione verificata con la
+  fixture `tests/fixtures/workspace_v1_16_0.inc` in `workspace_v117_test`) e
+  viene riscritto come v12 al primo salvataggio.
+
+Parti delle strisce di eActivity (v1.17.0): oltre alle parti 1–7 della v1.16.0,
+la parte `0x40 + AppId` contiene la sezione di una modalità Base nella stessa
+codifica; resettarla rimette la modalità ai valori iniziali.
+
+**Limite noto: ritorno a una versione precedente.** Un firmware fino alla
+v1.16.0 non conosce la versione 12 e rifiuta il record (come per i ritorni
+indietro delle versioni precedenti): parte con i valori iniziali e, al primo
+salvataggio, scrive un record v11 al posto di quello v12. Prima di tornare alla
+v1.16.0 sulla Plus conviene salvare il workspace con Link
+(`tools/picocalc_link.py receive`); se si torna alla v1.17.0 prima che il
+firmware vecchio abbia salvato, il record v12 è ancora lì e si legge. Il
+Raspberry Pi Pico 2 W non è interessato (scrive sempre la versione 11).
 
 ## File delle modalità (v1.15.0)
 

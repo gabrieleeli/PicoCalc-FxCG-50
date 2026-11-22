@@ -7,6 +7,7 @@
 #include "math_renderer.hpp"
 #include "workspace.hpp"
 #include <algorithm>
+#include <cstdio>
 
 namespace fx::app {
 using namespace ui::theme;
@@ -251,4 +252,85 @@ void ModeShell::drawModals(gfx::Canvas& c) const {
     confirm.draw(c);
 }
 
+#if FXAI_BOARD_PICO_PLUS_2W
+// ---------------------------------------------------------------- v1.17.0: FILE delle modalita' Base
+namespace {
+files::FileSystem& storeOf(Context& ctx) {
+    files::FileSystem* fs = userFiles(ctx);
+    if (!fs) throw MathError("ERROR: archivio dei file non disponibile (microSD assente)");
+    return *fs;
+}
+void raise(files::Status st) {
+    if (st == files::Status::Ok) return;
+    if (st == files::Status::Corrupt || st == files::Status::NotSupported) throw MathError(std::string("Data ERROR: ") + files::statusMessage(st));
+    if (st == files::Status::TooLarge || st == files::Status::Full) throw MathError(std::string("Memory ERROR: ") + files::statusMessage(st));
+    throw MathError(std::string("ERROR: ") + files::statusMessage(st));
+}
+} // namespace
+std::string TypedFileMenu::stem(const std::string& file) {
+    const std::size_t dot = file.rfind('.');
+    return dot == std::string::npos ? file : file.substr(0, dot);
+}
+void TypedFileMenu::openList(Context& ctx, Purpose purpose) {
+    files::TypedStore store(storeOf(ctx));
+    std::vector<files::TypedEntry> entries;
+    raise(store.list(type_, entries));
+    names_.clear();
+    std::vector<std::string> shown;
+    for (const auto& e : entries) { names_.push_back(e.file); shown.push_back(e.file); }
+    dialog_.setExtension("");
+    dialog_.setEmptyText(std::string("Nessun file ") + files::fileType(type_).name);
+    dialog_.openList(purpose == Purpose::Delete ? "DELETE" : "OPEN", shown);
+    purpose_ = purpose;
+}
+void TypedFileMenu::openSaveAs(Context& ctx, const std::string& currentStem) {
+    files::TypedStore store(storeOf(ctx));
+    std::vector<files::TypedEntry> entries;
+    raise(store.list(type_, entries));
+    std::vector<std::string> existing;
+    for (const auto& e : entries) existing.push_back(e.stem);
+    const files::FileType t = type_;
+    dialog_.setNameRule([t](char ch) { return files::typedNameChar(t, ch); }, [t](char ch) { return files::typedNameCase(t, ch); },
+                        files::fileType(type_).maxNameLength);
+    dialog_.setExisting(existing);
+    dialog_.openName("SAVE\xC2\xB7" "AS", currentStem);
+    purpose_ = Purpose::SaveAs;
+}
+int TypedFileMenu::key(const KeyEvent& ev) {
+    const int r = dialog_.key(ev);
+    if (r == 1) {
+        if (purpose_ == Purpose::SaveAs) {
+            if (!files::validTypedName(type_, dialog_.name())) throw MathError("Invalid Name: nome non valido");
+            file_ = files::TypedStore::fileName(type_, dialog_.name());
+        } else {
+            file_ = dialog_.name();
+        }
+    }
+    if (r != 0 && !dialog_.active() && r == -1) purpose_ = Purpose::None;
+    return r;
+}
+std::vector<std::uint8_t> TypedFileMenu::load(Context& ctx, const std::string& file) const {
+    files::TypedStore store(storeOf(ctx));
+    std::vector<std::uint8_t> payload;
+    raise(store.open(type_, file, payload));
+    return payload;
+}
+void TypedFileMenu::save(Context& ctx, const std::string& file, const std::vector<std::uint8_t>& payload) const {
+    files::TypedStore store(storeOf(ctx));
+    raise(store.save(type_, file, payload));
+}
+void TypedFileMenu::remove(Context& ctx, const std::string& file) const {
+    files::TypedStore store(storeOf(ctx));
+    raise(store.remove(type_, file));
+}
+std::string formNumber(double v) {
+    char b[32];
+    std::snprintf(b, sizeof b, "%.10G", v);
+    return b;
+}
+void drawModeHeader(gfx::Canvas& c, const std::string& text) {
+    c.rect(0, ui::ContentTop, ui::ScreenW, 16, ui::theme::StatusBg, true);
+    ui::text(c, 4, ui::ContentTop + 2, text.c_str(), ui::theme::Ink, font::Face::Small, ui::ScreenW - 8);
+}
+#endif
 } // namespace fx::app

@@ -166,7 +166,7 @@ int main() {
         CHECK(b.decimalAt(0) && !b.decimalAt(1));
         const auto blob = serializeWorkspace(w);
         Workspace back;
-        CHECK(blob[4] == 11 && deserializeWorkspace(blob.data(), blob.size(), back));
+        CHECK(blob[4] == workspaceRecordVersion() && deserializeWorkspace(blob.data(), blob.size(), back));
         CHECK(back.matrices.mat[1].decimalAt(0) && !back.matrices.mat[1].decimalAt(1));
         CHECK(back.matrices.mat[0].hasExact() && back.matrices.mat[0].size() == 81);
         CHECK_EQ_STR(calc(back, "Mat B[1,1]\xC3\x97" "4"), "1");
@@ -208,7 +208,7 @@ int main() {
         // Salvato di nuovo: versione 9, si rilegge con gli stessi dati
         const auto blob = serializeWorkspace(w);
         Workspace again;
-        CHECK(blob[4] == 11 && deserializeWorkspace(blob.data(), blob.size(), again));
+        CHECK(blob[4] == workspaceRecordVersion() && deserializeWorkspace(blob.data(), blob.size(), again));
         CHECK(again.equation.simResult.size() == 2 && again.lists[2].size() == 3 && again.history.size() == w.history.size());
     }
     // ================================================================ migrazione del record v7 (v1.11.0)
@@ -234,7 +234,7 @@ int main() {
         // Riscritto come v8 e riletto senza perdite
         const auto blob = serializeWorkspace(w);
         Workspace again;
-        CHECK(blob[4] == 11 && deserializeWorkspace(blob.data(), blob.size(), again));
+        CHECK(blob[4] == workspaceRecordVersion() && deserializeWorkspace(blob.data(), blob.size(), again));
         CHECK(serializeWorkspace(again) == blob);
     }
     // ================================================================ record v8: tutti i campi nuovi
@@ -269,7 +269,7 @@ int main() {
         CHECK_EQ_STR(resultText(back.history[8], back.settings), "1.234E+03");
         CHECK(back.listFiles[4].lists[1] == std::vector<double>({4, 4}) && back.listFiles[4].names[1] == "F5");
         // Record corrotti: file attivo con dati nello slot, versione futura
-        auto bad = blob; bad[4] = 12;                      // v1.15.0: la versione corrente e' 11
+        auto bad = blob; bad[4] = static_cast<std::uint8_t>(workspaceRecordVersion() + 1);   // versione futura
         CHECK(!deserializeWorkspace(bad.data(), bad.size(), back));
         for (std::size_t cut : {blob.size() - 1, blob.size() - 40, blob.size() / 2}) {
             Workspace t;

@@ -80,17 +80,28 @@ int main() {
         CHECK(e.boards == app::boards::Both);
         CHECK(files::fileTypeAvailable(FileType::EActivity));
         CHECK(e.maxBytes == limits::kEActivityDocumentBytes);
-        const char* folders[] = {"PICOCALC/EACT", "PICOCALC/PROG", "PICOCALC/SHEET", "PICOCALC/PY", "PICOCALC/GEOM", "PICOCALC/PPLOT"};
+        const char* folders[] = {"PICOCALC/EACT", "PICOCALC/PROG", "PICOCALC/SHEET", "PICOCALC/PY", "PICOCALC/GEOM", "PICOCALC/PPLOT",
+                                 "PICOCALC/DYNA", "PICOCALC/RECUR", "PICOCALC/CONIC", "PICOCALC/FIN", "PICOCALC/LINK"};   // v1.17.0: gli ultimi solo sulla Plus
+        // v1.17.0: un tipo esiste solo dove c'e' la sua modalita'.
+        const bool modeOf[] = {features::kEActivity, features::kProgram, features::kSpreadsheet, features::kPython, features::kGeometry, features::kPicturePlot,
+                               features::kDynaGraph, features::kRecursion, features::kConicGraphs, features::kFinancial, features::kLink};
         for (std::size_t i = 0; i < files::FileTypeCount; ++i) {
             const auto t = static_cast<FileType>(i);
             const files::FileTypeInfo& info = files::fileType(t);
             CHECK(info.type == t && std::string(info.folder) == folders[i]);
             // solo eActivity sul Pico 2 W
-            CHECK(files::fileTypeAvailable(t) == (t == FileType::EActivity || board::config::kIsPicoPlus2W));
+            CHECK(files::fileTypeAvailable(t) == (modeOf[i] && (t == FileType::EActivity || board::config::kIsPicoPlus2W)));
             CHECK(info.binary == (t != FileType::Program && t != FileType::Python));
         }
+#if FXAI_BOARD_PICO_PLUS_2W
+        // v1.17.0: i programmi nuovi sono .pcprog; i sorgenti del PC restano apribili.
+        CHECK(std::string(files::fileType(FileType::Program).extensions[1]) == ".cpp" && std::string(files::fileType(FileType::Program).extensions[3]) == ".cs");
+        CHECK(files::TypedStore::fileName(FileType::Program, "HELLO") == "HELLO.pcprog");
+        CHECK(files::TypedStore::fileName(FileType::Spreadsheet, "CONTI") == "CONTI.pcsheet");
+#else
         CHECK(std::string(files::fileType(FileType::Program).extensions[1]) == ".c" && std::string(files::fileType(FileType::Program).extensions[2]) == ".cs");
         CHECK(files::TypedStore::fileName(FileType::Program, "HELLO") == "HELLO.cpp");
+#endif
         CHECK(files::TypedStore::fileName(FileType::Program, "HELLO.cs") == "HELLO.cs");
         CHECK(files::TypedStore::path(FileType::Python, "demo") == "PICOCALC/PY/demo.py");
         // regole dei nomi

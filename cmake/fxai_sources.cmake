@@ -151,16 +151,38 @@ fxai_feature(SERVICE INTERP     BOARDS PICO_PLUS_2W SYMBOLS 4prog SOURCES src/pr
 # Modalita' non ancora realizzate (nessun sorgente fino alla loro milestone):
 # l'opzione esiste gia' perche' il registro dichiara su quali schede possono esistere.
 fxai_feature(MODE EACTIVITY    BOARDS PICO_PLUS_2W PICO2W SYMBOLS EActivityApp SOURCES src/eactivity.cpp src/apps/eactivity_app.cpp)
-fxai_feature(MODE SPREADSHEET  BOARDS PICO_PLUS_2W SYMBOLS SpreadsheetApp)
-fxai_feature(MODE DYNAGRAPH    BOARDS PICO_PLUS_2W SYMBOLS DynaGraphApp)
-fxai_feature(MODE RECURSION    BOARDS PICO_PLUS_2W SYMBOLS RecursionApp)
-fxai_feature(MODE CONICGRAPHS  BOARDS PICO_PLUS_2W SYMBOLS ConicGraphsApp)
-fxai_feature(MODE PROGRAM      BOARDS PICO_PLUS_2W SYMBOLS ProgramApp)
-fxai_feature(MODE FINANCIAL    BOARDS PICO_PLUS_2W SYMBOLS FinancialApp)
-fxai_feature(MODE LINK         BOARDS PICO_PLUS_2W SYMBOLS LinkApp)
-fxai_feature(MODE GEOMETRY     BOARDS PICO_PLUS_2W SYMBOLS GeometryApp)
-fxai_feature(MODE PICTUREPLOT  BOARDS PICO_PLUS_2W SYMBOLS PicturePlotApp)
-fxai_feature(MODE PYTHON       BOARDS PICO_PLUS_2W SYMBOLS PythonApp)
+# v1.17.0: modalita' Base, solo sulla Pimoroni Pico Plus 2 W (controller + nucleo proprio).
+fxai_feature(MODE SPREADSHEET  BOARDS PICO_PLUS_2W SYMBOLS SpreadsheetApp SOURCES src/spreadsheet.cpp src/apps/spreadsheet_app.cpp)
+fxai_feature(MODE DYNAGRAPH    BOARDS PICO_PLUS_2W SYMBOLS DynaGraphApp SOURCES src/dyna.cpp src/apps/dyna_app.cpp)
+fxai_feature(MODE RECURSION    BOARDS PICO_PLUS_2W SYMBOLS RecursionApp SOURCES src/recursion.cpp src/apps/recursion_app.cpp)
+fxai_feature(MODE CONICGRAPHS  BOARDS PICO_PLUS_2W SYMBOLS ConicGraphsApp SOURCES src/conic.cpp src/apps/conic_app.cpp)
+fxai_feature(MODE PROGRAM      BOARDS PICO_PLUS_2W SYMBOLS ProgramApp SOURCES src/program_mode.cpp src/apps/program_app.cpp)
+fxai_feature(MODE FINANCIAL    BOARDS PICO_PLUS_2W SYMBOLS FinancialApp SOURCES src/financial.cpp src/apps/financial_app.cpp)
+fxai_feature(MODE LINK         BOARDS PICO_PLUS_2W SYMBOLS LinkApp SOURCES src/link_protocol.cpp src/apps/link_app.cpp)
+fxai_feature(MODE GEOMETRY     BOARDS PICO_PLUS_2W SYMBOLS GeometryApp SOURCES src/geometry.cpp src/apps/geometry_app.cpp)
+fxai_feature(MODE PICTUREPLOT  BOARDS PICO_PLUS_2W SYMBOLS PicturePlotApp SOURCES src/picture_plot.cpp src/apps/picture_plot_app.cpp)
+# Python: MicroPython v1.24.1 (porta embed, third_party/micropython) compilato in C
+# senza warning ne' sanitizer (codice di terzi, come FatFs e LittleFS).
+file(GLOB _fxai_mp_py RELATIVE ${FXAI_ROOT} ${FXAI_ROOT}/third_party/micropython/micropython_embed/py/*.c)
+list(SORT _fxai_mp_py)
+set(FXAI_MICROPYTHON_C ${_fxai_mp_py}
+  third_party/micropython/micropython_embed/shared/runtime/gchelper_generic.c
+  third_party/micropython/usermod/picocalc/modcasioplot.c third_party/micropython/usermod/picocalc/pyglue.c)
+fxai_feature(MODE PYTHON       BOARDS PICO_PLUS_2W SYMBOLS PythonApp pc_py_glue SOURCES src/python_port.cpp src/apps/python_app.cpp ${FXAI_MICROPYTHON_C})
+if(FXAI_MODE_PYTHON)
+  set(_fxai_mp_abs)
+  foreach(_s ${FXAI_MICROPYTHON_C})
+    list(APPEND _fxai_mp_abs ${FXAI_ROOT}/${_s})
+  endforeach()
+  set(_fxai_mp_defs)
+  if(NOT CMAKE_CROSSCOMPILING)
+    set(_fxai_mp_defs MICROPY_NLR_SETJMP=1)   # PC: setjmp/longjmp (seguiti dai sanitizer)
+  endif()
+  set_source_files_properties(${_fxai_mp_abs} PROPERTIES
+    COMPILE_OPTIONS "-w;-fno-sanitize=all;-std=gnu99"
+    COMPILE_DEFINITIONS "${_fxai_mp_defs}"
+    INCLUDE_DIRECTORIES "${FXAI_ROOT}/third_party/micropython;${FXAI_ROOT}/third_party/micropython/micropython_embed")
+endif()
 list(APPEND FXAI_CORE_SOURCES ${FXAI_FEATURE_SOURCES})
 # v1.16.0: sorgenti ottimizzati per dimensione sul Raspberry Pi Pico 2 W
 # (CMakeLists.txt): eActivity e le parti che non stanno sui percorsi di calcolo

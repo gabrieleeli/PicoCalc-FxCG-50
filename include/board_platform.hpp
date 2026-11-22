@@ -32,5 +32,8 @@ public:
     storage::FlashDevice* diagnosticFlash() override { return board::diagnosticFlash(); }
     files::FileSystem* internalFiles() override { return board::internalFileSystem(); }
     std::uint32_t benchmarkPresent() override { return board::benchmarkFullPresent(); }
+#if FXAI_BOARD_PICO_PLUS_2W
+    link::Port* serialPort() override { return board::serialPort(); }
+#endif
 };
 } // namespace fx

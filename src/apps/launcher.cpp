@@ -1,4 +1,5 @@
 #include "apps.hpp"
+#include "board_config.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -169,13 +170,27 @@ void LauncherApp::draw(Context& ctx, gfx::Canvas& c) {
             c.roundedRect(x + 58, y + 3, 13, 13, 3, Ink, false);
             font::draw(c, font::Face::Small, x + 62, y + 3, info.key, Ink);
             if (!ok) { c.circle(x + 15, y + 9, 5, Error, true); c.hLine(x + 12, y + 9, 7, 0xFFFF); }
+            // v1.17.0: segno delle modalita' Base (aperte, parita' non completa): un
+            // triangolo ambra nell'angolo in basso a destra dell'icona. Solo sulla
+            // Plus: sul Pico 2 W congelato non esistono modalita' Base.
+            if constexpr (board::config::kIsPicoPlus2W) {
+                if (ok && info.status == AppStatus::Base) {
+                    const int bx = x + 12 + 56, by = y + 6 + 40;
+                    for (int k = 0; k < 11; ++k) c.hLine(bx - 1 - k, by - 12 + k, k + 1, k == 10 ? Ink : 0xFD20);
+                    for (int k = 0; k < 11; ++k) c.pixel(bx - 1 - k, by - 12 + k, Ink);
+                    c.vLine(bx - 1, by - 12, 11, Ink);
+                }
+            }
             ui::textCenter(c, x + TileW / 2, y + 50, info.name, ok ? Ink : Muted, font::Face::Small);
         }
     }
     ui::scrollBar(c, ui::ScreenW - 4, Top, VisibleRows * TileH, rows, VisibleRows, firstRow_);
     const AppInfo& cur = appInfoAt(selected_);
     char footer[80];
-    std::snprintf(footer, sizeof(footer), "%s  [%s]  %s", cur.name, cur.key, available(selected_) ? "EXE: apri" : "non disponibile");
+    const char* action = available(selected_) ? "EXE: apri" : "non disponibile";
+    if constexpr (board::config::kIsPicoPlus2W)
+        if (available(selected_) && cur.status == AppStatus::Base) action = "EXE: apri (base)";
+    std::snprintf(footer, sizeof(footer), "%s  [%s]  %s", cur.name, cur.key, action);
     c.hLine(0, ui::ScreenH - 17, ui::ScreenW, Faint);
     ui::text(c, 4, ui::ScreenH - 14, footer, available(selected_) ? Ink : Error, font::Face::Small);
 }

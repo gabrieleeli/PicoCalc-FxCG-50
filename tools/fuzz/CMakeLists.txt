@@ -26,6 +26,12 @@ set(FXAI_FUZZERS fuzz_expr fuzz_exactdiff fuzz_workspace fuzz_csv fuzz_pcgraph f
 if("FXAI_SERVICE_INTERP=1" IN_LIST FXAI_FEATURE_DEFINITIONS)
   list(APPEND FXAI_FUZZERS fuzz_program)                # v1.15.0, solo Pico Plus 2 W
 endif()
+if("FXAI_MODE_SPREADSHEET=1" IN_LIST FXAI_FEATURE_DEFINITIONS)
+  list(APPEND FXAI_FUZZERS fuzz_sheet fuzz_link fuzz_modes)   # v1.17.0, solo Pico Plus 2 W
+endif()
+if("FXAI_MODE_PYTHON=1" IN_LIST FXAI_FEATURE_DEFINITIONS)
+  list(APPEND FXAI_FUZZERS fuzz_python)                 # v1.17.0, solo Pico Plus 2 W
+endif()
 foreach(t ${FXAI_FUZZERS})
   add_executable(${t} ${CMAKE_CURRENT_LIST_DIR}/${t}.cpp)
   target_link_libraries(${t} PRIVATE fxai_fuzz_core)

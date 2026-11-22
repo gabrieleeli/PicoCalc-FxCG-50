@@ -1,4 +1,5 @@
 #pragma once
+#include "board_config.hpp"
 // Libreria di funzioni di Run-Matrix (v1.12.0) usata dall'unico valutatore
 // delle espressioni (expression.cpp): conversioni metriche (OPTN › CONVERT),
 // distribuzioni di probabilita' (OPTN › STAT › DIST, PROB › P( Q( R( ),
@@ -87,6 +88,12 @@ double cost(double sell, double margin);
 double sell(double cost, double margin);
 double margin(double cost, double sell);
 double daysPrd(double m1, double d1, double y1, double m2, double d2, double y2);
+#if FXAI_BOARD_PICO_PLUS_2W
+// v1.17.0 (Financial, solo Plus): le stesse equazioni con il pagamento
+// all'inizio (BGN) o alla fine (END) del periodo. unknown: 0 n, 1 I%, 2 PV, 3 PMT, 4 FV.
+double cmpdSolve(int unknown, double n, double rate, double pv, double pmt, double fv, double py, double cy, bool begin);
+double amortizationAt(int kind, double pm1, double pm2, double rate, double pv, double pmt, double py, double cy, bool begin);
+#endif
 
 // ---------------------------------------------------------------- nomi
 // Nome mostrato di un comando del testo canonico ("norm_pd" -> "NormPD",

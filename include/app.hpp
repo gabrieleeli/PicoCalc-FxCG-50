@@ -13,6 +13,7 @@ namespace storage { class FlashDevice; }
 namespace fx {
 namespace net { class ChatTransport; }
 namespace files { class FileSystem; }
+namespace link { class Port; }
 
 namespace app {
 
@@ -34,6 +35,10 @@ public:
     virtual storage::FlashDevice* diagnosticFlash() { return nullptr; }   // 4 KB scratch sector
     virtual files::FileSystem* internalFiles() { return nullptr; }       // LittleFS on the internal flash
     virtual std::uint32_t benchmarkPresent() { return 0; }               // full LCD frame, us
+#if FXAI_BOARD_PICO_PLUS_2W
+    // v1.17.0 (Link): la USB seriale (nullptr se non c'e').
+    virtual link::Port* serialPort() { return nullptr; }
+#endif
 };
 
 class AppManager;

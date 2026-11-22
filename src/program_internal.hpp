@@ -42,6 +42,7 @@ enum class Fn : std::uint8_t {
     Rand, Srand, Exit,
     FxCalc, FxGetVar, FxSetVar, FxCls, FxViewWindow, FxPlot, FxLine, FxCircle, FxText, FxGraphY, FxVertical, FxHorizontal,
     FxLocate, FxClrText, FxGetKey, FxCommand,
+    FxGetList, FxSetList, FxListSize,   // v1.17.0: List 1-26 del workspace (modalita' Program)
     Count
 };
 

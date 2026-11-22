@@ -2,6 +2,7 @@
 // Application classes of the PicoCalc FX firmware. Each mode owns its screen
 // state, input handling and drawing; shared data lives in fx::Workspace.
 #include "app.hpp"
+#include "features.hpp"
 #include "natural_editor.hpp"
 #include "line_editor.hpp"
 #include "app_widgets.hpp"
@@ -1109,4 +1110,60 @@ private:
     pict::Image picture_{};
 };
 
+#if FXAI_BOARD_PICO_PLUS_2W
+// ---- v1.17.0: controller delle modalita' Base (solo Pimoroni Pico Plus 2 W).
+// Lo stato persistente e' nel workspace (sezione della modalita'); la memoria
+// di lavoro della schermata (View, definita nel sorgente della modalita') esiste
+// solo mentre la modalita' e' aperta: creata in enter(), liberata in leave().
+// Ogni modalita' gestisce il proprio SET UP (SHIFT MENU).
+#define FXAI_BASE_APP(Class, Id)                                                  \
+    class Class final : public App {                                              \
+    public:                                                                       \
+        Class();                                                                  \
+        ~Class() override;                                                        \
+        AppId id() const override { return AppId::Id; }                           \
+        void enter(Context& ctx) override;                                        \
+        void leave(Context& ctx) override;                                        \
+        void key(Context& ctx, const KeyEvent& ev) override;                      \
+        void draw(Context& ctx, gfx::Canvas& c) override;                         \
+        bool tick(Context& ctx) override;                                         \
+        bool ownsSetup() const override { return true; }                          \
+        std::string screenName() const;      /* schermata attiva (test, simulatore) */ \
+        bool open() const noexcept { return v_ != nullptr; }                      \
+        struct View;                                                              \
+    private:                                                                      \
+        std::unique_ptr<View> v_;                                                 \
+    };
+#if FXAI_MODE_SPREADSHEET
+FXAI_BASE_APP(SpreadsheetApp, Spreadsheet)
+#endif
+#if FXAI_MODE_DYNAGRAPH
+FXAI_BASE_APP(DynaGraphApp, DynaGraph)
+#endif
+#if FXAI_MODE_RECURSION
+FXAI_BASE_APP(RecursionApp, Recursion)
+#endif
+#if FXAI_MODE_CONICGRAPHS
+FXAI_BASE_APP(ConicGraphsApp, ConicGraphs)
+#endif
+#if FXAI_MODE_PROGRAM
+FXAI_BASE_APP(ProgramApp, Program)
+#endif
+#if FXAI_MODE_FINANCIAL
+FXAI_BASE_APP(FinancialApp, Financial)
+#endif
+#if FXAI_MODE_LINK
+FXAI_BASE_APP(LinkApp, Link)
+#endif
+#if FXAI_MODE_GEOMETRY
+FXAI_BASE_APP(GeometryApp, Geometry)
+#endif
+#if FXAI_MODE_PICTUREPLOT
+FXAI_BASE_APP(PicturePlotApp, PicturePlot)
+#endif
+#if FXAI_MODE_PYTHON
+FXAI_BASE_APP(PythonApp, Python)
+#endif
+#undef FXAI_BASE_APP
+#endif
 } // namespace fx::app

@@ -1,5 +1,7 @@
 #include "workspace.hpp"
 #include "mem_pools.hpp"
+#include "storage.hpp"
+#include "board_config.hpp"
 #include "graph_engine.hpp"
 #include "solvers.hpp"
 #include "statistics.hpp"
@@ -46,6 +48,40 @@ void Workspace::resetAll() {
     modeVars = ModeVariables{};
     preservedSections.clear();
     eactivity = EActivityState{};
+#if FXAI_MODE_SPREADSHEET
+    sheet::reset(sheet);
+#endif
+#if FXAI_MODE_DYNAGRAPH
+    dyna::reset(dyna);
+#endif
+#if FXAI_MODE_RECURSION
+    rec::reset(recursion);
+#endif
+#if FXAI_MODE_CONICGRAPHS
+    conic::reset(conic);
+#endif
+#if FXAI_MODE_FINANCIAL
+    fin::reset(financial);
+#endif
+#if FXAI_MODE_PROGRAM
+    progmode::reset(program);
+#endif
+#if FXAI_MODE_LINK
+    link::reset(link);
+#endif
+#if FXAI_MODE_GEOMETRY
+    geo::reset(geometry);
+#endif
+#if FXAI_MODE_PICTUREPLOT
+    pplot::reset(pictplot);
+#endif
+#if FXAI_MODE_PYTHON
+    py::reset(python);
+#endif
+#if FXAI_BOARD_PICO_PLUS_2W
+    damagedSections.clear();
+    recordOrigin.clear();
+#endif
 }
 
 // ---------------------------------------------------------------- matrici, vettori, liste
@@ -457,7 +493,17 @@ constexpr std::uint32_t Magic = 0x46584157;   // "WAXF"
 // Le sezioni sconosciute o piu' nuove restano in Workspace::preservedSections
 // e vengono riscritte intatte. Dalla v1.15.0 ogni modalita' nuova aggiunge una
 // sezione invece di una versione del formato.
+#if FXAI_BOARD_PICO_PLUS_2W
+// Version 12 (v1.17.0, solo Pimoroni Pico Plus 2 W): dopo la versione la firma
+// del firmware che scrive (str "<scheda> <versione>"), e nella coda TLV un
+// CRC-32 per sezione (u32 dopo la lunghezza). Una sezione di modalita'
+// danneggiata o non decodificabile viene isolata (la modalita' riparte dai
+// valori iniziali, Workspace::damagedSections) invece di rendere illeggibile
+// tutto il record. Il Pico 2 W congelato scrive ancora la versione 11.
+constexpr std::uint16_t Version = 12;
+#else
 constexpr std::uint16_t Version = 11;
+#endif
 constexpr std::size_t MaxGraph3DSet = 16 * 1024;   // un insieme codificato (tre espressioni da 1000 byte al massimo)
 constexpr std::size_t LegacyLists = 6;     // liste del blocco delle versioni 1-6
 constexpr std::uint8_t NoValue = 0xFF;      // byte di tipo di una memoria non definita
@@ -580,9 +626,28 @@ std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws) {
     return serializeWorkspace(ws, codecs, count);
 }
 
+#if FXAI_BOARD_PICO_PLUS_2W
+namespace { std::vector<std::uint8_t> serializeAt(const Workspace& ws, const SectionCodec* codecs, std::size_t count, std::uint16_t version); }
+#ifndef FXAI_VERSION_STRING
+#define FXAI_VERSION_STRING "dev"
+#endif
+std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws, const SectionCodec* codecs, std::size_t count) { return serializeAt(ws, codecs, count, Version); }
+std::vector<std::uint8_t> serializeWorkspaceV11(const Workspace& ws) {
+    std::size_t count = 0;
+    const SectionCodec* codecs = workspaceSectionCodecs(count);
+    return serializeAt(ws, codecs, count, 11);
+}
+std::vector<std::uint8_t> serializeWorkspaceV11(const Workspace& ws, const SectionCodec* codecs, std::size_t count) { return serializeAt(ws, codecs, count, 11); }
+namespace {
+std::vector<std::uint8_t> serializeAt(const Workspace& ws, const SectionCodec* codecs, std::size_t count, std::uint16_t version) {
+    Writer w;
+    w.u32(Magic); w.u16(version);
+    if (version >= 12) w.str(std::string(FXAI_BOARD_ID) + " " + FXAI_VERSION_STRING);
+#else
 std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws, const SectionCodec* codecs, std::size_t count) {
     Writer w;
     w.u32(Magic); w.u16(Version);
+#endif
     const Settings& s = ws.settings;
     w.u8(static_cast<std::uint8_t>(s.angle)); w.u8(static_cast<std::uint8_t>(s.display.mode)); w.u8(s.display.digits);
     w.u8(static_cast<std::uint8_t>(s.complex)); w.u8(s.fractionResults ? 1 : 0); w.u8(s.lcdBacklight); w.u8(s.kbdBacklight);
@@ -762,10 +827,16 @@ std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws, const SectionC
     w.u16(static_cast<std::uint16_t>(sections.size()));
     for (const RecordSection& sec : sections) {
         w.u16(sec.id); w.u16(sec.version); w.u32(static_cast<std::uint32_t>(sec.data.size()));
+#if FXAI_BOARD_PICO_PLUS_2W
+        if (version >= 12) w.u32(storage::crc32(sec.data.data(), sec.data.size()));
+#endif
         w.out.insert(w.out.end(), sec.data.begin(), sec.data.end());
     }
     return std::move(w.out);
 }
+#if FXAI_BOARD_PICO_PLUS_2W
+} // namespace
+#endif
 
 namespace {
 // Blocco 3D delle versioni 5-9 (v1.9.0-v1.13.1): superfici Z1-Z3 con la
@@ -823,6 +894,10 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
     const std::uint16_t version = r.u16();
     if (version < 1 || version > Version || !r.ok) return false;
     const bool v2 = version >= 2;
+#if FXAI_BOARD_PICO_PLUS_2W
+    std::string origin;
+    if (version >= 12) { origin = r.str(); if (!r.ok || origin.size() > 64) return false; }
+#endif
     // The workspace being decoded lives on the heap (PSRAM on the Pico Plus
     // 2 W): as a local it took about 5.4 KB of the 32 KB stack.
     const auto holder = std::make_unique<Workspace>();
@@ -1190,12 +1265,26 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
         for (std::uint16_t k = 0; k < n; ++k) {
             const std::uint16_t id = r.u16(), sv = r.u16();
             const std::uint32_t len = r.u32();
+#if FXAI_BOARD_PICO_PLUS_2W
+            const std::uint32_t crc = version >= 12 ? r.u32() : 0;
+#endif
             if (!r.ok || static_cast<int>(id) <= previous || len > section::MaxSectionBytes || !r.need(len)) return false;
             previous = id;
             const std::uint8_t* bytes = r.p + r.i;
             r.i += len;
             const SectionCodec* codec = nullptr;
             for (std::size_t c = 0; c < count; ++c) if (codecs[c].id == id) codec = &codecs[c];
+#if FXAI_BOARD_PICO_PLUS_2W
+            if (version >= 12) {
+                // v12: una sezione danneggiata (CRC) o non decodificabile resta fuori
+                // da sola; il resto del record si legge.
+                if (storage::crc32(bytes, len) != crc) { ws.damagedSections.push_back(id); continue; }
+                if (codec && sv <= codec->version) {
+                    if (!codec->decode(ws, sv, bytes, len)) ws.damagedSections.push_back(id);
+                    continue;
+                }
+            }
+#endif
             if (codec && sv <= codec->version) {
                 if (!codec->decode(ws, sv, bytes, len)) return false;
             } else {
@@ -1220,6 +1309,9 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
         if (!validateView(v).empty()) v = ViewWindow{};
     }
     if (!validateView(v).empty()) return false;
+#if FXAI_BOARD_PICO_PLUS_2W
+    ws.recordOrigin = std::move(origin);
+#endif
     out = std::move(ws);
     return true;
 }
@@ -1445,6 +1537,19 @@ bool readMatricesPart(Reader& r, CollectionMemory& cm) {
 }
 } // namespace
 
+#if FXAI_BOARD_PICO_PLUS_2W
+namespace {
+// v1.17.0: parte di una modalita' Base = la sua sezione del record.
+const SectionCodec* modePartCodec(std::uint8_t which) noexcept {
+    if (which < part::ModeBase) return nullptr;
+    std::size_t count = 0;
+    const SectionCodec* codecs = workspaceSectionCodecs(count);
+    const auto id = static_cast<std::uint16_t>(section::ModeBase + (which - part::ModeBase));
+    for (std::size_t i = 0; i < count; ++i) if (codecs[i].id == id && codecs[i].reset) return &codecs[i];
+    return nullptr;
+}
+} // namespace
+#endif
 std::vector<std::uint8_t> encodePart(const Workspace& ws, std::uint8_t which) {
     Writer w;
     w.u8(which);
@@ -1465,7 +1570,11 @@ std::vector<std::uint8_t> encodePart(const Workspace& ws, std::uint8_t which) {
     case part::Equation: writeEquationPart(w, ws.equation); break;
     case part::Matrices: writeMatricesPart(w, ws.matrices); break;
     case part::Graph3D: w.blob(g3d::encode(ws.graph3d.set)); w.f32(ws.graph3d.zoom); break;
-    default: throw std::invalid_argument("parte del workspace sconosciuta");
+    default:
+#if FXAI_BOARD_PICO_PLUS_2W
+        if (const SectionCodec* c = modePartCodec(which)) { c->encode(ws, w.out); break; }
+#endif
+        throw std::invalid_argument("parte del workspace sconosciuta");
     }
     return std::move(w.out);
 }
@@ -1551,7 +1660,11 @@ bool decodePart(Workspace& ws, std::uint8_t which, const std::uint8_t* data, std
         ws.graph3d.zoom = zoom;
         return true;
     }
-    default: return false;
+    default:
+#if FXAI_BOARD_PICO_PLUS_2W
+        if (const SectionCodec* c = modePartCodec(which)) return c->decode(ws, c->version, data + 1, size - 1);
+#endif
+        return false;
     }
 }
 
@@ -1575,7 +1688,11 @@ void resetPart(Workspace& ws, std::uint8_t which) {
         ws.graph3d.set.setup = g3d::Setup{};
         ws.graph3d.zoom = 1.0F;
         break;
-    default: break;
+    default:
+#if FXAI_BOARD_PICO_PLUS_2W
+        if (const SectionCodec* c = modePartCodec(which)) c->reset(ws);
+#endif
+        break;
     }
 }
 
@@ -1606,15 +1723,31 @@ bool decodeHistoryEntries(const std::uint8_t* data, std::size_t size, std::vecto
 bool decodeParts(Workspace& ws, const std::uint8_t* data, std::size_t size) {
     Reader r{data, size};
     const auto n = r.u8();
+#if FXAI_BOARD_PICO_PLUS_2W
+    if (!r.ok || n > 32) return false;
+#else
     if (!r.ok || n > part::Count) return false;
+#endif
     struct Item { std::uint8_t id; const std::uint8_t* p; std::size_t len; };
     std::vector<Item> items;
+#if FXAI_BOARD_PICO_PLUS_2W
+    std::uint32_t seen = 0;
+#else
     std::uint8_t seen = 0;
+#endif
     for (std::uint8_t k = 0; k < n; ++k) {
         const auto id = r.u8();
         const auto len = r.u32();
+#if FXAI_BOARD_PICO_PLUS_2W
+        // Parti delle modalita' Base: bit 8 + (id - ModeBase), al piu' 23 modalita'.
+        const bool modePart = modePartCodec(id) != nullptr && id - part::ModeBase < 23;
+        const std::uint32_t bit = modePart ? (1u << (8 + id - part::ModeBase)) : (id < part::Count ? 1u << id : 0u);
+        if (!r.ok || id == 0 || bit == 0 || (seen & bit) || !r.need(len)) return false;
+        seen |= bit;
+#else
         if (!r.ok || id == 0 || id >= part::Count || (seen & (1u << id)) || !r.need(len)) return false;
         seen = static_cast<std::uint8_t>(seen | (1u << id));
+#endif
         items.push_back({id, r.p + r.i, len});
         r.i += len;
     }

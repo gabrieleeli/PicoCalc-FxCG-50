@@ -16,6 +16,34 @@ constexpr std::uint32_t fourcc(char a, char b2, char c, char d) {
     return static_cast<std::uint32_t>(static_cast<unsigned char>(a)) | (static_cast<std::uint32_t>(static_cast<unsigned char>(b2)) << 8) |
            (static_cast<std::uint32_t>(static_cast<unsigned char>(c)) << 16) | (static_cast<std::uint32_t>(static_cast<unsigned char>(d)) << 24);
 }
+#if FXAI_BOARD_PICO_PLUS_2W
+// v1.17.0: .pcprog (testo con la riga del dialetto) prima dei sorgenti del PC,
+// .pcsheet per i fogli; i file delle modalita' a stato e i pacchetti di Link.
+const char* const kEactExt[] = {".pceact", nullptr};
+const char* const kProgExt[] = {".pcprog", ".cpp", ".c", ".cs", nullptr};
+const char* const kSheetExt[] = {".pcsheet", nullptr};
+const char* const kPyExt[] = {".py", nullptr};
+const char* const kGeomExt[] = {".pcgeo", nullptr};
+const char* const kPplotExt[] = {".pcplot", nullptr};
+const char* const kDynaExt[] = {".pcdyna", nullptr};
+const char* const kRecurExt[] = {".pcrecur", nullptr};
+const char* const kConicExt[] = {".pcconic", nullptr};
+const char* const kFinExt[] = {".pcfin", nullptr};
+const char* const kLinkExt[] = {".pclink", nullptr};
+constexpr FileTypeInfo kTypes[FileTypeCount] = {
+    {FileType::EActivity, "eActivity", "PICOCALC/EACT", kEactExt, true, fourcc('P', 'C', 'E', 'A'), 1, 8, limits::kEActivityDocumentBytes, b::Both},
+    {FileType::Program, "Program", "PICOCALC/PROG", kProgExt, false, 0, 1, 8, limits::kTextFileBytes, b::PicoPlus2W},
+    {FileType::Spreadsheet, "Spreadsheet", "PICOCALC/SHEET", kSheetExt, true, fourcc('P', 'C', 'S', 'H'), 1, 8, limits::kTypedFileBytes, b::PicoPlus2W},
+    {FileType::Python, "Python", "PICOCALC/PY", kPyExt, false, 0, 1, 8, limits::kTextFileBytes, b::PicoPlus2W},
+    {FileType::Geometry, "Geometry", "PICOCALC/GEOM", kGeomExt, true, fourcc('P', 'C', 'G', 'O'), 1, 8, limits::kTypedFileBytes, b::PicoPlus2W},
+    {FileType::PicturePlot, "Picture Plot", "PICOCALC/PPLOT", kPplotExt, true, fourcc('P', 'C', 'P', 'P'), 1, 8, limits::kTypedFileBytes, b::PicoPlus2W},
+    {FileType::DynaGraph, "Dyna Graph", "PICOCALC/DYNA", kDynaExt, true, fourcc('P', 'C', 'D', 'Y'), 1, 8, 64u * 1024u, b::PicoPlus2W},
+    {FileType::Recursion, "Recursion", "PICOCALC/RECUR", kRecurExt, true, fourcc('P', 'C', 'R', 'C'), 1, 8, 64u * 1024u, b::PicoPlus2W},
+    {FileType::Conic, "Conic Graphs", "PICOCALC/CONIC", kConicExt, true, fourcc('P', 'C', 'C', 'N'), 1, 8, 64u * 1024u, b::PicoPlus2W},
+    {FileType::Financial, "Financial", "PICOCALC/FIN", kFinExt, true, fourcc('P', 'C', 'F', 'N'), 1, 8, 64u * 1024u, b::PicoPlus2W},
+    {FileType::Link, "Link", "PICOCALC/LINK", kLinkExt, true, fourcc('P', 'C', 'L', 'K'), 1, 8, 8u * 1024u * 1024u, b::PicoPlus2W},
+};
+#else   // Pico 2 W congelato: la tabella della v1.16.0
 const char* const kEactExt[] = {".pceact", nullptr};
 const char* const kProgExt[] = {".cpp", ".c", ".cs", nullptr};
 const char* const kSheetExt[] = {".sheet", nullptr};
@@ -30,6 +58,7 @@ constexpr FileTypeInfo kTypes[FileTypeCount] = {
     {FileType::Geometry, "Geometry", "PICOCALC/GEOM", kGeomExt, true, fourcc('P', 'C', 'G', 'O'), 1, 8, limits::kTypedFileBytes, b::PicoPlus2W},
     {FileType::PicturePlot, "Picture Plot", "PICOCALC/PPLOT", kPplotExt, true, fourcc('P', 'C', 'P', 'P'), 1, 8, limits::kTypedFileBytes, b::PicoPlus2W},
 };
+#endif
 constexpr std::uint8_t kBoard = board::config::kIsPicoPlus2W ? b::PicoPlus2W : b::Pico2W;
 
 void put16(std::vector<std::uint8_t>& o, std::uint16_t v) { o.push_back(static_cast<std::uint8_t>(v)); o.push_back(static_cast<std::uint8_t>(v >> 8)); }
@@ -59,6 +88,13 @@ bool fileTypeAvailable(FileType type) noexcept {
     case FileType::Python: return features::kPython;
     case FileType::Geometry: return features::kGeometry;
     case FileType::PicturePlot: return features::kPicturePlot;
+#if FXAI_BOARD_PICO_PLUS_2W
+    case FileType::DynaGraph: return features::kDynaGraph;
+    case FileType::Recursion: return features::kRecursion;
+    case FileType::Conic: return features::kConicGraphs;
+    case FileType::Financial: return features::kFinancial;
+    case FileType::Link: return features::kLink;
+#endif
     default: return false;
     }
 }

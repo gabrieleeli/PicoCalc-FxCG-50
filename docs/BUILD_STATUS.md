@@ -1,9 +1,46 @@
-# Build status — v1.16.0 (eActivity; Raspberry Pi Pico 2 W congelato)
+# Build status — v1.17.0 (base di tutte le modalità; Raspberry Pi Pico 2 W congelato)
 
 Stato delle build per versione; le novità sono in [CHANGELOG.md](CHANGELOG.md).
-Le sezioni dopo "v1.16.0" descrivono le build delle versioni precedenti.
+Le sezioni dopo "v1.17.0" descrivono le build delle versioni precedenti.
 
-## v1.16.0 — `main`
+## v1.17.0 — `main`
+
+Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`;
+sul Pico 2 W `-Os` per i sorgenti di `FXAI_PICO2W_SIZE_SOURCES`), nello stesso
+ambiente della v1.16.0 (Pico SDK 2.2.0, `gcc-arm-none-eabi` 13.2.1). Novità:
+stato Base e dieci modalità Base sulla Plus, record v12, MicroPython
+([reports/SVILUPPO_v1.17.0.md](reports/SVILUPPO_v1.17.0.md)). `picotool info
+-a`: «PicoCalc FX-CG50 AI», versione `1.17.0 (pico_plus_2w)` / `1.17.0
+(pico2w)`, SDK 2.2.0. **Nessuna prova su hardware.**
+
+> **Raspberry Pi Pico 2 W congelato alla v1.16.0**: 1 944 228 byte (+16 B, la
+> sola correzione condivisa di Conversion e la stringa di versione); stesse
+> modalità, stessa RAM statica, budget 2 064 384 B.
+
+| Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (5 251 584 byte) | `build/pico2w/picocalc_fxai_pico2w.uf2` (3 889 152 byte) |
+| Immagine flash | 2 625 472 byte (`__flash_binary_end` = `0x10280FC0`) = 62 % della partizione da 4 MB (budget < 90 %: 3 774 873 B); +527 924 byte rispetto alla v1.16.0: le dieci modalità Base (398 884 B, di cui Python e MicroPython 135 631 B) e l'interprete F9 ora collegato (105 270 B) | **1 944 228 byte** (`0x101DAAA4`) = 92 % della partizione da 2 MB; +16 byte |
+| Codice nuovo nell'immagine | nuclei e controller di Spreadsheet, Dyna Graph, Recursion, Conic Graphs, Financial, Program, Link, Geometry, Picture Plot, Python; MicroPython v1.24.1; record v12; `TypedFileMenu`; porta USB seriale | nessuno (mappa: **169** oggetti/simboli esclusi, nessuno nell'immagine) |
+| RAM statica | 310 712 byte fino a `__end__` = `0x2004BDB8` (+1 548); 312 760 byte con la sezione `.heap` minima | 305 236 byte (`0x2004A854`, invariata); 307 284 byte con `.heap` |
+| Heap SRAM | 180 808 byte (`__end__` → `0x20078000`) | 186 284 byte (invariato) |
+| PSRAM | 8 MB come pool TLSF separato; Python vi prende 512 KB per l'heap di MicroPython solo mentre la modalità è aperta | — |
+| Frame di stack (`-fstack-usage`) | massimo invariato `SystemApp::enter` 2 016 B; codice nuovo: `fillPage` di Financial 976 B, `DynaGraphApp::key` 808 B, `fillSet` di Recursion 664 B; MicroPython sulla pila della coroutine (24 KB): `pc_input` 264 B, `mp_execute_bytecode` 128 B per livello | invariati |
+| Warning | **nessuno** del compilatore | nessuno |
+| SHA-256 dell'UF2 locale | `b06018ccac8eaffbdbe79605c754748e36d27441b3626f784491009ee2df06ca` | `3047191f8b481ad4578a26a955e0c90ce5a5dbd5f2d3b45ef324a13dc720de15` |
+
+### Test
+
+| Suite | Pico Plus 2 W | Pico 2 W |
+|---|---|---|
+| CTest (`tests/run_host_tests.sh`) | 61/61: 58 suite C++ con **18 623** controlli, `mem_pools_smoke`, `sd_interop_test`, `link_tool_test` | 54/54: 52 suite con **16 297** controlli, `mem_pools_smoke`, `sd_interop_test` |
+| AddressSanitizer + UBSan bloccante (`--sanitize`) | 61/61 | 54/54 |
+| ThreadSanitizer (`--tsan`) | superato | superato |
+| Relay AI (Python, `unittest`) | 15/15 | — |
+| Fuzzing (≥ 300 s per harness nuovo o toccato) | nuovi: `fuzz_sheet` 551 536 esecuzioni, `fuzz_link` 3 543 604, `fuzz_modes` 2 457 080, `fuzz_python` 5 615 993; toccati: `fuzz_workspace` 2 370 949, `fuzz_ui` 16 191 (sul codice finale dei controller), `fuzz_typedfile` 118 272 391, `fuzz_eactivity` 3 024 con il controller e 13 830 763 sui soli documenti; ognuno ≥ 300 s: nessun crash né artefatto sul codice finale (durante lo sviluppo `fuzz_modes` aveva trovato i NaN in Financial) | — |
+| Simulatore (`tools/sim_compare.py`) | 137 identici: 113 precedenti invariati, 4 rigenerati per cambiamenti voluti (19, 105, 106, 115), 20 nuovi (128–147) | — |
+
+## v1.16.0
 
 Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`;
 sul Pico 2 W `-Os` per i sorgenti di `FXAI_PICO2W_SIZE_SOURCES`), nello stesso

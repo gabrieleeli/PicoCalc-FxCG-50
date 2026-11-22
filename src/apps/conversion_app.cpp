@@ -50,6 +50,7 @@ void ConversionApp::key(Context& ctx, const KeyEvent& ev) {
         const Unit a = cat.units[static_cast<std::size_t>(form_.fields[1].choice)].second, b = cat.units[static_cast<std::size_t>(form_.fields[2].choice)].second;
         const double r = pointa::convert(v, a, b);
         ctx.ws.memory.setAnswer(r);
+        ctx.markDirty();                     // v1.17.0 (apps_init_test K6): Ans va salvato dall'autosalvataggio
         result_ = fmt(ctx, v) + " " + form_.fields[1].text + " = " + fmt(ctx, r) + " " + form_.fields[2].text;
         return;
     }

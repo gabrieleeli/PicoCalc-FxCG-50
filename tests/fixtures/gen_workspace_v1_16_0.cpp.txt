@@ -1,0 +1,28 @@
+// Generatore della fixture workspace_v1_16_0.inc (sorgenti della v1.16.0, commit eb2338a, profilo Pico Plus 2 W).
+// Record v11 con le variabili di modo che le modalita' Base della v1.17.0 riprendono (migrazione v11 -> v12).
+#include "workspace.hpp"
+#include "run_matrix.hpp"
+#include <cstdio>
+using namespace fx;
+int main() {
+    auto ws = std::make_unique<Workspace>();
+    ws->settings.angle = AngleMode::Degrees;
+    ws->apply();
+    runCalculation(*ws, "1/3+1/6");
+    runCalculation(*ws, "7→B");
+    runCalculation(*ws, "{1.5,2.5,3.5}→List 1");
+    ws->functions[0].expr = "x^2-1"; ws->functions[0].selected = true;
+    ws->modeVars.dynaStart = 2; ws->modeVars.dynaEnd = 6; ws->modeVars.dynaPitch = 2;
+    ws->modeVars.recFormula = "2rec_an+1"; ws->modeVars.recStart = 1; ws->modeVars.recEnd = 8; ws->modeVars.recInitial[0] = 3;
+    ws->modeVars.tvmN = 24; ws->modeVars.tvmI = 4.5; ws->modeVars.tvmPV = -5000; ws->modeVars.tvmPMT = 0; ws->modeVars.tvmPY = 12; ws->modeVars.tvmCY = 12;
+    ws->eactivity.folder = "SCUOLA"; ws->eactivity.lastFile = "FISICA";
+    const auto rec = serializeWorkspace(*ws);
+    std::printf("// Workspace record written by v1.16.0 (format version 11, Pico Plus 2 W): Deg, history {1/3+1/6, 7->B,\n");
+    std::printf("// {1.5,2.5,3.5}->List 1}, Y1=x^2-1 (on), D Start/End/Pitch 2/6/2, an+1=2an+1 R Start 1 R End 8 a0=3,\n");
+    std::printf("// TVM n=24 I%%=4.5 PV=-5000 P/Y=C/Y=12, eActivity folder SCUOLA last FISICA (section 0x0102).\n");
+    std::printf("// Generated with the v1.16.0 sources (tag v1.16.0, main eb2338a).\n");
+    for (std::size_t i = 0; i < rec.size(); ++i) std::printf("0x%02X,%s", rec[i], (i % 20 == 19) ? "\n" : "");
+    std::printf("\n");
+    auto back = std::make_unique<Workspace>();
+    return deserializeWorkspace(rec.data(), rec.size(), *back) ? 0 : 1;
+}

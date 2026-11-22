@@ -8,6 +8,7 @@ namespace fx::eact {
 namespace {
 namespace p = fx::part;
 constexpr std::uint8_t bit(std::uint8_t id) { return static_cast<std::uint8_t>(1u << id); }
+constexpr std::uint8_t ModePart = 1;   // v1.17.0 (Plus): la sezione della modalita' Base (stripParts)
 using app::AppId;
 // Manuale 10-17: nomi del dialogo STRIP, modalita' e parti del workspace.
 constexpr StripInfo kStrips[StripKindCount] = {
@@ -16,26 +17,26 @@ constexpr StripInfo kStrips[StripKindCount] = {
     {StripKind::Graph, "Graph", AppId::Graph, bit(p::Graph)},
     {StripKind::GraphEditor, "Graph Editor", AppId::Graph, bit(p::Graph)},
     {StripKind::TableEditor, "Table Editor", AppId::Table, static_cast<std::uint8_t>(bit(p::Graph) | bit(p::Table))},
-    {StripKind::ConicsGraph, "Conics Graph", AppId::ConicGraphs, 0},
-    {StripKind::ConicsEditor, "Conics Editor", AppId::ConicGraphs, 0},
+    {StripKind::ConicsGraph, "Conics Graph", AppId::ConicGraphs, FXAI_MODE_CONICGRAPHS ? ModePart : 0},
+    {StripKind::ConicsEditor, "Conics Editor", AppId::ConicGraphs, FXAI_MODE_CONICGRAPHS ? ModePart : 0},
     {StripKind::StatGraph, "Stat Graph", AppId::Statistics, bit(p::Lists)},
     {StripKind::ListEditor, "List Editor", AppId::Statistics, bit(p::Lists)},
     {StripKind::Solver, "Solver", AppId::Equation, bit(p::Equation)},
-    {StripKind::RecurEditor, "Recur Editor", AppId::Recursion, 0},
+    {StripKind::RecurEditor, "Recur Editor", AppId::Recursion, FXAI_MODE_RECURSION ? ModePart : 0},
     {StripKind::Notes, "Notes", AppId::EActivity, 0},
     {StripKind::MatrixEditor, "Matrix Editor", AppId::RunMatrix, bit(p::Matrices)},
     {StripKind::VectorEditor, "Vector Editor", AppId::RunMatrix, bit(p::Matrices)},
     {StripKind::SimulEquation, "Simul Equation", AppId::Equation, bit(p::Equation)},
     {StripKind::PolyEquation, "Poly Equation", AppId::Equation, bit(p::Equation)},
-    {StripKind::DynamicGraph, "Dynamic Graph", AppId::DynaGraph, 0},
-    {StripKind::Financial, "Financial", AppId::Financial, 0},
-    {StripKind::SpreadSheet, "SpreadSheet", AppId::Spreadsheet, 0},
+    {StripKind::DynamicGraph, "Dynamic Graph", AppId::DynaGraph, FXAI_MODE_DYNAGRAPH ? ModePart : 0},
+    {StripKind::Financial, "Financial", AppId::Financial, FXAI_MODE_FINANCIAL ? ModePart : 0},
+    {StripKind::SpreadSheet, "SpreadSheet", AppId::Spreadsheet, FXAI_MODE_SPREADSHEET ? ModePart : 0},
     {StripKind::EConTop, "E-CON Top", AppId::ECon4, 0},
     {StripKind::EConResult, "E-CON Result", AppId::ECon4, 0},
     {StripKind::Graph3D, "3D Graph", AppId::Graph3D, bit(p::Graph3D)},
     {StripKind::Graph3DEditor, "3D Graph Editor", AppId::Graph3D, bit(p::Graph3D)},
-    {StripKind::Geometry, "Geometry", AppId::Geometry, 0},
-    {StripKind::PicturePlot, "Picture Plot", AppId::PicturePlot, 0},
+    {StripKind::Geometry, "Geometry", AppId::Geometry, FXAI_MODE_GEOMETRY ? ModePart : 0},
+    {StripKind::PicturePlot, "Picture Plot", AppId::PicturePlot, FXAI_MODE_PICTUREPLOT ? ModePart : 0},
 };
 
 struct Out {
@@ -94,11 +95,15 @@ bool stripAvailable(StripKind kind) noexcept {
     if (s.app == AppId::ECon4) return false;
     if (kind == StripKind::Notes) return true;
     // la modalita' c'e' su questa scheda e la sua striscia e' realizzata (ha parti da conservare)
-    return s.parts != 0 && app::appInfo(s.app).status == app::AppStatus::Available;
+    return s.parts != 0 && app::isOpen(app::appInfo(s.app).status);
 }
 std::vector<std::uint8_t> stripParts(StripKind kind) {
     std::vector<std::uint8_t> out;
     const std::uint8_t mask = stripInfo(kind).parts;
+#if FXAI_BOARD_PICO_PLUS_2W
+    // v1.17.0: il bit 0 e' la sezione della modalita' Base della striscia.
+    if (mask & ModePart) out.push_back(static_cast<std::uint8_t>(p::ModeBase + static_cast<std::uint8_t>(stripInfo(kind).app)));
+#endif
     for (std::uint8_t id = 1; id < p::Count; ++id) if (mask & bit(id)) out.push_back(id);
     return out;
 }

@@ -1,37 +1,45 @@
-# Roadmap — dopo la v1.16.0
+# Roadmap — dopo la v1.17.0
 
-**Piano dalla v1.15.0** ([reports/ANALISI_FONTI_v1.15.0.md](reports/ANALISI_FONTI_v1.15.0.md)):
-una milestone per versione, ognuna con il cancello completo (test su entrambi
-i profili anche con i sanitizer, fuzzing, simulatore, firmware nei budget,
-relay, documentazione) e un solo commit su `main`.
+**Piano dalla v1.17.0** ([reports/ANALISI_FONTI_v1.17.0.md](reports/ANALISI_FONTI_v1.17.0.md)):
+la v1.17.0 è la **base di tutte le modalità** (ogni modalità del registro si
+apre, fa il suo lavoro principale, salva e rimette a posto lo stato, esce senza
+perdite; dieci modalità nuove nello stato **Base** sulla Pimoroni Pico Plus
+2 W). Da qui **una modalità per versione arriva alla parità completa** con la
+fx-CG50 e passa da Base (o da Available incompleta) ad Available, con la sua
+tabella di parità scritta prima del codice e il cancello completo (test su
+entrambi i profili anche con i sanitizer, fuzzing, simulatore, firmware nei
+budget, relay, documentazione) e un solo commit su `main`.
 
-| Milestone | Versione | Contenuto | Schede |
+| Versione | Modalità alla parità completa | Note | Schede |
 |---|---|---|---|
-| M1 | v1.15.0 | fondamenta comuni (fatta) | entrambe (F7–F9 solo Plus) |
-| M2 | v1.16.0 | **eActivity** (cap. 10) con le strisce (fatta); il **Pico 2 W è congelato** | entrambe |
-| M3 | v1.17.0 | Statistics completa (cap. 6) | Plus |
-| M4 | v1.18.0 | Graph e Table: Dual Screen, GtoT, T+G, Graph to Table, FORMAT nello SKETCH | Plus |
-| M5 | v1.19.0 | Recursion (5-45) | Plus |
-| M6 | v1.20.0 | Dyna Graph (5-42) | Plus |
-| M7 | v1.21.0 | Conic Graphs (5-50) | Plus |
-| M8 | v1.22.0 | Financial (cap. 7) | Plus |
-| M9 | v1.23.0 | Spreadsheet (cap. 9) | Plus |
-| M10 | v1.24.0 | Program in C, C++ e C# (cap. 8 come modalità) | Plus |
-| M11 | v1.25.0 | Picture Plot (cap. 15) | Plus |
-| M12 | v1.26.0 | Geometry (cap. 14) | Plus |
-| M13 | v1.27.0 | Memory, System e Link completi (cap. 11–13) | Plus |
-| M14 | v1.28.0 | Python (MicroPython, cap. 17) | Plus |
-| M15 | v1.29.0 | chiusura: revisione completa e recap | entrambe |
+| v1.15.0 | fondamenta comuni (fatta) | ModeShell, file tipizzati, record v11, StepTask, TextEdit; Graph2D, Binding, Interp solo Plus | entrambe |
+| v1.16.0 | **eActivity** (cap. 10, fatta); il **Pico 2 W è congelato** | | entrambe |
+| v1.17.0 | **base di tutte le modalità** (fatta) | stato Base, `apps_init_test`, record v12, dieci modalità Base | Plus (inizializzazione: entrambe) |
+| **v1.18.0** | **Statistics** (cap. 6) | regressioni sinusoidale e logistica, test χ²/F/2 campioni/ANOVA nell'interfaccia, grafici a torta e a barre, tutto il capitolo; **Distribution** (cap. 18) entra nel registro come modalità Base (risposta Q1 della v1.17.0) | Plus |
+| v1.19.0 | Graph e Table | Dual Screen G+G/GtoT/T+G, Graph to Table, FORMAT nello SKETCH | Plus |
+| v1.20.0 | Recursion (5-45) | bn, cn, an = f(n), grafico di fase, convergenza | Plus |
+| v1.21.0 | Dyna Graph (5-42) | BUILT-IN, Locus, Dynamic Graph Memory | Plus |
+| v1.22.0 | Conic Graphs (5-50) | forme polari e parametriche, direttrice, asse, latus rectum, ZOOM | Plus |
+| v1.23.0 | Financial (cap. 7) | Cost/Sell/Margin, Depreciation, Bond, grafici, 360 giorni | Plus |
+| v1.24.0 | Spreadsheet (cap. 9) | SEQ, SORT, CellIf/CellProd, formattazione condizionale, GRAPH e CALC dalle celle | Plus |
+| v1.25.0 | Program (cap. 8 come modalità) | DEBUG, SEARCH, RENAME, password, libreria `fx` completa | Plus |
+| v1.26.0 | Picture Plot (cap. 15) | fotogrammi, AXTRANS, Plot List, Fade I/O | Plus |
+| v1.27.0 | Geometry (cap. 14) | Construct, trasformazioni, animazioni, testo | Plus |
+| v1.28.0 | Memory, System e Link (cap. 11–13) | Link: più file, immagini dello schermo | Plus |
+| v1.29.0 | Python (cap. 17) | menu delle funzioni, CATALOG, moduli `random`, `turtle`, `matplotl` | Plus |
+| v1.30.0 | Distribution (cap. 18) | dalla Base della v1.18.0 | Plus |
+| v1.31.0 | chiusura: revisione completa e recap | | entrambe |
 
-Dalla v1.16.0 il **Raspberry Pi Pico 2 W è congelato**: le milestone M3–M14
+Solo la v1.18.0 (Statistics) è fissata; l'ordine delle versioni seguenti è una
+proposta da confermare all'inizio di ognuna (cosa manca a ogni modalità Base è
+nel campo `missing` del registro e in [FEATURE_MATRIX.md](FEATURE_MATRIX.md)).
+E-CON4 resta External.
+
+Il **Raspberry Pi Pico 2 W è congelato alla v1.16.0**: le versioni successive
 aggiungono funzioni solo alla Pimoroni Pico Plus 2 W; sul Pico 2 W entrano
-soltanto correzioni di errori condivise (controllo in `architecture_test`).
-Le strisce di eActivity delle modalità della Plus (Conics, Recur, Dynamic,
-Financial, SpreadSheet, Picture Plot, Geometry) diventano disponibili con le
-loro milestone.
-
-Da decidere con l'utente: la modalità **Distribution** del capitolo 18 (fx-CG50
-OS 3.40+) non è nel registro né nel piano.
+soltanto correzioni di errori condivise (controllo in `architecture_test`, che
+fallisce se cambia l'insieme delle modalità aperte del Pico 2 W). Le prove su
+hardware continuano la numerazione: la v1.17.0 arriva a HW-245.
 
 La v1.14.0 completa il **3D Graph** (capitolo 16 del manuale fx-CG50: modelli
 Line, Plane, Sphere, Cylinder, Cone, grafici Z=, Param, Rot X/Y, V-Window con
@@ -51,7 +59,8 @@ tale: le tabelle sotto elencano ciò che manca. Fanno eccezione **Run-Matrix**
 **3D Graph** (dalla v1.14.0, [reports/SVILUPPO_v1.14.0.md](reports/SVILUPPO_v1.14.0.md))
 ed **eActivity** (dalla v1.16.0, [reports/SVILUPPO_v1.16.0.md](reports/SVILUPPO_v1.16.0.md)),
 con ogni voce della tabella di parità presente o documentata come differenza
-inevitabile. Il documento storico
+inevitabile. Le dieci modalità della v1.17.0 sono **Base**: si usano, ma la
+parità non c'è ancora ([reports/SVILUPPO_v1.17.0.md](reports/SVILUPPO_v1.17.0.md)). Il documento storico
 `archive/CG50_PARITY_ROADMAP.md` descrive gli obiettivi delle versioni precedenti.
 La v1.9.0 ha unito la v1.8.0 al supporto del Pimoroni Pico Plus 2 W
 ([reports/CONSOLIDAMENTO_v1.9.0.md](reports/CONSOLIDAMENTO_v1.9.0.md)); la
@@ -160,17 +169,17 @@ Stato e progetto di ogni modalità in [APPLICATIONS_ARCHITECTURE.md](APPLICATION
 
 | Modalità | Contenuto da realizzare |
 |---|---|
-| Statistics | regressioni sinusoidale e logistica; test χ², F, 2 campioni, ANOVA nell'interfaccia; grafici a torta e a barre |
+| Statistics | **prossima versione (v1.18.0)**: regressioni sinusoidale e logistica; test χ², F, 2 campioni, ANOVA nell'interfaccia; grafici a torta e a barre; con la modalità Base **Distribution** |
 | Graph | Dual Screen G+G/GtoT, Graph to Table, FORMAT nello SKETCH (i comandi grafici di Run-Matrix sono completi dalla v1.13.0) (dettaglio in [GRAPH_PARITY.md](GRAPH_PARITY.md)) |
 | Table | Dual Screen T+G (LISTMEM con 999 elementi già sulla Plus; 255 sul Pico 2 W) |
 | Equation | **parità completata nella v1.12.0** ([EQUATION.md](EQUATION.md)); restano come estensioni: interfaccia per i sistemi di disequazioni; forme esatte di quozienti complessi (`1/(1+i)`) e delle radici cubiche |
-| Recursion, Conic Graphs, Dyna Graph | modelli dati pronti (`app_models.hpp`) e servizio GraphCore per il disegno; mancano controller e UI |
-| Financial | schermate di TVM, flussi di cassa e ammortamento (le funzioni di calcolo sono in `calc_library` dalla v1.13.0 e Run-Matrix le usa) |
-| Spreadsheet, eActivity, Program | modelli pronti; l'area file su microSD esiste (servizio Files, v1.8.0); Program richiede l'interprete |
-| Geometry, Picture Plot | modelli pronti |
+| Recursion, Conic Graphs, Dyna Graph | **Base dalla v1.17.0** (solo Plus): mancano bn/cn, an = f(n), fase (Recursion); BUILT-IN, Locus, memoria (Dyna); forme polari/parametriche, direttrice, asse, latus rectum, ZOOM (Conic) |
+| Financial | **Base dalla v1.17.0** (SMPL, CMPD, CASH, AMT, CNVT, DAYS): mancano Cost/Sell/Margin, Depreciation, Bond, grafici, 360 giorni |
+| Spreadsheet, Program | **Base dalla v1.17.0**: mancano SEQ, SORT, CellIf/CellProd, formattazione condizionale, GRAPH/CALC dalle celle (Spreadsheet); DEBUG, SEARCH, RENAME, password, libreria `fx` completa (Program). eActivity: parità dalla v1.16.0 |
+| Geometry, Picture Plot | **Base dalla v1.17.0**: mancano Construct, trasformazioni, animazioni, testo (Geometry); fotogrammi, AXTRANS, Plot List, Fade I/O (Picture Plot) |
 | 3D Graph | **parità completata nella v1.14.0** ([GRAPH3D.md](GRAPH3D.md)); differenze inevitabili: griglia ≤ 25 e pittore senza PSRAM, tasti della PicoCalc; collaudo su hardware (HW-170…HW-189) |
-| Link | trasferimento del record del workspace via USB seriale (formato proprio) |
-| Python | MicroPython come libreria con heap separato |
+| Link | **Base dalla v1.17.0** (workspace e file in pacchetti `.pclink` su USB seriale, `tools/picocalc_link.py`): mancano la selezione di più file e le immagini dello schermo; il protocollo Casio tra calcolatrici non è supportato |
+| Python | **Base dalla v1.17.0** (MicroPython v1.24.1, heap separato, casioplot): mancano il menu delle funzioni, il CATALOG, il debug e i moduli `random`, `turtle`, `matplotl` |
 | E-CON4 | non realizzabile (data logger esterno); al più import CSV nelle liste |
 
 ## 5. Piattaforma

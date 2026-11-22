@@ -570,6 +570,9 @@ struct Machine::Impl {
         case Fn::FxVertical: host.graphics("Vertical " + num(d(0))); return Value{};
         case Fn::FxHorizontal: host.graphics("Horizontal " + num(d(0))); return Value{};
         case Fn::FxCommand: host.graphics(commandText(a[0])); return Value{};
+        case Fn::FxGetList: return real(host.getListItem(static_cast<int>(d(0)), static_cast<int>(d(1))));
+        case Fn::FxSetList: host.setListItem(static_cast<int>(d(0)), static_cast<int>(d(1)), d(2)); return Value{};
+        case Fn::FxListSize: return Value::ofInt(host.listSize(static_cast<int>(d(0))));
         case Fn::FxLocate: host.locate(static_cast<int>(d(0)), static_cast<int>(d(1)), text(a[2])); return Value{};
         case Fn::FxClrText: host.clearText(); return Value{};
         case Fn::FxGetKey: return Value::ofInt(host.getKey());
@@ -848,5 +851,25 @@ double WorkspaceHost::calc(const std::string& expression, const std::vector<std:
 }
 double WorkspaceHost::getVariable(char letter) { return ws_.memory.recall(letter); }
 void WorkspaceHost::setVariable(char letter, double value) { ws_.memory.store(letter, value); }
+// v1.17.0: List 1-26 con i controlli del workspace (setList: lunghezza e budget della scheda).
+namespace {
+std::size_t listIndex(int list) {
+    if (list < 1 || list > 26) throw MathError("Argument ERROR: List 1...26");
+    return static_cast<std::size_t>(list - 1);
+}
+} // namespace
+double WorkspaceHost::getListItem(int list, int index) {
+    const auto& l = ws_.lists[listIndex(list)];
+    if (index < 1 || static_cast<std::size_t>(index) > l.size()) throw DimensionError("Dimension ERROR: elemento della lista");
+    return l[static_cast<std::size_t>(index - 1)];
+}
+void WorkspaceHost::setListItem(int list, int index, double value) {
+    const std::size_t li = listIndex(list);
+    std::vector<double> l = ws_.lists[li];
+    if (index < 1 || static_cast<std::size_t>(index) > l.size() + 1) throw DimensionError("Dimension ERROR: elemento della lista");
+    if (static_cast<std::size_t>(index) == l.size() + 1) l.push_back(value); else l[static_cast<std::size_t>(index - 1)] = value;
+    ws_.setList(li, std::move(l));
+}
+int WorkspaceHost::listSize(int list) { return static_cast<int>(ws_.lists[listIndex(list)].size()); }
 
 } // namespace fx::prog

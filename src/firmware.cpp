@@ -24,6 +24,37 @@ struct Firmware::Apps {
 #if FXAI_MODE_EACTIVITY
     app::EActivityApp eactivity;    // v1.16.0, su entrambe le schede
 #endif
+    // v1.17.0: modalita' Base della Pimoroni Pico Plus 2 W.
+#if FXAI_MODE_SPREADSHEET
+    app::SpreadsheetApp spreadsheet;
+#endif
+#if FXAI_MODE_DYNAGRAPH
+    app::DynaGraphApp dyna;
+#endif
+#if FXAI_MODE_RECURSION
+    app::RecursionApp recursion;
+#endif
+#if FXAI_MODE_CONICGRAPHS
+    app::ConicGraphsApp conic;
+#endif
+#if FXAI_MODE_PROGRAM
+    app::ProgramApp program;
+#endif
+#if FXAI_MODE_FINANCIAL
+    app::FinancialApp financial;
+#endif
+#if FXAI_MODE_LINK
+    app::LinkApp link;
+#endif
+#if FXAI_MODE_GEOMETRY
+    app::GeometryApp geometry;
+#endif
+#if FXAI_MODE_PICTUREPLOT
+    app::PicturePlotApp pictplot;
+#endif
+#if FXAI_MODE_PYTHON
+    app::PythonApp python;
+#endif
 };
 
 namespace { constexpr std::uint32_t AutosaveDelayMs = 2500; }
@@ -42,6 +73,45 @@ Firmware::Firmware(app::Platform& platform, storage::FlashDevice& flash, storage
 #if FXAI_MODE_EACTIVITY
     manager_.add(apps_->eactivity);
     apps_->launcher.setAvailability(static_cast<std::size_t>(app::AppId::EActivity), true);
+#endif
+#if FXAI_BOARD_PICO_PLUS_2W
+    app::App* base[] = {
+#if FXAI_MODE_SPREADSHEET
+        &apps_->spreadsheet,
+#endif
+#if FXAI_MODE_DYNAGRAPH
+        &apps_->dyna,
+#endif
+#if FXAI_MODE_RECURSION
+        &apps_->recursion,
+#endif
+#if FXAI_MODE_CONICGRAPHS
+        &apps_->conic,
+#endif
+#if FXAI_MODE_PROGRAM
+        &apps_->program,
+#endif
+#if FXAI_MODE_FINANCIAL
+        &apps_->financial,
+#endif
+#if FXAI_MODE_LINK
+        &apps_->link,
+#endif
+#if FXAI_MODE_GEOMETRY
+        &apps_->geometry,
+#endif
+#if FXAI_MODE_PICTUREPLOT
+        &apps_->pictplot,
+#endif
+#if FXAI_MODE_PYTHON
+        &apps_->python,
+#endif
+        nullptr};
+    for (app::App* a : base) {
+        if (!a) continue;
+        manager_.add(*a);
+        apps_->launcher.setAvailability(static_cast<std::size_t>(a->id()), true);
+    }
 #endif
 }
 Firmware::~Firmware() = default;
@@ -73,6 +143,16 @@ void Firmware::boot() {
     }
     if (storageLocked_)
         manager_.showError("Memory ERROR: dati salvati troppo grandi per la memoria libera; salvataggio sospeso per non perderli");
+#if FXAI_BOARD_PICO_PLUS_2W
+    // v1.17.0 (record v12): sezioni di modalita' danneggiate isolate alla lettura.
+    if (!ws_.damagedSections.empty() && !storageLocked_) {
+        std::string m = "Data ERROR: dati danneggiati di";
+        for (std::uint16_t id : ws_.damagedSections) { m += ' '; m += sectionModeName(id); }
+        m += ": ripartono dai valori iniziali";
+        manager_.showError(m);
+        manager_.context().markDirty();
+    }
+#endif
     redraw_ = true;
 }
 void Firmware::notice(const std::string& message) { notice(message.c_str()); }

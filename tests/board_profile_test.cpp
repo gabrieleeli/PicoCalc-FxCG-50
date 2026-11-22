@@ -125,7 +125,7 @@ int main() {
         ws.graph3d.set.fns[2].kind = g3d::Kind::Z; ws.graph3d.set.fns[2].expr[0] = "x*y"; ws.graph3d.set.fns[2].selected = true;
         ws.graph3d.set.window.theta = 100;
         const auto blob = serializeWorkspace(ws);
-        CHECK(blob[4] == 11 && blob[5] == 0);
+        CHECK(blob[4] == workspaceRecordVersion() && blob[5] == 0);
         Workspace back;
         CHECK(deserializeWorkspace(blob.data(), blob.size(), back));
         CHECK(back.settings.fileStore == Settings::FileStore::Internal && back.graph3d.set.fns[2].expr[0] == "x*y" &&

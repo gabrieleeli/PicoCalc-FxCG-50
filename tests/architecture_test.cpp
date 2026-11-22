@@ -107,7 +107,12 @@ std::set<std::string> allowedHeaders(const AppInfo& info) {
     std::set<std::string> h = {"apps.hpp", "app.hpp", "app_widgets.hpp"};
     for (std::size_t i = 0; i < service::Count; ++i) {
         const ServiceInfo& s = serviceInfo(i);
-        if (info.services & s.bit) for (const char* const* p = s.headers; *p; ++p) h.insert(*p);
+        if ((info.services & s.bit) == 0) continue;
+#if FXAI_BOARD_PICO_PLUS_2W
+        // v1.17.0: ModeCore permette solo il nucleo della modalita' stessa.
+        if (s.bit == service::ModeCore) { for (const char* const* p = modeCoreHeaders(info.id); *p; ++p) h.insert(*p); continue; }
+#endif
+        for (const char* const* p = s.headers; *p; ++p) h.insert(*p);
     }
     return h;
 }
@@ -123,12 +128,14 @@ int main() {
         CHECK(keys.insert(a.key).second && names.insert(a.name).second);
         CHECK(a.role && std::strlen(a.role) > 10);
         CHECK(a.services != 0 && (a.data >> data::Count) == 0);
-        const bool available = a.status == AppStatus::Available;
-        CHECK(available == (a.sources != nullptr));
-        CHECK(available == (a.missing == nullptr));
-        if (!available) CHECK(a.links == 0);
+        // v1.17.0: Available e Base hanno un controller e i sorgenti; solo
+        // Available (parita' completa) non ha la voce `missing`.
+        const bool open = isOpen(a.status);
+        CHECK(open == (a.sources != nullptr));
+        CHECK((a.status == AppStatus::Available) == (a.missing == nullptr));
+        if (!open) CHECK(a.links == 0);
         for (std::size_t j = 0; j < AppCount; ++j)
-            if (a.links & linkTo(static_cast<AppId>(j))) CHECK(appInfoAt(j).status == AppStatus::Available);
+            if (a.links & linkTo(static_cast<AppId>(j))) CHECK(isOpen(appInfoAt(j).status));
         if (a.sources) for (const char* const* s = a.sources; *s; ++s) CHECK(std::filesystem::exists(kRoot + "/" + *s));
     }
     // Every service is backed by existing headers.
@@ -158,13 +165,13 @@ int main() {
             CHECK(decl.boards != 0 && (decl.boards & ~boards::Both) == 0);
             const bool onBoard = (decl.boards & board) != 0;
             if (!onBoard) {
-                ::testutil::report(a.status != AppStatus::Available && a.sources == nullptr && a.links == 0 &&
+                ::testutil::report(!isOpen(a.status) && a.sources == nullptr && a.links == 0 &&
                                    a.missing && std::string(a.missing) == kNotOnThisBoard,
                                    "mode not on this board is Planned with the board text", decl.name, 0, decl.name);
                 ::testutil::report(!modeCompiled(decl.id), "FXAI_MODE off on a board the registry excludes", decl.name, 0, decl.name);
             }
-            if (a.status == AppStatus::Available) {
-                ::testutil::report(onBoard && modeCompiled(a.id), "Available only where compiled", a.name, 0, a.name);
+            if (isOpen(a.status)) {
+                ::testutil::report(onBoard && modeCompiled(a.id), "Available/Base only where compiled", a.name, 0, a.name);
                 for (const char* const* src = a.sources; *src; ++src)
                     ::testutil::report(compiled.count(*src) == 1, "sources of an Available mode are compiled", *src, 0, a.name);
                 for (std::size_t k = 0; k < service::Count; ++k) {
@@ -203,9 +210,23 @@ int main() {
         const std::set<AppId> v116 = {AppId::RunMatrix, AppId::Statistics, AppId::EActivity, AppId::Graph, AppId::Table, AppId::Equation,
                                       AppId::Memory, AppId::System, AppId::Graph3D, AppId::Conversion, AppId::AiChat, AppId::Symbols};
         std::set<AppId> available;
-        for (std::size_t i = 0; i < AppCount; ++i) if (appInfoAt(i).status == AppStatus::Available) available.insert(appInfoAt(i).id);
-        if (thisBoard() == boards::Pico2W) ::testutil::report(available == v116, "Pico 2 W frozen at v1.16.0 (Available modes)", "tests/architecture_test.cpp", 0, "Pico2W");
-        else CHECK(std::includes(available.begin(), available.end(), v116.begin(), v116.end()));
+        // v1.17.0: l'insieme congelato e' quello delle modalita' APERTE (Available
+        // o Base): sul Pico 2 W nessuna modalita' Base, nessuna Available nuova.
+        for (std::size_t i = 0; i < AppCount; ++i) if (isOpen(appInfoAt(i).status)) available.insert(appInfoAt(i).id);
+        if (thisBoard() == boards::Pico2W) {
+            ::testutil::report(available == v116, "Pico 2 W frozen at v1.16.0 (open modes)", "tests/architecture_test.cpp", 0, "Pico2W");
+            for (std::size_t i = 0; i < AppCount; ++i)
+                ::testutil::report(appInfoAt(i).status != AppStatus::Base, "no Base mode on the frozen Pico 2 W", appInfoAt(i).name, 0, "Pico2W");
+        } else {
+            CHECK(std::includes(available.begin(), available.end(), v116.begin(), v116.end()));
+            // Sulla Plus le modalita' della v1.16.0 restano Available (Statistics compresa:
+            // la sua parita' completa e' la v1.18.0) e le modalita' nuove sono Base.
+            for (AppId id : v116) CHECK(appInfo(id).status == AppStatus::Available);
+            const std::set<AppId> v117Base = {AppId::Spreadsheet, AppId::DynaGraph, AppId::Recursion, AppId::ConicGraphs, AppId::Program,
+                                              AppId::Financial, AppId::Link, AppId::Geometry, AppId::PicturePlot, AppId::Python};
+            for (AppId id : v117Base)
+                ::testutil::report(appInfo(id).status == AppStatus::Base || !modeCompiled(id), "v1.17.0 modes are Base on the Plus", appInfo(id).name, 0, "Plus");
+        }
         // E-CON4 resta External su entrambe le schede.
         CHECK(appInfo(AppId::ECon4).status == AppStatus::External);
         // Il controllo sulla mappa del linker usa questi nomi (cmake/fxai_sources.cmake).
@@ -228,7 +249,7 @@ int main() {
             App* active = fw.apps().active();
             const bool unavailable = dynamic_cast<UnavailableApp*>(active) != nullptr;
             CHECK(active != nullptr && fw.apps().activeId() == id);
-            CHECK(unavailable == (appInfoAt(i).status != AppStatus::Available));
+            CHECK(unavailable == !isOpen(appInfoAt(i).status));
             if (!unavailable) CHECK(active->id() == id);
             fw.draw(board::graphics());                                    // every screen draws without errors
             CHECK(!fw.apps().errorShown());
@@ -377,9 +398,12 @@ int main() {
         }
     }
     // Graphs of functions live in Graph: no other available mode draws function curves.
+    // v1.17.0: le modalita' Base della Plus che dichiarano il grafico 2D condiviso
+    // (Graph2D) e la sezione View disegnano sulla V-Window di Graph (Dyna, Recursion, Conic...).
     for (std::size_t i = 0; i < AppCount; ++i) {
         const AppInfo& a = appInfoAt(i);
         if (!a.sources || a.id == AppId::Graph || a.id == AppId::Statistics) continue;   // Statistics draws statistical plots
+        if (a.status == AppStatus::Base && (a.services & service::Graph2D) && (a.data & data::View)) continue;
         for (const char* const* src = a.sources; *src; ++src)
             ::testutil::report(codeOnly(readFile(*src)).find("ws.view.") == std::string::npos || a.id == AppId::Table,
                                "only Graph/Table use the V-Window", *src, 0, a.name);

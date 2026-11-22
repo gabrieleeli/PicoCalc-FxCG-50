@@ -92,6 +92,10 @@ FlashChip flashChip() noexcept {
 }
 fx::net::ChatTransport* chatTransport() { return transport; }
 fx::files::FileSystem* fileSystem() { return files; }
+namespace { fx::link::Port* serial = nullptr; }
+#if FXAI_BOARD_PICO_PLUS_2W
+fx::link::Port* serialPort() { return serial; }
+#endif
 const char* name() { return "host"; }
 std::size_t lastFlushBytes() { return lastBytes; }
 
@@ -103,6 +107,7 @@ void setBattery(int p, bool c) { battery = p; isCharging = c; }
 void setChatTransport(fx::net::ChatTransport* t) { transport = t; }
 void setFileSystem(fx::files::FileSystem* fs) { files = fs; }
 void setLegacyStorage(storage::FlashDevice* device) { legacyFlash = device; }
+void setSerialPort(fx::link::Port* port) { serial = port; }
 fx::files::FileSystem& ramCard() { return card; }
 bool savePng(const std::string& path, int scale) {
     if (scale < 1) scale = 1;
