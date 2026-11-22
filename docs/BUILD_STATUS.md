@@ -1,9 +1,45 @@
-# Build status — v1.15.0 (fondamenta comuni delle modalità)
+# Build status — v1.16.0 (eActivity; Raspberry Pi Pico 2 W congelato)
 
 Stato delle build per versione; le novità sono in [CHANGELOG.md](CHANGELOG.md).
-Le sezioni dopo "v1.15.0" descrivono le build delle versioni precedenti.
+Le sezioni dopo "v1.16.0" descrivono le build delle versioni precedenti.
 
-## v1.15.0 — `main`
+## v1.16.0 — `main`
+
+Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`;
+sul Pico 2 W `-Os` per i sorgenti di `FXAI_PICO2W_SIZE_SOURCES`), nello stesso
+ambiente della v1.15.0 (Pico SDK 2.2.0, `gcc-arm-none-eabi` 13.2.1). Novità:
+eActivity su entrambe le schede
+([reports/SVILUPPO_v1.16.0.md](reports/SVILUPPO_v1.16.0.md)). **Nessuna prova
+su hardware.**
+
+> **Dimensione finale del Raspberry Pi Pico 2 W (congelato alla v1.16.0):
+> 1 944 004 byte** (budget 2 064 384 B; restano 120 380 B solo per correzioni
+> di errori condivise).
+
+| Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (4 195 328 byte) | `build/pico2w/picocalc_fxai_pico2w.uf2` (3 888 640 byte) |
+| Immagine flash | 2 097 404 byte (`__flash_binary_end` = `0x102000FC`) = 50 % della partizione da 4 MB (budget < 90 %: 3 774 873 B); +118 564 byte rispetto alla v1.15.0 (eActivity, parti del workspace, servizi ora collegati: editor di testo, guscio) | **1 944 004 byte** (`0x101DA9C4`) = 92 % della partizione da 2 MB; **−25 804 byte** rispetto alla v1.15.0 nonostante eActivity, grazie a `-Os` su eActivity, record del workspace, file, impostazioni e relay AI |
+| Codice nuovo nell'immagine | `eactivity.cpp` + `eactivity_app.cpp`, codifica per parti, sezione `0x0102`, sessione da striscia, editor di testo (memo), immagini nelle righe | gli stessi; `graph2d`, `binding`, `program_*` **non compilati** (mappa: 18 oggetti/simboli esclusi, nessuno nell'immagine) |
+| RAM statica | 309 164 byte fino a `__end__` = `0x2004B7AC` (+100); 311 212 byte con la sezione `.heap` minima | 305 236 byte (`0x2004A854`, +96); 307 284 byte con `.heap` |
+| Heap SRAM | 182 356 byte (`__end__` → `0x20078000`) | 186 284 byte |
+| PSRAM | 8 MB come pool TLSF separato | — |
+| Frame di stack (`-fstack-usage`) | massimo invariato `SystemApp::enter` 2 016 B; codice nuovo: `decodePart` 1 080 B, `EActivityApp::docAction` 360 B, `eact::encode` 320 B, `execute` 288 B; nessuna ricorsione nuova | massimo `SystemApp::enter` 1 968 B (`-Os`), `decodePart` 1 048 B, `docAction` 360 B |
+| Warning | **nessuno** del compilatore | nessuno |
+| SHA-256 dell'UF2 locale | `a01895aca4347ff5c2b195e6a7afe9dd7323cabac886a151c5d5351addb2299f` | `a16b8e1ccde30d78bf8d313c3b7856702f4d3648779342958aef3fffe3960ec7` |
+
+### Test
+
+| Suite | Pico Plus 2 W | Pico 2 W |
+|---|---|---|
+| CTest (`tests/run_host_tests.sh`) | 56/56: 54 suite C++ con **14 656** controlli, `mem_pools_smoke` (333 427), `sd_interop_test` | 53/53: 51 suite con **14 561** controlli, `mem_pools_smoke` (333 430), `sd_interop_test` |
+| AddressSanitizer + UBSan bloccante (`--sanitize`) | 56/56 | 53/53 |
+| ThreadSanitizer (`--tsan`) | superato | superato |
+| Relay AI (Python, `unittest`) | 15/15 | — |
+| Fuzzing (≥ 300 s per harness nuovo o toccato) | {{FUZZ}} | — |
+| Simulatore (`tools/sim_compare.py`) | 97 schermate identiche agli screenshot pubblicati, 20 nuove (108–127) | — |
+
+## v1.15.0
 
 Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`),
 una cartella per scheda, nello stesso ambiente della v1.14.0 (Pico SDK 2.2.0,
