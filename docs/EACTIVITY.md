@@ -69,7 +69,7 @@ testo lungo (JUMP, DEL-LINE, INSERT, MATH, CHAR, A⇔a; EXIT o SHIFT ' torna).
 
 | Striscia | Si apre |
 |---|---|
-| RUN | Run-Matrix in Math |
+| RUN | Run-Matrix in Math (la striscia conserva anche i dati di Graph scritti dai comandi grafici) |
 | Graph / Graph Editor | Graph: grafico / lista delle funzioni |
 | Table Editor | Table |
 | Stat Graph / List Editor | Statistics: grafico (Scatter) / liste |
