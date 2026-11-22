@@ -1,0 +1,33 @@
+// Generatore della fixture workspace_v1_14_0.inc (sorgenti della v1.14.0, commit 72d0921).
+#include "workspace.hpp"
+#include "run_matrix.hpp"
+#include <cstdio>
+using namespace fx;
+int main() {
+    auto ws = std::make_unique<Workspace>();
+    ws->settings.angle = AngleMode::Degrees;
+    ws->settings.inputMode = Settings::InputMode::Math;
+    ws->settings.mixedFractions = true;
+    ws->apply();
+    runCalculation(*ws, "1/3+1/6");
+    runCalculation(*ws, "7→B");
+    runCalculation(*ws, "[[1,2][3,4]]→Mat A");
+    runCalculation(*ws, "{1.5,2.5,3.5}→List 1");
+    runCalculation(*ws, "\"HELLO\"→str_1");
+    ws->functions[0].expr = "x^2-1"; ws->functions[0].selected = true;
+    ws->setListName(0, "QTY");
+    ws->graph3d.set.fns[0].kind = g3d::Kind::Z; ws->graph3d.set.fns[0].expr[0] = "x^2-y^2"; ws->graph3d.set.fns[0].selected = true;
+    ws->graph3d.set.window.theta = 30; ws->graph3d.set.window.phi = 70;
+    ws->equation.solverExpr = "x^2=2";
+    ws->modeVars.dynaStart = 2;
+    const auto rec = serializeWorkspace(*ws);
+    std::printf("// Workspace record written by v1.14.0 (format version 10): Deg, Math, Frac Result ab/c,\n");
+    std::printf("// history {1/3+1/6, 7->B, [[1,2][3,4]]->Mat A, {1.5,2.5,3.5}->List 1, \"HELLO\"->Str 1}, B=7,\n");
+    std::printf("// Y1=x^2-1 (on), List 1 sub name QTY, 3D Z1=x^2-y^2 (on) theta 30 phi 70, Solver x^2=2, D Start 2.\n");
+    std::printf("// Generated with the v1.14.0 sources (tag v1.14.0, main 72d0921).\n");
+    for (std::size_t i = 0; i < rec.size(); ++i) std::printf("0x%02X,%s", rec[i], (i % 20 == 19) ? "\n" : "");
+    std::printf("\n");
+    // check round trip
+    auto back = std::make_unique<Workspace>();
+    return deserializeWorkspace(rec.data(), rec.size(), *back) ? 0 : 1;
+}

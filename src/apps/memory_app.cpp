@@ -1,5 +1,9 @@
-// MEMORY: overview of stored data with selective deletion and manual save.
+// MEMORY: overview of stored data with selective deletion and manual save;
+// v1.15.0 (F3): the user files by type (eActivity on both boards; Program,
+// Spreadsheet, Python, Geometry, Picture Plot on the Pico Plus 2 W).
 #include "apps.hpp"
+#include "typed_files.hpp"
+#include <algorithm>
 #include <cstdio>
 
 namespace fx::app {
@@ -13,8 +17,85 @@ const char* kItems[] = {"Storia Run-Matrix", "Variabili A-Z e Ans", "Liste 1-26 
 constexpr int ItemCount = 10;
 }
 
+void MemoryApp::enter(Context&) {
+    page_ = Page::Data;
+    confirm_ = -1;
+    dialog_.close();
+}
+
+void MemoryApp::openTypes(Context& ctx) {
+    page_ = Page::Types;
+    types_.clear(); typeUsage_.clear(); typeStatus_.clear();
+    files::FileSystem* fs = userFiles(ctx);
+    for (std::size_t i = 0; i < files::FileTypeCount; ++i) {
+        const auto t = static_cast<files::FileType>(i);
+        if (!files::fileTypeAvailable(t)) continue;
+        types_.push_back(t);
+        std::size_t count = 0;
+        std::uint64_t bytes = 0;
+        if (fs) {
+            files::TypedStore store(*fs);
+            std::vector<files::TypedEntry> list;
+            const files::Status st = store.list(t, list);
+            if (st != files::Status::Ok) typeStatus_ = files::statusMessage(st);
+            for (const auto& e : list) { ++count; bytes += e.size; }
+        }
+        typeUsage_.emplace_back(count, bytes);
+    }
+    if (!fs) typeStatus_ = "Archivio dei file non disponibile";
+    typeSel_ = std::clamp(typeSel_, 0, std::max(0, static_cast<int>(types_.size()) - 1));
+}
+
+void MemoryApp::openFiles(Context& ctx) {
+    entries_.clear();
+    files::FileSystem* fs = userFiles(ctx);
+    if (!fs || types_.empty()) throw MathError("Storage ERROR: archivio non disponibile");
+    files::TypedStore store(*fs);
+    const files::Status st = store.list(types_[static_cast<std::size_t>(typeSel_)], entries_);
+    if (st != files::Status::Ok) throw MathError(std::string("Storage ERROR: ") + files::statusMessage(st));
+    page_ = Page::Files;
+    fileSel_ = 0;
+}
+
+void MemoryApp::filesKey(Context& ctx, const KeyEvent& ev) {
+    if (dialog_.active()) {
+        if (dialog_.key(ev) == 1 && !entries_.empty()) {
+            files::FileSystem* fs = userFiles(ctx);
+            if (!fs) throw MathError("Storage ERROR: archivio non disponibile");
+            files::TypedStore store(*fs);
+            const files::Status st = store.remove(types_[static_cast<std::size_t>(typeSel_)], entries_[static_cast<std::size_t>(fileSel_)].file);
+            if (st != files::Status::Ok) throw MathError(std::string("Storage ERROR: ") + files::statusMessage(st));
+            ctx.toast("Eliminato");
+            openFiles(ctx);
+            fileSel_ = std::min(fileSel_, std::max(0, static_cast<int>(entries_.size()) - 1));
+        }
+        return;
+    }
+    if (page_ == Page::Types) {
+        const int n = static_cast<int>(types_.size());
+        switch (ev.key) {
+        case Key::Up: if (n) typeSel_ = (typeSel_ + n - 1) % n; return;
+        case Key::Down: if (n) typeSel_ = (typeSel_ + 1) % n; return;
+        case Key::Exe: case Key::F1: if (n) openFiles(ctx); return;
+        case Key::Exit: page_ = Page::Data; return;
+        default: return;
+        }
+    }
+    const int n = static_cast<int>(entries_.size());
+    switch (ev.key) {
+    case Key::Up: if (n) fileSel_ = (fileSel_ + n - 1) % n; return;
+    case Key::Down: if (n) fileSel_ = (fileSel_ + 1) % n; return;
+    case Key::F1: case Key::Del: case Key::DelForward:
+        if (n) dialog_.openConfirm("MEMORY", "Eliminare " + entries_[static_cast<std::size_t>(fileSel_)].file + "?");
+        return;
+    case Key::Exit: openTypes(ctx); return;
+    default: return;
+    }
+}
+
 void MemoryApp::key(Context& ctx, const KeyEvent& ev) {
     Workspace& ws = ctx.ws;
+    if (page_ != Page::Data) { filesKey(ctx, ev); return; }
     if (confirm_ >= 0) {
         if (ev.is(Key::Exe)) {
             switch (confirm_) {
@@ -40,15 +121,49 @@ void MemoryApp::key(Context& ctx, const KeyEvent& ev) {
     case Key::Up: selected_ = (selected_ + ItemCount - 1) % ItemCount; return;
     case Key::Down: selected_ = (selected_ + 1) % ItemCount; return;
     case Key::F1: case Key::DelForward: case Key::Del: confirm_ = selected_; return;
+    case Key::F3: openTypes(ctx); return;                     // v1.15.0: FILES
     case Key::F6: ctx.markDirty(); ctx.toast("Salvataggio in corso"); return;
     case Key::Exit: ctx.home(); return;
     default: return;
     }
 }
 
+void MemoryApp::drawFiles(Context& ctx, gfx::Canvas& c) {
+    (void)ctx;
+    const int top = ui::ContentTop + 4;
+    if (page_ == Page::Types) {
+        ui::text(c, 8, top, "File per tipo", Accent, font::Face::Small);
+        for (std::size_t i = 0; i < types_.size(); ++i) {
+            const files::FileTypeInfo& t = files::fileType(types_[i]);
+            char right[48];
+            std::snprintf(right, sizeof right, "%u file, %lu byte", static_cast<unsigned>(typeUsage_[i].first), static_cast<unsigned long>(typeUsage_[i].second));
+            ui::listRow(c, top + 16 + static_cast<int>(i) * 21, 20, t.name, right, static_cast<int>(i) == typeSel_);
+        }
+        if (!typeStatus_.empty()) ui::text(c, 8, top + 16 + static_cast<int>(types_.size()) * 21 + 6, typeStatus_.c_str(), Error, font::Face::Small);
+        const char* k[6] = {"OPEN", nullptr, nullptr, nullptr, nullptr, nullptr};
+        ui::softKeys(c, k);
+        return;
+    }
+    const files::FileTypeInfo& t = files::fileType(types_[static_cast<std::size_t>(typeSel_)]);
+    ui::text(c, 8, top, (std::string(t.name) + " (" + t.folder + ")").c_str(), Accent, font::Face::Small);
+    if (entries_.empty()) ui::text(c, 8, top + 24, "Nessun file", Muted);
+    const int visible = 11;
+    const int first = std::max(0, fileSel_ - visible + 1);
+    for (int i = 0; i < visible && first + i < static_cast<int>(entries_.size()); ++i) {
+        const auto& e = entries_[static_cast<std::size_t>(first + i)];
+        char right[32];
+        std::snprintf(right, sizeof right, "%lu byte", static_cast<unsigned long>(e.size));
+        ui::listRow(c, top + 16 + i * 21, 20, e.file.c_str(), right, first + i == fileSel_);
+    }
+    const char* k[6] = {"DELETE", nullptr, nullptr, nullptr, nullptr, nullptr};
+    ui::softKeys(c, k);
+    dialog_.draw(c);
+}
+
 void MemoryApp::draw(Context& ctx, gfx::Canvas& c) {
     ui::clear(c);
     ctx.drawStatus(c, "MEMORY");
+    if (page_ != Page::Data) { drawFiles(ctx, c); return; }
     const Workspace& ws = ctx.ws;
     int vars = 0; for (char v = 'A'; v <= 'Z'; ++v) if (ws.memory.recall(v) != 0) ++vars;
     std::size_t listItems = 0; for (const auto& l : ws.lists) listItems += l.size();
@@ -80,7 +195,7 @@ void MemoryApp::draw(Context& ctx, gfx::Canvas& c) {
     const int w = cap ? static_cast<int>((ui::ScreenW - 18) * std::min<std::size_t>(blob.size(), cap) / cap) : 0;
     c.rect(9, y + 17, w, 8, blob.size() * 10 > cap * 8 ? Warn : Ok, true);
     ui::text(c, 8, y + 34, "Salvataggio automatico A/B con CRC (flash interna).", Muted, font::Face::Small);
-    const char* k[6] = {"DELETE", nullptr, nullptr, nullptr, nullptr, "SAVE"};
+    const char* k[6] = {"DELETE", nullptr, "FILES", nullptr, nullptr, "SAVE"};
     ui::softKeys(c, k);
     if (confirm_ >= 0) ui::errorBox(c, "ELIMINARE?", (std::string(kItems[confirm_]) + "  EXE = conferma").c_str());
 }

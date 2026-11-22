@@ -54,6 +54,8 @@ set_target_properties(${FXAI_TARGET} PROPERTIES OUTPUT_NAME "picocalc_fxai_${FXA
 target_include_directories(${FXAI_TARGET} PRIVATE ${FXAI_INCLUDE_DIR}
   ${CMAKE_CURRENT_LIST_DIR}/src/platform/pico/config ${CMAKE_CURRENT_BINARY_DIR}/generated)
 fxai_apply_board_definitions(${FXAI_TARGET})
+# v1.15.0 (F1): modalita' e servizi della scheda (cmake/fxai_sources.cmake).
+target_compile_definitions(${FXAI_TARGET} PRIVATE ${FXAI_FEATURE_DEFINITIONS})
 target_compile_definitions(${FXAI_TARGET} PRIVATE
   FXAI_VERSION="${FXAI_VERSION}"
   FXAI_VERSION_STRING="${FXAI_VERSION}"
@@ -110,8 +112,12 @@ pico_enable_stdio_usb(${FXAI_TARGET} 1)
 pico_enable_stdio_uart(${FXAI_TARGET} 0)
 pico_add_extra_outputs(${FXAI_TARGET})
 
-# Post-build check: warning above 90% of the firmware partition and above the
-# partition, error above the physical flash; static SRAM report.
+# Post-build check (v1.15.0: bloccante): errore oltre la partizione firmware e
+# oltre il margine della scheda (FXAI_FIRMWARE_MARGIN_BYTES: 32 KiB sul Pico 2 W
+# per le correzioni future, il 10 % sulla Plus), errore se la mappa del linker
+# contiene un oggetto o un simbolo di una modalita'/servizio esclusi; RAM statica.
+string(REPLACE ";" "|" _fxai_excluded_objects "${FXAI_EXCLUDED_OBJECTS}")
+string(REPLACE ";" "|" _fxai_excluded_symbols "${FXAI_EXCLUDED_SYMBOLS}")
 get_filename_component(_fxai_toolchain_dir "${CMAKE_C_COMPILER}" DIRECTORY)
 find_program(FXAI_SIZE_TOOL NAMES arm-none-eabi-size HINTS "${_fxai_toolchain_dir}")
 add_custom_command(TARGET ${FXAI_TARGET} POST_BUILD
@@ -122,5 +128,9 @@ add_custom_command(TARGET ${FXAI_TARGET} POST_BUILD
     -DFXAI_LIMIT=${FXAI_FIRMWARE_PARTITION_BYTES}
     -DFXAI_FLASH=${FXAI_FLASH_SIZE_BYTES}
     -DFXAI_BOARD=${FXAI_BOARD}
+    -DFXAI_MARGIN=${FXAI_FIRMWARE_MARGIN_BYTES}
+    -DFXAI_MAP=$<TARGET_FILE:${FXAI_TARGET}>.map
+    "-DFXAI_EXCLUDED_OBJECTS=${_fxai_excluded_objects}"
+    "-DFXAI_EXCLUDED_SYMBOLS=${_fxai_excluded_symbols}"
     -P ${CMAKE_CURRENT_LIST_DIR}/cmake/check_firmware_size.cmake
   VERBATIM)

@@ -498,7 +498,7 @@ int main() {
             CHECK(g3d::validate(w.graph3d.set.window).empty());
             // saved again as v10 and read back unchanged
             const auto blob = serializeWorkspace(w);
-            CHECK(blob[4] == 10 && blob[5] == 0);
+            CHECK(blob[4] == 11 && blob[5] == 0);
             Workspace back;
             CHECK(deserializeWorkspace(blob.data(), blob.size(), back));
             CHECK(g3d::encode(back.graph3d.set) == g3d::encode(w.graph3d.set) && back.graph3d.zoom == w.graph3d.zoom);

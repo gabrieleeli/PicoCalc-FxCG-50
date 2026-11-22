@@ -1,4 +1,30 @@
-# Roadmap — dopo la v1.14.0
+# Roadmap — dopo la v1.15.0
+
+**Piano dalla v1.15.0** ([reports/ANALISI_FONTI_v1.15.0.md](reports/ANALISI_FONTI_v1.15.0.md)):
+una milestone per versione, ognuna con il cancello completo (test su entrambi
+i profili anche con i sanitizer, fuzzing, simulatore, firmware nei budget,
+relay, documentazione) e un solo commit su `main`.
+
+| Milestone | Versione | Contenuto | Schede |
+|---|---|---|---|
+| M1 | v1.15.0 | fondamenta comuni (fatta) | entrambe (F7–F9 solo Plus) |
+| M2 | v1.16.0 | **eActivity** (cap. 10) con le strisce; poi il **Pico 2 W è congelato** | entrambe |
+| M3 | v1.17.0 | Statistics completa (cap. 6) | Plus |
+| M4 | v1.18.0 | Graph e Table: Dual Screen, GtoT, T+G, Graph to Table, FORMAT nello SKETCH | Plus |
+| M5 | v1.19.0 | Recursion (5-45) | Plus |
+| M6 | v1.20.0 | Dyna Graph (5-42) | Plus |
+| M7 | v1.21.0 | Conic Graphs (5-50) | Plus |
+| M8 | v1.22.0 | Financial (cap. 7) | Plus |
+| M9 | v1.23.0 | Spreadsheet (cap. 9) | Plus |
+| M10 | v1.24.0 | Program in C, C++ e C# (cap. 8 come modalità) | Plus |
+| M11 | v1.25.0 | Picture Plot (cap. 15) | Plus |
+| M12 | v1.26.0 | Geometry (cap. 14) | Plus |
+| M13 | v1.27.0 | Memory, System e Link completi (cap. 11–13) | Plus |
+| M14 | v1.28.0 | Python (MicroPython, cap. 17) | Plus |
+| M15 | v1.29.0 | chiusura: revisione completa e recap | entrambe |
+
+Da decidere con l'utente: la modalità **Distribution** del capitolo 18 (fx-CG50
+OS 3.40+) non è nel registro né nel piano.
 
 La v1.14.0 completa il **3D Graph** (capitolo 16 del manuale fx-CG50: modelli
 Line, Plane, Sphere, Cylinder, Cone, grafici Z=, Param, Rot X/Y, V-Window con

@@ -32,7 +32,7 @@ find_package(Threads REQUIRED)
 add_library(fxai_core STATIC ${FXAI_CORE_SOURCES})
 target_include_directories(fxai_core PUBLIC ${FXAI_INCLUDE_DIR})
 target_compile_definitions(fxai_core PUBLIC FXAI_VERSION_STRING="${FXAI_VERSION_STRING}" FXAI_FATFS_MKFS=1
-  ${FXAI_BOARD_DEFINE} LFS_NO_DEBUG=1 LFS_NO_WARN=1 LFS_NO_ERROR=1 LFS_NO_ASSERT=1)
+  ${FXAI_BOARD_DEFINE} ${FXAI_FEATURE_DEFINITIONS} LFS_NO_DEBUG=1 LFS_NO_WARN=1 LFS_NO_ERROR=1 LFS_NO_ASSERT=1)
 target_link_libraries(fxai_core PUBLIC Threads::Threads)
 
 add_library(fxai_host_board STATIC ${FXAI_ROOT}/src/platform/host/board_host.cpp ${FXAI_ROOT}/src/platform/host/file_disk.cpp)
@@ -57,7 +57,19 @@ set(FXAI_TESTS
   # v1.13.1: versione di correzione (un gruppo per errore di docs/reports/ERRORI_v1.13.1.md)
   fixes_v1131_test
   # v1.14.0: completamento di 3D Graph (modelli, G-Solve, TRACE, V-Window, Setup, record v10)
-  graph3d_v114_test)
+  graph3d_v114_test
+  # v1.15.0: fondamenta comuni (record v11, file tipizzati, guscio, editor di testo, StepTask)
+  workspace_v115_test typed_files_test mode_shell_test text_editor_test step_task_test)
+# v1.15.0: servizi solo della Pimoroni Pico Plus 2 W (grafico 2D, BindingResolver, interprete)
+if("FXAI_SERVICE_GRAPH2D=1" IN_LIST FXAI_FEATURE_DEFINITIONS)
+  list(APPEND FXAI_TESTS graph2d_test)
+endif()
+if("FXAI_SERVICE_BINDING=1" IN_LIST FXAI_FEATURE_DEFINITIONS)
+  list(APPEND FXAI_TESTS binding_test)
+endif()
+if("FXAI_SERVICE_INTERP=1" IN_LIST FXAI_FEATURE_DEFINITIONS)
+  list(APPEND FXAI_TESTS program_core_test)
+endif()
 foreach(t ${FXAI_TESTS})
   add_executable(${t} ${CMAKE_CURRENT_LIST_DIR}/${t}.cpp)
   target_link_libraries(${t} PRIVATE fxai_core fxai_host_board)
@@ -75,6 +87,9 @@ endforeach()
 
 # The architecture test reads the sources it checks.
 target_compile_definitions(architecture_test PRIVATE FXAI_SOURCE_ROOT="${FXAI_ROOT}")
+# v1.15.0 (F1): sorgenti compilati per questa scheda, confrontati con il registro.
+string(REPLACE ";" "," _fxai_compiled "${FXAI_COMPILED_SOURCES}")
+target_compile_definitions(architecture_test PRIVATE FXAI_COMPILED_SOURCES="${_fxai_compiled}")
 
 # ThreadSanitizer build of the allocator stress (two threads on the same pools).
 # TSan cannot be combined with ASan: run_host_tests.sh --tsan uses its own build.

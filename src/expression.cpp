@@ -141,9 +141,32 @@ char explicitVariable(const std::string& lowerName){
     return lowerName.size()==3&&lowerName[0]=='v'&&lowerName[1]=='_'&&lowerName[2]>='a'&&lowerName[2]<='z'?
            static_cast<char>(lowerName[2]-'a'+'A'):0;
 }
+// v1.15.0 (F8): nomi legati dalle modalita' (BindingResolver): i termini delle
+// successioni di Recursion oltre rec_n/rec_an. Non sono variabili di VARS:
+// systemVariableNames() non li elenca.
+constexpr const char* kBoundNames[]={"rec_an1","rec_an2","rec_bn","rec_bn1","rec_bn2","rec_cn","rec_cn1","rec_cn2"};
+// "cell_a1".."cell_z999": cella del foglio (lessico con ParseOptions::cellReferences).
+bool cellName(const std::string& n){
+    if(n.size()<7||n.size()>9||n.compare(0,5,"cell_")!=0||n[5]<'a'||n[5]>'z'||n[6]<'1'||n[6]>'9')return false;
+    for(std::size_t i=7;i<n.size();++i)if(n[i]<'0'||n[i]>'9')return false;
+    return true;
+}
+// "range_a1_b5": intervallo di celle (una lista, dal CollectionResolver::special).
+bool rangeName(const std::string& n){
+    if(n.compare(0,6,"range_")!=0)return false;
+    const std::size_t u=n.find('_',6);
+    return u!=std::string::npos&&cellName("cell_"+n.substr(6,u-6))&&cellName("cell_"+n.substr(u+1));
+}
+// "var_nome": variabile di un programma legata da ParseOptions::boundNames.
+bool boundVariableName(const std::string& n){
+    if(n.size()<5||n.compare(0,4,"var_")!=0)return false;
+    for(std::size_t i=4;i<n.size();++i)if(!(std::islower(static_cast<unsigned char>(n[i]))||std::isdigit(static_cast<unsigned char>(n[i]))||n[i]=='_'))return false;
+    return true;
+}
 bool isSystemName(const std::string& lowerName){
     for(const char* const* n=kSystemNames;*n;++n)if(lowerName==*n)return true;
-    return false;
+    for(const char* n:kBoundNames)if(lowerName==n)return true;
+    return cellName(lowerName)||boundVariableName(lowerName);
 }
 // "list1".."list26": le liste del workspace (Statistics, List 1-26). In GRAPH
 // una lista in una funzione indica uno dei suoi elementi (un grafico per
@@ -157,7 +180,7 @@ int listNumber(const std::string& lowerName){
 }
 bool isListName(const std::string& lowerName){return listNumber(lowerName)!=0;}
 constexpr const char* kSpecialCollections[]={"tbl_result"};   // VARS › EQUATION: SimRes... (equationMatrixIndex)
-bool specialCollection(const std::string& lowerName){for(const char* n:kSpecialCollections)if(lowerName==n)return true;return false;}
+bool specialCollection(const std::string& lowerName){for(const char* n:kSpecialCollections)if(lowerName==n)return true;return rangeName(lowerName);}
 // "str_1".."str_20": Str 1-20 (testo; un nome riservato anche se non e' un numero).
 bool stringName(const std::string& n){
     if(n.size()<5||n.size()>6||n.compare(0,4,"str_")!=0||n[4]=='0')return false;
@@ -200,7 +223,7 @@ class Lexer {
 public:
     // base: base dei numeri senza prefisso (10, oppure 16/2/8 e 10 intero nella
     // modalita' Base-N: allora integer e' vero, i numeri sono interi a 32 bit).
-    explicit Lexer(const std::string& s,unsigned base=10,bool integer=false):s_(s),base_(base),integer_(integer){
+    explicit Lexer(const std::string& s,unsigned base=10,bool integer=false,bool cells=false,const std::vector<std::string>* bound=nullptr):s_(s),base_(base),integer_(integer),cells_(cells),bound_(bound){
         if(s_.size()>60000)throw MathError("Memory ERROR: espressione troppo lunga");
     }
     std::vector<Tok> run(){
@@ -214,6 +237,8 @@ public:
                 if(integer_)throw SyntaxError("Syntax ERROR: simboli ingegneristici non disponibili in Base-N",static_cast<int>(p_),2);
                 out.push_back({TT::Op,std::string("#")+engFactor(s_[p_+1]),'#',at(p_),2});p_+=2;continue;
             }
+            // v1.15.0 (F8): riferimenti di cella A1..Z999 ($ assoluto) e intervalli A1:B5.
+            if(cells_&&(std::isalpha(c)||c=='$')&&cellReference(out))continue;
             if(std::isalpha(c)||c=='_'){
                 // Base-N esadecimale: le cifre A-F sono numeri anche attaccate agli
                 // operatori ("FFxor0F" = FF Xor 0F: l'editor non conserva gli spazi).
@@ -250,7 +275,33 @@ private:
     const std::string& s_; std::size_t p_{};
     unsigned base_{10};
     bool integer_{false};
+    bool cells_{false};
+    const std::vector<std::string>* bound_{nullptr};
     static std::uint16_t at(std::size_t p){return static_cast<std::uint16_t>(p);}
+    // Una cella in p (lettera, numero di riga 1..999, $ facoltativi): fine o npos.
+    std::size_t cellAt(std::size_t p,std::string& name)const{
+        if(p<s_.size()&&s_[p]=='$')++p;
+        if(p>=s_.size()||!std::isalpha(static_cast<unsigned char>(s_[p])))return std::string::npos;
+        const char col=static_cast<char>(std::tolower(static_cast<unsigned char>(s_[p])));++p;
+        if(p<s_.size()&&s_[p]=='$')++p;
+        const std::size_t d=p;
+        while(p<s_.size()&&std::isdigit(static_cast<unsigned char>(s_[p])))++p;
+        if(p==d||p-d>3||s_[d]=='0')return std::string::npos;
+        if(p<s_.size()&&(std::isalnum(static_cast<unsigned char>(s_[p]))||s_[p]=='_'))return std::string::npos;
+        name=std::string(1,col)+s_.substr(d,p-d);
+        return p;
+    }
+    bool cellReference(std::vector<Tok>& out){
+        std::string a,b;
+        const std::size_t e=cellAt(p_,a);
+        if(e==std::string::npos)return false;
+        if(e<s_.size()&&s_[e]==':'){
+            const std::size_t e2=cellAt(e+1,b);
+            if(e2==std::string::npos)throw SyntaxError("Syntax ERROR: intervallo di celle non valido",static_cast<int>(p_),static_cast<int>(e-p_+1));
+            out.push_back({TT::Ident,"range_"+a+"_"+b,0,at(p_),at(e2-p_)});p_=e2;return true;
+        }
+        out.push_back({TT::Ident,"cell_"+a,0,at(p_),at(e-p_)});p_=e;return true;
+    }
     // "[" dopo un valore (numero, nome, parentesi chiusa) e' un'unita'; dopo
     // Mat A / Vct A / List n e' l'indice di un elemento.
     static bool unitAllowed(const std::vector<Tok>& out){
@@ -408,6 +459,8 @@ private:
         const std::size_t b=p_;
         while(p_<s_.size()&&(std::isalnum(static_cast<unsigned char>(s_[p_]))||s_[p_]=='_'))++p_;
         const std::string raw=s_.substr(b,p_-b);
+        // v1.15.0 (F8): nome legato dal chiamante (variabile di un programma): una parola sola.
+        if(bound_)for(const std::string& n:*bound_)if(n==raw){out.push_back({TT::Ident,"var_"+lower(raw),0,at(b),at(raw.size())});return;}
         // fx-CG50 "Int÷" (integer quotient) is written as Int followed by the division sign.
         if(lower(raw)=="int"&&s_.compare(p_,2,"\xC3\xB7")==0){p_+=2;out.push_back({TT::Op,{},'q',at(b),at(p_-b)});return;}
         // Mat / Vct / List (esattamente con queste maiuscole, come li inserisce il
@@ -2497,7 +2550,8 @@ private:
                 throw DimensionError("Dimension ERROR: "+std::string(calclib::displayName(t)?calclib::displayName(t):t.c_str())+" non disponibile");
             C out;
             D::load(stored,out,env);
-            out.type=ValueType::Matrix;
+            // v1.15.0 (F8): un intervallo di celle (range_a1_b5) e' una lista.
+            out.type=stored.type==ValueType::List?ValueType::List:ValueType::Matrix;
             return out;
         }
         if(isListName(t)){
@@ -3437,6 +3491,13 @@ EvalContext& EvalContext::bind(const char* name,double value){
 ast::NodePtr parseExpression(const std::string& expression){
     return Parser(Lexer(expression).run()).run();
 }
+ast::NodePtr parseExpression(const std::string& expression,const ParseOptions& options){
+    if(!options.cellReferences&&!options.boundNames)return parseExpression(expression,options.integerBase);
+    if(options.integerBase!=0)throw std::invalid_argument("celle o nomi legati e Base-N insieme");
+    return Parser(Lexer(expression,10,false,options.cellReferences,options.boundNames).run()).run();
+}
+bool isCellVariableName(const std::string& lowerName) noexcept{try{return cellName(lowerName);}catch(...){return false;}}
+bool isCellRangeName(const std::string& lowerName) noexcept{try{return rangeName(lowerName);}catch(...){return false;}}
 ast::NodePtr parseExpression(const std::string& expression,unsigned integerBase){
     if(integerBase==0)return parseExpression(expression);
     if(integerBase!=2&&integerBase!=8&&integerBase!=10&&integerBase!=16)throw std::invalid_argument("base non valida");

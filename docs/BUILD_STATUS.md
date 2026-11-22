@@ -1,9 +1,48 @@
-# Build status — v1.14.0 (completamento totale di 3D Graph)
+# Build status — v1.15.0 (fondamenta comuni delle modalità)
 
 Stato delle build per versione; le novità sono in [CHANGELOG.md](CHANGELOG.md).
-Le sezioni dopo "v1.14.0" descrivono le build delle versioni precedenti.
+Le sezioni dopo "v1.15.0" descrivono le build delle versioni precedenti.
 
-## v1.14.0 — `main`
+## v1.15.0 — `main`
+
+Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`),
+una cartella per scheda, nello stesso ambiente della v1.14.0 (Pico SDK 2.2.0,
+`gcc-arm-none-eabi` 13.2.1). Novità: fondamenta comuni F1–F9
+([reports/SVILUPPO_v1.15.0.md](reports/SVILUPPO_v1.15.0.md)); dalla v1.15.0 il
+controllo dopo il link è **bloccante** (partizione, margine della scheda,
+oggetti e simboli delle modalità/servizi esclusi nella mappa del linker).
+**Nessuna prova su hardware.**
+
+| Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (3 958 272 byte) | `build/pico2w/picocalc_fxai_pico2w.uf2` (3 940 352 byte) |
+| Immagine flash | 1 978 840 byte (`__flash_binary_end` = `0x101E31D8`) = 47 % della partizione da 4 MB (budget < 90 %: 3 774 873 B); +30 816 byte rispetto alla v1.14.0 | **1 969 808 byte** (`0x101E0E90`) = 93 % della partizione da 2 MB; **budget ≤ 2 064 384 B** (margine di 32 KiB): restano 94 576 B per la v1.16.0; +30 628 byte |
+| Codice nuovo nell'immagine | registro risolto, record v11, file tipizzati, `FileDialog` unico e MEMORY › FILES, guscio (TABLE), runner (3D), celle e nomi legati nel lexer; `graph2d`, `binding` e `program_*` compilati ma scartati dal linker finché nessuna modalità li usa | gli stessi; `graph2d`, `binding`, `program_*` **non compilati** (mappa: 18 oggetti/simboli esclusi, nessuno nell'immagine) |
+| RAM statica | 309 064 byte fino a `__end__` = `0x2004B748` (+40); 311 112 byte contando la sezione `.heap` minima (valore del controllo dopo il link) | 305 140 byte (`0x2004A7F4`, +40); 307 188 byte con `.heap` |
+| Heap SRAM | 182 456 byte (`__end__` → `0x20078000`) | 186 380 byte |
+| PSRAM | 8 MB come pool TLSF separato | — |
+| Frame di stack (`-fstack-usage`) | massimo invariato `SystemApp::enter` 2 016 B; codice nuovo: analizzatore dei programmi ≤ 304 B per livello con al più 48 livelli (≈ 19 KB nel caso peggiore, poi «Stack ERROR»), macchina non ricorsiva (`printf` 800 B, `step` 448 B) | come la Plus (senza l'interprete) |
+| Warning | **nessuno** del compilatore | nessuno |
+| SHA-256 dell'UF2 locale | `8a275975a47d97e0fd4a43f6b8b6e3275e364f5b365a5f4871d9e771a18c84f0` | `d99d412effadb5251cb3ebccf3c66378fdc7ad0fbc717eb7dd8848e6081023a2` |
+
+Controlli del build provati sul PC (HW-200/HW-201): un margine di 200 000 B sul
+Pico 2 W fa fallire il build («leaves less than 200000 B…»); una mappa con
+`src/graph2d.cpp.o` fa fallire il controllo («excluded mode/service found in
+the image»); `-DFXAI_SERVICE_GRAPH2D=ON` sul Pico 2 W è rifiutato dalla
+configurazione.
+
+### Test
+
+| Suite | Pico Plus 2 W | Pico 2 W |
+|---|---|---|
+| CTest (`tests/run_host_tests.sh`) | 55/55: 53 suite C++ con **14 304** controlli, `mem_pools_smoke`, `sd_interop_test` | 52/52: 50 suite con **14 209** controlli |
+| AddressSanitizer + UBSan bloccante (`--sanitize`) | 55/55 | 52/52 |
+| ThreadSanitizer (`--tsan`) | superato | superato |
+| Relay AI (Python, `unittest`) | 15/15 | — |
+| Fuzzing (`tools/fuzz`, ≥ 300 s per harness nuovo o toccato) | `fuzz_workspace` 2 284 459, `fuzz_expr` 683 978, `fuzz_ui` 11 912, `fuzz_typedfile` 62 249 374, `fuzz_texteditor` 2 555 841, `fuzz_program` 2 532 316 esecuzioni: nessun crash | — |
+| Simulatore (`tools/sim_compare.py`) | 94 schermate identiche agli screenshot pubblicati, 3 nuove (105–107) | — |
+
+## v1.14.0
 
 Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`),
 una cartella per scheda, nello stesso ambiente delle versioni precedenti (Pico

@@ -1,5 +1,53 @@
 # Changelog
 
+## v1.15.0 — fondamenta comuni delle modalità
+
+Base: `main` = `72d0921` (v1.14.0 + recap). Nessuna modalità nuova: le
+modalità Available sono quelle della v1.14.0 su entrambe le schede. Prima
+milestone (M1) del piano che porta il Pico 2 W alla v1.16.0 con eActivity e la
+Pimoroni Pico Plus 2 W fino alla parità delle modalità realizzabili. Analisi:
+[reports/ANALISI_FONTI_v1.15.0.md](reports/ANALISI_FONTI_v1.15.0.md);
+rapporto: [reports/SVILUPPO_v1.15.0.md](reports/SVILUPPO_v1.15.0.md).
+**Nessuna prova su hardware fisico**: procedura
+[HARDWARE_TEST_v1.15.0.md](HARDWARE_TEST_v1.15.0.md) (HW-190…HW-201).
+
+### Nuovo
+- **Modalità e servizi per scheda** (F1): opzioni `FXAI_MODE_<NOME>` e
+  `FXAI_SERVICE_<NOME>` in `cmake/fxai_sources.cmake`, campo `boards` nel
+  registro; sul Pico 2 W le modalità della Plus mostrano «Non disponibile sul
+  Raspberry Pi Pico 2 W: richiede la Pimoroni Pico Plus 2 W (flash e RAM).»
+- **Controllo dell'immagine bloccante**: superare la partizione o il margine
+  (32 KiB sul Pico 2 W, 10 % sulla Plus) è un errore del build, come un oggetto
+  o un simbolo di una modalità esclusa nella mappa del linker.
+- **Record del workspace v11** (F2): coda di sezioni TLV; le sezioni di
+  modalità che il firmware non ha (o di versioni più nuove) sono conservate e
+  riscritte intatte; lettura v1–v10 invariata (nuova fixture della v1.14.0).
+- **File tipizzati** (F3): tabella dei tipi per scheda (`PICOCALC/EACT` su
+  entrambe; `PROG`, `SHEET`, `PY`, `GEOM`, `PPLOT` sulla Plus), intestazione con
+  versione e CRC, testo UTF-8 per sorgenti e script, API comune atomica,
+  `FileDialog` unico (regola dei nomi, sovrascrittura, ricerca, conferma),
+  **MEMORY › F3 FILES** con i file per tipo ([FILE_FORMATS.md](FILE_FORMATS.md)).
+- **Guscio comune** `ModeShell` (F4): pila di schermate, barra F1–F6 da tabella
+  con sottomenu/pagine/SHIFT, lista, conferma, richiesta di valore, SET UP da
+  tabella, VARS e CATALOG dai resolver; **TABLE** portata sul guscio con gli
+  stessi screenshot.
+- **Editor di testo multiriga** (F5) con a capo, ricerca, salto alla riga,
+  clipboard di testo del `Context`, limiti per scheda.
+- **StepTask** (F6): lavoro a passi con budget di unità e di tempo, AC →
+  «Break», avanzamento; il calcolo progressivo del **3D Graph** passa al
+  runner con lo stesso budget (screenshot identici).
+- Solo **Pimoroni Pico Plus 2 W**: grafico 2D condiviso a schermo diviso (F7),
+  `BindingResolver` con celle A1…Z999, intervalli e nomi legati dallo stesso
+  lexer e «Circular ERROR» (F8), **nucleo dell'interprete dei programmi in C,
+  C++ e C#** (F9, decisione dell'utente per Program).
+
+### Strumenti
+- `tools/map_sizes.py` (dimensioni per modulo dalla mappa del linker),
+  `tools/sim_compare.py` (confronto pixel per pixel di tutti gli screenshot e
+  compressione senza perdita); fuzzing: `fuzz_typedfile`, `fuzz_texteditor`,
+  `fuzz_program`, `fuzz_workspace` con le sezioni, `fuzz_expr` con celle e nomi
+  legati; `FUZZ_ONLY` in `run_fuzz.sh`.
+
 ## v1.14.0 — completamento totale di 3D Graph
 
 Base: tag `v1.13.1` (commit `62b3f8f` = `main`). Il **3D Graph** raggiunge la

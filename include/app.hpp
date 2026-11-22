@@ -67,6 +67,8 @@ public:
 
     // Clipboard shared by every editor (Ctrl+C / Ctrl+V).
     std::shared_ptr<ast::Node> clipboard;
+    // v1.15.0 (F5): clipboard di testo degli editor multiriga (TextEditor).
+    std::string textClipboard;
     // Ultima schermata disegnata (CAPTURE di Run-Matrix, v1.12.0); nullptr prima del primo disegno.
     const gfx::Canvas* screen() const noexcept;
 

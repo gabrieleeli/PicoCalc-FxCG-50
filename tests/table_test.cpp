@@ -385,6 +385,7 @@ int main() {
             // v10 appends the 3D Graph state: the encoded set, the zoom, the 3D V-Win
             // bits and the six windows, the twenty (empty) 3D G-Mem
             tail += 4 + g3d::encode(w3.graph3d.set).size() + 4 + 1 + 6 * (4 + g3d::encodeWindow(g3d::Window{}).size()) + 20 * 4;
+            tail += 2;                                                 // v11 (v1.15.0): numero di sezioni TLV (0)
             blob.resize(blob.size() - tail);
             // ... and the version 1-7 EQUATION block (doubles) goes back before the chat count
             std::vector<std::uint8_t> legacy;

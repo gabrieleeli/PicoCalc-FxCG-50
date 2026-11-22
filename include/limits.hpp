@@ -74,6 +74,20 @@ inline constexpr std::size_t kEquationExpression = 255;     // equazione del Sol
 // cambio di segno + bisezione); oltre: "Time Out".
 inline constexpr std::size_t kSolverEvaluations = 4000;
 
+// ---- v1.15.0: documenti, file di testo, editor di testo (F3, F5) ---------------------
+// Documento eActivity aperto (fx-CG50: circa 29 000 byte per file, manuale 10-23).
+// Sul Pico 2 W il documento sta nell'heap SRAM di ~186 KB: 24 KB, oltre "Memory
+// ERROR"; sulla Plus sta nella PSRAM.
+inline constexpr std::size_t kEActivityDocumentBytes = board::config::kIsPicoPlus2W ? 256u * 1024u : 24u * 1024u;
+// File di testo (sorgenti C/C++/C# di Program, script Python): solo sulla Plus.
+inline constexpr std::size_t kTextFileBytes = board::config::kIsPicoPlus2W ? 256u * 1024u : 24u * 1024u;
+// Testo di un editor multiriga (TextEditor): il documento piu' grande che una
+// modalita' della scheda puo' aprire.
+inline constexpr std::size_t kTextEditorBytes = board::config::kIsPicoPlus2W ? 256u * 1024u : 24u * 1024u;
+inline constexpr std::size_t kTextLineBytes = 4096;       // una riga dell'editor (oltre: va a capo)
+// File binari tipizzati (fogli, figure di Geometry, progetti di Picture Plot).
+inline constexpr std::size_t kTypedFileBytes = board::config::kIsPicoPlus2W ? 1024u * 1024u : 32u * 1024u;
+
 // ---- RAM limits -------------------------------------------------------------------
 struct RamProfile {
     const char* name;

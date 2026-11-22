@@ -54,8 +54,27 @@ constexpr std::uint32_t Hardware   = 1u << 19;   // board_config/mem_pools/psram
 constexpr std::uint32_t GraphCmd   = 1u << 20;
 // equation.hpp: motore di EQUATION (v1.12.0): coefficienti esatti, SIML, POLY, SOLVER.
 constexpr std::uint32_t EquationCore = 1u << 21;
-constexpr std::uint32_t Count      = 22;
+// ---- v1.15.0 (M1): fondamenta comuni delle modalita'
+constexpr std::uint32_t TypedFiles = 1u << 22;   // typed_files.hpp  file per tipo (EACT, PROG, SHEET, PY, GEOM, PPLOT) con intestazione e CRC
+constexpr std::uint32_t ModeShell  = 1u << 23;   // mode_shell.hpp   pila di schermate, barra F1-F6, conferme, SET UP da tabella
+constexpr std::uint32_t TextEdit   = 1u << 24;   // text_editor.hpp  editor di testo multiriga con limite per scheda
+constexpr std::uint32_t StepTask   = 1u << 25;   // step_task.hpp    lavoro a passi interrompibile con AC ("Break")
+constexpr std::uint32_t Graph2D    = 1u << 26;   // graph2d.hpp      grafico 2D condiviso, schermo diviso (solo Pico Plus 2 W)
+constexpr std::uint32_t Binding    = 1u << 27;   // binding.hpp      variabili legate, celle, dipendenze (solo Pico Plus 2 W)
+constexpr std::uint32_t Interp     = 1u << 28;   // program.hpp      nucleo dell'interprete C/C++/C# (solo Pico Plus 2 W)
+constexpr std::uint32_t Count      = 29;
 } // namespace service
+
+// v1.15.0 (F1): schede su cui una modalita' o un servizio possono esistere.
+namespace boards {
+constexpr std::uint8_t PicoPlus2W = 1u << 0;     // Pimoroni Pico Plus 2 W (16 MB flash, 8 MB PSRAM)
+constexpr std::uint8_t Pico2W     = 1u << 1;     // Raspberry Pi Pico 2 W (4 MB flash, senza PSRAM)
+constexpr std::uint8_t Both       = PicoPlus2W | Pico2W;
+} // namespace boards
+// Bit della scheda di questa build.
+std::uint8_t thisBoard() noexcept;
+// Testo mostrato al posto di una modalita' che non esiste su questa scheda.
+extern const char* const kNotOnThisBoard;
 
 // Sections of fx::Workspace, the only channel through which modes exchange data.
 namespace data {
@@ -95,15 +114,28 @@ struct AppInfo {
     std::uint32_t data;         // data:: sections the sources may access
     std::uint32_t links;        // linkTo() bits: modes this one may open directly
     const char* const* sources; // implementation files relative to the repository (nullptr-terminated)
+    // v1.15.0 (F1): schede su cui la modalita' puo' esistere (boards::). Su
+    // un'altra scheda, o quando la sua opzione FXAI_MODE_<NOME> e' spenta, il
+    // registro la risolve in Planned senza sorgenti ne' collegamenti.
+    std::uint8_t boards{boards::Both};
 };
+// Voce del registro risolta per la scheda e le opzioni di questa build.
 const AppInfo& appInfo(AppId id) noexcept;
 const AppInfo& appInfoAt(std::size_t index) noexcept;
+// Voce come e' scritta nella tabella, prima della risoluzione (architecture_test).
+const AppInfo& declaredAppInfo(std::size_t index) noexcept;
+// Valore della definizione FXAI_MODE_<NOME> della modalita' (1 per le modalita'
+// che non hanno un'opzione: quelle della v1.14.0 e le estensioni).
+bool modeCompiled(AppId id) noexcept;
 
 struct ServiceInfo {
     std::uint32_t bit;
     const char* name;
     const char* const* headers;  // headers that provide the service (nullptr-terminated)
+    std::uint8_t boards{boards::Both};   // v1.15.0: schede su cui il servizio esiste
 };
+// v1.15.0: true se il servizio e' compilato in questa build (FXAI_SERVICE_<NOME>).
+bool serviceCompiled(std::uint32_t bit) noexcept;
 const ServiceInfo& serviceInfo(std::size_t index) noexcept;   // index < service::Count
 const char* dataSectionName(std::size_t index) noexcept;       // index < data::Count, "ws.<name>"
 } // namespace fx::app

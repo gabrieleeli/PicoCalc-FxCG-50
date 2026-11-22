@@ -1,0 +1,15 @@
+# v1.15.0 (fondamenta comuni): screenshot nuovi (docs/screenshots/105-107),
+# prodotti con lo stesso codice del firmware sul profilo Pico Plus 2 W:
+#   build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/foundations_v115.txt
+# (PNG non compressi: comprimerli senza perdita con tools/sim_compare.py --compress)
+#
+# ---- MEMORY: la vista dei file per tipo (F3 FILES)
+type f
+shot 105_memory_data.png
+key F3
+shot 106_memory_file_types.png
+key EXE
+shot 107_memory_eact_files.png
+key EXIT
+key EXIT
+key MENU

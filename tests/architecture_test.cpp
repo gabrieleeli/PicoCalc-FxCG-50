@@ -31,6 +31,9 @@
 #ifndef FXAI_SOURCE_ROOT
 #error "FXAI_SOURCE_ROOT must point to the repository root"
 #endif
+#ifndef FXAI_COMPILED_SOURCES
+#error "FXAI_COMPILED_SOURCES must list the sources compiled for this board (tests/CMakeLists.txt)"
+#endif
 
 using namespace fx;
 using namespace fx::app;
@@ -130,6 +133,84 @@ int main() {
     // Every service is backed by existing headers.
     for (std::size_t i = 0; i < service::Count; ++i)
         for (const char* const* h = serviceInfo(i).headers; *h; ++h) CHECK(std::filesystem::exists(kRoot + "/include/" + *h));
+
+    // ---------------------------------------------------------------- v1.15.0 (F1): modalita' e servizi per scheda
+    {
+        std::set<std::string> compiled;
+        {
+            const std::string list = FXAI_COMPILED_SOURCES;
+            std::size_t p = 0;
+            while (p <= list.size()) {
+                const std::size_t e = list.find(',', p);
+                const std::string item = list.substr(p, e == std::string::npos ? std::string::npos : e - p);
+                if (!item.empty()) compiled.insert(item);
+                if (e == std::string::npos) break;
+                p = e + 1;
+            }
+        }
+        CHECK(compiled.count("src/app_registry.cpp") == 1 && compiled.size() > 60);
+        const std::uint8_t board = thisBoard();
+        CHECK(board == boards::PicoPlus2W || board == boards::Pico2W);
+        for (std::size_t i = 0; i < AppCount; ++i) {
+            const AppInfo& decl = declaredAppInfo(i);
+            const AppInfo& a = appInfoAt(i);
+            CHECK(decl.boards != 0 && (decl.boards & ~boards::Both) == 0);
+            const bool onBoard = (decl.boards & board) != 0;
+            if (!onBoard) {
+                ::testutil::report(a.status != AppStatus::Available && a.sources == nullptr && a.links == 0 &&
+                                   a.missing && std::string(a.missing) == kNotOnThisBoard,
+                                   "mode not on this board is Planned with the board text", decl.name, 0, decl.name);
+                ::testutil::report(!modeCompiled(decl.id), "FXAI_MODE off on a board the registry excludes", decl.name, 0, decl.name);
+            }
+            if (a.status == AppStatus::Available) {
+                ::testutil::report(onBoard && modeCompiled(a.id), "Available only where compiled", a.name, 0, a.name);
+                for (const char* const* src = a.sources; *src; ++src)
+                    ::testutil::report(compiled.count(*src) == 1, "sources of an Available mode are compiled", *src, 0, a.name);
+                for (std::size_t k = 0; k < service::Count; ++k) {
+                    const ServiceInfo& sv = serviceInfo(k);
+                    if (a.services & sv.bit)
+                        ::testutil::report(serviceCompiled(sv.bit) && (sv.boards & board) != 0, "services of an Available mode exist on the board", a.name, 0, sv.name);
+                }
+            } else if (decl.sources) {
+                // Una modalita' non disponibile qui non porta i propri controller nell'immagine.
+                for (const char* const* src = decl.sources; *src; ++src)
+                    if (std::string(*src).find("src/apps/") == 0)
+                        ::testutil::report(compiled.count(*src) == 0, "controllers of an excluded mode are not compiled", *src, 0, decl.name);
+            }
+        }
+        // Servizi: compilati esattamente sulle schede del registro, con i loro sorgenti.
+        const std::map<std::uint32_t, std::vector<std::string>> serviceSources = {
+            {service::TypedFiles, {"src/typed_files.cpp"}}, {service::ModeShell, {"src/apps/mode_shell.cpp"}},
+            {service::TextEdit, {"src/text_editor.cpp"}}, {service::StepTask, {"src/step_task.cpp"}},
+            {service::Graph2D, {"src/graph2d.cpp"}}, {service::Binding, {"src/binding.cpp"}},
+            {service::Interp, {"src/program_lang.cpp", "src/program_vm.cpp"}}};
+        for (std::size_t k = 0; k < service::Count; ++k) {
+            const ServiceInfo& sv = serviceInfo(k);
+            CHECK(sv.boards != 0 && (sv.boards & ~boards::Both) == 0);
+            ::testutil::report(serviceCompiled(sv.bit) == ((sv.boards & board) != 0), "service compiled exactly on its boards", sv.name, 0, sv.name);
+            const auto it = serviceSources.find(sv.bit);
+            if (it == serviceSources.end()) continue;
+            for (const std::string& src : it->second) {
+                CHECK(std::filesystem::exists(kRoot + "/" + src));
+                ::testutil::report((compiled.count(src) == 1) == serviceCompiled(sv.bit), "service sources compiled with the service", src.c_str(), 0, sv.name);
+            }
+        }
+        // Le funzioni della v1.14.0 restano identiche: stesso insieme di modalita'
+        // Available su entrambe le schede (nessuna modalita' nuova nella v1.15.0).
+        const std::set<AppId> v114 = {AppId::RunMatrix, AppId::Statistics, AppId::Graph, AppId::Table, AppId::Equation, AppId::Memory,
+                                      AppId::System, AppId::Graph3D, AppId::Conversion, AppId::AiChat, AppId::Symbols};
+        std::set<AppId> available;
+        for (std::size_t i = 0; i < AppCount; ++i) if (appInfoAt(i).status == AppStatus::Available) available.insert(appInfoAt(i).id);
+        CHECK(available == v114);
+        // E-CON4 resta External su entrambe le schede.
+        CHECK(appInfo(AppId::ECon4).status == AppStatus::External);
+        // Il controllo sulla mappa del linker usa questi nomi (cmake/fxai_sources.cmake).
+        const std::string cmakeFeatures = readFile("cmake/fxai_sources.cmake");
+        for (const char* opt : {"MODE EACTIVITY", "MODE SPREADSHEET", "MODE PROGRAM", "MODE PYTHON", "SERVICE GRAPH2D",
+                                "SERVICE BINDING", "SERVICE INTERP", "SERVICE TYPEDFILES", "SERVICE MODESHELL", "SERVICE TEXTEDIT", "SERVICE STEPTASK"})
+            ::testutil::report(cmakeFeatures.find(std::string("fxai_feature(") + opt) != std::string::npos, "option declared in fxai_sources.cmake", "cmake/fxai_sources.cmake", 0, opt);
+        CHECK(readFile("cmake/check_firmware_size.cmake").find("FXAI_EXCLUDED_OBJECTS") != std::string::npos);
+    }
 
     // ---------------------------------------------------------------- firmware registration
     board::init();
@@ -309,12 +390,16 @@ int main() {
                                 "solvers.hpp", "statistics.hpp", "run_matrix.hpp", "workspace.hpp", "storage.hpp", "app_models.hpp",
                                 "graph_model.hpp", "graph_engine.hpp", "graph_solve.hpp", "file_store.hpp", "graph_file.hpp", "pict.hpp",
                                 "sd_card.hpp", "fatfs_store.hpp", "value.hpp", "csv_io.hpp", "graph_commands.hpp", "calc_library.hpp", "equation.hpp", "limits.hpp",
-                                "graph3d_model.hpp"};
+                                "graph3d_model.hpp",
+                                // v1.15.0: servizi puri delle fondamenta (F2, F3, F6, F8, F9)
+                                "step_task.hpp", "typed_files.hpp", "features.hpp", "binding.hpp", "program.hpp"};
         const char* engineSrc[] = {"src/expression.cpp", "src/exact.cpp", "src/memory.cpp", "src/math_engine.cpp", "src/number_format.cpp",
                                    "src/solvers.cpp", "src/statistics.cpp", "src/run_matrix.cpp", "src/workspace.cpp", "src/storage.cpp", "src/app_models.cpp",
                                    "src/graph_model.cpp", "src/graph_engine.cpp", "src/graph_solve.cpp", "src/file_store.cpp", "src/graph_file.cpp", "src/pict.cpp",
                                    "src/sd_card.cpp", "src/fatfs_store.cpp", "src/value.cpp", "src/csv_io.cpp", "src/graph_commands.cpp",
-                                   "src/calc_library.cpp", "src/equation.cpp", "src/graph3d_model.cpp"};
+                                   "src/calc_library.cpp", "src/equation.cpp", "src/graph3d_model.cpp",
+                                   "src/step_task.cpp", "src/typed_files.cpp", "src/workspace_sections.cpp", "src/binding.cpp",
+                                   "src/program_lang.cpp", "src/program_vm.cpp"};
         for (const char* h : engine)
             for (const auto& inc : includesOf(codeOnly(readFile(std::string("include/") + h))))
                 ::testutil::report(appLayer.count(inc) == 0, "engine header independent of the UI", h, 0, inc);
@@ -331,6 +416,26 @@ int main() {
             const std::string code = codeOnly(readFile(rel));
             for (const char* f : {"class Lexer", "class Parser", "struct Lexer", "struct Parser", "evalNode<", "CollEval<"})
                 ::testutil::report(code.find(f) == std::string::npos, "single parser and evaluator", rel.c_str(), 0, f);
+        }
+        {
+            // v1.15.0 (F9): il linguaggio dei programmi (C, C++, C#) ha il suo analizzatore
+            // solo in program_lang.cpp; le espressioni della calcolatrice passano dal parser
+            // unico (fx::calc) e i grafici dall'interprete dei comandi di Run-Matrix.
+            const std::string lang = codeOnly(readFile("src/program_lang.cpp"));
+            const std::string vm = codeOnly(readFile("src/program_vm.cpp"));
+            CHECK(lang.find("class SourceLexer") != std::string::npos && lang.find("class Compiler") != std::string::npos);
+            CHECK(vm.find("parseExpression(") != std::string::npos && vm.find("graphcmd::execute(") != std::string::npos);
+            CHECK(vm.find("bind::BindingResolver") != std::string::npos);
+            for (const char* f : {"evaluateAny(", "evaluateExact(", "class Lexer", "class Parser"})
+                ::testutil::report(lang.find(f) == std::string::npos && vm.find(f) == std::string::npos, "program core uses the calculator engine only through parseExpression", "src/program_*.cpp", 0, f);
+            for (const auto& entry : std::filesystem::recursive_directory_iterator(kRoot + "/src")) {
+                const std::string rel = entry.path().lexically_relative(kRoot).string();
+                if (entry.path().extension() != ".cpp" || rel == "src/program_lang.cpp") continue;
+                ::testutil::report(codeOnly(readFile(rel)).find("SourceLexer") == std::string::npos, "only program_lang parses program sources", rel.c_str(), 0, "SourceLexer");
+            }
+            // F8: celle e nomi legati sono opzioni dello stesso lexer.
+            const std::string expr = codeOnly(readFile("src/expression.cpp"));
+            CHECK(expr.find("cellReference(") != std::string::npos && expr.find("bound_") != std::string::npos);
         }
         {
             const std::string lib = codeOnly(readFile("src/calc_library.cpp")) + codeOnly(readFile("include/calc_library.hpp"));

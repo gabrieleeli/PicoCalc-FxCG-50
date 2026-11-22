@@ -44,6 +44,7 @@ void Workspace::resetAll() {
     for (auto& f : functionMemories) f.clear();
     for (auto& t : strings) t.clear();
     modeVars = ModeVariables{};
+    preservedSections.clear();
 }
 
 // ---------------------------------------------------------------- matrici, vettori, liste
@@ -449,7 +450,13 @@ constexpr std::uint32_t Magic = 0x46584157;   // "WAXF"
 // colori), la 3D View Window con Xgrid/Ygrid, S, T, θ e φ, il Setup, lo zoom,
 // le 3D V-Win 1-6 e le 3D G-Mem 1-20 (g3d::encode). I record 5-9 convertono
 // Z1-Z3 in grafici Z=, la griglia (celle) in punti e yaw/pitch in θ/φ.
-constexpr std::uint16_t Version = 10;
+// Version 11 (v1.15.0, fondamenta comuni) aggiunge in coda le sezioni TLV:
+// u16 numero, poi per sezione u16 id, u16 versione, u32 lunghezza e i dati,
+// in ordine di id crescente (id duplicati o fuori ordine: record non valido).
+// Le sezioni sconosciute o piu' nuove restano in Workspace::preservedSections
+// e vengono riscritte intatte. Dalla v1.15.0 ogni modalita' nuova aggiunge una
+// sezione invece di una versione del formato.
+constexpr std::uint16_t Version = 11;
 constexpr std::size_t MaxGraph3DSet = 16 * 1024;   // un insieme codificato (tre espressioni da 1000 byte al massimo)
 constexpr std::size_t LegacyLists = 6;     // liste del blocco delle versioni 1-6
 constexpr std::uint8_t NoValue = 0xFF;      // byte di tipo di una memoria non definita
@@ -564,7 +571,15 @@ struct Reader {
 };
 } // namespace
 
+std::uint16_t workspaceRecordVersion() noexcept { return Version; }
+
 std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws) {
+    std::size_t count = 0;
+    const SectionCodec* codecs = workspaceSectionCodecs(count);
+    return serializeWorkspace(ws, codecs, count);
+}
+
+std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws, const SectionCodec* codecs, std::size_t count) {
     Writer w;
     w.u32(Magic); w.u16(Version);
     const Settings& s = ws.settings;
@@ -723,6 +738,31 @@ std::vector<std::uint8_t> serializeWorkspace(const Workspace& ws) {
     w.u8(g3.vmemUsed);
     for (const g3d::Window& vw : g3.vmem) w.blob(g3d::encodeWindow(vw));
     for (const std::string& m : g3.gmem) w.blob(m);
+    // v11: sezioni TLV (v1.15.0). Una sezione conservata vince sulla codifica
+    // conosciuta con lo stesso id solo se e' di una versione piu' nuova (i dati
+    // di un firmware successivo non si perdono).
+    std::vector<RecordSection> sections;
+    for (std::size_t i = 0; i < count; ++i) {
+        const SectionCodec& c = codecs[i];
+        bool newer = false;
+        for (const RecordSection& p : ws.preservedSections) newer = newer || (p.id == c.id && p.version > c.version);
+        if (newer || !c.present(ws)) continue;
+        RecordSection sec;
+        sec.id = c.id; sec.version = c.version;
+        c.encode(ws, sec.data);
+        sections.push_back(std::move(sec));
+    }
+    for (const RecordSection& p : ws.preservedSections) {
+        bool known = false;
+        for (const RecordSection& q : sections) known = known || q.id == p.id;
+        if (!known) sections.push_back(p);
+    }
+    std::sort(sections.begin(), sections.end(), [](const RecordSection& a, const RecordSection& b) { return a.id < b.id; });
+    w.u16(static_cast<std::uint16_t>(sections.size()));
+    for (const RecordSection& sec : sections) {
+        w.u16(sec.id); w.u16(sec.version); w.u32(static_cast<std::uint32_t>(sec.data.size()));
+        w.out.insert(w.out.end(), sec.data.begin(), sec.data.end());
+    }
     return std::move(w.out);
 }
 
@@ -770,6 +810,12 @@ bool readLegacyGraph3D(Reader& r, Graph3DState& g3) {
 } // namespace
 
 bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace& out) {
+    std::size_t count = 0;
+    const SectionCodec* codecs = workspaceSectionCodecs(count);
+    return deserializeWorkspace(data, size, out, codecs, count);
+}
+
+bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace& out, const SectionCodec* codecs, std::size_t count) {
     if (!data) return false;
     Reader r{data, size};
     if (r.u32() != Magic || !r.ok) return false;
@@ -1133,6 +1179,31 @@ bool deserializeWorkspace(const std::uint8_t* data, std::size_t size, Workspace&
             if (!m.empty() && !g3d::decode(m, probe)) return false;
         }
         if (bytes > limits::kGraph3DMemoryBytes) return false;
+    }
+    if (version >= 11) {
+        // v1.15.0: coda TLV. Id crescenti, lunghezze dentro il record; le
+        // sezioni conosciute si decodificano, le altre si conservano.
+        const std::uint16_t n = r.u16();
+        if (!r.ok || n > section::MaxSections) return false;
+        int previous = -1;
+        for (std::uint16_t k = 0; k < n; ++k) {
+            const std::uint16_t id = r.u16(), sv = r.u16();
+            const std::uint32_t len = r.u32();
+            if (!r.ok || static_cast<int>(id) <= previous || len > section::MaxSectionBytes || !r.need(len)) return false;
+            previous = id;
+            const std::uint8_t* bytes = r.p + r.i;
+            r.i += len;
+            const SectionCodec* codec = nullptr;
+            for (std::size_t c = 0; c < count; ++c) if (codecs[c].id == id) codec = &codecs[c];
+            if (codec && sv <= codec->version) {
+                if (!codec->decode(ws, sv, bytes, len)) return false;
+            } else {
+                RecordSection sec;
+                sec.id = id; sec.version = sv;
+                sec.data.assign(bytes, bytes + len);
+                ws.preservedSections.push_back(std::move(sec));
+            }
+        }
     }
     if (ws.listElements() > Workspace::MaxListElements) return false;
     if (!r.ok || r.i != r.n) return false;

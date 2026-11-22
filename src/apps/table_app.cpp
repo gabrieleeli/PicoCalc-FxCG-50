@@ -33,15 +33,27 @@ std::string relation(GraphType t) {
     return std::string(graphTypeLabel(t)).substr(1);
 }
 const GraphType kTableTypes[] = {GraphType::Y, GraphType::Polar, GraphType::Param};
+// v1.15.0 (F4): the F1-F6 bars of TABLE as tables of the mode shell.
+enum Action : int { ActSelect = 0, ActDelete, ActType, ActStyle, ActSet, ActGenerate, ActFormula, ActRow, ActEdit, ActGphCon, ActGphPlt, ActOk };
+const FKeyPage kListPage{{{"SELECT", ActSelect}, {"DELETE", ActDelete}, {"TYPE", ActType}, {"STYLE", ActStyle}, {"SET", ActSet}, {"TABLE", ActGenerate}}};
+const FKeyMenu kListMenu{&kListPage, 1, nullptr};
+const FKeyPage kTablePage{{{"FORMULA", ActFormula}, {"DELETE", ActDelete}, {"ROW", ActRow}, {"EDIT", ActEdit}, {"GPH-CON", ActGphCon}, {"GPH-PLT", ActGphPlt}}};
+const FKeyMenu kTableMenu{&kTablePage, 1, nullptr};
+const FKeyPage kErrorPage{{{"FORMULA", ActFormula}, {}, {}, {}, {}, {}}};
+const FKeyMenu kErrorMenu{&kErrorPage, 1, nullptr};
+const FKeyPage kSetPage{{{"OK", ActOk}, {}, {}, {}, {}, {"OK", ActOk}}};
+const FKeyMenu kSetMenu{&kSetPage, 1, nullptr};
+const FKeyPage kSetupPage{{{}, {}, {}, {}, {}, {"OK", ActOk}}};
+const FKeyMenu kSetupMenu{&kSetupPage, 1, nullptr};
 } // namespace
 
 // ---------------------------------------------------------------- lifecycle
 void TableApp::enter(Context& ctx) {
-    menu_.close(); ask_ = Ask::None; confirm_ = Confirm::None;
+    shell_.closeModals();
     built_ = false;
     ctx.ws.table.draw = TableRange::Draw::None;
     // A generated table is shown again (also after GPH-CON / GPH-PLT and G<->T).
-    screen_ = ctx.ws.table.generated && !ctx.ws.table.rows.empty() ? Screen::Table : Screen::List;
+    show(ctx.ws.table.generated && !ctx.ws.table.rows.empty() ? Screen::Table : Screen::List);
     row_ = std::clamp(row_, 0, std::max(0, static_cast<int>(ctx.ws.table.rows.size()) - 1));
 }
 void TableApp::leave(Context& ctx) {
@@ -105,7 +117,7 @@ void TableApp::generate(Context& ctx) {
     t.generated = true;
     ctx.markDirty();                    // the rows are workspace data, not part of the GRAPH project
     row_ = 0; col_ = cols_.empty() ? -1 : 0; firstRow_ = 0; firstCol_ = 0;
-    screen_ = Screen::Table;
+    show(Screen::Table);
 }
 
 bool TableApp::cell(Context& ctx, int row, int column, double& out) {
@@ -123,42 +135,26 @@ std::string TableApp::cellText(Context& ctx, int row, int column) {
 
 // ---------------------------------------------------------------- keys
 void TableApp::key(Context& ctx, const KeyEvent& ev) {
-    if (confirm_ != Confirm::None) {
-        if (ev.is(Key::F1) || ev.is(Key::Exe)) {
-            if (confirm_ == Confirm::DeleteFunction) {
+    // Modals of the mode shell: confirmation, value prompt, menu (v1.15.0, F4).
+    const bool modal = shell_.modalKey(ev,
+        [&](int tag, bool yes) {
+            if (!yes) return;
+            if (static_cast<Confirm>(tag) == Confirm::DeleteFunction) {
                 const auto ls = lines(ctx);
                 const Line line = ls[static_cast<std::size_t>(std::clamp(listRow_, 0, static_cast<int>(ls.size()) - 1))];
                 ctx.ws.functions[static_cast<std::size_t>(line.fn)] = emptyGraphFunction(static_cast<std::size_t>(line.fn));
                 ctx.ws.graph.projectModified = true;
             } else {
                 ctx.ws.table.rows.clear(); ctx.ws.table.generated = false;
-                screen_ = Screen::List;
+                show(Screen::List);
             }
             ctx.markDirty();
-        }
-        if (ev.is(Key::F1) || ev.is(Key::Exe) || ev.is(Key::F6) || ev.is(Key::Exit)) confirm_ = Confirm::None;
-        return;
-    }
-    if (ask_ != Ask::None) {
-        switch (ev.key) {
-        case Key::Exe: answer(ctx); return;
-        case Key::Exit: ask_ = Ask::None; return;
-        case Key::Left: input_.moveLeft(); return;
-        case Key::Right: input_.moveRight(); return;
-        case Key::Del: input_.backspace(); return;
-        case Key::AC: input_.clear(); return;
-        case Key::Char: if (!ev.ctrl) input_.insert(ev.ch); return;
-        default: return;
-        }
-    }
-    if (menu_.open) {
-        const int c = menu_.key(ev);
-        if (c == -2) { menuKind_ = Menu::None; return; }
-        if (c >= 0) { menu_.close(); menuChoice(ctx, c); }
-        return;
-    }
-    if (ev.is(Key::Setup) && screen_ != Screen::Edit) { openSetup(ctx); return; }
-    switch (screen_) {
+        },
+        [&](int) { answer(ctx); },
+        [&](int tag, int choice) { menuChoice(ctx, tag, choice); });
+    if (modal) return;
+    if (ev.is(Key::Setup) && current() != Screen::Edit) { openSetup(ctx); return; }
+    switch (current()) {
     case Screen::List: listKey(ctx, ev); return;
     case Screen::Edit: editKey(ctx, ev); return;
     case Screen::Set: case Screen::Setup: formKey(ctx, ev); return;
@@ -172,6 +168,31 @@ void TableApp::listKey(Context& ctx, const KeyEvent& ev) {
     listRow_ = std::clamp(listRow_, 0, n - 1);
     const Line line = ls[static_cast<std::size_t>(listRow_)];
     GraphFunction& f = ctx.ws.functions[static_cast<std::size_t>(line.fn)];
+    shell_.fkeys.set(&kListMenu);
+    int action = shell_.fkeys.key(ev, false);
+    if (action == FKeyBar::None && (ev.is(Key::Del) || ev.is(Key::DelForward))) action = ActDelete;
+    switch (action) {
+    case ActSelect:
+        if (f.defined()) { f.selected = !f.selected; ctx.markDirty(); ctx.ws.graph.projectModified = true; }
+        return;
+    case ActDelete:
+        if (f.empty()) return;
+        shell_.confirm.open("Eliminare " + prefix(f.type, line.fn, 0) + (f.type == GraphType::Param ? " e Yt" + std::to_string(line.fn + 1) : std::string()) + "?",
+                            static_cast<int>(Confirm::DeleteFunction));
+        return;
+    case ActType: shell_.showMenu("TYPE (tabella)", {"Y=", "r=", "Param"}, static_cast<int>(Menu::Type)); return;
+    case ActStyle: {
+        if (f.empty()) return;
+        std::vector<std::string> items;
+        for (std::uint8_t i = 0; i < GraphColorCount; ++i) items.emplace_back(graphColorName(i));
+        shell_.showMenu("STYLE (colore)", items, static_cast<int>(Menu::Style));
+        shell_.menu.selected = f.color % GraphColorCount;
+        return;
+    }
+    case ActSet: openSet(ctx); return;
+    case ActGenerate: generate(ctx); return;                          // TABLE
+    default: break;
+    }
     switch (ev.key) {
     case Key::Up: listRow_ = (listRow_ + n - 1) % n; return;
     case Key::Down: listRow_ = (listRow_ + 1) % n; return;
@@ -179,25 +200,6 @@ void TableApp::listKey(Context& ctx, const KeyEvent& ev) {
     case Key::PageDown: listRow_ = std::min(n - 1, listRow_ + 6); return;
     case Key::Home: listRow_ = 0; return;
     case Key::End: listRow_ = n - 1; return;
-    case Key::F1:                                                  // SELECT
-        if (f.defined()) { f.selected = !f.selected; ctx.markDirty(); ctx.ws.graph.projectModified = true; }
-        return;
-    case Key::F2: case Key::Del: case Key::DelForward:            // DELETE
-        if (f.empty()) return;
-        confirm_ = Confirm::DeleteFunction;
-        confirmText_ = "Eliminare " + prefix(f.type, line.fn, 0) + (f.type == GraphType::Param ? " e Yt" + std::to_string(line.fn + 1) : std::string()) + "?";
-        return;
-    case Key::F3: menu_.show("TYPE (tabella)", {"Y=", "r=", "Param"}); menuKind_ = Menu::Type; return;
-    case Key::F4: {
-        if (f.empty()) return;
-        std::vector<std::string> items;
-        for (std::uint8_t i = 0; i < GraphColorCount; ++i) items.emplace_back(graphColorName(i));
-        menu_.show("STYLE (colore)", items); menuKind_ = Menu::Style;
-        menu_.selected = f.color % GraphColorCount;
-        return;
-    }
-    case Key::F5: openSet(ctx); return;
-    case Key::F6: generate(ctx); return;                          // TABLE
     case Key::Exe: case Key::Right: beginEdit(ctx, true); return;
     case Key::Exit: ctx.home(); return;
     case Key::Char:
@@ -217,7 +219,7 @@ void TableApp::beginEdit(Context& ctx, bool keep, char first) {
     const std::string& text = line.sub ? f.expr2 : f.expr;
     if (keep && !text.empty()) editor_.setExpression(text);
     if (first) editor_.insert(first);
-    screen_ = Screen::Edit;
+    shell_.screens.push(static_cast<int>(Screen::Edit));
 }
 
 void TableApp::storeEdit(Context& ctx) {
@@ -233,7 +235,7 @@ void TableApp::storeEdit(Context& ctx) {
     if (f.type != GraphType::Param) f.expr2.clear();
     if (!text.empty()) f.selected = true;
     ctx.markDirty(); ctx.ws.graph.projectModified = true;
-    screen_ = Screen::List;
+    show(Screen::List);
     listRow_ = std::min(listRow_ + 1, static_cast<int>(lines(ctx).size()) - 1);
 }
 
@@ -241,7 +243,7 @@ void TableApp::editKey(Context& ctx, const KeyEvent& ev) {
     const GraphType t = lineType(ctx, editFn_);
     switch (ev.key) {
     case Key::Exe: storeEdit(ctx); return;
-    case Key::Exit: screen_ = Screen::List; return;
+    case Key::Exit: show(Screen::List); return;
     case Key::Char:
         if (ev.ctrl) {
             if (ev.ch == 'c' || ev.ch == 'C') { ctx.clipboard = editor_.copyTree(); ctx.toast("Copiato"); }
@@ -275,8 +277,7 @@ void TableApp::openSet(Context& ctx) {
     auto f = [](const char* l, double v) { return FormField{l, formatReal(v, {DisplayMode::Norm2, 0}), FormField::Type::Number, {}, 0}; };
     form_.fields = {f("Start", t.start), f("End", t.end), f("Step", t.step)};
     form_.selected = 0;
-    if (screen_ != Screen::Set) formReturn_ = screen_;
-    screen_ = Screen::Set;
+    if (current() != Screen::Set) shell_.screens.push(static_cast<int>(Screen::Set));   // EXIT returns where SET was opened
 }
 void TableApp::openSetup(Context& ctx) {
     const TableRange& t = ctx.ws.table;
@@ -292,15 +293,16 @@ void TableApp::openSetup(Context& ctx) {
         choice("Angle", {"Deg", "Rad", "Gra"}, ctx.ws.settings.angle == AngleMode::Degrees ? 0 : ctx.ws.settings.angle == AngleMode::Radians ? 1 : 2),
     };
     form_.selected = 0;
-    if (screen_ != Screen::Setup && screen_ != Screen::Set) formReturn_ = screen_;
-    screen_ = Screen::Setup;
+    if (current() == Screen::Setup || current() == Screen::Set) shell_.screens.replace(static_cast<int>(Screen::Setup));
+    else shell_.screens.push(static_cast<int>(Screen::Setup));
 }
 
 void TableApp::formKey(Context& ctx, const KeyEvent& ev) {
     if (form_.editing()) { (void)form_.key(ctx, ev); return; }
-    if (ev.is(Key::Exit) || ev.is(Key::F6) || (screen_ == Screen::Set && ev.is(Key::F1))) {
+    shell_.fkeys.set(current() == Screen::Set ? &kSetMenu : &kSetupMenu);
+    if (ev.is(Key::Exit) || shell_.fkeys.key(ev, false) == ActOk) {
         TableRange& t = ctx.ws.table;
-        if (screen_ == Screen::Set) {
+        if (current() == Screen::Set) {
             try {
                 const double start = form_.number(ctx, 0), end = form_.number(ctx, 1), step = form_.number(ctx, 2);
                 (void)table::rangeRows(start, end, step);              // the same checks as generating the table
@@ -320,8 +322,9 @@ void TableApp::formKey(Context& ctx, const KeyEvent& ev) {
         }
         ctx.markDirty(); ctx.ws.graph.projectModified = true;
         // back where SET / SETUP was opened (the table only if it still exists)
-        screen_ = formReturn_ == Screen::Table && t.generated && !t.rows.empty() ? Screen::Table : Screen::List;
-        if (screen_ == Screen::Table && !ensure(ctx)) { const std::string e = buildError_; screen_ = Screen::List; throw MathError(e); }
+        const Screen back = static_cast<Screen>(shell_.screens.below());
+        show(back == Screen::Table && t.generated && !t.rows.empty() ? Screen::Table : Screen::List);
+        if (current() == Screen::Table && !ensure(ctx)) { const std::string e = buildError_; show(Screen::List); throw MathError(e); }
         return;
     }
     (void)form_.key(ctx, ev);
@@ -329,12 +332,31 @@ void TableApp::formKey(Context& ctx, const KeyEvent& ev) {
 
 void TableApp::tableKey(Context& ctx, const KeyEvent& ev) {
     TableRange& t = ctx.ws.table;
-    if (ev.is(Key::F1) || ev.is(Key::Exit)) { screen_ = Screen::List; return; }   // FORMULA
-    if (!ensure(ctx)) { screen_ = Screen::List; throw MathError(buildError_); }
+    shell_.fkeys.set(&kTableMenu);
+    const int action = shell_.fkeys.key(ev, false);
+    if (action == ActFormula || ev.is(Key::Exit)) { show(Screen::List); return; }   // FORMULA
+    if (!ensure(ctx)) { show(Screen::List); throw MathError(buildError_); }
     const int rows = static_cast<int>(t.rows.size()), cols = static_cast<int>(cols_.size());
-    if (rows == 0) { screen_ = Screen::List; return; }
+    if (rows == 0) { show(Screen::List); return; }
     row_ = std::clamp(row_, 0, rows - 1);
+    switch (action) {
+    case ActDelete: shell_.confirm.open("Eliminare la tabella?", static_cast<int>(Confirm::DeleteTable)); return;
+    case ActRow: shell_.showMenu("ROW", {"DELETE", "INSERT", "ADD"}, static_cast<int>(Menu::Row)); return;
+    case ActEdit:                                                         // EDIT: a new value of the variable
+        shell_.ask.open(std::string(table::variableName(t.funcType)) + " (riga " + std::to_string(row_ + 1) + "):", static_cast<int>(Ask::EditValue));
+        return;
+    case ActGphCon: case ActGphPlt:
+        // GPH-CON / GPH-PLT: GRAPH draws the points of the table (manual 5-35).
+        if (cols_.empty()) throw MathError("Math ERROR: nessuna funzione selezionata");
+        t.draw = action == ActGphCon ? TableRange::Draw::Connect : TableRange::Draw::Plot;
+        ctx.open(AppId::Graph);
+        return;
+    default: break;
+    }
     switch (ev.key) {
+    case Key::Exe:                                                     // EDIT
+        shell_.ask.open(std::string(table::variableName(t.funcType)) + " (riga " + std::to_string(row_ + 1) + "):", static_cast<int>(Ask::EditValue));
+        return;
     case Key::Up: row_ = std::max(0, row_ - 1); return;
     case Key::Down: row_ = std::min(rows - 1, row_ + 1); return;
     case Key::PageUp: row_ = std::max(0, row_ - 10); return;
@@ -343,34 +365,19 @@ void TableApp::tableKey(Context& ctx, const KeyEvent& ev) {
     case Key::End: row_ = rows - 1; return;
     case Key::Left: col_ = std::max(-1, col_ - 1); return;
     case Key::Right: col_ = std::min(cols - 1, col_ + 1); return;
-    case Key::F2: confirm_ = Confirm::DeleteTable; confirmText_ = "Eliminare la tabella?"; return;
-    case Key::F3: menu_.show("ROW", {"DELETE", "INSERT", "ADD"}); menuKind_ = Menu::Row; return;
-    case Key::F4: case Key::Exe:                                       // EDIT: a new value of the variable
-        ask_ = Ask::EditValue; input_.clear();
-        askPrompt_ = std::string(table::variableName(t.funcType)) + " (riga " + std::to_string(row_ + 1) + "):";
-        return;
-    case Key::F5: case Key::F6:
-        // GPH-CON / GPH-PLT: GRAPH draws the points of the table (manual 5-35).
-        if (cols_.empty()) throw MathError("Math ERROR: nessuna funzione selezionata");
-        t.draw = ev.is(Key::F5) ? TableRange::Draw::Connect : TableRange::Draw::Plot;
-        ctx.open(AppId::Graph);
-        return;
-    case Key::Optn: menu_.show("OPTN", {"LISTMEM (colonna -> List)"}); menuKind_ = Menu::Optn; return;
+    case Key::Optn: shell_.showMenu("OPTN", {"LISTMEM (colonna -> List)"}, static_cast<int>(Menu::Optn)); return;
     case Key::Char:
         // A number typed in the table replaces the variable of the row (the other columns cannot be changed).
-        if (!ev.ctrl && (std::isdigit(static_cast<unsigned char>(ev.ch)) || ev.ch == '-' || ev.ch == '.' || ev.ch == '(')) {
-            ask_ = Ask::EditValue; input_.clear(); input_.insert(ev.ch);
-            askPrompt_ = std::string(table::variableName(t.funcType)) + " (riga " + std::to_string(row_ + 1) + "):";
-        }
+        if (!ev.ctrl && (std::isdigit(static_cast<unsigned char>(ev.ch)) || ev.ch == '-' || ev.ch == '.' || ev.ch == '('))
+            shell_.ask.open(std::string(table::variableName(t.funcType)) + " (riga " + std::to_string(row_ + 1) + "):", static_cast<int>(Ask::EditValue), ev.ch);
         return;
     default: return;
     }
 }
 
-void TableApp::menuChoice(Context& ctx, int c) {
+void TableApp::menuChoice(Context& ctx, int tag, int c) {
     TableRange& t = ctx.ws.table;
-    const Menu m = menuKind_;
-    menuKind_ = Menu::None;
+    const Menu m = static_cast<Menu>(tag);
     switch (m) {
     case Menu::Type: {
         const GraphType type = kTableTypes[std::clamp(c, 0, 2)];
@@ -391,7 +398,7 @@ void TableApp::menuChoice(Context& ctx, int c) {
         const auto at = rows.begin() + std::clamp(row_, 0, static_cast<int>(rows.size()) - 1);
         if (c == 0) {                                                  // DELETE
             rows.erase(at);
-            if (rows.empty()) { t.generated = false; screen_ = Screen::List; }
+            if (rows.empty()) { t.generated = false; show(Screen::List); }
             row_ = std::min(row_, std::max(0, static_cast<int>(rows.size()) - 1));
         } else {
             // INSERT: a copy of the row above it; ADD: a copy below it (then EDIT changes the value).
@@ -403,8 +410,8 @@ void TableApp::menuChoice(Context& ctx, int c) {
         return;
     }
     case Menu::Optn:
-        ask_ = Ask::ListMem; input_.clear();
-        askPrompt_ = "LISTMEM: colonna " + (col_ < 0 ? std::string(table::variableName(t.funcType)) : cols_[static_cast<std::size_t>(col_)].title) + " in List (1-6):";
+        shell_.ask.open("LISTMEM: colonna " + (col_ < 0 ? std::string(table::variableName(t.funcType)) : cols_[static_cast<std::size_t>(col_)].title) + " in List (1-6):",
+                        static_cast<int>(Ask::ListMem));
         return;
     case Menu::None: return;
     }
@@ -412,9 +419,8 @@ void TableApp::menuChoice(Context& ctx, int c) {
 
 void TableApp::answer(Context& ctx) {
     TableRange& t = ctx.ws.table;
-    const Ask a = ask_;
-    const std::string text = input_.empty() ? std::string() : input_.toExpression();
-    ask_ = Ask::None;
+    const Ask a = static_cast<Ask>(shell_.ask.tag());
+    const std::string text = shell_.ask.text();
     if (text.empty()) return;
     EvalContext ec;
     ec.memory = &ctx.ws.memory;
@@ -449,7 +455,7 @@ void TableApp::drawList(Context& ctx, gfx::Canvas& c) {
     (void)ensure(ctx);
     const auto ls = lines(ctx);
     listRow_ = std::clamp(listRow_, 0, static_cast<int>(ls.size()) - 1);
-    const bool editing = screen_ == Screen::Edit;
+    const bool editing = current() == Screen::Edit;
     const int rowH = 28, top = ui::ContentTop + 1, panelH = editing ? 72 : 0;
     const int visible = (ui::ContentBottom - top - 16 - panelH) / rowH;
     if (listRow_ < listFirst_) listFirst_ = listRow_;
@@ -503,8 +509,8 @@ void TableApp::drawList(Context& ctx, gfx::Canvas& c) {
         ui::softKeys(c, keys);
         return;
     }
-    const char* keys[6] = {"SELECT", "DELETE", "TYPE", "STYLE", "SET", "TABLE"};
-    ui::softKeys(c, keys);
+    shell_.fkeys.set(&kListMenu);
+    shell_.fkeys.draw(c, false);
 }
 
 void TableApp::drawTable(Context& ctx, gfx::Canvas& c) {
@@ -512,8 +518,8 @@ void TableApp::drawTable(Context& ctx, gfx::Canvas& c) {
     const int top = ui::ContentTop + 1, bottom = ui::ContentBottom;
     if (!ensure(ctx)) {
         ui::textCenter(c, ui::ScreenW / 2, 120, buildError_.c_str(), Error, font::Face::Small);
-        const char* keys[6] = {"FORMULA", nullptr, nullptr, nullptr, nullptr, nullptr};
-        ui::softKeys(c, keys);
+        shell_.fkeys.set(&kErrorMenu);
+        shell_.fkeys.draw(c, false);
         return;
     }
     const int rows = static_cast<int>(t.rows.size()), cols = static_cast<int>(cols_.size());
@@ -562,44 +568,28 @@ void TableApp::drawTable(Context& ctx, gfx::Canvas& c) {
     full += cell(ctx, row_, col_, v) ? formatReal(v, ctx.ws.settings.display) : std::string("ERROR");
     c.hLine(0, bottom - 22, ui::ScreenW, Faint);
     ui::textFit(c, 6, bottom - 19, full, ui::ScreenW - 12, Ink);
-    const char* keys[6] = {"FORMULA", "DELETE", "ROW", "EDIT", "GPH-CON", "GPH-PLT"};
-    ui::softKeys(c, keys);
+    shell_.fkeys.set(&kTableMenu);
+    shell_.fkeys.draw(c, false);
 }
 
 void TableApp::draw(Context& ctx, gfx::Canvas& c) {
     ui::clear(c);
     ctx.drawStatus(c, "TABLE");
     const int top = ui::ContentTop + 1;
-    switch (screen_) {
+    switch (current()) {
     case Screen::List: case Screen::Edit: drawList(ctx, c); break;
     case Screen::Table: drawTable(ctx, c); break;
     case Screen::Set: case Screen::Setup: {
-        c.rect(0, top, ui::ScreenW, 20, SelectSoft, true);
-        const bool set = screen_ == Screen::Set;
-        ui::text(c, 6, top + 2, set ? (std::string("Table Setting (") + table::variableName(ctx.ws.table.funcType) + ")").c_str() : "SET UP (Table)", Ink);
-        form_.draw(c, top + 22, top + 22 + (set ? 60 : 80));
+        const bool set = current() == Screen::Set;
+        drawFormScreen(c, set ? std::string("Table Setting (") + table::variableName(ctx.ws.table.funcType) + ")" : std::string("SET UP (Table)"),
+                       form_, set ? 60 : 80, nullptr);
         if (set && ctx.ws.table.variable == TableRange::Variable::List)
             ui::text(c, 6, top + 112, ("Variable = List " + std::to_string(ctx.ws.table.list + 1) + ": il range non e' usato").c_str(), Muted, font::Face::Small);
-        const char* keys[6] = {set ? "OK" : nullptr, nullptr, nullptr, nullptr, nullptr, "OK"};
-        ui::softKeys(c, keys);
+        shell_.fkeys.set(set ? &kSetMenu : &kSetupMenu);
+        shell_.fkeys.draw(c, false);
         break;
     }
     }
-    if (menu_.open) menu_.draw(c);
-    if (ask_ != Ask::None) {
-        const gfx::Rect r{20, 120, ui::ScreenW - 40, 58};
-        ui::panel(c, r, 0xFFFF, Accent);
-        ui::textFit(c, r.x + 8, r.y + 6, askPrompt_, r.w - 16, Accent, font::Face::Small);
-        const math::CursorTarget cur{input_.activeRowPtr(), input_.cursorIndex()};
-        const auto sz = math::measure(input_.root());
-        auto l = math::layout(input_.root(), r.x + 8, r.y + 24 + sz.baseline, r.w - 16, 30, math::Align::Left, &cur);
-        math::draw(c, l, Ink, Cursor, Placeholder);
-    }
-    if (confirm_ != Confirm::None) {
-        const gfx::Rect r{16, 110, ui::ScreenW - 32, 80};
-        ui::panel(c, r, 0xFFFF, Warn);
-        ui::text(c, r.x + 8, r.y + 8, confirmText_.c_str(), Ink);
-        ui::text(c, r.x + 8, r.y + r.h - 20, "F1/EXE: S\xC3\xAC   F6/EXIT: No", Muted, font::Face::Small);
-    }
+    shell_.drawModals(c);
 }
 } // namespace fx::app

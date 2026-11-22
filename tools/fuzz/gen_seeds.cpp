@@ -33,11 +33,25 @@ static const unsigned char f12[] = {
 static const unsigned char f1131[] = {
 #include "fixtures/workspace_v1_13_1_graph3d.inc"
 };
+// v1.15.0: record v10 scritto dalla v1.14.0
+static const unsigned char f1140[] = {
+#include "fixtures/workspace_v1_14_0.inc"
+};
 int main(int, char** argv) {
     std::string out = argv[1];
     put(out + "/ws/f6", f6, sizeof f6); put(out + "/ws/f8", f8, sizeof f8); put(out + "/ws/f9", f9, sizeof f9);
     put(out + "/ws/f10", f10, sizeof f10); put(out + "/ws/f11", f11, sizeof f11); put(out + "/ws/f11r", f11r, sizeof f11r); put(out + "/ws/f12", f12, sizeof f12);
     put(out + "/ws/f1131", f1131, sizeof f1131);
+    put(out + "/ws/f1140", f1140, sizeof f1140);
+    // v1.15.0: record v11 con sezioni TLV conservate (sconosciute e di versioni future)
+    {
+        Workspace wt;
+        RecordSection a; a.id = 0x0010; a.version = 1; a.data = {1, 2, 3};
+        RecordSection b2; b2.id = 0x0102; b2.version = 7; b2.data = {'e', 'a', 'c', 't'};
+        RecordSection c2; c2.id = 0x0300; c2.version = 1;
+        wt.preservedSections = {a, b2, c2};
+        const auto rt = serializeWorkspace(wt); put(out + "/ws/sections", rt.data(), rt.size());
+    }
     // v1.14.0: record v10 with every kind of 3D graph, 3D G-Mem and 3D V-Win; seeds of fuzz_graph3d
     {
         Workspace w3;

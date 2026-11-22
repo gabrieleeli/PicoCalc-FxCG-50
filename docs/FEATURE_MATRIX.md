@@ -1,5 +1,15 @@
-# Feature matrix — v1.14.0
+# Feature matrix — v1.15.0
 
+La v1.15.0 mette le **fondamenta comuni** delle modalità mancanti, senza
+modalità nuove: modalità e servizi per scheda, record del workspace **v11** a
+sezioni, file tipizzati e MEMORY › FILES, guscio comune (TABLE portata sopra),
+editor di testo, lavoro a passi interrompibile con AC (3D Graph portato sopra)
+e, solo sulla Pimoroni Pico Plus 2 W, grafico 2D a schermo diviso, espressioni
+con variabili legate e celle, nucleo dell'interprete dei programmi C/C++/C#
+([reports/ANALISI_FONTI_v1.15.0.md](reports/ANALISI_FONTI_v1.15.0.md),
+[reports/SVILUPPO_v1.15.0.md](reports/SVILUPPO_v1.15.0.md)). Le modalità
+Available restano quelle della v1.14.0 su entrambe le schede. Nessuna voce è
+provata su hardware ([HARDWARE_TEST_v1.15.0.md](HARDWARE_TEST_v1.15.0.md)).
 La v1.14.0 completa il **3D Graph** alla parità con la fx-CG50 (capitolo 16
 del manuale): ogni voce della tabella di parità è presente o è una differenza
 inevitabile documentata ([reports/SVILUPPO_v1.14.0.md](reports/SVILUPPO_v1.14.0.md),
@@ -240,12 +250,30 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Progetti e immagini sulla flash interna (LittleFS), scelta in SYSTEM | TESTED ON HOST |
 | Coefficienti Equation (record v8: forme esatte e complesse, equazione, Lower/Upper, soluzioni) | TESTED ON HOST |
 | Conversazioni AI (cancellabili da AI Chat e Memory) | TESTED ON HOST |
-| Programmi, file Python, documenti | NOT STARTED |
+| Record v11 (v1.15.0): coda di sezioni TLV, sezioni sconosciute o più nuove conservate e riscritte intatte, sezioni corrotte/troncate/duplicate rifiutate; lettura v1…v10 con le fixture v1.6.0…v1.14.0 | TESTED ON HOST |
+| File tipizzati (v1.15.0): cartelle per tipo, intestazione con versione e CRC, testo UTF-8, elenco/apri/salva/salva come/rinomina/elimina atomici su microSD e LittleFS, anche con interruzione di alimentazione | TESTED ON HOST |
+| MEMORY › FILES (v1.15.0): file per tipo con numero e spazio, eliminazione con conferma | TESTED ON SIMULATOR (screenshot 105–107) |
+| Programmi, file Python, documenti eActivity (contenuto) | NOT STARTED (formati dei contenitori pronti: [FILE_FORMATS.md](FILE_FORMATS.md)) |
 | Matrici e vettori salvati nel workspace (record v6) | TESTED ON HOST (v1.10.0) |
 | Matrici e liste come file CSV (manuale 2-48, 3-18) | TESTED ON HOST (v1.11.0) |
 | Record v9 (v1.13.0): List File, Sub Name, r e θ, Str, function memory, variabili Dyna/Recursion/TVM, celle decimali, ENG/◢/stringhe della cronologia; lettura dei record v7 della v1.11.0 (fixture) | TESTED ON HOST |
 | Record v7 (v1.11.0): Base-N, Simplify, CSV, List 7–26, sottonomi, forme esatte delle memorie, ▶Simp e base della cronologia, grafici dei comandi; lettura dei record v6 della v1.10.0 | TESTED ON HOST |
 | Record v8 (v1.12.0): dati di EQUATION in coda; lettura senza perdite dei record v7 della v1.11.0 (fixture) | TESTED ON HOST |
+
+## Fondamenta comuni delle modalità (v1.15.0)
+
+| Servizio | Schede | Stato |
+|---|---|---|
+| Modalità e servizi per scheda (`FXAI_MODE_*`, `FXAI_SERVICE_*`, campo `boards` del registro, testo «Non disponibile sul Raspberry Pi Pico 2 W…») | entrambe | TESTED ON HOST (`architecture_test`) |
+| Controllo dell'immagine: partizione e margine come errori, nessun oggetto/simbolo di una modalità esclusa nella mappa del linker | entrambe | TESTED ON HOST (build del firmware) |
+| Guscio comune `ModeShell`: pila di schermate, barra F1–F6 con sottomenu, pagine e SHIFT, lista, conferma, richiesta di valore, SET UP da tabella, VARS e CATALOG dai resolver | entrambe | TESTED ON HOST (`mode_shell_test`) |
+| TABLE sul guscio comune | entrambe | TESTED ON SIMULATOR (screenshot 06, 07, 20–37 identici) |
+| Editor di testo multiriga (a capo, ricerca, salto alla riga, clipboard, limiti per scheda, memoria esaurita) | entrambe | TESTED ON HOST (`text_editor_test`, `fuzz_texteditor`) |
+| Lavoro a passi interrompibile (StepTask): budget di unità e di tempo, AC → Break, avanzamento | entrambe | TESTED ON HOST (`step_task_test`) |
+| 3D Graph sul servizio StepTask | entrambe | TESTED ON SIMULATOR (screenshot 88–104 identici) |
+| Grafico 2D condiviso: schermo pieno, G+G, GtoT, T+G; sorgenti di punti; TRACE e ZOOM; disegno incrementale identico al completo | Pico Plus 2 W | TESTED ON HOST (`graph2d_test`) |
+| BindingResolver: variabili legate, celle A1…Z999 e intervalli dallo stesso lexer, Circular ERROR | Pico Plus 2 W | TESTED ON HOST (`binding_test`, `fuzz_expr`) |
+| Nucleo dell'interprete C, C++, C#: macchina iterativa, controllo di flusso, funzioni, array, stringhe, I/O, input in attesa, comandi grafici e `fx::calc`, budget, AC, errori con riga e colonna | Pico Plus 2 W | TESTED ON HOST (`program_core_test`, `fuzz_program`) |
 
 ## Relay AI
 
