@@ -13,30 +13,30 @@ eActivity su entrambe le schede
 su hardware.**
 
 > **Dimensione finale del Raspberry Pi Pico 2 W (congelato alla v1.16.0):
-> 1 944 004 byte** (budget 2 064 384 B; restano 120 380 B solo per correzioni
+> 1 944 212 byte** (budget 2 064 384 B; restano 120 172 B solo per correzioni
 > di errori condivise).
 
 | Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
 |---|---|---|
-| Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (4 195 328 byte) | `build/pico2w/picocalc_fxai_pico2w.uf2` (3 888 640 byte) |
-| Immagine flash | 2 097 404 byte (`__flash_binary_end` = `0x102000FC`) = 50 % della partizione da 4 MB (budget < 90 %: 3 774 873 B); +118 564 byte rispetto alla v1.15.0 (eActivity, parti del workspace, servizi ora collegati: editor di testo, guscio) | **1 944 004 byte** (`0x101DA9C4`) = 92 % della partizione da 2 MB; **−25 804 byte** rispetto alla v1.15.0 nonostante eActivity, grazie a `-Os` su eActivity, record del workspace, file, impostazioni e relay AI |
+| Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (4 195 840 byte) | `build/pico2w/picocalc_fxai_pico2w.uf2` (3 889 152 byte) |
+| Immagine flash | 2 097 548 byte (`__flash_binary_end` = `0x1020018C`) = 50 % della partizione da 4 MB (budget < 90 %: 3 774 873 B); +118 708 byte rispetto alla v1.15.0 (eActivity, parti del workspace, servizi ora collegati: editor di testo, guscio) | **1 944 212 byte** (`0x101DAA94`) = 92 % della partizione da 2 MB; **−25 596 byte** rispetto alla v1.15.0 nonostante eActivity, grazie a `-Os` su eActivity, record del workspace, file, impostazioni e relay AI |
 | Codice nuovo nell'immagine | `eactivity.cpp` + `eactivity_app.cpp`, codifica per parti, sezione `0x0102`, sessione da striscia, editor di testo (memo), immagini nelle righe | gli stessi; `graph2d`, `binding`, `program_*` **non compilati** (mappa: 18 oggetti/simboli esclusi, nessuno nell'immagine) |
 | RAM statica | 309 164 byte fino a `__end__` = `0x2004B7AC` (+100); 311 212 byte con la sezione `.heap` minima | 305 236 byte (`0x2004A854`, +96); 307 284 byte con `.heap` |
 | Heap SRAM | 182 356 byte (`__end__` → `0x20078000`) | 186 284 byte |
 | PSRAM | 8 MB come pool TLSF separato | — |
 | Frame di stack (`-fstack-usage`) | massimo invariato `SystemApp::enter` 2 016 B; codice nuovo: `decodePart` 1 080 B, `EActivityApp::docAction` 360 B, `eact::encode` 320 B, `execute` 288 B; nessuna ricorsione nuova | massimo `SystemApp::enter` 1 968 B (`-Os`), `decodePart` 1 048 B, `docAction` 360 B |
 | Warning | **nessuno** del compilatore | nessuno |
-| SHA-256 dell'UF2 locale | `a01895aca4347ff5c2b195e6a7afe9dd7323cabac886a151c5d5351addb2299f` | `a16b8e1ccde30d78bf8d313c3b7856702f4d3648779342958aef3fffe3960ec7` |
+| SHA-256 dell'UF2 locale | `4e3602db9adbab14b2126f232ddcf9d429d9ea41dd6a15b4972f53156b3384b9` | `f41d66441988a55cdad3938702a5adeac7d83ba4fcf8931796d2a76a6c8785a9` |
 
 ### Test
 
 | Suite | Pico Plus 2 W | Pico 2 W |
 |---|---|---|
-| CTest (`tests/run_host_tests.sh`) | 56/56: 54 suite C++ con **14 656** controlli, `mem_pools_smoke` (333 427), `sd_interop_test` | 53/53: 51 suite con **14 561** controlli, `mem_pools_smoke` (333 430), `sd_interop_test` |
+| CTest (`tests/run_host_tests.sh`) | 56/56: 54 suite C++ con **14 658** controlli, `mem_pools_smoke` (333 435), `sd_interop_test` | 53/53: 51 suite con **14 563** controlli, `mem_pools_smoke` (333 465), `sd_interop_test` |
 | AddressSanitizer + UBSan bloccante (`--sanitize`) | 56/56 | 53/53 |
 | ThreadSanitizer (`--tsan`) | superato | superato |
 | Relay AI (Python, `unittest`) | 15/15 | — |
-| Fuzzing (≥ 300 s per harness nuovo o toccato) | {{FUZZ}} | — |
+| Fuzzing (≥ 300 s per harness nuovo o toccato) | `fuzz_eactivity` 988 esecuzioni con il controller (firmware riavviato a ogni input) e 8 716 498 sui soli documenti (`FXAI_FUZZ_EACT_DOCS=1`), `fuzz_ui` 10 826, `fuzz_workspace` 2 208 879, ognuno ≥ 300 s: nessun crash né artefatto sul codice finale (prima della correzione la modalità documenti aveva trovato le righe con un a capo) | — |
 | Simulatore (`tools/sim_compare.py`) | 97 schermate identiche agli screenshot pubblicati, 20 nuove (108–127) | — |
 
 ## v1.15.0

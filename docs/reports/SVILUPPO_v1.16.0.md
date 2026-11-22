@@ -115,7 +115,15 @@ SpreadSheet (M9), Picture Plot (M11), Geometry (M12). Fino ad allora sono
 
 ## 5. Test, fuzzing, simulatore
 
-{{TESTS}}
+| Verifica | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| CTest (`tests/run_host_tests.sh`) | **56/56**: 54 suite C++ con **14 658** controlli (+354 sulla v1.15.0), `mem_pools_smoke`, `sd_interop_test` | **53/53**: 51 suite con **14 563** controlli (+354) |
+| Suite nuova | `eactivity_test` 289 | `eactivity_test` 289 |
+| Suite cambiate | `architecture_test` 1 839 (congelamento, servizio `EActivityCore`), `workspace_v115_test` 114 (una sezione di produzione), `mode_shell_test` 53 (▶) | `architecture_test` 1 859, gli stessi |
+| ASan + UBSan (bloccante), TSan | 56/56, TSan superato | 53/53, TSan superato |
+| Fuzzing (≥ 300 s per harness nuovo o toccato) | `fuzz_eactivity` 988 esecuzioni con il controller (firmware riavviato a ogni input) e 8 716 498 sui soli documenti (`FXAI_FUZZ_EACT_DOCS=1`), `fuzz_ui` 10 826, `fuzz_workspace` 2 208 879, ognuno ≥ 300 s: nessun crash né artefatto sul codice finale (prima della correzione la modalità documenti aveva trovato le righe con un a capo) | — |
+| Simulatore (`tools/sim_compare.py`) | 97 screenshot precedenti identici pixel per pixel, 20 nuovi (108–127, `tests/sim/eactivity.txt`) | le stesse schermate (unico codice) |
+| Relay AI | 15/15 | — |
 
 Errori trovati durante lo sviluppo e corretti prima della pubblicazione:
 le espressioni nel testo usavano U+E000/U+E001, che sono i simboli statistici
@@ -135,12 +143,29 @@ scritte sul PC ne vengono ripulite; i due input sono nel corpus.
 
 ## 6. Firmware e memoria
 
-{{FIRMWARE}}
+| Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| Immagine | 2 097 548 B = 50 % della partizione da 4 MB (+118 708 B) | **1 944 212 B** = 92 % (−25 596 B): **dimensione finale del Pico 2 W congelato**; restano 120 172 B sotto il budget di 2 064 384 B, solo per correzioni condivise |
+| RAM statica / heap SRAM | 309 164 B (+100) / 182 356 B | 305 236 B (+96) / 186 284 B |
+| Budget | < 90 % della partizione da 4 MB (3 774 873 B) | ≤ 2 064 384 B; documento aperto ≤ 24 KB; record ≤ 59,75 KB (la sezione `0x0102` è vuota senza documento aperto) |
+| Ottimizzazione | `-O2` | `-O2`; `-Os` per eActivity, record del workspace, file, impostazioni, memoria, relay AI, guscio (`FXAI_PICO2W_SIZE_SOURCES`) |
+
+Dettagli e hash degli UF2: [BUILD_STATUS.md](../BUILD_STATUS.md).
 
 Stack: nessuna ricorsione nuova. L'a capo, il ricalcolo e la codifica sono
 iterativi; le espressioni nel testo usano l'editor naturale e il disegno 2D
-già limitati (12 livelli di modelli, 400 nodi). {{STACK}}
+già limitati (12 livelli di modelli, 400 nodi). Frame più grandi del codice nuovo (`-fstack-usage`, Plus): `decodePart` 1 080 B, `EActivityApp::docAction` 360 B, `eact::encode` 320 B, `execute` 288 B, `evaluateLine` 280 B; il massimo del firmware resta `SystemApp::enter` (2 016 B, 1 968 B sul Pico 2 W).
 
 ## 7. Cancello
 
-{{GATE}}
+| Controllo | Esito |
+|---|---|
+| `git fetch origin main` | `main` fermo a `08a4e6a`: fast-forward |
+| `tests/run_host_tests.sh` (due profili) | 56/56 e 53/53 |
+| `--sanitize --tsan` | 56/56 e 53/53, TSan superato su entrambi |
+| Fuzzing ≥ 300 s per harness nuovo o toccato | `fuzz_eactivity` (controller e documenti), `fuzz_ui`, `fuzz_workspace`: nessun crash |
+| Simulatore | 97 identici, 20 nuovi |
+| Firmware | due schede `--clean`, nessun warning, nei budget; mappa del Pico 2 W senza oggetti esclusi |
+| Congelamento del Pico 2 W | `architecture_test` («Pico 2 W frozen at v1.16.0»), dimensione finale qui e in BUILD_STATUS, «Pico 2 W congelato alla v1.16.0» in CONTINUE.md |
+| Relay | 15/15 |
+| Documentazione | ANALISI_FONTI e SVILUPPO v1.16.0, HARDWARE_TEST_v1.16.0, EACTIVITY, FEATURE_MATRIX, APPLICATIONS_ARCHITECTURE, STORAGE, FILE_FORMATS, BUILD_STATUS, CHANGELOG, ROADMAP, TESTING, CONTINUE, README, docs/README, releases/v1.16.0, VERSION |

@@ -11,7 +11,7 @@ test, firmware). M0/M1: `ANALISI_FONTI_v1.15.0.md`, `SVILUPPO_v1.15.0.md`.
 > **Pico 2 W congelato alla v1.16.0.** Dalla v1.17.0 nessuna funzione,
 > schermata o crescita dell'immagine sul Raspberry Pi Pico 2 W, salvo
 > correzioni di errori condivise. Immagine finale del Pico 2 W:
-> **{{PICO2W_SIZE}} byte** (budget 2 064 384 B). `architecture_test` fallisce se
+> **1 944 212 byte** (budget 2 064 384 B). `architecture_test` fallisce se
 > cambia l'insieme delle modalità Available del Pico 2 W.
 
 ## 0. Piano delle milestone (dal prompt di sviluppo della v1.15.0)
@@ -83,7 +83,7 @@ documento 24 KB / 256 KB. Record v11 con la sezione `0x0102`. Guida
    per le funzioni nuove: il Pico 2 W resta quello della v1.16.0).
 4. Ogni funzione nuova di Statistics sulla Plus deve lasciare identici gli
    screenshot e il comportamento del Pico 2 W (profilo host PICO2W) e la sua
-   immagine (≤ {{PICO2W_SIZE}} B, nessuna crescita salvo correzioni).
+   immagine (≤ 1 944 212 B, nessuna crescita salvo correzioni).
 5. Strisce di eActivity delle modalità nuove: aggiungere le parti del
    workspace e la schermata d'ingresso (`stripentry`), poi
    `eact::stripAvailable` le rende disponibili da sola (solo sulla Plus).
