@@ -10,9 +10,21 @@ Plus 2 W** (RP2350B, 8 MB di PSRAM, 16 MB di flash); profilo alternativo:
 > ogni modalità è reimplementata in modo indipendente. La documentazione Casio è
 > usata solo come riferimento di comportamento.
 
-![Menu principale](docs/screenshots/01_main_menu.png) ![Run-Matrix](docs/screenshots/12_run_matrix_exact.png) ![Matrici](docs/screenshots/46_run_matrix_matrices.png) ![Comandi grafici](docs/screenshots/61_graph_commands.png) ![CATALOG](docs/screenshots/79_catalog.png) ![Base-N](docs/screenshots/60_base_n.png) ![Equation](docs/screenshots/70_equation_poly_complex.png) ![Graph](docs/screenshots/22_graph_multi.png) ![3D Graph](docs/screenshots/90_graph3d_sphere.png) ![3D Graph: INTSECT](docs/screenshots/93_graph3d_intsect.png) ![3D Graph: CROSS](docs/screenshots/97_graph3d_cross.png)
+![Menu principale](docs/screenshots/01_main_menu.png) ![Run-Matrix](docs/screenshots/12_run_matrix_exact.png) ![Matrici](docs/screenshots/46_run_matrix_matrices.png) ![Comandi grafici](docs/screenshots/61_graph_commands.png) ![CATALOG](docs/screenshots/79_catalog.png) ![Base-N](docs/screenshots/60_base_n.png) ![Equation](docs/screenshots/70_equation_poly_complex.png) ![Graph](docs/screenshots/22_graph_multi.png) ![3D Graph](docs/screenshots/90_graph3d_sphere.png) ![3D Graph: INTSECT](docs/screenshots/93_graph3d_intsect.png) ![3D Graph: CROSS](docs/screenshots/97_graph3d_cross.png) ![eActivity](docs/screenshots/112_eact_calc_lines.png) ![eActivity: striscia](docs/screenshots/118_eact_doc_strip.png)
 
-## Stato (v1.15.0)
+## Stato (v1.16.0)
+
+La **v1.16.0** porta **eActivity** alla parità con il capitolo 10 del manuale
+fx-CG50 su **entrambe le schede** ([docs/EACTIVITY.md](docs/EACTIVITY.md)):
+documenti con righe di testo (espressioni Math, colori, marcatori, memo),
+righe di calcolo valutate come in Run-Matrix con il ricalcolo fino alla riga
+di stop, immagini, **strisce** che aprono Run-Matrix, Graph, Table,
+Statistics, Equation e 3D Graph con dati propri, Notes, memorie Mat/Vct/List
+per documento. Con questa versione il **Raspberry Pi Pico 2 W è congelato**:
+le modalità successive arrivano solo sulla Pimoroni Pico Plus 2 W
+([docs/ROADMAP.md](docs/ROADMAP.md)). Rapporti:
+[docs/reports/ANALISI_FONTI_v1.16.0.md](docs/reports/ANALISI_FONTI_v1.16.0.md),
+[docs/reports/SVILUPPO_v1.16.0.md](docs/reports/SVILUPPO_v1.16.0.md).
 
 La **v1.15.0** mette le **fondamenta comuni** delle modalità che mancano
 ancora, senza modalità nuove (quelle disponibili sono le stesse della
@@ -85,8 +97,8 @@ fonti: [docs/reports/ANALISI_FONTI_v1.13.0.md](docs/reports/ANALISI_FONTI_v1.13.
 | Compilazione UF2 (Pico SDK 2.2.0) per Pimoroni Pico Plus 2 W e per Pico 2 W | ✅ entrambe compilano, nessun warning; cartelle e UF2 separati per scheda |
 | Test automatici host | ✅ 47 test per ciascun profilo di scheda: 45 suite C++ (13 111 controlli sulla Plus e 13 105 sul Pico 2 W, più le ≈ 334 000 verifiche di integrità dello stress dell'allocatore su due thread) e l'interoperabilità FAT/exFAT con fsck e mtools (41); tutti superati anche con AddressSanitizer/UBSan (UBSan bloccante dalla v1.13.1), allocatore su due thread con ThreadSanitizer; fuzzing con libFuzzer in `tools/fuzz`; gli stessi test girano su GitHub Actions a ogni push |
 | Test relay AI | ✅ 15 test (SDK ufficiali contro API simulate, TLS reale in loopback) |
-| Parità con la fx-CG50 | Run-Matrix (v1.13.0), EQUATION (v1.12.0) e 3D Graph (v1.14.0): ✅ ogni voce della tabella di parità presente o differenza inevitabile documentata ([Run-Matrix](docs/reports/SVILUPPO_v1.13.0.md#5-tabella-di-parit%C3%A0-finale), [EQUATION](docs/reports/SVILUPPO_v1.12.0.md#4-tabella-di-parità-finale), [3D Graph](docs/reports/SVILUPPO_v1.14.0.md#5-tabella-di-parità-finale)); ❌ **non completa** per le altre modalità — GRAPH in [docs/GRAPH_PARITY.md](docs/GRAPH_PARITY.md), elenco in [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md) |
-| **Prova su PicoCalc fisica** | ❌ **non ancora eseguita**, né con il Pico Plus 2 W né con il Pico 2 W: display, tastiera, flash, PSRAM, microSD, Wi-Fi e TLS vanno collaudati con [docs/HARDWARE_TEST_v1.15.0.md](docs/HARDWARE_TEST_v1.15.0.md), [v1.14.0](docs/HARDWARE_TEST_v1.14.0.md), [v1.13.1](docs/HARDWARE_TEST_v1.13.1.md), [v1.13.0](docs/HARDWARE_TEST_v1.13.0.md), [v1.12.0](docs/HARDWARE_TEST_v1.12.0.md), [v1.11.0](docs/HARDWARE_TEST_v1.11.0.md), [v1.10.0](docs/HARDWARE_TEST_v1.10.0.md), [v1.9.0](docs/HARDWARE_TEST_v1.9.0.md) e [v1.8.0](docs/HARDWARE_TEST_v1.8.0.md), diagnostica SYSTEM → DIAG |
+| Parità con la fx-CG50 | Run-Matrix (v1.13.0), EQUATION (v1.12.0), 3D Graph (v1.14.0) ed eActivity (v1.16.0, [tabella](docs/reports/SVILUPPO_v1.16.0.md#3-tabella-di-parità-finale)): ✅ ogni voce della tabella di parità presente o differenza inevitabile documentata ([Run-Matrix](docs/reports/SVILUPPO_v1.13.0.md#5-tabella-di-parit%C3%A0-finale), [EQUATION](docs/reports/SVILUPPO_v1.12.0.md#4-tabella-di-parità-finale), [3D Graph](docs/reports/SVILUPPO_v1.14.0.md#5-tabella-di-parità-finale)); ❌ **non completa** per le altre modalità — GRAPH in [docs/GRAPH_PARITY.md](docs/GRAPH_PARITY.md), elenco in [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md) |
+| **Prova su PicoCalc fisica** | ❌ **non ancora eseguita**, né con il Pico Plus 2 W né con il Pico 2 W: display, tastiera, flash, PSRAM, microSD, Wi-Fi e TLS vanno collaudati con [docs/HARDWARE_TEST_v1.16.0.md](docs/HARDWARE_TEST_v1.16.0.md), [v1.15.0](docs/HARDWARE_TEST_v1.15.0.md), [v1.14.0](docs/HARDWARE_TEST_v1.14.0.md), [v1.13.1](docs/HARDWARE_TEST_v1.13.1.md), [v1.13.0](docs/HARDWARE_TEST_v1.13.0.md), [v1.12.0](docs/HARDWARE_TEST_v1.12.0.md), [v1.11.0](docs/HARDWARE_TEST_v1.11.0.md), [v1.10.0](docs/HARDWARE_TEST_v1.10.0.md), [v1.9.0](docs/HARDWARE_TEST_v1.9.0.md) e [v1.8.0](docs/HARDWARE_TEST_v1.8.0.md), diagnostica SYSTEM → DIAG |
 
 Dettagli: [docs/BUILD_STATUS.md](docs/BUILD_STATUS.md) · stato per funzione:
 [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md) · scheda e memoria:
@@ -113,6 +125,7 @@ viene riconosciuto (capacità reale della flash) e non scrive oltre il chip.
 | Tasto | Modalità | Contenuto |
 |---|---|---|
 | 1 | **Run-Matrix** | input **Math** (2D: frazioni, frazioni miste, radici, potenze, ∫, d/dx, Σ, Π, \|x\|, logₐb, periodo, matrici; **SHIFT+INS** per l'argomento di un modello) o **Line** (**INS** sovrascrittura, frazioni **⌟**, risultati scorrevoli); **risultati esatti** (frazioni, √, π) con S⇔D che non altera il valore, Frac Result d/c ↔ ab/c, sviluppo periodico, **▶Simp** e Simplify; **matrici, vettori e liste** (`[[1,2][3,4]]`, `{1,2}`, Mat/Vct/**List 1–26**, Det, Trn, inversa, Ref/Rref, DotP, CrossP, Sum, Mean, Seq…) con l'**editor MAT/VCT** (SHIFT 3: celle esatte e complesse, CSV) e le schermate **MatAns/ListAns**; cronologia modificabile sul posto con ricalcolo; Ans/PreAns e A–Z che conservano la forma esatta, `→A~F`; relazioni e logica, Int÷/Rmdr; VARS (A–Z, V-WIN, TABLE); **simboli ingegneristici** e display Eng; **Base-N intera** (Dec/Hex/Bin/Oct, And/Or/Xor/Xnor/Not/Neg), DMS, complessi, Pol/Rec; **comandi grafici** (Plot, F-Line, Circle, Text, Graph Y=…) disegnati da GRAPH; **CLIP** (SHIFT 8/9), copia/incolla, undo/redo; **parentesi colorate**; **cursore sulla causa degli errori** — vedi [docs/RUN_MATRIX.md](docs/RUN_MATRIX.md) |
+| 3 | **eActivity** | documenti `.pceact` (cartelle, NEW, SEARCH, MEMO); righe di **testo** con espressioni Math, colori, marcatori e memo; righe di **calcolo** come Run-Matrix con ricalcolo fino alla riga di stop (AC = Break); immagini PICT/CAPT; **strisce** di Run-Matrix, Graph, Table, Statistics, Equation, 3D Graph e Notes con dati propri e barra azzurra; memorie Mat/Vct/List per documento; 24 KB per documento sul Pico 2 W, 256 KB sulla Plus — [docs/EACTIVITY.md](docs/EACTIVITY.md) |
 | 2 | **Statistics** | **List 1–26** con i sottonomi (riga SUB) e i file **CSV** (OPTN), fino a 999 elementi per lista sulla Pico Plus 2 W (255 sul Pico 2 W), SET XList/YList, 1-Var/2-Var, 9 regressioni (ax+b, Med-Med, X², X³, X⁴, Log, Exp, ab^x, Power) con grafico e copia in GRAPH, scatter/xyLine/istogramma/box plot, distribuzioni (normale, binomiale, Poisson, t, χ², F), test Z/t e intervalli |
 | 5 | **Graph** | Y1–Y20: Y=, r=, parametriche, X=, 8 tipi di disequazioni (Union/Intsect), intervalli, sovrapposizioni [A=…], grafici da lista, funzioni composte; TRACE, ZOOM (13 funzioni), V-Window con memorie, SKETCH, G-SOLVE (ROOT, MAX, MIN, Y-ICEPT, INTSECT, Y-CAL, X-CAL, ∫dx anche tra radici/intersezioni), Modify, memorie grafiche, PICT e sfondo, progetti `.pcgraph` sulla microSD o nella flash interna — vedi [docs/GRAPH_PARITY.md](docs/GRAPH_PARITY.md) |
 | 7 | **Table** | tabelle di Y=, r= e parametriche da Start/End/Step o da una lista (fino a 999 righe), derivate, EDIT e ROW DELETE/INSERT/ADD, LISTMEM, GPH-CON/GPH-PLT — vedi [docs/TABLE.md](docs/TABLE.md) |
@@ -124,7 +137,7 @@ viene riconosciuto (capacità reale della flash) e non scrive oltre il chip.
 | M | **AI Chat** | conversazione con Claude o ChatGPT tramite relay HTTPS |
 | N | **Symbols** | guida di simboli e funzioni |
 
-Le altre icone del menu (eActivity, Spreadsheet, Dyna Graph, Recursion, Conic
+Le altre icone del menu (Spreadsheet, Dyna Graph, Recursion, Conic
 Graphs, Program, Financial, E-CON4, Link, Geometry, Picture Plot, Python) sono **mostrate in grigio con un segno rosso** e aprono una schermata che
 spiega cosa manca: non sono presentate come funzionanti.
 Il progetto di ogni modalità (responsabilità, servizi condivisi, modello dati,
@@ -200,7 +213,7 @@ Senza rete tutte le funzioni matematiche restano disponibili.
 [GRAPH_PARITY](docs/GRAPH_PARITY.md) · [GRAPH_ENGINE](docs/GRAPH_ENGINE.md) ·
 [STORAGE](docs/STORAGE.md) · [PCGRAPH_FORMAT](docs/PCGRAPH_FORMAT.md) ·
 [TABLE](docs/TABLE.md) · [PICO_PLUS_2W](docs/PICO_PLUS_2W.md) ·
-[EQUATION](docs/EQUATION.md) · [GRAPH3D](docs/GRAPH3D.md) · [ERRORI v1.13.1](docs/reports/ERRORI_v1.13.1.md) · [HARDWARE_TEST v1.15.0](docs/HARDWARE_TEST_v1.15.0.md) · [v1.14.0](docs/HARDWARE_TEST_v1.14.0.md) · [FILE_FORMATS](docs/FILE_FORMATS.md) · [v1.13.1](docs/HARDWARE_TEST_v1.13.1.md) · [v1.13.0](docs/HARDWARE_TEST_v1.13.0.md) · [v1.12.0](docs/HARDWARE_TEST_v1.12.0.md) · [v1.11.0](docs/HARDWARE_TEST_v1.11.0.md) · [v1.10.0](docs/HARDWARE_TEST_v1.10.0.md) · [v1.9.0](docs/HARDWARE_TEST_v1.9.0.md) · [v1.8.0](docs/HARDWARE_TEST_v1.8.0.md) ·
+[EQUATION](docs/EQUATION.md) · [GRAPH3D](docs/GRAPH3D.md) · [ERRORI v1.13.1](docs/reports/ERRORI_v1.13.1.md) · [HARDWARE_TEST v1.16.0](docs/HARDWARE_TEST_v1.16.0.md) · [v1.15.0](docs/HARDWARE_TEST_v1.15.0.md) · [EACTIVITY](docs/EACTIVITY.md) · [v1.14.0](docs/HARDWARE_TEST_v1.14.0.md) · [FILE_FORMATS](docs/FILE_FORMATS.md) · [v1.13.1](docs/HARDWARE_TEST_v1.13.1.md) · [v1.13.0](docs/HARDWARE_TEST_v1.13.0.md) · [v1.12.0](docs/HARDWARE_TEST_v1.12.0.md) · [v1.11.0](docs/HARDWARE_TEST_v1.11.0.md) · [v1.10.0](docs/HARDWARE_TEST_v1.10.0.md) · [v1.9.0](docs/HARDWARE_TEST_v1.9.0.md) · [v1.8.0](docs/HARDWARE_TEST_v1.8.0.md) ·
 [GRAPHICS_ENGINE](docs/GRAPHICS_ENGINE.md) · [MATH_ENGINE](docs/MATH_ENGINE.md) ·
 [AI_INTEGRATION](docs/AI_INTEGRATION.md) · [TESTING](docs/TESTING.md) ·
 [ROADMAP](docs/ROADMAP.md) · [CHANGELOG](docs/CHANGELOG.md) ·

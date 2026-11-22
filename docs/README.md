@@ -1,12 +1,16 @@
 # Documentazione
 
-## Documenti attuali (v1.15.0)
+## Documenti attuali (v1.16.0)
 
 | Documento | Contenuto |
 |---|---|
+| [EACTIVITY.md](EACTIVITY.md) | guida di eActivity (v1.16.0): tasti della PicoCalc, elenco dei file, righe, barre, strisce, memorie e limiti per scheda |
+| [reports/ANALISI_FONTI_v1.16.0.md](reports/ANALISI_FONTI_v1.16.0.md) | M2: capitolo 10 del manuale, progetto (documento, strisce, espressioni nel testo, memorie per file), tabella di parità E01–E56 scritta prima del codice, differenze previste |
+| [reports/SVILUPPO_v1.16.0.md](reports/SVILUPPO_v1.16.0.md) | v1.16.0: eActivity, tabella di parità finale con le prove, differenze inevitabili, test, firmware e memoria, congelamento del Pico 2 W |
+| [HARDWARE_TEST_v1.16.0.md](HARDWARE_TEST_v1.16.0.md) | collaudo di eActivity sulle due schede e della dimensione finale del Pico 2 W (HW-202…HW-219) |
 | [reports/ANALISI_FONTI_v1.15.0.md](reports/ANALISI_FONTI_v1.15.0.md) | M0: fonti (manuale fx-CG50 v3.60, capitoli verificati), punto di partenza con dimensioni per modulo, capitoli di ogni modalità mancante, matrice «modalità × fondamenta», decisioni (Program in C, C++ e C#), requisiti della v1.15.0 |
 | [reports/SVILUPPO_v1.15.0.md](reports/SVILUPPO_v1.15.0.md) | v1.15.0: fondamenta comuni F1–F9, tabella dei requisiti con i test, dimensioni e RAM per scheda, stack, fuzzing, differenze |
-| [FILE_FORMATS.md](FILE_FORMATS.md) | file tipizzati delle modalità: cartelle, estensioni, intestazione con CRC, testo UTF-8, regole dei nomi, ricerca |
+| [FILE_FORMATS.md](FILE_FORMATS.md) | file tipizzati delle modalità: cartelle, estensioni, intestazione con CRC, testo UTF-8, regole dei nomi, ricerca; contenuto dei documenti eActivity `.pceact` (v1.16.0) |
 | [HARDWARE_TEST_v1.15.0.md](HARDWARE_TEST_v1.15.0.md) | collaudo delle fondamenta della v1.15.0 (aggiornamento del record dalla v1.14.0, mappa della flash, MEMORY › FILES, TABLE sul guscio, 3D sul runner, controlli del build; HW-190…HW-201) |
 | [reports/RECAP_v1.14.0.md](reports/RECAP_v1.14.0.md) | recap del progetto alla v1.14.0 e parità con la fx-CG50 modalità per modalità (3 complete, 2 quasi, 3 parziali, 10 con solo il modello, Python assente, E-CON4 non realizzabile) |
 | [BUILD_STATUS.md](BUILD_STATUS.md) | ambiente di build, audit della v1.5.4, risultati di build e test, cosa non è verificato |

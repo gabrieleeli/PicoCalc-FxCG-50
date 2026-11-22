@@ -11,7 +11,8 @@ constexpr std::uint8_t bit(std::uint8_t id) { return static_cast<std::uint8_t>(1
 using app::AppId;
 // Manuale 10-17: nomi del dialogo STRIP, modalita' e parti del workspace.
 constexpr StripInfo kStrips[StripKindCount] = {
-    {StripKind::Run, "RUN", AppId::RunMatrix, bit(p::History)},
+    // RUN: anche Graph, perche' i comandi grafici di Run-Matrix scrivono V-Window, SKETCH e grafici dei comandi
+    {StripKind::Run, "RUN", AppId::RunMatrix, static_cast<std::uint8_t>(bit(p::History) | bit(p::Graph))},
     {StripKind::Graph, "Graph", AppId::Graph, bit(p::Graph)},
     {StripKind::GraphEditor, "Graph Editor", AppId::Graph, bit(p::Graph)},
     {StripKind::TableEditor, "Table Editor", AppId::Table, static_cast<std::uint8_t>(bit(p::Graph) | bit(p::Table))},

@@ -1,4 +1,4 @@
-# Roadmap — dopo la v1.15.0
+# Roadmap — dopo la v1.16.0
 
 **Piano dalla v1.15.0** ([reports/ANALISI_FONTI_v1.15.0.md](reports/ANALISI_FONTI_v1.15.0.md)):
 una milestone per versione, ognuna con il cancello completo (test su entrambi
@@ -8,7 +8,7 @@ relay, documentazione) e un solo commit su `main`.
 | Milestone | Versione | Contenuto | Schede |
 |---|---|---|---|
 | M1 | v1.15.0 | fondamenta comuni (fatta) | entrambe (F7–F9 solo Plus) |
-| M2 | v1.16.0 | **eActivity** (cap. 10) con le strisce; poi il **Pico 2 W è congelato** | entrambe |
+| M2 | v1.16.0 | **eActivity** (cap. 10) con le strisce (fatta); il **Pico 2 W è congelato** | entrambe |
 | M3 | v1.17.0 | Statistics completa (cap. 6) | Plus |
 | M4 | v1.18.0 | Graph e Table: Dual Screen, GtoT, T+G, Graph to Table, FORMAT nello SKETCH | Plus |
 | M5 | v1.19.0 | Recursion (5-45) | Plus |
@@ -22,6 +22,13 @@ relay, documentazione) e un solo commit su `main`.
 | M13 | v1.27.0 | Memory, System e Link completi (cap. 11–13) | Plus |
 | M14 | v1.28.0 | Python (MicroPython, cap. 17) | Plus |
 | M15 | v1.29.0 | chiusura: revisione completa e recap | entrambe |
+
+Dalla v1.16.0 il **Raspberry Pi Pico 2 W è congelato**: le milestone M3–M14
+aggiungono funzioni solo alla Pimoroni Pico Plus 2 W; sul Pico 2 W entrano
+soltanto correzioni di errori condivise (controllo in `architecture_test`).
+Le strisce di eActivity delle modalità della Plus (Conics, Recur, Dynamic,
+Financial, SpreadSheet, Picture Plot, Geometry) diventano disponibili con le
+loro milestone.
 
 Da decidere con l'utente: la modalità **Distribution** del capitolo 18 (fx-CG50
 OS 3.40+) non è nel registro né nel piano.
@@ -41,7 +48,8 @@ Il progetto **non** ha la parità con la Casio fx-CG50 e non va presentato come
 tale: le tabelle sotto elencano ciò che manca. Fanno eccezione **Run-Matrix**
 (dalla v1.13.0, [reports/SVILUPPO_v1.13.0.md](reports/SVILUPPO_v1.13.0.md)),
 **EQUATION** (dalla v1.12.0, [reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md))
-e **3D Graph** (dalla v1.14.0, [reports/SVILUPPO_v1.14.0.md](reports/SVILUPPO_v1.14.0.md)),
+**3D Graph** (dalla v1.14.0, [reports/SVILUPPO_v1.14.0.md](reports/SVILUPPO_v1.14.0.md))
+ed **eActivity** (dalla v1.16.0, [reports/SVILUPPO_v1.16.0.md](reports/SVILUPPO_v1.16.0.md)),
 con ogni voce della tabella di parità presente o documentata come differenza
 inevitabile. Il documento storico
 `archive/CG50_PARITY_ROADMAP.md` descrive gli obiettivi delle versioni precedenti.

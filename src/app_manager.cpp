@@ -61,7 +61,8 @@ ui::StatusInfo Context::status(const char* title) const {
     s.battery = platform.batteryPercent();
     s.charging = platform.charging();
     s.shift = shift_;
-    s.strip = strip_.active && manager_.activeId_ == strip_.target;   // barra azzurra (manuale 10-20)
+    // barra azzurra (manuale 10-20) anche nelle schermate aperte dalla modalita' della striscia
+    s.strip = strip_.active && manager_.activeId_ != strip_.owner;
     return s;
 }
 void Context::drawStatus(gfx::Canvas& c, const char* title) const { ui::statusBar(c, status(title)); }
@@ -142,7 +143,8 @@ void AppManager::key(const KeyEvent& ev) {
         return;
     }
     // v1.16.0: dalla modalita' di una striscia MENU, SHIFT ' e SHIFT , tornano all'eActivity.
-    const bool inStripApp = ctx_.strip_.active && activeId_ == ctx_.strip_.target;
+    // (anche da una modalita' aperta da quella della striscia, es. Graph da Table)
+    const bool inStripApp = ctx_.strip_.active && activeId_ != ctx_.strip_.owner;
     if (inStripApp && ctx_.shift_ && ev.key == Key::Char && (ev.ch == '\'' || ev.ch == ',')) {
         ctx_.shift_ = false;
         ctx_.strip_.switchRequested = ev.ch == ',';

@@ -709,6 +709,13 @@ int main() {
             rig.key(pk::Tab);
             CHECK(rig.fw.apps().activeId() == AppId::EActivity && !rig.fw.apps().context().strip().active);
         }
+        // una schermata aperta dalla modalita' della striscia resta nella sessione (Graph da un comando grafico di RUN)
+        t.F(2); t.exe(); t.exe(); t.exe();                                 // RUN
+        CHECK(rig.fw.apps().activeId() == AppId::RunMatrix && rig.ws().functions[0].expr.empty());
+        rig.enter("Cls");
+        CHECK(rig.fw.apps().activeId() == AppId::Graph && rig.fw.apps().context().status("x").strip);
+        rig.key(pk::Tab);
+        CHECK(rig.fw.apps().activeId() == AppId::EActivity && !rig.fw.apps().context().strip().active && rig.ws().functions[0].expr == "X^2");
         // E47: striscia non disponibile su questa scheda
         t.F(2);
         for (int i = 0; i < static_cast<int>(StripKind::SpreadSheet); ++i) t.down();
