@@ -17,7 +17,13 @@ namespace fx::app {
 enum class AppId : std::uint8_t {
     RunMatrix, Statistics, EActivity, Spreadsheet, Graph, DynaGraph, Table, Recursion,
     ConicGraphs, Equation, Program, Financial, ECon4, Link, Memory, System, Geometry,
-    PicturePlot, Graph3D, Conversion, Python, AiChat, Symbols, Count, MainMenu = 0xFF
+    PicturePlot, Graph3D, Conversion, Python, AiChat, Symbols,
+#if FXAI_BOARD_PICO_PLUS_2W
+    // v1.18.0: in coda solo sulla Plus (id, sezioni e strisce delle altre modalita'
+    // invariati; sul Pico 2 W congelato AppCount resta 23).
+    Distribution,
+#endif
+    Count, MainMenu = 0xFF
 };
 constexpr std::size_t AppCount = static_cast<std::size_t>(AppId::Count);
 
@@ -127,8 +133,12 @@ constexpr std::uint32_t Link        = FXAI_PLUS_DATA(20);   // ultimo trasferime
 constexpr std::uint32_t Geometry    = FXAI_PLUS_DATA(21);   // costruzione aperta di Geometry
 constexpr std::uint32_t PicturePlot = FXAI_PLUS_DATA(22);   // sfondo e punti di Picture Plot
 constexpr std::uint32_t Python      = FXAI_PLUS_DATA(23);   // ultimo script di Python
+// v1.18.0: StatGraph, SET, SET UP, colori/formule delle liste e risultati di
+// Statistics (sezione 0x0101); stato della modalita' Distribution (0x0117).
+constexpr std::uint32_t StatData     = FXAI_PLUS_DATA(24);
+constexpr std::uint32_t Distribution = FXAI_PLUS_DATA(25);
 #undef FXAI_PLUS_DATA
-constexpr std::uint32_t Count     = FXAI_BOARD_PICO_PLUS_2W ? 24 : 14;
+constexpr std::uint32_t Count     = FXAI_BOARD_PICO_PLUS_2W ? 26 : 14;
 } // namespace data
 
 constexpr std::uint32_t linkTo(AppId id) noexcept { return 1u << static_cast<unsigned>(id); }

@@ -351,3 +351,53 @@ void FileDialog::draw(gfx::Canvas& c) const {
     ui::scrollBar(c, box.x + box.w - 4, top, visible * rowH, static_cast<int>(names_.size()), visible, first_);
 }
 } // namespace fx::app
+#if FXAI_BOARD_PICO_PLUS_2W
+// v1.18.0 (solo Plus): grafico di una distribuzione continua (DIST di Statistics,
+// DRAW dei test, modalita' Distribution): curva, aree evidenziate, punto, testo.
+#include "apps.hpp"
+#include "dist_core.hpp"
+namespace fx::app {
+void drawDistributionGraph(gfx::Canvas& c, gfx::Rect a, const dist::GraphModel& g, const std::vector<std::string>& lines) {
+    using namespace ui::theme;
+    if (!g.available || !(g.xmax > g.xmin) || !(g.ymax > 0)) return;
+    c.setClip(a);
+    const double ymin = -g.ymax * 0.06;
+    auto sx = [&](double x) { return a.x + static_cast<int>(std::lround(std::clamp((x - g.xmin) / (g.xmax - g.xmin), -10.0, 10.0) * (a.w - 1))); };
+    auto sy = [&](double y) { return a.y + a.h - 1 - static_cast<int>(std::lround(std::clamp((y - ymin) / (g.ymax - ymin), -10.0, 10.0) * (a.h - 1))); };
+    const int axisY = sy(0);
+    c.hLine(a.x, axisY, a.w, Muted);
+    if (g.xmin < 0 && g.xmax > 0) c.vLine(sx(0), a.y, a.h, Muted);
+    // Aree evidenziate: colonne dall'asse alla curva.
+    for (int x = a.x; x < a.x + a.w; ++x) {
+        const double xv = g.xmin + (g.xmax - g.xmin) * (x - a.x) / (a.w - 1);
+        bool in = false;
+        for (const auto& r : g.areas) in = in || (xv >= r.first && xv <= r.second);
+        if (!in) continue;
+        const int y = sy(dist::density(g, xv));
+        if (y < axisY) c.vLine(x, y, axisY - y, SelectSoft);
+    }
+    int px = 0, py = 0;
+    bool prev = false;
+    for (int x = a.x; x < a.x + a.w; ++x) {
+        const double xv = g.xmin + (g.xmax - g.xmin) * (x - a.x) / (a.w - 1);
+        const double d = dist::density(g, xv);
+        if (!std::isfinite(d)) { prev = false; continue; }
+        const int y = sy(d);
+        if (prev) c.line(px, py, x, y, Accent);
+        px = x; py = y; prev = true;
+    }
+    for (const auto& r : g.areas) {
+        if (std::isfinite(r.first) && r.first >= g.xmin && r.first <= g.xmax) c.vLine(sx(r.first), sy(dist::density(g, r.first)), axisY - sy(dist::density(g, r.first)), Select);
+        if (std::isfinite(r.second) && r.second >= g.xmin && r.second <= g.xmax) c.vLine(sx(r.second), sy(dist::density(g, r.second)), axisY - sy(dist::density(g, r.second)), Select);
+    }
+    if (g.hasMark) {
+        const int X = sx(g.markX), Y = sy(g.markY);
+        c.vLine(X, Y, axisY - Y, Error);
+        c.circle(X, Y, 2, Error, true);
+    }
+    int y = a.y + 4;
+    for (const std::string& l : lines) { ui::textRight(c, a.x + a.w - 6, y, l.c_str(), Ink, font::Face::Small); y += 14; }
+    c.resetClip();
+}
+} // namespace fx::app
+#endif

@@ -43,7 +43,11 @@ namespace {
 const std::string kRoot = FXAI_SOURCE_ROOT;
 const char* const kIdNames[AppCount] = {"RunMatrix", "Statistics", "EActivity", "Spreadsheet", "Graph", "DynaGraph", "Table",
     "Recursion", "ConicGraphs", "Equation", "Program", "Financial", "ECon4", "Link", "Memory", "System", "Geometry",
-    "PicturePlot", "Graph3D", "Conversion", "Python", "AiChat", "Symbols"};
+    "PicturePlot", "Graph3D", "Conversion", "Python", "AiChat", "Symbols",
+#if FXAI_BOARD_PICO_PLUS_2W
+    "Distribution",                                           // v1.18.0, solo Plus
+#endif
+};
 
 std::string readFile(const std::string& relative) {
     std::ifstream in(kRoot + "/" + relative, std::ios::binary);

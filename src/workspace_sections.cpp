@@ -68,6 +68,8 @@ constexpr std::uint16_t modeId(app::AppId a) { return static_cast<std::uint16_t>
      [](Workspace& ws, std::uint16_t, const std::uint8_t* d, std::size_t n) { return NS::decode(ws.MEMBER, d, n); },                 \
      [](Workspace& ws) { NS::reset(ws.MEMBER); }}
 const SectionCodec kCodecs[] = {
+    // v1.18.0: Statistics (0x0101: StatGraph, SET, SET UP, colori e formule delle liste, risultati).
+    FXAI_MODE_CODEC(stats, statistics, Statistics),
 #if FXAI_MODE_EACTIVITY
     {EActivityId, 1, eactPresent, eactEncode, eactDecode},
 #endif
@@ -100,6 +102,9 @@ const SectionCodec kCodecs[] = {
 #endif
 #if FXAI_MODE_PYTHON
     FXAI_MODE_CODEC(py, python, Python),
+#endif
+#if FXAI_MODE_DISTRIBUTION
+    FXAI_MODE_CODEC(dmode, distribution, Distribution),   // v1.18.0: 0x0117
 #endif
     {0, 0, nullptr, nullptr, nullptr},   // segnaposto (non contato)
 };

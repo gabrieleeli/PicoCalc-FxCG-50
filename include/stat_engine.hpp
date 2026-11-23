@@ -227,13 +227,15 @@ struct StatGraph {
 StatGraph defaultGraph(std::size_t index) noexcept;  // StatGraph1 acceso, colori Blue, Red, Green
 constexpr std::size_t kPaletteColors = 7;
 const char* paletteName(std::uint8_t c) noexcept;    // "Blue", "Red", "Magenta", "Green", "Cyan", "Yellow", "Black"
+// Colore iniziale dei dati delle liste: Black (indice 6 della tavolozza).
+inline std::array<std::uint8_t, 26> defaultListColors() { std::array<std::uint8_t, 26> a{}; a.fill(6); return a; }
 struct PlusState {
     std::array<StatGraph, 3> graphs{defaultGraph(0), defaultGraph(1), defaultGraph(2)};
     std::uint8_t var1X{0}, var1Freq{0}, var2Freq{0};  // SET di CALC (2Var XList/YList in Settings)
     bool statWindManual{false};
     std::uint8_t residList{0};                        // 0 None, k = List k
     QuartileRule quartiles{QuartileRule::Std};
-    std::array<std::uint8_t, 26> listColor{};
+    std::array<std::uint8_t, 26> listColor = defaultListColors();
     std::array<std::string, 26> listFormula{};
     std::array<double, ResultVarCount> results{};
     std::array<std::uint8_t, ResultVarCount> valid{};
@@ -241,6 +243,7 @@ struct PlusState {
     bool value(std::uint8_t v, double& out) const noexcept;
     bool operator==(const PlusState& o) const noexcept;
 };
+using State = PlusState;                              // nome comune delle sezioni delle modalita' (FXAI_MODE_CODEC)
 void reset(PlusState& s);
 void encode(const PlusState& s, std::vector<std::uint8_t>& out);
 // Solo dati validi (numeri finiti, indici nei limiti); s invariato se false.

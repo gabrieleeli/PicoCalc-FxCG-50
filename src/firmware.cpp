@@ -55,6 +55,9 @@ struct Firmware::Apps {
 #if FXAI_MODE_PYTHON
     app::PythonApp python;
 #endif
+#if FXAI_MODE_DISTRIBUTION
+    app::DistributionApp distribution;
+#endif
 };
 
 namespace { constexpr std::uint32_t AutosaveDelayMs = 2500; }
@@ -105,6 +108,9 @@ Firmware::Firmware(app::Platform& platform, storage::FlashDevice& flash, storage
 #endif
 #if FXAI_MODE_PYTHON
         &apps_->python,
+#endif
+#if FXAI_MODE_DISTRIBUTION
+        &apps_->distribution,
 #endif
         nullptr};
     for (app::App* a : base) {

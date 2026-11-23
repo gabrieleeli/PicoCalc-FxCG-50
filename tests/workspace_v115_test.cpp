@@ -229,7 +229,9 @@ int main() {
         (void)workspaceSectionCodecs(n);
         // v1.17.0: sulla Plus anche le sezioni delle modalita' Base compilate.
         const std::size_t base = features::kSpreadsheet + features::kDynaGraph + features::kRecursion + features::kConicGraphs + features::kProgram +
-                                 features::kFinancial + features::kLink + features::kGeometry + features::kPicturePlot + features::kPython;
+                                 features::kFinancial + features::kLink + features::kGeometry + features::kPicturePlot + features::kPython +
+                                 // v1.18.0: Statistics (0x0101) sulla Plus e Distribution (0x0117).
+                                 (board::config::kIsPicoPlus2W ? 1u : 0u) + features::kDistribution;
         CHECK(n == (features::kEActivity ? 1u : 0u) + base);
     }
     return testutil::finish("workspace_v115_test");

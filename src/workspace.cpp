@@ -79,6 +79,12 @@ void Workspace::resetAll() {
     py::reset(python);
 #endif
 #if FXAI_BOARD_PICO_PLUS_2W
+    stats::reset(statistics);
+#endif
+#if FXAI_MODE_DISTRIBUTION
+    dmode::reset(distribution);
+#endif
+#if FXAI_BOARD_PICO_PLUS_2W
     damagedSections.clear();
     recordOrigin.clear();
 #endif
@@ -408,6 +414,25 @@ bool Workspace::resolve(const std::string& n, double& out) const {
     return false;
 }
 bool Workspace::statisticVariable(const std::string& n, double& out) const {
+#if FXAI_BOARD_PICO_PLUS_2W
+    // v1.18.0 (Q16): i valori dell'ultimo calcolo di Statistics (sezione 0x0101);
+    // le variabili nuove (PTS, INPUT, RESULT) valgono 0 finche' non si calcolano;
+    // quelle della v1.16.0 senza un calcolo salvato si ricalcolano dalle liste.
+    if (n == "reg_type") { out = settings.statRegType == 0xFF ? -1 : settings.statRegType; return true; }
+    const int id = stats::resultVarByName(n);
+    if (id >= 0 && statistics.value(static_cast<std::uint8_t>(id), out)) return true;
+    if (id >= static_cast<int>(stats::VX1)) { out = 0; return true; }
+    if (settings.statRegType >= static_cast<std::uint8_t>(stats::RegType::Count) && settings.statRegType != 0xFF && n.compare(0, 4, "reg_") == 0) {
+        // Sin, Logistic, a+bx senza valori salvati: si ricalcolano con il nucleo della v1.18.0.
+        const auto& rx = lists[settings.statXList];
+        const auto& ry = lists[settings.statYList];
+        if (rx.empty() || rx.size() != ry.size()) throw MathError("Math ERROR: dati di Statistics insufficienti (XList / YList)");
+        std::vector<std::pair<std::uint8_t, double>> vars;
+        stats::fitVars(stats::fit(static_cast<stats::Reg>(settings.statRegType), rx, ry), vars);
+        for (const auto& [v, value] : vars) if (v == id) { out = value; return true; }
+        return false;
+    }
+#endif
     const auto& x = lists[settings.statXList];
     const auto& y = lists[settings.statYList];
     auto need = [](bool ok) { if (!ok) throw MathError("Math ERROR: dati di Statistics insufficienti (XList / YList)"); };

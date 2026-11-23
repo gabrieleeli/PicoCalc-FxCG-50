@@ -48,8 +48,14 @@ std::vector<Mode> modes() {
     std::vector<Mode> m;
     m.push_back({AppId::RunMatrix, [](Rig& r) { r.enter("1+2"); r.key(pk::Up); r.key(pk::Esc); },
                  [](Workspace& w) { return str(w.history.size()) + (w.history.empty() ? "" : w.history.back().expression); }, 0});
+#if FXAI_BOARD_PICO_PLUS_2W
+    // v1.18.0: CALC › 1-VAR con la barra della fx-CG50; la sonda comprende un risultato di VARS › STAT.
+    m.push_back({AppId::Statistics, [](Rig& r) { r.enter("1"); r.enter("2"); r.enter("3"); r.key(pk::F2); r.key(pk::F1); r.key(pk::Esc); },
+                 [](Workspace& w) { double n = 0; return listText(w.lists[0]) + (w.statistics.value(stats::VN, n) ? str(n) : std::string("-")); }, 7});
+#else
     m.push_back({AppId::Statistics, [](Rig& r) { r.enter("1"); r.enter("2"); r.enter("3"); r.key(pk::F2); r.type("1"); r.key(pk::Esc); },
                  [](Workspace& w) { return listText(w.lists[0]); }, 7});
+#endif
     m.push_back({AppId::EActivity, [](Rig& r) { r.key(pk::F2); r.enter("INIT"); r.type("Prova"); r.key(pk::Esc); r.key(pk::F1); },
                  [](Workspace& w) { return w.eactivity.lastFile + "|" + w.eactivity.folder; }, -1});
     m.push_back({AppId::Graph, [](Rig& r) { r.key(pk::F6); r.settle(); r.key(pk::Esc); },
@@ -107,6 +113,11 @@ std::vector<Mode> modes() {
 #if FXAI_MODE_PICTUREPLOT
     m.push_back({AppId::PicturePlot, [](Rig& r) { r.key(pk::F2); r.key(pk::Right); r.key(pk::F2); },
                  [](Workspace& w) { return str(w.pictplot.points.size()); }, static_cast<int>(eact::StripKind::PicturePlot)});
+#endif
+#if FXAI_MODE_DISTRIBUTION
+    // v1.18.0: Distribution (Base): Normal C.D con i valori iniziali, CALC, risultato in Ans.
+    m.push_back({AppId::Distribution, [](Rig& r) { r.key(pk::Enter); r.key(pk::F1); r.settle(); r.key(pk::Esc); r.key(pk::Esc); },
+                 [](Workspace& w) { return str(w.distribution.kind) + str(w.distribution.hasResult) + str(w.distribution.lastResult); }, -1});
 #endif
 #if FXAI_MODE_PYTHON
     m.push_back({AppId::Python, [](Rig& r) { r.key(pk::F5); r.enter("1+2"); r.settle(); r.key(pk::Esc); },
@@ -334,7 +345,8 @@ int main() {
         ::testutil::report(found, "every open mode has an init case", __FILE__, __LINE__, info.name);
     }
     CHECK(open == all.size());
-    CHECK(open == (board::config::kIsPicoPlus2W ? 12u + 10u : 12u) || !board::config::kIsPicoPlus2W);
+    // v1.18.0: sulla Plus anche Distribution (Base).
+    CHECK(open == (board::config::kIsPicoPlus2W ? 12u + 10u + (features::kDistribution ? 1u : 0u) : 12u) || !board::config::kIsPicoPlus2W);
     // Le cache statiche delle schermate nascono nell'heap vero, prima dei pool simulati.
     {
         storage::RecordStore(board::storageFlash()).eraseAll();

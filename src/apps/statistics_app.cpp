@@ -3,6 +3,11 @@
 // statistical graphs (scatter, xyLine, histogram, box plot, regression curve),
 // DIST calculators and Z/t tests and intervals.
 #include "apps.hpp"
+#if FXAI_BOARD_PICO_PLUS_2W
+// v1.18.0: sulla Pimoroni Pico Plus 2 W Statistics e' alla parita' del capitolo 6
+// (src/apps/statistics_plus_app.cpp e src/apps/stat_plot.cpp). Qui sotto, nell'#else,
+// il codice della v1.16.0 per il Raspberry Pi Pico 2 W congelato, invariato.
+#else
 #include "csv_io.hpp"
 #include <algorithm>
 #include <cmath>
@@ -482,3 +487,4 @@ void StatisticsApp::draw(Context& ctx, gfx::Canvas& c) {
     dialog_.draw(c);
 }
 } // namespace fx::app
+#endif

@@ -19,7 +19,12 @@ constexpr std::uint32_t Shell = s::ModeShell | s::TypedFiles;
 constexpr std::uint8_t Plus = boards::PicoPlus2W;
 
 const char* const kRunMatrixSrc[] = {"src/apps/run_matrix_app.cpp", "src/apps/matrix_editor.cpp", "src/apps/answer_view.cpp", "src/run_matrix.cpp", nullptr};
+#if FXAI_BOARD_PICO_PLUS_2W
+// v1.18.0: sulla Plus il controller alla parita' (statistics_app.cpp tiene la v1.16.0 nell'#else).
+const char* const kStatisticsSrc[] = {"src/apps/statistics_app.cpp", "src/apps/statistics_plus_app.cpp", "src/apps/stat_plot.cpp", nullptr};
+#else
 const char* const kStatisticsSrc[] = {"src/apps/statistics_app.cpp", nullptr};
+#endif
 const char* const kGraphSrc[] = {"src/apps/graph_app.cpp", "src/apps/graph_plot.cpp", "src/apps/graph_files.cpp", nullptr};
 const char* const kTableSrc[] = {"src/apps/table_app.cpp", nullptr};
 const char* const kEquationSrc[] = {"src/apps/equation_app.cpp", "src/apps/math_field.cpp", "src/equation.cpp", nullptr};
@@ -43,6 +48,7 @@ const char* const kSrcLink[] = {"src/apps/link_app.cpp", "src/link_protocol.cpp"
 const char* const kSrcGeometry[] = {"src/apps/geometry_app.cpp", "src/geometry.cpp", nullptr};
 const char* const kSrcPicturePlot[] = {"src/apps/picture_plot_app.cpp", "src/picture_plot.cpp", nullptr};
 const char* const kSrcPython[] = {"src/apps/python_app.cpp", "src/python_port.cpp", nullptr};
+const char* const kSrcDistribution[] = {"src/apps/distribution_app.cpp", "src/distribution.cpp", nullptr};
 constexpr AppStatus BaseStatus = AppStatus::Base;
 #else
 #define FXAI_SRC(name) nullptr
@@ -58,9 +64,19 @@ constexpr AppInfo kApps[AppCount] = {
      // storeSystemVariable (->Xmax, ->TblStart, ->Xfct), mai direttamente; Lists solo con
      // i metodi del workspace (List "QTY", n->Dim List, Fill); Strings: Str, f1-f20, Dyna/Recursion/TVM.
      d::Settings | d::Memory | d::History | d::Matrices | d::View | d::Table | d::Graph | d::Lists | d::Strings, linkTo(AppId::Graph), kRunMatrixSrc},
+#if FXAI_BOARD_PICO_PLUS_2W
+    // v1.18.0: parita' completa con il capitolo 6 (docs/reports/ANALISI_FONTI_v1.18.0.md).
+    {AppId::Statistics, "Statistics", "2", rgb888To565(30, 160, 90), AppStatus::Available,
+     "Editor di List 1-26 (sottonomi, colori, formule nella testa, List File 1-6, CSV, SRT-A/SRT-D su piu' liste, DEL, DEL-ALL, INS, ADD, JUMP), StatGraph1-3 con 20 tipi di grafico, Stat Wind e TRACE, CALC 1/2-Var con frequenze e 12 regressioni con residui e COPY, TEST (Z, t, chi^2, F, ANOVA a una e due vie), INTR, DIST con le 24 funzioni, VARS › STAT",
+     nullptr, s::Expression | Ui | s::Stats | s::Storage | s::Files | s::ModeShell | s::StepTask,
+     // View: V-Window per Stat Wind Manual; Memory: Ans della DIST; Matrices: chi^2 2-way
+     // (le matrici si leggono e scrivono con collection/storeMatrix); StatData: sezione 0x0101.
+     d::Settings | d::Lists | d::Functions | d::View | d::Memory | d::Matrices | d::StatData, 0, kStatisticsSrc},
+#else
     {AppId::Statistics, "Statistics", "2", rgb888To565(30, 160, 90), AppStatus::Available,
      "Liste 1-26 con sottonomi e file CSV, statistiche 1/2 variabili, regressioni, grafici statistici, distribuzioni, test e intervalli",
      nullptr, s::Expression | Ui | s::Stats | s::Storage | s::Files, d::Settings | d::Lists | d::Functions, 0, kStatisticsSrc},
+#endif
     {AppId::EActivity, "eActivity", "3", rgb888To565(220, 40, 140), AppStatus::Available,
      "Documenti .pceact con righe di testo (espressioni Math, colori, marcatori, memo), righe di calcolo valutate dal nucleo di Run-Matrix con ricalcolo fino alla riga di stop, immagini PICT, strisce delle modalita' con i propri dati, Notes, memorie Mat/Vct/List per file",
      nullptr,
@@ -216,6 +232,13 @@ constexpr AppInfo kApps[AppCount] = {
      nullptr, s::Widgets | s::Editor | s::Network | s::Storage, d::Settings | d::Chat, linkTo(AppId::System), kAiChatSrc},
     {AppId::Symbols, "Symbols", "N", rgb888To565(130, 60, 170), AppStatus::Available,
      "Guida di simboli e funzioni", nullptr, s::Widgets | s::Help, 0, 0, kSymbolsSrc},
+#if FXAI_BOARD_PICO_PLUS_2W
+    // v1.18.0 (cap. 18): modalita' Base sul nucleo delle distribuzioni condiviso con il DIST di Statistics.
+    {AppId::Distribution, "Distribution", "O", rgb888To565(210, 100, 40), BaseStatus,
+     "Distribuzioni Normale, t, chi^2, F, Binomiale, Poisson, Geometrica, Ipergeometrica: PD, CD e inverse con Data Variable o List, risultato in Ans o ListAns e Save Res, grafico con l'area per le continue; stesso nucleo (dist_core) del DIST di Statistics",
+     "Base v1.18.0: mancano per la parita' (cap. 18) lo schermo diviso grafico/parametri con l'aggiornamento dal vivo, lo spostamento dei limiti con il cursore sul grafico, la tabella dei valori della distribuzione e le strisce di eActivity.",
+     s::Expression | Ui | s::Stats | s::Storage | Shell | s::StepTask | Core, d::Settings | d::Memory | d::Lists | d::Distribution, 0, FXAI_SRC(Distribution), Plus},
+#endif
 };
 
 const char* const kHExpression[] = {"expression.hpp", "expression_ast.hpp", "value.hpp", "calc_library.hpp", nullptr};
@@ -224,7 +247,11 @@ const char* const kHEditor[] = {"natural_editor.hpp", "line_editor.hpp", nullptr
 const char* const kHRender[] = {"math_renderer.hpp", nullptr};
 const char* const kHFormat[] = {"number_format.hpp", nullptr};
 const char* const kHSolvers[] = {"solvers.hpp", nullptr};
+#if FXAI_BOARD_PICO_PLUS_2W
+const char* const kHStats[] = {"statistics.hpp", "stat_engine.hpp", "dist_core.hpp", nullptr};   // v1.18.0
+#else
 const char* const kHStats[] = {"statistics.hpp", nullptr};
+#endif
 const char* const kHMathCore[] = {"math_engine.hpp", "limits.hpp", nullptr};
 const char* const kHWidgets[] = {"ui_kit.hpp", "app_widgets.hpp", "graphics_engine.hpp", "font_renderer.hpp", nullptr};
 const char* const kHNetwork[] = {"net.hpp", "ai_protocol.hpp", "ai_client.hpp", nullptr};
@@ -251,7 +278,7 @@ const char* const kHEActivity[] = {"eactivity.hpp", "limits.hpp", nullptr};
 // v1.17.0: tutti i nuclei delle modalita' Base (l'architecture_test permette a
 // ogni modalita' solo il proprio, modeCoreHeaders).
 const char* const kHModeCore[] = {"spreadsheet.hpp", "dyna.hpp", "recursion.hpp", "conic.hpp", "program_mode.hpp", "financial.hpp",
-                                  "link_protocol.hpp", "geometry.hpp", "picture_plot.hpp", "python_port.hpp", "mode_codec.hpp", "limits.hpp", nullptr};
+                                  "link_protocol.hpp", "geometry.hpp", "picture_plot.hpp", "python_port.hpp", "distribution.hpp", "mode_codec.hpp", "limits.hpp", nullptr};
 #endif
 const char* const kHHardware[] = {"board_config.hpp", "mem_pools.hpp", "psram.hpp", "limits.hpp", "system_info.hpp", "system_runtime.hpp", nullptr};
 const ServiceInfo kServices[service::Count] = {
@@ -275,6 +302,7 @@ const ServiceInfo kServices[service::Count] = {
 const char* const kDataNames[data::Count] = {"settings", "memory", "history", "functions", "view", "table", "lists", "equation", "chat", "graph", "graph3d", "matrices", "strings", "eactivity",
 #if FXAI_BOARD_PICO_PLUS_2W
                                              "sheet", "dyna", "recursion", "conic", "financial", "program", "link", "geometry", "pictplot", "python",
+                                             "statistics", "distribution",
 #endif
 };
 // Membri e metodi del workspace che non hanno il nome di una sezione (v1.11.0).
@@ -306,6 +334,9 @@ constexpr bool compiledFlag(AppId id) noexcept {
     case AppId::Geometry: return features::kGeometry;
     case AppId::PicturePlot: return features::kPicturePlot;
     case AppId::Python: return features::kPython;
+#if FXAI_BOARD_PICO_PLUS_2W
+    case AppId::Distribution: return features::kDistribution;
+#endif
     default: return true;                  // modalita' della v1.14.0 ed estensioni: sempre compilate
     }
 }
@@ -376,6 +407,7 @@ const char* const* modeCoreHeaders(AppId id) noexcept {
     static const char* const geo[] = {"geometry.hpp", "mode_codec.hpp", "limits.hpp", nullptr};
     static const char* const pp[] = {"picture_plot.hpp", "mode_codec.hpp", "limits.hpp", nullptr};
     static const char* const py[] = {"python_port.hpp", "mode_codec.hpp", "limits.hpp", nullptr};
+    static const char* const dm[] = {"distribution.hpp", "mode_codec.hpp", "limits.hpp", nullptr};
     static const char* const none[] = {nullptr};
     switch (id) {
     case AppId::Spreadsheet: return sheet;
@@ -388,6 +420,7 @@ const char* const* modeCoreHeaders(AppId id) noexcept {
     case AppId::Geometry: return geo;
     case AppId::PicturePlot: return pp;
     case AppId::Python: return py;
+    case AppId::Distribution: return dm;
     default: return none;
     }
 }
