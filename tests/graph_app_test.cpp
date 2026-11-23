@@ -592,7 +592,7 @@ int main() {
         pict::Image img;
         CHECK_EQ_STR(pict::parse(data.data(), data.size(), img), "");
         CHECK(img.width == graphgeo::Columns && img.height == graphgeo::Rows && img.view == ws.view);
-        r.key(pckey::F8); r.type("1"); r.type("2"); r.enter("WAVE");   // SAVE•AS
+        r.key(pckey::F8); r.type("1"); r.type("2"); r.key(pckey::F1); r.enter("WAVE");   // SAVE•AS: folder (v1.18.0), then the name
         r.settle();
         CHECK(card.exists("PICOCALC/PICT/WAVE.pcpict"));
         r.key(pckey::F8); r.type("1"); r.type("5"); r.enter("WAVE");   // BMP export
@@ -613,8 +613,9 @@ int main() {
         CHECK(ws.graph.settings.background == 1);
         r.key(pckey::F1);                                          // load its V-Window: Yes
         CHECK(ws.view.xmin == -6.3);
-        r.key(pckey::F8); r.type("3"); r.enter("40");              // Fade 40 %
+        r.key(pckey::F8); r.type("3"); r.enter("40");              // Fade 40 % (v1.18.0: slider, value typed, EXIT, manual 5-12)
         CHECK(ws.graph.settings.fade == 40);
+        r.key(pckey::Esc);
         // BGV-WIN: the background file takes the current V-Window (manual 5-10)
         ws.view.xmin = -3; ws.view.xmax = 3;
         r.key(pckey::F8); r.type("4"); r.type("1"); r.key(pckey::F1);   // BGV-WIN > SAVE > Yes
@@ -625,7 +626,7 @@ int main() {
             CHECK(files::readAll(card, "PICOCALC/PICT/PICT01.pcpict", bytes, 1 << 20) == files::Status::Ok);
             CHECK(pict::parse(bytes.data(), bytes.size(), back).empty() && back.view.xmin == -3 && back.view.xmax == 3 && back.fade == 40);
         }
-        r.key(pckey::F8); r.type("4"); r.type("2"); r.enter("BACK");    // BGV-WIN > SAVE•AS
+        r.key(pckey::F8); r.type("4"); r.type("2"); r.key(pckey::F1); r.enter("BACK");    // BGV-WIN > SAVE•AS: folder, name
         CHECK(card.exists("PICOCALC/PICT/BACK.pcpict") && ws.graph.settings.background == BackgroundFile);
         CHECK_EQ_STR(ws.graph.settings.backgroundFile, "PICOCALC/PICT/BACK.pcpict");
         r.key(pckey::F10); r.keys(pckey::Down, 11); r.keys(pckey::Left, 21); r.key(pckey::Esc);    // Background: None

@@ -96,7 +96,7 @@ int main() {
         CHECK(w.lists[index].empty());                                          // tutto o niente
         CHECK_THROWS_AS(w.setList(0, std::vector<double>(perList + 1, 0.0)), DimensionError);
         if (board::config::kIsPicoPlus2W) CHECK(Workspace::MaxListElements == 20000 && index == 20);
-        else CHECK(Workspace::MaxListElements == 1530 && index == 6);
+        else CHECK(Workspace::MaxListElements == 1530 && index == 1);   // v1.18.0 (D4): lists of 999 elements, same total
         // Un record con le liste oltre il budget non si legge
         Workspace big = w;
         auto blob = serializeWorkspace(big);

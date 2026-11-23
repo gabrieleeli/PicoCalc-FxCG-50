@@ -1,4 +1,4 @@
-# Formati dei file GRAPH (v1.8.0)
+# Formati dei file GRAPH (v1.8.0; aggiornato alla v1.18.0)
 
 Formati originali del progetto, documentati qui e implementati in
 `src/graph_file.cpp` (progetti e memorie grafiche) e `src/pict.cpp`
@@ -111,6 +111,10 @@ crc32=76C89E50
 | `tablevar=` | variabile di TABLE: `Range` o `List1`…`List6` (aggiunta compatibile: i firmware che non la conoscono la ignorano) |
 | `tablefunc=` | tipo della tabella: `Y=`, `r=` o `Param` (aggiunta compatibile) |
 | `overlay=` | percorso dell'immagine richiamata (RECALL) |
+| `dual=` | v1.18.0: Dual Screen di Graph, `G+G` o `GtoT` (scritta solo se non è `Off`) |
+| `subview=` | v1.18.0: V-Window del sotto-schermo (G+G), stesso formato di `view` (scritta solo se diversa da quella iniziale) |
+| `side=` | v1.18.0: 20 caratteri, uno per funzione Y1…Y20: `M` principale, `S` solo sotto-schermo, `E` entrambi (scritta solo se un indicatore non è `M`) |
+| `tabledual=` | v1.18.0: Dual Screen di Table, `On` = T+G (scritta solo se `On`) |
 | `f<n>=` | funzione `n` (1–20): `tipo|selezione|colore|stile|espressione|Yt`; le righe vuote non sono scritte; `Yt` solo per `Param` |
 | `s=` | elemento SKETCH (max 64): `tipo|x0;y0;x1;y1|colore|stile|testo|percorso` |
 | `c=` | grafico di un comando di Run-Matrix (v1.13.0, max 10): `tipo|colore|stile|espressione|espressione2`; `tipo` come `functype=` (anche le disequazioni `Y>=` …), `espressione2` solo per `Param` (aggiunta compatibile: i firmware precedenti ignorano la chiave) |
@@ -149,7 +153,12 @@ delle altre modalità non fanno parte del progetto.
 **Contenuto non salvato nel progetto**: le immagini (sono file `.pcpict`
 separati, il progetto ne conserva il percorso), le memorie grafiche (sono della
 calcolatrice), i grafici incollati e i punti marcati con EXE (temporanei, come
-sulla CG50).
+sulla CG50), la tabella del Graph to Table (come le righe di TABLE, sta nel
+workspace: sezione `0x0104`, [STORAGE.md](STORAGE.md)).
+
+Le quattro chiavi del Dual Screen (v1.18.0) sono un'aggiunta compatibile: un
+progetto senza Dual Screen è identico a quello della v1.17.0 e un firmware
+precedente apre un progetto con il Dual Screen ignorandone le chiavi.
 
 ## Memoria grafica `PCGMEM` (testo, versione 1)
 
@@ -167,7 +176,13 @@ crc32=XXXXXXXX
 Spazio totale per le 20 memorie: 24 KB (`MaxGraphMemoryBytes`); oltre si ha
 "Memory ERROR".
 
-## Immagine `.pcpict` (binario, versione 1)
+## Immagine `.pcpict` (binario, versioni 1 e 2)
+
+La **versione 2** (v1.18.0) contiene i **due livelli** della fx-CG50 (manuale
+5-20: l'immagine del grafico e quella dello sfondo); la versione 1, a un solo
+livello, resta quella delle catture di Run-Matrix e del 3D Graph e si legge
+sempre. Un firmware ≤ v1.17.0 rifiuta le immagini v2 («creato da una versione
+più recente»).
 
 | Offset | Dimensione | Campo |
 |---|---|---|
@@ -175,12 +190,24 @@ Spazio totale per le 20 memorie: 24 KB (`MaxGraphMemoryBytes`); oltre si ha
 | 8 | 2 | versione del formato (1) |
 | 10 | 2 | larghezza in pixel (1–4096; GRAPH: 320) |
 | 12 | 2 | altezza in pixel (1–4096; GRAPH: 282) |
-| 14 | 1 | flag: bit 0 = V-Window presente (altri bit = 0) |
+| 14 | 1 | flag: bit 0 = V-Window presente; bit 1 = due livelli (solo versione 2) |
 | 15 | 1 | Fade I/O dello sfondo (0–100) |
 | 16 | 72 | V-Window: 9 double IEEE 754 (Xmin, Xmax, Xscale, Ymin, Ymax, Yscale, Tmin, Tmax, Tpitch) |
 | 88 | 4 | `n` = lunghezza dei dati RLE (≤ 96 KB) |
-| 92 | n | dati RLE |
-| 92+n | 4 | CRC-32 di tutti i byte precedenti |
+| 92 | n | dati RLE (versione 2: livello dello **sfondo**) |
+| 92+n | 4 | solo versione 2: `m` = lunghezza del livello del **grafico** (n + m ≤ 96 KB) |
+| 96+n | m | solo versione 2: livello del grafico |
+| fine − 4 | 4 | CRC-32 di tutti i byte precedenti |
+
+**Due livelli** (versione 2): il livello dello sfondo contiene l'immagine di
+sfondo come appare (con Fade I/O), la griglia, gli assi e le etichette; il
+livello del grafico le regioni delle disequazioni, l'area di ∫dx, l'immagine
+richiamata, le curve, gli elementi SKETCH e i punti, con il bianco trasparente.
+In lettura i due livelli sono composti (lo sfondo, poi i pixel non bianchi del
+grafico) e la composizione è ciò che vedono RECALL, eActivity, Picture Plot e
+l'esportazione BMP; quando l'immagine è lo **sfondo** di Graph, Fade I/O
+schiarisce solo il livello dello sfondo e il livello del grafico resta nitido.
+La composizione è fatta riga per riga (buffer di una riga).
 
 **Dati RLE**: per ogni riga, dall'alto in basso, sequenze di coppie
 `conteggio (u16), colore (u16 RGB565)`; una sequenza non attraversa la fine
@@ -189,7 +216,13 @@ Il bianco `0xFFFF` è trasparente quando l'immagine è richiamata sopra un
 grafico (RECALL), ed è opaco quando l'immagine è usata come sfondo.
 
 L'immagine contiene l'area del grafico (320×282, senza barra di stato né menu
-funzione) come appare sullo schermo: sfondo, griglia, assi, grafici, sketch.
+funzione): sfondo, griglia, assi, grafici, sketch. Uno schermo diviso (Dual
+Screen) non si salva in un'immagine (manuale 5-21).
+
+**Cartelle** (v1.18.0): le immagini stanno in `PICOCALC/PICT` (la radice) e
+nelle sue cartelle di primo livello; SAVE•AS, OPEN e Background › OPEN
+mostrano le cartelle per prime (`[NOME]`, 1–8 caratteri `A–Z a–z 0–9 _ -`);
+NEW F crea una cartella.
 
 ## Esportazione BMP
 

@@ -61,7 +61,9 @@ set(FXAI_TESTS
   # v1.15.0: fondamenta comuni (record v11, file tipizzati, guscio, editor di testo, StepTask)
   workspace_v115_test typed_files_test mode_shell_test text_editor_test step_task_test
   # v1.16.0: eActivity (entrambe le schede)
-  eactivity_test)
+  eactivity_test
+  # v1.18.0: Graph e Table alla parita' completa (entrambe le schede)
+  graph_v118_test table_v118_test workspace_v118_test)
 # v1.15.0: servizi solo della Pimoroni Pico Plus 2 W (grafico 2D, BindingResolver, interprete)
 if("FXAI_SERVICE_GRAPH2D=1" IN_LIST FXAI_FEATURE_DEFINITIONS)
   list(APPEND FXAI_TESTS graph2d_test)

@@ -116,6 +116,10 @@ public:
     void build(const GraphSource& source, const std::vector<std::string>& pasted = {});
     const std::vector<Plot>& plots() const noexcept { return plots_; }
     const std::string& error(std::size_t function) const;      // "" = no error
+    // v1.18.0: colour and style of a pasted graph (FORMAT on the graph screen, manual 5-31).
+    void setPlotFormat(std::size_t plot, std::uint8_t color, LineStyle style) noexcept {
+        if (plot < plots_.size()) { plots_[plot].color = color; plots_[plot].style = style; }
+    }
     // Plot of an arbitrary expression (sketch Inverse, Modify preview); throws on syntax errors.
     Plot makePlot(const std::string& text, GraphType type, std::uint8_t color, LineStyle style) const;
 
@@ -186,10 +190,11 @@ ViewWindow withXdot(const ViewWindow& v, double xdot);           // Xdot edit: X
 ViewWindow zoomAt(const ViewWindow& v, double cx, double cy, double fx, double fy);
 // Box zoom; throws Argument ERROR when the box has no width or height (manual 5-9).
 ViewWindow zoomBox(const ViewWindow& v, double x0, double y0, double x1, double y1);
-ViewWindow squareWindow(const ViewWindow& v);                    // SQUARE / Y-BASE: Xdot = Ydot, x centre kept
-ViewWindow squareXBase(const ViewWindow& v);                     // X-BASE: x kept, y changed
-ViewWindow roundWindow(const ViewWindow& v, double cx, double cy);   // ROUND: dots of one significant digit
-ViewWindow integerWindow(const ViewWindow& v, double cx, double cy); // INTEGER: Xdot = Ydot = 1
+// rows (v1.18.0): height in pixels of the pane (graphgeo::Rows, or SplitRows in the Dual Screen).
+ViewWindow squareWindow(const ViewWindow& v, int rows = graphgeo::Rows);   // SQUARE / Y-BASE: Xdot = Ydot, x centre kept
+ViewWindow squareXBase(const ViewWindow& v, int rows = graphgeo::Rows);    // X-BASE: x kept, y changed
+ViewWindow roundWindow(const ViewWindow& v, double cx, double cy, int rows = graphgeo::Rows);   // ROUND: dots of one significant digit
+ViewWindow integerWindow(const ViewWindow& v, double cx, double cy, int rows = graphgeo::Rows); // INTEGER: Xdot = Ydot = 1
 // AUTO: Y range from the finite values (outliers of poles ignored). False if none.
 bool autoWindow(ViewWindow& v, std::vector<double> values);
 // Tick positions of an axis (Xscale/Yscale), limited to maxTicks.

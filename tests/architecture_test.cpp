@@ -229,6 +229,68 @@ int main() {
         }
         // E-CON4 resta External su entrambe le schede.
         CHECK(appInfo(AppId::ECon4).status == AppStatus::External);
+
+        // ---------------------------------------------------------- v1.18.0: congelamento del Pico 2 W
+        // Il Raspberry Pi Pico 2 W resta congelato alla v1.17.0 con UNA eccezione
+        // esplicita: le funzioni di Graph e Table della v1.18.0 (parita' completa,
+        // docs/reports/ANALISI_FONTI_v1.18.0.md §9). Il manifesto ha l'impronta di
+        // ogni file compilato sul Pico 2 W alla v1.17.0: un file fuori dall'eccezione
+        // che cambia fa fallire il test; un sorgente nuovo del Pico 2 W deve stare
+        // nell'eccezione. Il margine bloccante della flash e' in cmake/fxai_board.cmake.
+        const std::set<std::string> kGraphTableV118 = {
+            // Graph e Table (controller, motore, disegno condiviso, Dual Screen)
+            "src/apps/graph_app.cpp", "src/apps/graph_plot.cpp", "src/apps/graph_files.cpp", "src/apps/table_app.cpp",
+            "src/apps/graph_view.cpp", "src/apps/graph_dual.cpp", "include/graph_view.hpp",
+            "src/graph_model.cpp", "include/graph_model.hpp", "src/graph_engine.cpp", "include/graph_engine.hpp",
+            "include/apps.hpp",                                      // solo le classi GraphApp e TableApp
+            // persistenza del Dual Screen (sezioni 0x0104/0x0106, parte Dual, chiavi .pcgraph)
+            "src/workspace.cpp", "src/workspace_sections.cpp", "include/workspace.hpp", "src/graph_file.cpp", "include/graph_file.hpp",
+            // immagini a due livelli (5-20), liste di 999 per LISTMEM (D4), funzioni predefinite di 5-26
+            "src/pict.cpp", "include/pict.hpp", "include/limits.hpp", "src/graph_commands.cpp",
+            // sorgenti del registro di Graph e Table
+            "src/app_registry.cpp"};
+        auto fnv = [](const std::string& bytes) {
+            std::uint64_t h = 1469598103934665603ull;
+            for (unsigned char b : bytes) { h ^= b; h *= 1099511628211ull; }
+            return h;
+        };
+        std::set<std::string> manifest;
+        {
+            std::istringstream lines(readFile("tests/fixtures/pico2w_frozen_v1_17_0.txt"));
+            std::string line;
+            while (std::getline(lines, line)) {
+                if (line.empty() || line[0] == '#') continue;
+                const std::size_t sp = line.find(' ');
+                CHECK(sp != std::string::npos);
+                if (sp == std::string::npos) continue;
+                const std::string file = line.substr(0, sp);
+                manifest.insert(file);
+                if (kGraphTableV118.count(file)) continue;
+                const std::uint64_t want = std::stoull(line.substr(sp + 1), nullptr, 16);
+                ::testutil::report(fnv(readFile(file)) == want, "Pico 2 W frozen at v1.17.0 (file unchanged)", file.c_str(), 0, "freeze");
+            }
+        }
+        CHECK(manifest.size() > 150 && manifest.count("src/apps/graph_plot.cpp") == 1);
+        for (const std::string& file : kGraphTableV118)
+            ::testutil::report(std::filesystem::exists(kRoot + "/" + file), "exception lists existing files", file.c_str(), 0, "freeze");
+        if (thisBoard() == boards::Pico2W)
+            for (const std::string& src : compiled)
+                ::testutil::report(manifest.count(src) == 1 || kGraphTableV118.count(src) == 1, "new Pico 2 W sources only for Graph/Table (v1.18.0)", src.c_str(), 0, "freeze");
+        // Margine bloccante del Pico 2 W: 32 KiB + 48 KiB (immagine <= 2 015 232 B).
+        {
+            const std::string board = readFile("cmake/fxai_board.cmake");
+            const std::size_t p2w = board.find("FXAI_BOARD_SUFFIX pico2w");
+            const std::size_t margin = board.find("set(_fxai_fw_margin 81920)", p2w);
+            CHECK(p2w != std::string::npos && margin != std::string::npos && margin < board.find("PICO_PLUS_2W", p2w));
+            CHECK(2097152 - 81920 == 2015232);
+        }
+        // Graph e Table restano Available su entrambe le schede, con i sorgenti del Dual Screen.
+        for (AppId id : {AppId::Graph, AppId::Table}) {
+            CHECK(appInfo(id).status == AppStatus::Available);
+            bool view = false;
+            for (const char* const* src = appInfo(id).sources; src && *src; ++src) view = view || std::string(*src) == "src/apps/graph_view.cpp";
+            ::testutil::report(view, "Graph/Table use the shared drawing of the Dual Screen", appInfo(id).name, 0, "v1.18.0");
+        }
         // Il controllo sulla mappa del linker usa questi nomi (cmake/fxai_sources.cmake).
         const std::string cmakeFeatures = readFile("cmake/fxai_sources.cmake");
         for (const char* opt : {"MODE EACTIVITY", "MODE SPREADSHEET", "MODE PROGRAM", "MODE PYTHON", "SERVICE GRAPH2D",

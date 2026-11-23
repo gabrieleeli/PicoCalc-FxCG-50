@@ -23,7 +23,9 @@ constexpr GraphType kConvert[] = {GraphType::Y, GraphType::YGreater, GraphType::
 constexpr const char* kBuiltIn[] = {"Ax+B", "A(x-B)^(2)+C", "Ax^(2)+Bx+C", "Ax^(3)+Bx^(2)+Cx+D", "Asin(Bx+C)", "Acos(Bx+C)", "Atan(Bx+C)"};
 constexpr const char* kBuiltInLabel[] = {"Y=AX+B", "Y=A(X-B)\xC2\xB2+C", "Y=AX\xC2\xB2+BX+C", "Y=AX\xC2\xB3+BX\xC2\xB2+CX+D", "Y=Asin(BX+C)", "Y=Acos(BX+C)", "Y=Atan(BX+C)"};
 enum WindowField { WXmin, WXmax, WXscl, WXdot, WYmin, WYmax, WYscl, WTmin, WTmax, WTstep, WCount };
-enum SetupField { SFunc, SDraw, SDeriv, SAngle, SCoord, SGrid, SAxes, SLabel, SDisplay, SGraphFunc, SSimul, SBack, SFade, SPlotCol, SSketch, SIneq, SCount };
+// v1.18.0: "Dual Screen" (manual 1-36) takes the row of "Fade I/O", which on the
+// fx-CG50 is not a Setup item but the OPTN slider (manual 5-12).
+enum SetupField { SFunc, SDraw, SDeriv, SAngle, SCoord, SGrid, SAxes, SLabel, SDisplay, SGraphFunc, SSimul, SBack, SDual, SPlotCol, SSketch, SIneq, SCount };
 
 std::string numberText(double v) { return formatReal(v, {DisplayMode::Norm2, 0}); }
 FormField num(const char* l, double v) { return {l, numberText(v), FormField::Type::Number, {}, 0}; }
@@ -111,6 +113,11 @@ void GraphApp::leave(Context& ctx) {
     shade_.clear(); built_ = false;
     layer_.clear(); layer_.shrink_to_fit(); layerValid_ = false;
     capture_ = pict::Image{}; captureReady_ = capturePending_ = false;
+    // v1.18.0: the Dual Screen buffers live only while Graph is open.
+    subCurves_.clear(); subCurves_.shrink_to_fit();
+    onMain_.clear(); onMain_.shrink_to_fit();
+    gtotCols_.clear(); gtotCols_.shrink_to_fit(); gtotKey_ = 0; gtotError_.clear();
+    tableActive_ = false;
 }
 bool GraphApp::tick(Context& ctx) {
     bool redraw = false;
@@ -231,7 +238,15 @@ void GraphApp::listKey(Context& ctx, const KeyEvent& ev) {
     case Key::PageDown: row_ = std::min(n - 1, row_ + 6); return;
     case Key::Home: row_ = 0; return;
     case Key::End: row_ = n - 1; return;
-    case Key::F1: f.selected = !f.selected; changed(ctx); return;
+    case Key::F1:
+        // G+G: SELECT on a line with the S/E indicator only clears the indicator (manual 5-24).
+        if (ctx.ws.graph.dual.mode == DualScreen::GraphGraph && ctx.ws.graph.dual.side[static_cast<std::size_t>(line.fn)] != DualSide::Main) {
+            ctx.ws.graph.dual.side[static_cast<std::size_t>(line.fn)] = DualSide::Main;
+            changed(ctx);
+            return;
+        }
+        f.selected = !f.selected; changed(ctx);
+        return;
     case Key::F2: case Key::DelForward: case Key::Del:
         if (f.empty()) return;
         confirm(Confirm::DeleteFunction, "Eliminare " + linePrefix(f.type, line.fn, 0) + (f.type == GraphType::Param ? " e Yt" + std::to_string(line.fn + 1) : std::string()) + "?");
@@ -243,10 +258,10 @@ void GraphApp::listKey(Context& ctx, const KeyEvent& ev) {
         return;
     }
     case Key::F4: showMenu(Menu::Tool, "TOOL", {"STYLE \xE2\x96\xB6", "GPH-MEM \xE2\x96\xB6", "BUILT-IN \xE2\x96\xB6", "FORMAT", "FILE \xE2\x96\xB6"}); return;
-    case Key::F5: startModify(ctx, -1); return;
-    case Key::F6: showPlot(); haveOriginal_ = false; marks_.clear(); return;
+    case Key::F5: dualOnly(ctx, "MODIFY"); startModify(ctx, -1); return;     // Dual Screen Off (manual 5-39)
+    case Key::F6: case Key::Exe: showPlot(); haveOriginal_ = false; marks_.clear(); return;   // DRAW or EXE (manual 5-2, 5-18)
     case Key::Optn: showMenu(Menu::ListOptn, "OPTN", {"FORMAT", "FILE \xE2\x96\xB6", "V-WIN", "\xE2\x86\x92 TABLE"}); return;
-    case Key::Exe: case Key::Right: beginEdit(ctx, true); return;
+    case Key::Right: beginEdit(ctx, true); return;                       // -> shows the cursor in the expression (manual 5-17)
     case Key::Char:
         if (ev.ctrl) {
             if (ev.ch == 'v' || ev.ch == 'V') { if (ctx.clipboard) { beginEdit(ctx, false); editor_.paste(*ctx.clipboard); } }
@@ -296,7 +311,7 @@ void GraphApp::editKey(Context& ctx, const KeyEvent& ev) {
         return;
     case Key::F5: editor_.insertAbs(); return;
     case Key::F6: case Key::Optn:
-        showMenu(Menu::EditMore, "INSERISCI", {"[ ]  intervallo ,[a,b]", "[A=]  sovrapposizione", "List 1-26", "\xCF\x80", "\xCE\xB8", "x\xC2\xB2", "log\xE2\x82\x90" "b", "e^\xE2\x96\xA1", "d/dx", "\xE2\x88\xAB" "dx", "\xE2\x89\xA5  \xE2\x89\xA4  =", "GRAPH: Y r Xt Yt X"});
+        showMenu(Menu::EditMore, "INSERISCI", {"[ ]  intervallo ,[a,b]", "[A=]  sovrapposizione", "List 1-26", "\xCF\x80", "\xCE\xB8", "x\xC2\xB2", "log\xE2\x82\x90" "b", "e^\xE2\x96\xA1", "d/dx", "\xE2\x88\xAB" "dx", "\xE2\x89\xA5  \xE2\x89\xA4  =", "GRAPH: Y r Xt Yt X", "ANGLE  \xC2\xB0 \xCA\xB3 \xE1\xB5\x8D"});
         return;
     case Key::Vars: showMenu(Menu::EditVars, "VARS GRAPH", {"Y  (Y=, Y>...)", "r  (polare)", "Xt (parametrica)", "Yt (parametrica)", "X  (X=, X>...)"}); return;
     default: return;
@@ -313,6 +328,7 @@ void GraphApp::loadWindowForm(const ViewWindow& v) {
     for (const auto& f : window_.fields) windowText_.push_back(f.text);
 }
 void GraphApp::openWindow(Context& ctx) {
+    windowSub_ = false;
     loadWindowForm(ctx.ws.view);
     window_.selected = 0;
     screen_ = Screen::Window;
@@ -331,9 +347,11 @@ bool GraphApp::applyWindow(Context& ctx) {
     if (v.tstep != 0 && (v.tmax - v.tmin) * v.tstep < 0) v.tstep = -v.tstep;
     const std::string err = validateView(v);
     if (!err.empty()) throw MathError(err);
-    if (!(v == ctx.ws.view)) {
-        ctx.ws.view = v;
-        haveOriginal_ = false; zoomStack_.clear(); marks_.clear(); shade_.clear(); shadeIntegral_ = false;
+    ViewWindow& target = windowSub_ ? ctx.ws.graph.dual.sub : ctx.ws.view;    // G+G: V-Window of the sub-screen (manual 5-23)
+    if (!(v == target)) {
+        target = v;
+        haveOriginal_ = false; zoomStack_.clear(); shade_.clear(); shadeIntegral_ = false;
+        if (!windowSub_) marks_.clear();
         ctx.markDirty(); ctx.ws.graph.projectModified = true;
     }
     loadWindowForm(v);
@@ -360,7 +378,12 @@ void GraphApp::windowKey(Context& ctx, const KeyEvent& ev) {
         return;
     }
     const AngleMode angle = ctx.ws.settings.angle;
-    auto current = [&]() { ViewWindow keep = ctx.ws.view; try { (void)applyWindow(ctx); } catch (...) { ctx.ws.view = keep; throw; } return ctx.ws.view; };
+    auto current = [&]() {
+        ViewWindow& target = windowSub_ ? ctx.ws.graph.dual.sub : ctx.ws.view;
+        ViewWindow keep = target;
+        try { (void)applyWindow(ctx); } catch (...) { target = keep; throw; }
+        return target;
+    };
     switch (ev.key) {
     case Key::F1: loadWindowForm(graph::initialWindow(angle));  return;
     case Key::F2: { ViewWindow v = graph::trigWindow(windowStart_, angle); loadWindowForm(v);  return; }
@@ -368,10 +391,19 @@ void GraphApp::windowKey(Context& ctx, const KeyEvent& ev) {
     case Key::F4: showMenu(Menu::VMem, "V-MEM", {"STORE", "RECALL"}); return;
     case Key::F5: showMenu(Menu::Square, "SQUARE", {"Y-BASE (X corretto)", "X-BASE (Y corretto)"}); return;
     case Key::F6:
+        if (ctx.ws.graph.dual.mode == DualScreen::GraphGraph) {
+            // G+G: F6 SOTTO / SOPRA switches between the two V-Windows (manual 5-23: RIGHT / LEFT).
+            (void)current();
+            windowSub_ = !windowSub_;
+            loadWindowForm(windowSub_ ? ctx.ws.graph.dual.sub : ctx.ws.view);
+            window_.selected = 0;
+            return;
+        }
         if (!background_.empty()) confirm(Confirm::BgvLoad, "Caricare la V-Window dello sfondo?");
         return;
     case Key::Exit:
         (void)current();
+        windowSub_ = false;
         screen_ = returnScreen_;
         if (screen_ == Screen::Plot) mode_ = Mode::View;
         return;
@@ -389,8 +421,6 @@ void GraphApp::openSetup(Context& ctx) {
     std::vector<std::string> back = {"None"};
     for (int i = 1; i <= pict::PictMemories; ++i) back.push_back("PICT " + std::to_string(i));
     if (!g.backgroundFile.empty()) back.push_back(files::stem(g.backgroundFile.substr(g.backgroundFile.rfind('/') + 1)));
-    std::vector<std::string> fades;
-    for (int i = 0; i <= 100; i += 5) fades.push_back(std::to_string(i) + "%");
     setup_.fields = {
         choice("Func Type", types, static_cast<int>(g.funcType)),
         choice("Draw Type", {"Connect", "Plot"}, g.plotDraw ? 1 : 0),
@@ -404,7 +434,7 @@ void GraphApp::openSetup(Context& ctx) {
         choice("Graph Func", {"On", "Off"}, g.graphFunc ? 0 : 1),
         choice("Simul Graph", {"On", "Off"}, g.simulGraph ? 0 : 1),
         choice("Background", back, g.background == BackgroundFile ? static_cast<int>(back.size()) - 1 : g.background),
-        choice("Fade I/O", fades, g.fade / 5),
+        choice("Dual Screen", {"G+G", "GtoT", "Off"}, ctx.ws.graph.dual.mode == DualScreen::GraphGraph ? 0 : ctx.ws.graph.dual.mode == DualScreen::GraphTable ? 1 : 2),
         choice("Plot/LineCol", colorNames(), g.plotColor),
         choice("Sketch Line", styleNames(), static_cast<int>(g.sketchLine)),
         choice("Ineq Type", {"Intsect", "Union"}, g.ineqUnion ? 1 : 0),
@@ -418,6 +448,8 @@ void GraphApp::applySetup(Context& ctx) {
     Settings& s = ctx.ws.settings;
     const auto& f = setup_.fields;
     const std::uint8_t oldBack = g.background, oldFade = g.fade;
+    const DualScreen dual = f[SDual].choice == 0 ? DualScreen::GraphGraph : f[SDual].choice == 1 ? DualScreen::GraphTable : DualScreen::Off;
+    if (dual != ctx.ws.graph.dual.mode) { ctx.ws.graph.dual.mode = dual; tableActive_ = false; windowSub_ = false; }
     g.funcType = static_cast<GraphType>(f[SFunc].choice);
     g.plotDraw = f[SDraw].choice == 1;
     g.derivative = f[SDeriv].choice == 0;
@@ -431,7 +463,6 @@ void GraphApp::applySetup(Context& ctx) {
     g.simulGraph = f[SSimul].choice == 0;
     const int b = f[SBack].choice;
     g.background = b == 0 ? 0 : b <= pict::PictMemories ? static_cast<std::uint8_t>(b) : BackgroundFile;
-    g.fade = static_cast<std::uint8_t>(f[SFade].choice * 5);
     g.plotColor = static_cast<std::uint8_t>(f[SPlotCol].choice);
     g.sketchLine = static_cast<LineStyle>(f[SSketch].choice);
     g.ineqUnion = f[SIneq].choice == 1;
@@ -456,12 +487,19 @@ void GraphApp::setupKey(Context& ctx, const KeyEvent& ev) {
 }
 
 // ---------------------------------------------------------------- FORMAT (line style and colour)
-void GraphApp::openFormat(Context& ctx, int function, int sketchItem) {
-    formatFn_ = function; formatSketch_ = sketchItem;
+void GraphApp::openFormat(Context& ctx, int function, int sketchItem, int pasted) {
     std::uint8_t color = 0; LineStyle style = LineStyle::Normal;
-    if (function >= 0) { const auto& f = ctx.ws.functions[static_cast<std::size_t>(function)]; color = f.color; style = f.style; }
+    if (function >= 0) {
+        // G+G: the properties of a function drawn only in the sub-screen cannot change (manual 5-24).
+        if (ctx.ws.graph.dual.mode == DualScreen::GraphGraph && ctx.ws.graph.dual.side[static_cast<std::size_t>(function)] == DualSide::Sub)
+            throw MathError("Argument ERROR: grafico del sotto-schermo (S): proprieta' non modificabili");
+        const auto& f = ctx.ws.functions[static_cast<std::size_t>(function)]; color = f.color; style = f.style;
+    }
+    else if (sketchItem == -2) { color = sketchFormat_.color; style = sketchFormat_.style; }
+    else if (pasted >= 0 && pasted < static_cast<int>(pastedFormat_.size())) { color = pastedFormat_[static_cast<std::size_t>(pasted)].first; style = pastedFormat_[static_cast<std::size_t>(pasted)].second; }
     else if (sketchItem >= 0 && sketchItem < static_cast<int>(ctx.ws.graph.sketch.size())) { const auto& s = ctx.ws.graph.sketch[static_cast<std::size_t>(sketchItem)]; color = s.color; style = s.style; }
     else return;
+    formatFn_ = function; formatSketch_ = sketchItem; formatPasted_ = pasted;
     format_.fields = {choice("Line Style", styleNames(), static_cast<int>(style)), choice("Line Color", colorNames(), color)};
     format_.selected = 0;
     formatReturn_ = screen_ == Screen::Edit ? Screen::List : screen_;
@@ -472,12 +510,31 @@ void GraphApp::formatKey(Context& ctx, const KeyEvent& ev) {
         const auto style = static_cast<LineStyle>(format_.fields[0].choice);
         const auto color = static_cast<std::uint8_t>(format_.fields[1].choice);
         if (formatFn_ >= 0) { auto& f = ctx.ws.functions[static_cast<std::size_t>(formatFn_)]; f.style = style; f.color = color; changed(ctx); }
+        else if (formatSketch_ == -2) {
+            // SKETCH operation: the elements drawn next take this style and colour; the operation goes on.
+            sketchFormat_ = {color, style};
+            sketchFormatSet_ = true;
+            screen_ = Screen::Plot;
+            return;
+        }
+        else if (formatPasted_ >= 0 && formatPasted_ < static_cast<int>(pastedFormat_.size())) {
+            pastedFormat_[static_cast<std::size_t>(formatPasted_)] = {color, style};
+            built_ = false;
+        }
         else if (formatSketch_ >= 0 && formatSketch_ < static_cast<int>(ctx.ws.graph.sketch.size())) {
             auto& s = ctx.ws.graph.sketch[static_cast<std::size_t>(formatSketch_)]; s.style = style; s.color = color;
             ctx.markDirty(); ctx.ws.graph.projectModified = true;
         }
         screen_ = formatReturn_;
         if (screen_ == Screen::Plot) mode_ = Mode::View;
+        return;
+    }
+    // A number key chooses the option of the highlighted item (manual 5-16):
+    // 1-5 Line Style, 1-7 Line Color.
+    if (ev.is(Key::Char) && !ev.ctrl && ev.ch >= '1' && ev.ch <= '9') {
+        FormField& f = format_.fields[static_cast<std::size_t>(format_.selected)];
+        const int k = ev.ch - '1';
+        if (k < static_cast<int>(f.choices.size())) { f.choice = k; f.text = f.choices[static_cast<std::size_t>(k)]; }
         return;
     }
     (void)format_.key(ctx, ev);
@@ -678,8 +735,14 @@ void GraphApp::menuChoice(Context& ctx, Menu menu, int c) {
         case 8: editor_.insertDerivative(); return;
         case 9: editor_.insertIntegral(); return;
         case 10: editor_.insertText(">="); return;
-        default: showMenu(Menu::EditVars, "VARS GRAPH", {"Y  (Y=, Y>...)", "r  (polare)", "Xt (parametrica)", "Yt (parametrica)", "X  (X=, X>...)"}); return;
+        case 11: showMenu(Menu::EditVars, "VARS GRAPH", {"Y  (Y=, Y>...)", "r  (polare)", "Xt (parametrica)", "Yt (parametrica)", "X  (X=, X>...)"}); return;
+        default: showMenu(Menu::EditAngle, "ANGLE", {"\xC2\xB0  gradi", "\xCA\xB3  radianti", "\xE1\xB5\x8D  gradi centesimali"}); return;   // OPTN > ANGLE (manual 5-4)
         }
+    case Menu::EditAngle: {
+        static const char* const suffix[] = {"\xC2\xB0", "\xCA\xB3", "\xE1\xB5\x8D"};
+        editor_.insertSymbol(suffix[std::clamp(c, 0, 2)]);
+        return;
+    }
     case Menu::EditList: editor_.insertSymbol("List" + std::to_string(c + 1)); return;
     case Menu::EditVars: {
         const Ask refs[] = {Ask::RefY, Ask::RefR, Ask::RefXt, Ask::RefYt, Ask::RefX};
@@ -689,9 +752,10 @@ void GraphApp::menuChoice(Context& ctx, Menu menu, int c) {
     }
     case Menu::VMem: ask(c == 0 ? Ask::VMemStore : Ask::VMemRecall, c == 0 ? "STORE V-Win (1-6):" : "RECALL V-Win (1-6):"); return;
     case Menu::Square: {
-        ViewWindow cur = ctx.ws.view;
-        try { (void)applyWindow(ctx); cur = ctx.ws.view; } catch (...) { throw; }
-        loadWindowForm(c == 0 ? graph::squareWindow(cur) : graph::squareXBase(cur));
+        (void)applyWindow(ctx);
+        const ViewWindow cur = windowSub_ ? ctx.ws.graph.dual.sub : ctx.ws.view;
+        const int rows = ctx.ws.graph.dual.mode == DualScreen::Off ? graphgeo::Rows : graphgeo::SplitRows;   // the pane the window is for
+        loadWindowForm(c == 0 ? graph::squareWindow(cur, rows) : graph::squareXBase(cur, rows));
         
         return;
     }
@@ -714,7 +778,7 @@ void GraphApp::answer(Context& ctx, Ask a, const std::string& text) {
     case Ask::VMemStore: {
         const int n = index(static_cast<int>(VWindowMemories));
         (void)applyWindow(ctx);
-        ctx.ws.graph.vmem[static_cast<std::size_t>(n - 1)] = ctx.ws.view;
+        ctx.ws.graph.vmem[static_cast<std::size_t>(n - 1)] = windowSub_ ? ctx.ws.graph.dual.sub : ctx.ws.view;
         ctx.ws.graph.vmemUsed = static_cast<std::uint8_t>(ctx.ws.graph.vmemUsed | (1u << (n - 1)));
         ctx.markDirty(); ctx.ws.graph.projectModified = true;
         ctx.toast("V-Win" + std::to_string(n) + " memorizzata");
@@ -771,7 +835,7 @@ void GraphApp::answer(Context& ctx, Ask a, const std::string& text) {
         const files::Status st = fs->rename(files::join(files_.folder, from), files::join(files_.folder, text + ext));
         if (st != files::Status::Ok) throw MathError(std::string("Storage ERROR: ") + files::statusMessage(st));
         if (files_.purpose == Browse::Projects && files::stem(from) == ctx.ws.graph.project) { ctx.ws.graph.project = text; ctx.markDirty(); }
-        openFiles(ctx, files_.purpose);
+        openFiles(ctx, files_.purpose, files_.folder);
         return;
     }
     default: return;
@@ -796,7 +860,7 @@ void GraphApp::confirmed(Context& ctx, Confirm c) {
     case Confirm::DeleteFile: deleteFile(ctx); return;
     case Confirm::ClearSketch:
         ctx.ws.graph.sketch.clear(); ctx.ws.graph.overlay.clear(); overlay_ = pict::Image{}; overlayPath_.clear();
-        pasted_.clear(); marks_.clear(); changed(ctx);
+        pasted_.clear(); pastedFormat_.clear(); marks_.clear(); changed(ctx);
         return;
     case Confirm::BgvLoad:
         if (!background_.empty()) {
@@ -808,6 +872,9 @@ void GraphApp::confirmed(Context& ctx, Confirm c) {
         }
         return;
     case Confirm::BgvSave: bgvSave(ctx, backgroundPath_); return;
+    case Confirm::GtoTDeleteAll:
+        ctx.ws.graph.dual.gtot.clear(); gtotCursor_ = {}; gtotKey_ = 0; ctx.markDirty();
+        return;
     default: return;
     }
 }
@@ -911,6 +978,12 @@ void GraphApp::drawList(Context& ctx, gfx::Canvas& c) {
             math::draw(c, l, Ink, Cursor, Placeholder);
             if (!engine_.error(static_cast<std::size_t>(line.fn)).empty() && f.defined()) ui::textRight(c, ui::ScreenW - 3, y + 1, "ERROR", Error, font::Face::Small);
         }
+        // G+G: where the function is drawn (manual 5-23): S = sub-screen only, E = both screens.
+        const DualSide side = ctx.ws.graph.dual.side[static_cast<std::size_t>(line.fn)];
+        if (ctx.ws.graph.dual.mode == DualScreen::GraphGraph && side != DualSide::Main && f.defined() && line.sub == 0) {
+            c.rect(ui::ScreenW - 18, sy - 8, 13, 16, Accent, false);
+            ui::textCenter(c, ui::ScreenW - 12, sy - 7, side == DualSide::Sub ? "S" : "E", Accent, font::Face::Small);
+        }
         c.hLine(0, y + rowH - 1, ui::ScreenW, Grid);
     }
     ui::scrollBar(c, ui::ScreenW - 3, top, visible * rowH, static_cast<int>(ls.size()), visible, firstRow_);
@@ -945,11 +1018,11 @@ void GraphApp::drawList(Context& ctx, gfx::Canvas& c) {
 }
 
 void GraphApp::drawWindow(Context& ctx, gfx::Canvas& c) {
-    (void)ctx;
+    const bool gg = ctx.ws.graph.dual.mode == DualScreen::GraphGraph;
     c.rect(0, ui::ContentTop, ui::ScreenW, 20, SelectSoft, true);
-    ui::text(c, 6, ui::ContentTop + 2, "View Window", Ink);
+    ui::text(c, 6, ui::ContentTop + 2, !gg ? "View Window" : windowSub_ ? "View Window (sotto-schermo)" : "View Window (principale)", Ink);
     window_.draw(c, ui::ContentTop + 22, ui::ContentBottom - 2);
-    const char* keys[6] = {"INITIAL", "TRIG", "STANDRD", "V-MEM", "SQUARE", background_.empty() ? nullptr : "BGV-WIN"};
+    const char* keys[6] = {"INITIAL", "TRIG", "STANDRD", "V-MEM", "SQUARE", gg ? (windowSub_ ? "SOPRA" : "SOTTO") : background_.empty() ? nullptr : "BGV-WIN"};
     ui::softKeys(c, keys);
 }
 
@@ -989,7 +1062,8 @@ void GraphApp::draw(Context& ctx, gfx::Canvas& c) {
     }
     case Screen::Format: {
         c.rect(0, ui::ContentTop, ui::ScreenW, 20, SelectSoft, true);
-        const std::string title = formatFn_ >= 0 ? "FORMAT " + linePrefix(ctx.ws.functions[static_cast<std::size_t>(formatFn_)].type, formatFn_, 0) : std::string("FORMAT SKETCH");
+        const std::string title = formatFn_ >= 0 ? "FORMAT " + linePrefix(ctx.ws.functions[static_cast<std::size_t>(formatFn_)].type, formatFn_, 0)
+                                : formatPasted_ >= 0 ? std::string("FORMAT (grafico incollato)") : std::string("FORMAT SKETCH");
         ui::text(c, 6, ui::ContentTop + 2, title.c_str(), Ink);
         format_.draw(c, ui::ContentTop + 24, ui::ContentTop + 70);
         ui::text(c, 8, ui::ContentTop + 84, "\xE2\x97\x80 \xE2\x96\xB6 cambia, EXIT applica", Muted, font::Face::Small);

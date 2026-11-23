@@ -62,6 +62,7 @@ void GraphApp::saveProject(Context& ctx, const std::string& name) {
     p.overlay = ws.graph.overlay;
     p.tableStart = ws.table.start; p.tableEnd = ws.table.end; p.tableStep = ws.table.step;
     p.tableFromList = ws.table.variable == TableRange::Variable::List; p.tableList = ws.table.list; p.tableFunc = ws.table.funcType;
+    p.dual = ws.graph.dual.mode; p.subView = ws.graph.dual.sub; p.side = ws.graph.dual.side; p.tableDual = ws.table.dual;   // v1.18.0
     const std::string text = graphfile::encode(p);
     if (text.size() > graphfile::MaxProjectBytes) throw MathError("Memory ERROR: progetto troppo grande");
     check(fs->makeDirs(files::GraphFolder));
@@ -101,6 +102,7 @@ void GraphApp::openProject(Context& ctx, const std::string& name) {
     ws.graph.project = name;
     ws.table.start = p.tableStart; ws.table.end = p.tableEnd; ws.table.step = p.tableStep;
     ws.table.variable = p.tableFromList ? TableRange::Variable::List : TableRange::Variable::Range; ws.table.list = p.tableList; ws.table.funcType = p.tableFunc;
+    ws.graph.dual.mode = p.dual; ws.graph.dual.sub = p.subView; ws.graph.dual.side = p.side; ws.table.dual = p.tableDual;   // v1.18.0
     ws.table.rows.clear(); ws.table.generated = false;      // the table of the opened project is generated again in TABLE
     ws.apply();
     pasted_.clear(); marks_.clear(); zoomStack_.clear(); haveOriginal_ = false; shadeIntegral_ = false; shade_.clear();
@@ -120,10 +122,13 @@ void GraphApp::openProject(Context& ctx, const std::string& name) {
 }
 
 // ---------------------------------------------------------------- file list
-void GraphApp::openFiles(Context& ctx, Browse purpose) {
+// v1.18.0: the pictures live in PICOCALC/PICT (the root of the fx-CG50's
+// storage memory for this project) and in its folders (manual 5-10, 5-21,
+// 5-22): folders are listed first as "[NAME]", EXE opens one, EXIT goes back.
+void GraphApp::openFiles(Context& ctx, Browse purpose, const std::string& folder) {
     files_ = FileList{};
     files_.purpose = purpose;
-    files_.folder = purpose == Browse::Projects ? files::GraphFolder : files::PictFolder;
+    files_.folder = purpose == Browse::Projects ? files::GraphFolder : folder.empty() ? std::string(files::PictFolder) : folder;
     if (screen_ != Screen::Files) returnScreen_ = screen_ == Screen::Edit ? Screen::List : screen_;
     screen_ = Screen::Files;
     files::FileSystem* fs = userFiles(ctx);
@@ -135,8 +140,13 @@ void GraphApp::openFiles(Context& ctx, Browse purpose) {
     if (st == files::Status::Ok) st = fs->list(files_.folder, all);
     if (st != files::Status::Ok) { files_.status = files::statusMessage(st); return; }
     const char* ext = purpose == Browse::Projects ? files::ProjectExtension : files::PictExtension;
-    for (auto& e : all) if (!e.directory && files::hasExtension(e.name, ext)) files_.entries.push_back(std::move(e));
-    std::sort(files_.entries.begin(), files_.entries.end(), [](const files::Entry& a, const files::Entry& b) { return a.name < b.name; });
+    const bool root = files_.folder == files::PictFolder;
+    for (auto& e : all) {
+        if (e.directory) { if (purpose != Browse::Projects && root && files::validName(e.name, 8)) files_.entries.push_back(std::move(e)); continue; }
+        if (files::hasExtension(e.name, ext)) files_.entries.push_back(std::move(e));
+    }
+    std::sort(files_.entries.begin(), files_.entries.end(), [](const files::Entry& a, const files::Entry& b) {
+        return a.directory != b.directory ? a.directory : a.name < b.name; });
     std::uint64_t free = 0;
     if (fs->freeSpace(free) == files::Status::Ok) {
         char buf[48];
@@ -145,6 +155,9 @@ void GraphApp::openFiles(Context& ctx, Browse purpose) {
     }
     if (files_.entries.empty()) files_.status = "Nessun file in " + files_.folder;
 }
+namespace {
+bool saveAs(GraphApp::Browse b) { return b == GraphApp::Browse::PictSaveAs || b == GraphApp::Browse::BgvSaveAs; }
+} // namespace
 
 void GraphApp::deleteFile(Context& ctx) {
     if (files_.entries.empty()) return;
@@ -153,19 +166,37 @@ void GraphApp::deleteFile(Context& ctx) {
     check(fs->remove(files::join(files_.folder, name)));
     if (files_.purpose == Browse::Projects && files::stem(name) == ctx.ws.graph.project) { ctx.ws.graph.project.clear(); ctx.ws.graph.projectModified = true; ctx.markDirty(); }
     ctx.toast("Eliminato: " + name);
-    openFiles(ctx, files_.purpose);
+    openFiles(ctx, files_.purpose, files_.folder);
     files_.selected = 0;
 }
 
 void GraphApp::filesKey(Context& ctx, const KeyEvent& ev) {
     const int n = static_cast<int>(files_.entries.size());
     auto selectedName = [&]() { return files_.entries[static_cast<std::size_t>(files_.selected)].name; };
+    const bool pictures = files_.purpose != Browse::Projects;
+    const bool inFolder = pictures && files_.folder != files::PictFolder;
+    const bool onFolder = n && files_.entries[static_cast<std::size_t>(files_.selected)].directory;
     switch (ev.key) {
     case Key::Up: if (n) files_.selected = (files_.selected + n - 1) % n; return;
     case Key::Down: if (n) files_.selected = (files_.selected + 1) % n; return;
-    case Key::Exit: screen_ = returnScreen_; if (screen_ == Screen::Plot) mode_ = Mode::View; return;
+    case Key::Exit:
+        if (inFolder) { openFiles(ctx, files_.purpose); return; }          // back to the root
+        screen_ = returnScreen_; if (screen_ == Screen::Plot) mode_ = Mode::View;
+        return;
+    case Key::F5:
+        if (pictures && !inFolder) ask(Ask::FolderNew, "Nuova cartella (max 8):", {}, true);
+        return;
     case Key::F1: case Key::Exe: {
-        if (!n) return;
+        if (onFolder) { openFiles(ctx, files_.purpose, files::join(files_.folder, selectedName())); return; }
+        if (saveAs(files_.purpose) && ev.is(Key::F1)) {
+            // SAVE•AS in the folder shown (manual 5-21: folder, then the name).
+            saveFolder_ = files_.folder;
+            const bool bgv = files_.purpose == Browse::BgvSaveAs;
+            screen_ = returnScreen_; if (screen_ == Screen::Plot) mode_ = Mode::View;
+            ask(bgv ? Ask::BgvSaveAs : Ask::PictSaveAs, bgv ? "Sfondo SAVE\xE2\x80\xA2" "AS (max 8):" : "SAVE\xE2\x80\xA2" "AS nome (max 8):", {}, true);
+            return;
+        }
+        if (!n || saveAs(files_.purpose)) return;
         const std::string name = selectedName();
         if (files_.purpose == Browse::Projects) { openProject(ctx, files::stem(name)); return; }
         const std::string path = files::join(files_.folder, name);
@@ -175,10 +206,10 @@ void GraphApp::filesKey(Context& ctx, const KeyEvent& ev) {
         recallPicture(ctx, path, bg);
         return;
     }
-    case Key::F2: if (n) confirm(Confirm::DeleteFile, "Eliminare " + selectedName() + "?"); return;
-    case Key::F3: if (n) askValue(Ask::ProjectRename, "Nuovo nome:", files::stem(selectedName()), true); return;
+    case Key::F2: if (n && !onFolder) confirm(Confirm::DeleteFile, "Eliminare " + selectedName() + "?"); return;
+    case Key::F3: if (n && !onFolder) askValue(Ask::ProjectRename, "Nuovo nome:", files::stem(selectedName()), true); return;
     case Key::F4:
-        if (n && files_.purpose != Browse::Projects) {
+        if (n && !onFolder && files_.purpose != Browse::Projects) {
             // BMP copy of a picture, readable on a PC.
             files::FileSystem* fs = fileSystem(ctx, true);
             std::vector<std::uint8_t> data;
@@ -198,8 +229,10 @@ void GraphApp::filesKey(Context& ctx, const KeyEvent& ev) {
 void GraphApp::drawFiles(Context& ctx, gfx::Canvas& c) {
     (void)ctx;
     c.rect(0, ui::ContentTop, ui::ScreenW, 20, SelectSoft, true);
-    const char* title = files_.purpose == Browse::Projects ? "Progetti GRAPH (.pcgraph)" : files_.purpose == Browse::Background ? "Sfondo (.pcpict)" : "Immagini PICT (.pcpict)";
-    ui::text(c, 6, ui::ContentTop + 2, title, Ink);
+    const char* title = files_.purpose == Browse::Projects ? "Progetti GRAPH (.pcgraph)" : files_.purpose == Browse::Background ? "Sfondo (.pcpict)"
+                      : saveAs(files_.purpose) ? "SAVE\xE2\x80\xA2" "AS: cartella" : "Immagini PICT (.pcpict)";
+    const bool inFolder = files_.purpose != Browse::Projects && files_.folder != files::PictFolder;
+    ui::text(c, 6, ui::ContentTop + 2, inFolder ? (std::string(title) + "  " + baseName(files_.folder)).c_str() : title, Ink);
     const int top = ui::ContentTop + 22, rowH = 20;
     const int visible = (ui::ContentBottom - top - 20) / rowH;
     if (files_.selected < files_.first) files_.first = files_.selected;
@@ -209,14 +242,21 @@ void GraphApp::drawFiles(Context& ctx, gfx::Canvas& c) {
         char size[24];
         std::snprintf(size, sizeof(size), "%u B", static_cast<unsigned>(e.size));
         const bool current = files_.purpose == Browse::Projects && files::stem(e.name) == ctx.ws.graph.project;
+        if (e.directory) { ui::listRow(c, top + i * rowH, rowH, ("  [" + e.name + "]").c_str(), "", files_.first + i == files_.selected); continue; }
         ui::listRow(c, top + i * rowH, rowH, (std::string(current ? "\xE2\x96\xB6 " : "  ") + e.name).c_str(), size, files_.first + i == files_.selected);
     }
     ui::scrollBar(c, ui::ScreenW - 4, top, visible * rowH, static_cast<int>(files_.entries.size()), visible, files_.first);
     c.hLine(0, ui::ContentBottom - 19, ui::ScreenW, Faint);
     ui::textFit(c, 6, ui::ContentBottom - 16, files_.status, ui::ScreenW - 12, files_.entries.empty() ? Error : Muted, font::Face::Small);
     const bool any = !files_.entries.empty();
+    const bool pictRoot = files_.purpose != Browse::Projects && !inFolder;
+    if (saveAs(files_.purpose)) {
+        const char* keys[6] = {"SAVE\xE2\x80\xA2" "AS", nullptr, nullptr, nullptr, pictRoot ? "NEW F" : nullptr, nullptr};
+        ui::softKeys(c, keys);
+        return;
+    }
     const char* keys[6] = {any ? "OPEN" : nullptr, any ? "DELETE" : nullptr, any ? "RENAME" : nullptr,
-                           any && files_.purpose != Browse::Projects ? "BMP" : nullptr, nullptr, nullptr};
+                           any && files_.purpose != Browse::Projects ? "BMP" : nullptr, pictRoot ? "NEW F" : nullptr, nullptr};
     ui::softKeys(c, keys);
 }
 
@@ -321,12 +361,12 @@ void GraphApp::loadBackground(Context& ctx) {
 }
 
 // BGV-WIN SAVE / SAVE•AS: the background image with the current V-Window (manual 5-11).
-void GraphApp::bgvSave(Context& ctx, const std::string& path) {
+void GraphApp::bgvSave(Context& ctx, const std::string& path, bool keepView) {
     if (background_.empty()) throw MathError("Argument ERROR: nessuna immagine di sfondo");
     if (path.empty()) throw MathError("Argument ERROR: sfondo senza file");
     files::FileSystem* fs = fileSystem(ctx, true);
     pict::Image img = background_;
-    img.view = ctx.ws.view;
+    if (!keepView) img.view = ctx.ws.view;                  // Fade I/O keeps the V-Window of the file (v1.18.0)
     img.fade = ctx.ws.graph.settings.fade;
     const auto data = pict::serialize(img);
     check(fs->makeDirs(files::PictFolder));
@@ -337,7 +377,7 @@ void GraphApp::bgvSave(Context& ctx, const std::string& path) {
         ctx.ws.graph.settings.background = BackgroundFile;
         ctx.ws.graph.settings.backgroundFile = path;
         ctx.markDirty(); ctx.ws.graph.projectModified = true;
-    } else {
+    } else if (!keepView) {
         background_.view = ctx.ws.view;
     }
     ctx.toast("Sfondo aggiornato: " + baseName(path));

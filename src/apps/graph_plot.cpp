@@ -8,84 +8,33 @@
 #include "graph_solve.hpp"
 #include "math_renderer.hpp"
 #include "table_model.hpp"
+#include "graph_view.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <functional>
 #include <limits>
 
 namespace fx::app {
 using namespace ui::theme;
 
 namespace {
-constexpr int L = graphgeo::Left, T = graphgeo::Top, R = graphgeo::Right, B = graphgeo::Bottom;
-constexpr int Cols = graphgeo::Columns, Rows = graphgeo::Rows;
+// v1.18.0: le costanti della geometria a schermo pieno sono diventate quella del
+// riquadro (schermo pieno o principale del Dual Screen): ogni funzione le
+// prende dal viewport che usa (FX_PANE_GEO).
+#define FX_PANE_GEO(vp) \
+    const int L = (vp).left(), T = (vp).top(), Cols = (vp).columns(), Rows = (vp).rows(), R = L + Cols - 1, B = T + Rows - 1; \
+    (void)L; (void)T; (void)Cols; (void)Rows; (void)R; (void)B
 constexpr std::size_t MaxMarks = 20;
 const double NaN = std::numeric_limits<double>::quiet_NaN();
-
-std::uint16_t graphColor(std::uint8_t c) {
-    static const std::uint16_t pal[GraphColorCount] = {Graph[0], Graph[1], Graph[2], Graph[3], Graph[4], Graph[5], rgb888To565(225, 180, 0)};
-    return pal[c % GraphColorCount];
-}
-struct Pen { int width; int on; int off; };
-Pen penFor(LineStyle s, bool strict) {
-    Pen p{2, 0, 0};
-    switch (s) {
-    case LineStyle::Thin: p = {1, 0, 0}; break;
-    case LineStyle::Thick: p = {4, 0, 0}; break;
-    case LineStyle::Broken: p = {3, 7, 4}; break;
-    case LineStyle::Dot: p = {2, 2, 3}; break;
-    default: break;
-    }
-    if (strict && p.off == 0) { p.on = 6; p.off = 4; }   // Y>, Y<: boundary not included
-    return p;
-}
-void stamp(gfx::Canvas& c, int x, int y, int w, std::uint16_t col) {
-    if (w <= 1) { c.pixel(x, y, col); return; }
-    const int o = (w - 1) / 2;
-    c.rect(x - o, y - o, w, w, col, true);
-}
-void segment(gfx::Canvas& c, int x0, int y0, int x1, int y1, const Pen& pen, std::uint16_t col, int& phase) {
-    const int dx = std::abs(x1 - x0), dy = -std::abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
-    int err = dx + dy;
-    for (int guard = 0; guard < 8192; ++guard) {
-        if (pen.off == 0 || phase % (pen.on + pen.off) < pen.on) stamp(c, x0, y0, pen.width, col);
-        ++phase;
-        if (x0 == x1 && y0 == y1) break;
-        const int e2 = 2 * err;
-        if (e2 >= dy) { err += dy; x0 += sx; }
-        if (e2 <= dx) { err += dx; y0 += sy; }
-    }
-}
-void drawCurve(gfx::Canvas& c, const std::vector<std::int16_t>& xy, const Pen& pen, std::uint16_t col) {
-    int phase = 0;
-    bool have = false;
-    int px = 0, py = 0;
-    for (std::size_t i = 0; i + 1 < xy.size(); i += 2) {
-        if (xy[i] == graph::PenUp) { have = false; continue; }
-        const int x = xy[i], y = xy[i + 1];
-        if (!have) {
-            have = true; px = x; py = y;
-            if (i + 2 >= xy.size() || xy[i + 2] == graph::PenUp) stamp(c, x, y, std::max(pen.width, 2), col);   // isolated point
-            continue;
-        }
-        segment(c, px, py, x, y, pen, col, phase);
-        px = x; py = y;
-    }
-}
-// Segment in graph coordinates, clipped before rasterising.
-void mathSegment(gfx::Canvas& c, const graph::Viewport& vp, double x0, double y0, double x1, double y1, const Pen& pen, std::uint16_t col) {
-    double a = vp.screenX(x0), b = vp.screenY(y0), e = vp.screenX(x1), f = vp.screenY(y1);
-    if (!vp.clip(a, b, e, f, 4)) return;
-    int phase = 0;
-    segment(c, static_cast<int>(std::lround(a)), static_cast<int>(std::lround(b)), static_cast<int>(std::lround(e)), static_cast<int>(std::lround(f)), pen, col, phase);
-}
-std::string shortNumber(double v) {
-    char b[24];
-    if (std::abs(v) < 1e-12) v = 0;
-    std::snprintf(b, sizeof(b), "%.4g", v);
-    return b;
-}
+using graphview::Pen;
+using graphview::penFor;
+using graphview::stamp;
+using graphview::drawCurve;
+using graphview::mathSegment;
+using graphview::shortNumber;
+std::uint16_t graphColor(std::uint8_t c) { return graphview::lineColor(c); }
 std::string value(double v, const DisplayFormat& f) { return std::isfinite(v) ? formatReal(v, f) : std::string("--"); }
 const char* actionName(GraphApp::Action a) {
     using A = GraphApp::Action;
@@ -175,16 +124,49 @@ std::uint64_t GraphApp::sourceFingerprint(Context& ctx) const {
         const std::uint8_t meta[3] = {static_cast<std::uint8_t>(cg.type), cg.color, static_cast<std::uint8_t>(cg.style)};
         mix(meta, 3);
     }
+    // v1.18.0: Dual Screen (where each function is drawn) and the format of the pasted graphs.
+    const GraphDual& d = ctx.ws.graph.dual;
+    const std::uint8_t dm = static_cast<std::uint8_t>(d.mode);
+    mix(&dm, 1);
+    for (DualSide side : d.side) { const auto b = static_cast<std::uint8_t>(side); mix(&b, 1); }
+    for (const auto& f : pastedFormat_) { const std::uint8_t b[2] = {f.first, static_cast<std::uint8_t>(f.second)}; mix(b, 2); }
     return h;
+}
+
+// v1.18.0: layout of the graph screen. G+G and GtoT apply to the graphs of the
+// relation list; the graphs of Run-Matrix's commands and PxlTest use the full
+// screen; TABLE's GPH-CON/GPH-PLT uses T+G when TABLE's Setup says so.
+GraphApp::Layout GraphApp::layout(Context& ctx) const {
+    if (forceFull_ || ctx.ws.graph.commandScreen) return Layout::Full;
+    if (tableDraw(ctx)) return ctx.ws.table.dual ? Layout::TableGraph : Layout::Full;
+    switch (ctx.ws.graph.dual.mode) {
+    case DualScreen::GraphGraph: return Layout::GraphGraph;
+    case DualScreen::GraphTable: return Layout::GraphTable;
+    case DualScreen::Off: break;
+    }
+    return Layout::Full;
+}
+// G+G: functions without indicator are drawn in the main screen, "S" only in
+// the sub-screen, "E" in both (manual 5-23). Pasted graphs and SKETCH graphs: main.
+bool GraphApp::onPane(const Context& ctx, const graph::Plot& p, bool sub) const {
+    if (builtLayout_ != Layout::GraphGraph) return !sub;
+    if (p.function < 0 || p.function >= static_cast<int>(MaxGraphFunctions)) return !sub;
+    const DualSide side = ctx.ws.graph.dual.side[static_cast<std::size_t>(p.function)];
+    return sub ? side != DualSide::Main : side != DualSide::Sub;
 }
 
 void GraphApp::ensureBuilt(Context& ctx) {
     const std::uint64_t fp = sourceFingerprint(ctx);
     if (fp != fingerprint_) built_ = false;
-    if (built_ && builtView_ == ctx.ws.view) return;
+    const Layout lay = layout(ctx);
+    const bool sameSub = lay != Layout::GraphGraph || builtSub_ == ctx.ws.graph.dual.sub;
+    if (built_ && builtView_ == ctx.ws.view && lay == builtLayout_ && sameSub) return;
     if (!built_) {
         ctx.ws.apply();
         engine_.build({&ctx.ws.functions, &ctx.ws.memory, &ctx.ws, &ctx.ws.lists, &ctx.ws.graph.commandGraphs}, pasted_);
+        // v1.18.0: colour and style chosen with FORMAT for the pasted graphs (manual 5-31).
+        for (std::size_t i = 0, k = 0; i < engine_.plots().size(); ++i)
+            if (engine_.plots()[i].pasted && k < pastedFormat_.size()) { engine_.setPlotFormat(i, pastedFormat_[k].first, pastedFormat_[k].second); ++k; }
         sketchPlots_.clear();
         for (const auto& s : ctx.ws.graph.sketch) {
             if (s.kind != SketchItem::Kind::Inverse) continue;
@@ -198,10 +180,25 @@ void GraphApp::ensureBuilt(Context& ctx) {
         built_ = true;
         fingerprint_ = fp;
     }
-    if (!(builtView_ == ctx.ws.view)) { shade_.clear(); shadeIntegral_ = false; }
+    if (!(builtView_ == ctx.ws.view) || lay != builtLayout_) { shade_.clear(); shadeIntegral_ = false; }
+    if (lay != builtLayout_) { marks_.clear(); tableActive_ = false; }
     builtView_ = ctx.ws.view;
-    curves_.assign(engine_.plots().size(), graph::Curve{});
+    builtSub_ = ctx.ws.graph.dual.sub;
+    builtLayout_ = lay;
+    mainPane_ = lay == Layout::Full ? graphview::Pane::Full : graphview::Pane::Main;
+    const auto& plots = engine_.plots();
+    curves_.assign(plots.size(), graph::Curve{});
     sketchCurves_.assign(sketchPlots_.size(), graph::Curve{});
+    subCurves_.clear(); subCurves_.shrink_to_fit();
+    subRenderPlot_ = 0;
+    onMain_.assign(plots.size(), 1);
+    if (lay == Layout::GraphGraph) {
+        subCurves_.assign(plots.size(), graph::Curve{});
+        for (std::size_t i = 0; i < plots.size(); ++i) {
+            if (!onPane(ctx, plots[i], false)) { curves_[i].done = true; onMain_[i] = 0; }
+            if (!onPane(ctx, plots[i], true)) subCurves_[i].done = true;
+        }
+    }
     renderPlot_ = 0;
     renderDone_ = false;
     truncationShown_ = false;
@@ -211,47 +208,59 @@ void GraphApp::ensureBuilt(Context& ctx) {
 bool GraphApp::renderStep(Context& ctx, int budget) {
     ensureBuilt(ctx);
     if (renderDone_) return false;
-    const graph::Viewport vp(ctx.ws.view);
+    const graph::Viewport vp = mainViewport(ctx);
     const auto& plots = engine_.plots();
     const bool plotOnly = ctx.ws.graph.settings.plotDraw;
+    const bool simul = ctx.ws.graph.settings.simulGraph;
     const std::size_t total = plots.size() + sketchPlots_.size();
     auto plotAt = [&](std::size_t i) -> const graph::Plot& { return i < plots.size() ? plots[i] : sketchPlots_[i - plots.size()]; };
     auto curveAt = [&](std::size_t i) -> graph::Curve& { return i < plots.size() ? curves_[i] : sketchCurves_[i - plots.size()]; };
-    // All the curves share maxTotalCurvePoints(): a curve may use what the others left.
+    // All the curves (both panes of G+G) share maxTotalCurvePoints(): a curve may use what the others left.
     auto share = [&](graph::Curve& c) {
         std::size_t used = 0;
         for (const auto& k : curves_) used += k.xy.size() / 2;
         for (const auto& k : sketchCurves_) used += k.xy.size() / 2;
+        for (const auto& k : subCurves_) used += k.xy.size() / 2;
         const std::size_t others = used - c.xy.size() / 2;
         const std::size_t total = graph::maxTotalCurvePoints();
         c.limit = others >= total ? 0 : std::min(graph::maxCurvePoints(), total - others);
     };
-    if (ctx.ws.graph.settings.simulGraph) {
-        // Simul Graph: every graph advances in the same tick.
-        bool all = true;
-        const int each = std::max(24, budget / static_cast<int>(std::max<std::size_t>(1, total)));
-        for (std::size_t i = 0; i < total; ++i) {
-            graph::Curve& c = curveAt(i);
-            if (c.done) continue;
-            int b = each;
-            share(c);
-            graph::sampleStep(engine_, plotAt(i), vp, plotOnly && i < plots.size(), c, b);
-            all = all && c.done;
+    // One pane: Simul Graph advances every graph in the same tick, otherwise
+    // one graph after the other in the order of the relation list.
+    auto advance = [&](std::size_t count, const graph::Viewport& pv, const std::function<graph::Curve&(std::size_t)>& curve,
+                       std::size_t& next, bool plotsOnly) {
+        if (simul) {
+            bool all = true;
+            const int each = std::max(24, budget / static_cast<int>(std::max<std::size_t>(1, count)));
+            for (std::size_t i = 0; i < count; ++i) {
+                graph::Curve& c = curve(i);
+                if (c.done) continue;
+                int b = each;
+                share(c);
+                graph::sampleStep(engine_, plotAt(i), pv, plotOnly && (plotsOnly || i < plots.size()), c, b);
+                all = all && c.done;
+            }
+            return all;
         }
-        renderDone_ = all;
-    } else {
-        // One graph after the other, in the order of the relation list.
-        while (budget > 0 && renderPlot_ < total) {
-            graph::Curve& c = curveAt(renderPlot_);
-            share(c);
-            graph::sampleStep(engine_, plotAt(renderPlot_), vp, plotOnly && renderPlot_ < plots.size(), c, budget);
-            if (c.done) ++renderPlot_;
+        while (budget > 0 && next < count) {
+            graph::Curve& c = curve(next);
+            if (!c.done) {
+                share(c);
+                graph::sampleStep(engine_, plotAt(next), pv, plotOnly && (plotsOnly || next < plots.size()), c, budget);
+            }
+            if (c.done) ++next;
         }
-        renderDone_ = renderPlot_ >= total;
+        return next >= count;
+    };
+    const bool mainDone = advance(total, vp, curveAt, renderPlot_, false);
+    bool subDone = true;
+    if (!subCurves_.empty()) {
+        subDone = mainDone && advance(plots.size(), subViewport(ctx), [&](std::size_t i) -> graph::Curve& { return subCurves_[i]; }, subRenderPlot_, true);
     }
+    renderDone_ = mainDone && subDone;
     if (!truncationShown_)
-        for (std::size_t i = 0; i < total; ++i)
-            if (curveAt(i).truncated) {
+        for (std::size_t i = 0; i < total + subCurves_.size(); ++i)
+            if ((i < total ? curveAt(i) : subCurves_[i - total]).truncated) {
                 truncationShown_ = true;
                 ctx.toast("Memory ERROR: grafici troppo complessi, disegno parziale", 2500);
                 break;
@@ -263,7 +272,7 @@ bool GraphApp::renderStep(Context& ctx, int budget) {
 void GraphApp::buildTableCurves(Context& ctx) {
     // The rows of the generated table (range, list or edited values) and the
     // functions of the table type, as TABLE shows them (table_model).
-    const graph::Viewport vp(ctx.ws.view);
+    const graph::Viewport vp = mainViewport(ctx);
     const TableRange& t = ctx.ws.table;
     const bool connect = t.draw == TableRange::Draw::Connect;
     const auto& plots = engine_.plots();
@@ -273,42 +282,28 @@ void GraphApp::buildTableCurves(Context& ctx) {
         c.done = true;
         const graph::Plot& p = plots[i];
         if (p.type != t.funcType || p.pasted || p.variant != 0 || !t.generated) continue;
-        bool have = false;
-        double px = 0, py = 0;
-        for (double v : t.rows) {
-            double x, y;
-            if (!table::point(engine_, p, v, x, y)) { have = false; continue; }
-            const double sx = std::clamp(vp.screenX(x), -1e6, 1e6), sy = std::clamp(vp.screenY(y), -1e6, 1e6);
-            if (connect && have) {
-                double a = px, b = py, e = sx, f = sy;
-                if (vp.clip(a, b, e, f, 3)) {
-                    c.xy.push_back(graph::PenUp); c.xy.push_back(0);
-                    c.xy.push_back(static_cast<std::int16_t>(std::lround(a))); c.xy.push_back(static_cast<std::int16_t>(std::lround(b)));
-                    c.xy.push_back(static_cast<std::int16_t>(std::lround(e))); c.xy.push_back(static_cast<std::int16_t>(std::lround(f)));
-                }
-            }
-            if (vp.inside(sx, sy)) {
-                c.xy.push_back(graph::PenUp); c.xy.push_back(0);
-                c.xy.push_back(static_cast<std::int16_t>(std::lround(sx))); c.xy.push_back(static_cast<std::int16_t>(std::lround(sy)));
-            }
-            px = sx; py = sy; have = true;
-        }
+        graphview::tableCurve(engine_, p, t.rows, vp, connect, c);
     }
 }
 
 std::vector<int> GraphApp::drawablePlots(bool analysable) const {
     std::vector<int> out;
     const auto& plots = engine_.plots();
-    for (int i = 0; i < static_cast<int>(plots.size()); ++i)
+    for (int i = 0; i < static_cast<int>(plots.size()); ++i) {
+        if (static_cast<std::size_t>(i) < onMain_.size() && !onMain_[static_cast<std::size_t>(i)]) continue;   // G+G: main screen only
         if (!analysable || isYType(plots[static_cast<std::size_t>(i)].type)) out.push_back(i);
+    }
     return out;
 }
 
 // PxlTest( di Run-Matrix (v1.12.0): la schermata del grafico completa (sfondo,
 // assi, curve, SKETCH) e lo stato del pixel (riga 1..282, colonna 1..320).
 int GraphApp::probePixel(Context& ctx, gfx::Canvas& c, int row, int column) {
+    constexpr int L = graphgeo::Left, T = graphgeo::Top, Cols = graphgeo::Columns, Rows = graphgeo::Rows;
     if (row < 1 || row > Rows || column < 1 || column > Cols || c.width() < L + Cols || c.height() < T + Rows) return 0;
     built_ = false;
+    forceFull_ = true;                                   // PxlTest: always the full graph screen
+    struct Restore { bool& f; ~Restore() { f = false; } } restore{forceFull_};
     finishRendering(ctx);
     c.resetClip();
     c.rect(L, T, Cols, Rows, 0xFFFF, true);
@@ -321,28 +316,47 @@ int GraphApp::probePixel(Context& ctx, gfx::Canvas& c, int row, int column) {
 }
 
 // ---------------------------------------------------------------- drawing
+// v1.18.0: the static layers of the graph screen, one pane at a time (full
+// screen, or the main and sub-screen of G+G). The background picture and the
+// recalled picture are 320x282: they are shown only on the full screen.
 void GraphApp::drawLayers(Context& ctx, gfx::Canvas& c) {
-    const graph::Viewport vp(ctx.ws.view);
-    const ViewWindow& v = ctx.ws.view;
+    drawPaneLayers(ctx, c, false);
+    if (mainPane_ == graphview::Pane::Full) return;
+    if (builtLayout_ == Layout::GraphGraph) drawPaneLayers(ctx, c, true);
+    graphview::drawSeparator(c);
+}
+void GraphApp::drawPaneLayers(Context& ctx, gfx::Canvas& c, bool sub, int parts) {
+    const bool backPart = (parts & 1) != 0, graphPart = (parts & 2) != 0;
+    const graph::Viewport vp = sub ? subViewport(ctx) : mainViewport(ctx);
+    FX_PANE_GEO(vp);
+    const bool full = mainPane_ == graphview::Pane::Full;
+    const std::vector<graph::Curve>& paneCurves = sub ? subCurves_ : curves_;
+    const ViewWindow& v = vp.view();
     const GraphSettings& gs = ctx.ws.graph.settings;
     c.setClip({L, T, Cols, Rows});
     // 1) background picture with its lightness (Fade I/O)
-    if (!background_.empty()) {
+    if (backPart && full && !background_.empty()) {
         const int fade = gs.fade;
         pict::forEachSpan(background_, [&](int x, int y, int n, std::uint16_t col) {
             if (y >= Rows) return;
             const std::uint16_t shown = fade ? gfx::Canvas::blend(0xFFFF, col, static_cast<std::uint8_t>(fade * 255 / 100)) : col;
             c.hLine(L + x, T + y, n, shown);
         });
+        // v1.18.0: a two-layer picture keeps its graph layer as it is; Fade I/O
+        // lightens only its background layer (manual 5-12, 5-20).
+        if (fade && background_.layered())
+            pict::forEachRun(background_.graphLayer, background_.width, background_.height, [&](int x, int y, int n, std::uint16_t col) {
+                if (y < Rows && col != pict::Transparent) c.hLine(L + x, T + y, n, col);
+            });
     }
     // 2) inequality regions: Union fills each region, Intsect only the common one (manual 5-3)
     const auto& plots = engine_.plots();
     std::vector<int> ineq;
-    for (int i = 0; i < static_cast<int>(plots.size()) && i < static_cast<int>(curves_.size()); ++i)
-        if (isInequality(plots[static_cast<std::size_t>(i)].type) && !curves_[static_cast<std::size_t>(i)].boundary.empty()) ineq.push_back(i);
+    for (int i = 0; i < static_cast<int>(plots.size()) && i < static_cast<int>(paneCurves.size()); ++i)
+        if (isInequality(plots[static_cast<std::size_t>(i)].type) && !paneCurves[static_cast<std::size_t>(i)].boundary.empty()) ineq.push_back(i);
     auto inside = [&](int i, int x, int y) {
         const graph::Plot& p = plots[static_cast<std::size_t>(i)];
-        const auto& bd = curves_[static_cast<std::size_t>(i)].boundary;
+        const auto& bd = paneCurves[static_cast<std::size_t>(i)].boundary;
         const bool yType = isYType(p.type);
         const std::size_t k = static_cast<std::size_t>(yType ? x - L : y - T);
         if (k >= bd.size() || std::isnan(bd[k])) return false;
@@ -351,7 +365,7 @@ void GraphApp::drawLayers(Context& ctx, gfx::Canvas& c) {
         if (yType) return greater ? (strict ? y < b - 0.5f : y <= b) : (strict ? y > b + 0.5f : y >= b);
         return greater ? (strict ? x > b + 0.5f : x >= b) : (strict ? x < b - 0.5f : x <= b);
     };
-    if (!ineq.empty()) {
+    if (graphPart && !ineq.empty()) {
         if (gs.ineqUnion || ineq.size() == 1) {
             for (std::size_t n = 0; n < ineq.size(); ++n) {
                 const int i = ineq[n];
@@ -372,75 +386,26 @@ void GraphApp::drawLayers(Context& ctx, gfx::Canvas& c) {
         }
     }
     // 3) integral shading
-    if (shadeIntegral_ && !shade_.empty() && integral_.f >= 0 && integral_.f < static_cast<int>(plots.size())) {
+    if (graphPart && !sub && shadeIntegral_ && !shade_.empty() && integral_.f >= 0 && integral_.f < static_cast<int>(plots.size())) {
         const std::uint16_t col = gfx::Canvas::blend(graphColor(plots[static_cast<std::size_t>(integral_.f)].color), 0xFFFF, 90);
         for (std::size_t i = 0; i + 2 < shade_.size(); i += 3) {
             const int y0 = std::clamp<int>(shade_[i + 1], T, B), y1 = std::clamp<int>(shade_[i + 2], T, B);
             c.vLine(shade_[i], std::min(y0, y1), std::abs(y1 - y0) + 1, col);
         }
     }
-    // 4) grid, drawn over the fills so the axes stay readable
-    double fx = 0, fy = 0; int nx = 0, ny = 0;
-    const bool xt = graph::tickRange(v.xmin, v.xmax, v.xscl, 200, fx, nx) && v.xscl / vp.xdot() >= 4;
-    const bool yt = graph::tickRange(v.ymin, v.ymax, v.yscl, 200, fy, ny) && v.yscl / vp.ydot() >= 4;
-    if (gs.grid == GridMode::On && xt && yt) {
-        for (int i = 0; i < nx; ++i) for (int j = 0; j < ny; ++j)
-            c.pixel(static_cast<int>(std::lround(vp.screenX(fx + i * v.xscl))), static_cast<int>(std::lround(vp.screenY(fy + j * v.yscl))), Muted);
-    } else if (gs.grid == GridMode::Line) {
-        if (xt) for (int i = 0; i < nx; ++i) c.vLine(static_cast<int>(std::lround(vp.screenX(fx + i * v.xscl))), T, Rows, Faint);
-        if (yt) for (int j = 0; j < ny; ++j) c.hLine(L, static_cast<int>(std::lround(vp.screenY(fy + j * v.yscl))), Cols, Faint);
-    }
-    // 5) axes, ticks, scale values and labels. An axis outside the window is
-    // indicated on the edge closest to the origin (manual 5-6).
-    if (gs.axes != AxesMode::Off) {
-        const bool xIn = v.ymin <= 0 && v.ymax >= 0, yIn = v.xmin <= 0 && v.xmax >= 0;
-        const int ay = xIn ? static_cast<int>(std::lround(vp.screenY(0))) : (v.ymin > 0 ? B : T);
-        const int ax = yIn ? static_cast<int>(std::lround(vp.screenX(0))) : (v.xmin > 0 ? L : R);
-        if (xIn) c.hLine(L, ay, Cols, Ink);
-        if (yIn) c.vLine(ax, T, Rows, Ink);
-        if (v.xscl > 0 && graph::tickRange(v.xmin, v.xmax, v.xscl, 200, fx, nx) && v.xscl / vp.xdot() >= 3)
-            for (int i = 0; i < nx; ++i) c.vLine(static_cast<int>(std::lround(vp.screenX(fx + i * v.xscl))), ay - 2, 5, Ink);
-        if (v.yscl > 0 && graph::tickRange(v.ymin, v.ymax, v.yscl, 200, fy, ny) && v.yscl / vp.ydot() >= 3)
-            for (int j = 0; j < ny; ++j) c.hLine(ax - 2, static_cast<int>(std::lround(vp.screenY(fy + j * v.yscl))), 5, Ink);
-        if (gs.axes == AxesMode::Scale) {
-            if (v.xscl > 0 && graph::tickRange(v.xmin, v.xmax, v.xscl, 200, fx, nx)) {
-                const int stride = std::max(1, static_cast<int>(std::ceil(36.0 / (v.xscl / vp.xdot()))));
-                const int ty = ay + 4 > B - 12 ? ay - 15 : ay + 4;
-                for (int i = 0; i < nx; ++i) {
-                    const double x = fx + i * v.xscl;
-                    const long k = std::lround(x / v.xscl);
-                    if (k % stride != 0 || (yIn && k == 0)) continue;
-                    ui::textCenter(c, static_cast<int>(std::lround(vp.screenX(x))), ty, shortNumber(x).c_str(), Muted, font::Face::Small);
-                }
-            }
-            if (v.yscl > 0 && graph::tickRange(v.ymin, v.ymax, v.yscl, 200, fy, ny)) {
-                const int stride = std::max(1, static_cast<int>(std::ceil(14.0 / (v.yscl / vp.ydot()))));
-                for (int j = 0; j < ny; ++j) {
-                    const double y = fy + j * v.yscl;
-                    const long k = std::lround(y / v.yscl);
-                    if (k % stride != 0 || (xIn && k == 0)) continue;
-                    const std::string s = shortNumber(y);
-                    const int sy = static_cast<int>(std::lround(vp.screenY(y))) - 6;
-                    if (ax + 4 + 40 < R) ui::text(c, ax + 4, sy, s.c_str(), Muted, font::Face::Small);
-                    else ui::textRight(c, ax - 4, sy, s.c_str(), Muted, font::Face::Small);
-                }
-            }
-        }
-        if (gs.label) {
-            if (xIn) ui::text(c, R - 8, ay - 14, "x", Ink, font::Face::Small);
-            if (yIn) ui::text(c, ax + 4, T + 1, "y", Ink, font::Face::Small);
-            if (xIn && yIn) ui::text(c, ax - 8, ay + 2, "O", Ink, font::Face::Small);
-        }
-    }
+    // 4) grid and 5) axes, ticks, scale values and labels (drawn over the fills)
+    if (backPart) graphview::drawFrame(c, vp, gs);
+    if (!graphPart) { c.resetClip(); return; }
     // 6) recalled picture: behind the graphs, white is transparent
-    if (!overlay_.empty()) {
+    if (full && !overlay_.empty()) {
         pict::forEachSpan(overlay_, [&](int x, int y, int n, std::uint16_t col) {
             if (col != pict::Transparent && y < Rows) c.hLine(L + x, T + y, n, col);
         });
     }
     // 7) curves
-    for (std::size_t i = 0; i < plots.size() && i < curves_.size(); ++i)
-        drawCurve(c, curves_[i].xy, penFor(plots[i].style, isStrictInequality(plots[i].type)), graphColor(plots[i].color));
+    for (std::size_t i = 0; i < plots.size() && i < paneCurves.size(); ++i)
+        drawCurve(c, paneCurves[i].xy, penFor(plots[i].style, isStrictInequality(plots[i].type)), graphColor(plots[i].color));
+    if (sub) { c.resetClip(); return; }                 // SKETCH, marks: main screen only
     for (std::size_t i = 0; i < sketchPlots_.size() && i < sketchCurves_.size(); ++i)
         drawCurve(c, sketchCurves_[i].xy, penFor(sketchPlots_[i].style, false), graphColor(sketchPlots_[i].color));
     // 8) sketches
@@ -524,7 +489,7 @@ bool GraphApp::tracePoint(double& x, double& y) const {
 }
 bool GraphApp::cursor(double& x, double& y) const noexcept {
     if (mode_ == Mode::Pointer) {
-        const graph::Viewport vp(builtView_);
+        const graph::Viewport vp = graphview::viewport(builtView_, mainPane_);
         x = vp.mathX(px_); y = vp.mathY(py_);
         return true;
     }
@@ -533,7 +498,8 @@ bool GraphApp::cursor(double& x, double& y) const noexcept {
 }
 
 void GraphApp::drawOverlays(Context& ctx, gfx::Canvas& c) {
-    const graph::Viewport vp(ctx.ws.view);
+    pointerLabel_.clear();
+    const graph::Viewport vp = mainViewport(ctx); FX_PANE_GEO(vp);
     const GraphSettings& gs = ctx.ws.graph.settings;
     const DisplayFormat df{DisplayMode::Norm1, 0};
     const auto& plots = engine_.plots();
@@ -569,7 +535,16 @@ void GraphApp::drawOverlays(Context& ctx, gfx::Canvas& c) {
                 for (int xx = std::min(sx, ax); xx <= std::max(sx, ax); xx += 3) c.pixel(xx, sy, Muted);
                 c.resetClip();
             }
-            if (vp.inside(sx, sy)) cross(sx, sy, Error);
+            if (vp.inside(sx, sy)) {
+                cross(sx, sy, Error);
+                // Coordinates next to the pointer, on its right or left (manual 5-54), like the EXE marks.
+                if (gs.coord && action_ == Action::None) {
+                    pointerLabel_ = "(" + shortNumber(x) + "," + shortNumber(y) + ")";
+                    c.setClip({L, T, Cols, Rows});
+                    ui::text(c, sx + 4 > R - 70 ? sx - 74 : sx + 4, sy - 13, pointerLabel_.c_str(), Ink, font::Face::Small);
+                    c.resetClip();
+                }
+            }
             if (action_ == Action::Tangent || action_ == Action::Normal) {
                 double d;
                 if (engine_.derivative(*p, cursorV_, d)) bottomText_ = (isXType(p->type) ? "dX/dY=" : "dY/dX=") + value(d, df);
@@ -581,7 +556,9 @@ void GraphApp::drawOverlays(Context& ctx, gfx::Canvas& c) {
                 } else if (p->type == GraphType::Param) {
                     bottomText_ = "T=" + value(cursorV_, df) + "  X=" + value(x, df) + "  Y=" + value(y, df);
                 } else {
-                    bottomText_ = "X=" + value(x, df) + "  Y=" + value(y, df);
+                    // Y>, Y<, X>, X<: "X:" and "Y:" (the point is not included, manual 5-54).
+                    const char* sep = isStrictInequality(p->type) ? ":" : "=";
+                    bottomText_ = std::string("X") + sep + value(x, df) + "  Y" + sep + value(y, df);
                 }
                 if (gs.derivative) {
                     double d;
@@ -705,6 +682,17 @@ void GraphApp::drawOverlays(Context& ctx, gfx::Canvas& c) {
     }
     if (!topText_.empty()) { c.rect(0, T, ui::ScreenW, 14, 0xFFFF, true); ui::textFit(c, 3, T + 1, topText_, ui::ScreenW - 6, Ink, font::Face::Small); }
     if (!bottomText_.empty()) { c.rect(0, B - 13, ui::ScreenW, 14, 0xFFFF, true); ui::textFit(c, 3, B - 12, bottomText_, ui::ScreenW - 6, Ink, font::Face::Small); }
+    if (fadeSlider_) {
+        // Fade I/O slider (manual 5-12): 0 % as is .. 100 % all white, steps of 5 %.
+        const int fade = ctx.ws.graph.settings.fade;
+        const gfx::Rect r{40, B - 46, ui::ScreenW - 80, 40};
+        ui::panel(c, r, 0xFFFF, Accent);
+        ui::text(c, r.x + 6, r.y + 3, ("Fade I/O  " + std::to_string(fade) + "%").c_str(), Ink, font::Face::Small);
+        const int w = r.w - 16;
+        c.rect(r.x + 8, r.y + 24, w, 6, Faint, true);
+        c.rect(r.x + 8, r.y + 24, w * fade / 100, 6, Accent, true);
+        c.rect(r.x + 8 + w * fade / 100 - 2, r.y + 20, 5, 14, Ink, true);
+    }
     if (!renderDone_) {
         // Progress of the incremental drawing (the keyboard stays active).
         const std::size_t total = plots.size() + sketchPlots_.size();
@@ -743,8 +731,10 @@ std::uint64_t GraphApp::layerFingerprint(const Context& ctx) const {
 void GraphApp::drawPlot(Context& ctx, gfx::Canvas& c) {
     ensureBuilt(ctx);
     // While the trace/pointer cursor moves only the overlays change: with the
-    // PSRAM pool the static layers are copied back instead of redrawn.
-    const gfx::Rect area{L, T, Cols, Rows};
+    // PSRAM pool the static layers are copied back instead of redrawn. The
+    // cached area is the whole plot area (both panes of the Dual Screen).
+    constexpr int T = graphgeo::Top, Cols = graphgeo::Columns, Rows = graphgeo::Rows;
+    const gfx::Rect area{graphgeo::Left, T, Cols, Rows};
     const bool cursorMode = mode_ == Mode::Trace || mode_ == Mode::Pointer;
     const bool cacheable = cursorMode && renderDone_ && !capturePending_ && limits::ram().graphLayerCache;
     const std::uint64_t key = cacheable ? layerFingerprint(ctx) : 0;
@@ -765,10 +755,26 @@ void GraphApp::drawPlot(Context& ctx, gfx::Canvas& c) {
         }
     }
     if (capturePending_) {
-        // PICT: the graph layers only (no menus, cursors or texts).
+        // PICT: the graph layers only (no menus, cursors or texts). v1.18.0: a
+        // picture holds the background layer and the graph layer separately
+        // (manual 5-20); BMP keeps the single image shown on the screen.
         capturePending_ = false;
-        pict::Image img;
-        if (!pict::encode(c.pixels() + static_cast<std::size_t>(T) * static_cast<std::size_t>(c.width()), c.width(), Cols, Rows, img)) {
+        const std::uint16_t* rows = c.pixels() + static_cast<std::size_t>(T) * static_cast<std::size_t>(c.width());
+        pict::Image img, layer;
+        bool ok = pict::encode(rows, c.width(), Cols, Rows, img);
+        if (ok && !captureBmp_) {
+            c.rect(area.x, area.y, area.w, area.h, 0xFFFF, true);
+            drawPaneLayers(ctx, c, false, 1);
+            ok = pict::encode(rows, c.width(), Cols, Rows, layer);
+            if (ok) img.backLayer.swap(layer.rle);
+            c.rect(area.x, area.y, area.w, area.h, 0xFFFF, true);
+            drawPaneLayers(ctx, c, false, 2);
+            ok = ok && pict::encode(rows, c.width(), Cols, Rows, layer);
+            if (ok) { img.graphLayer.swap(layer.rle); ok = pict::compose(img); }
+            c.rect(area.x, area.y, area.w, area.h, 0xFFFF, true);
+            drawLayers(ctx, c);                                   // the screen again
+        }
+        if (!ok) {
             ctx.toast("Memory ERROR: immagine troppo complessa", 2500);
         } else {
             img.view = ctx.ws.view;
@@ -776,8 +782,13 @@ void GraphApp::drawPlot(Context& ctx, gfx::Canvas& c) {
             captureReady_ = true;
         }
     }
+    if (builtLayout_ == Layout::GraphTable || builtLayout_ == Layout::TableGraph) drawTablePane(ctx, c);
     drawOverlays(ctx, c);
-    if (ctx.shift() || mode_ == Mode::View || mode_ == Mode::Trace) {
+    if (tableActive_) {
+        // GtoT, table active (manual 5-55): delete a row, delete all.
+        const char* keys[6] = {"R\xE2\x80\xA2" "DEL", "DEL\xE2\x80\xA2" "ALL", nullptr, nullptr, nullptr, nullptr};
+        ui::softKeys(c, keys);
+    } else if (ctx.shift() || mode_ == Mode::View || mode_ == Mode::Trace) {
         const char* keys[6] = {mode_ == Mode::Trace && action_ == Action::None ? "TRACE*" : "TRACE", "ZOOM", "V-WIN", "SKETCH", "G-SOLV", "G\xE2\x87\x94T"};
         ui::softKeys(c, keys);
     } else if (mode_ == Mode::Modify) {
@@ -792,7 +803,32 @@ void GraphApp::drawPlot(Context& ctx, gfx::Canvas& c) {
 // ---------------------------------------------------------------- plot screen keys
 void GraphApp::plotKey(Context& ctx, const KeyEvent& ev) {
     ensureBuilt(ctx);
-    if (tableDraw(ctx) && mode_ == Mode::View && (ev.is(Key::Exit) || ev.is(Key::F6))) {
+    if (fadeSlider_) {
+        GraphSettings& gs = ctx.ws.graph.settings;
+        if (ev.is(Key::Left) || ev.is(Key::Right)) {
+            const int f = std::clamp(static_cast<int>(gs.fade) + (ev.is(Key::Left) ? -5 : 5), 0, 100);
+            gs.fade = static_cast<std::uint8_t>(f - f % 5);
+            background_.fade = gs.fade;
+            ctx.markDirty(); ctx.ws.graph.projectModified = true;
+        } else if (ev.is(Key::Char) && !ev.ctrl && std::isdigit(static_cast<unsigned char>(ev.ch))) {
+            ask(Ask::Fade, "Fade I/O (0-100%):", std::string(1, ev.ch));
+        } else if (ev.is(Key::Exit) || ev.is(Key::Exe) || ev.is(Key::AC)) {
+            fadeSlider_ = false;
+            // The lightness is stored with the background image (manual 5-12).
+            if (!backgroundPath_.empty() && fileSystem(ctx, false)) {
+                try { bgvSave(ctx, backgroundPath_, true); } catch (const std::bad_alloc&) { throw; } catch (const std::exception& e) { ctx.toast(e.what(), 2500); }
+            }
+        }
+        return;
+    }
+    if (tableActive_) {
+        if (builtLayout_ == Layout::GraphTable) { tableKeyGtoT(ctx, ev); return; }
+        tableActive_ = false;
+    }
+    // TABLE's GPH-CON/GPH-PLT: G<->T, EXIT or AC go back to the table (manual 5-35);
+    // with T+G the graph stays drawn above the active table (5-37).
+    if (tableDraw(ctx) && mode_ == Mode::View && (ev.is(Key::Exit) || ev.is(Key::F6) || ev.is(Key::AC))) {
+        ctx.ws.table.shown = builtLayout_ == Layout::TableGraph ? ctx.ws.table.draw : TableRange::Draw::None;
         ctx.ws.table.draw = TableRange::Draw::None;
         ctx.open(AppId::Table);
         return;
@@ -827,9 +863,17 @@ void GraphApp::plotKey(Context& ctx, const KeyEvent& ev) {
         return;
     case Key::F6: screen_ = Screen::List; return;               // G<->T: graph <-> relation list (manual 5-2)
     case Key::Optn:
-        showMenu(Menu::PlotOptn, "OPTN", {"PICTURE \xE2\x96\xB6", "PAN", "FadeI/O", "BGV-WIN \xE2\x96\xB6", "FORMAT", "\xE2\x86\x92 TABLE", "FILE \xE2\x96\xB6"});
+        // v1.18.0: COPY/SWAP (G+G, 5-23), CHANGE (GtoT 5-55, T+G 5-37) first.
+        if (builtLayout_ == Layout::GraphGraph)
+            showMenu(Menu::DualOptn, "OPTN", {"COPY", "SWAP", "PICTURE \xE2\x96\xB6", "PAN", "FORMAT", "\xE2\x86\x92 TABLE", "FILE \xE2\x96\xB6"});
+        else if (builtLayout_ == Layout::GraphTable)
+            showMenu(Menu::DualOptn, "OPTN", {"CHANGE", "PICTURE \xE2\x96\xB6", "PAN", "FORMAT", "\xE2\x86\x92 TABLE", "FILE \xE2\x96\xB6"});
+        else if (builtLayout_ == Layout::TableGraph)
+            showMenu(Menu::DualOptn, "OPTN", {"CHANGE", "PICTURE \xE2\x96\xB6", "PAN", "FORMAT"});
+        else
+            showMenu(Menu::PlotOptn, "OPTN", {"PICTURE \xE2\x96\xB6", "PAN", "FadeI/O", "BGV-WIN \xE2\x96\xB6", "FORMAT", "\xE2\x86\x92 TABLE", "FILE \xE2\x96\xB6"});
         return;
-    case Key::Exit:
+    case Key::Exit: case Key::AC:                                // AC too returns to the relation list (manual 5-2, 5-24)
         if (shadeIntegral_) { shadeIntegral_ = false; shade_.clear(); return; }
         screen_ = Screen::List;
         return;
@@ -863,17 +907,25 @@ void GraphApp::startTrace(Context& ctx, Action purpose) {
     if (plots.empty()) throw MathError("Math ERROR: nessun grafico da tracciare");
     action_ = purpose;
     const ViewWindow& v = ctx.ws.view;
-    if (cursorPlot_ < 0 || cursorPlot_ >= static_cast<int>(plots.size())) cursorPlot_ = 0;
+    // G+G: only the graphs of the main screen (manual 5-23).
+    auto onMain = [&](int i) { return static_cast<std::size_t>(i) >= onMain_.size() || onMain_[static_cast<std::size_t>(i)]; };
+    if (cursorPlot_ < 0 || cursorPlot_ >= static_cast<int>(plots.size()) || !onMain(cursorPlot_)) {
+        cursorPlot_ = -1;
+        for (int i = 0; i < static_cast<int>(plots.size()) && cursorPlot_ < 0; ++i) if (onMain(i)) cursorPlot_ = i;
+        if (cursorPlot_ < 0) throw MathError("Math ERROR: nessun grafico da tracciare nello schermo principale");
+    }
     if (purpose == Action::Tangent || purpose == Action::Normal) {
         // tangent/normal: graphs with a derivative
         if (isTType(plots[static_cast<std::size_t>(cursorPlot_)].type) && plots[static_cast<std::size_t>(cursorPlot_)].type == GraphType::Polar) cursorPlot_ = 0;
     }
     const graph::Plot& p = plots[static_cast<std::size_t>(cursorPlot_)];
-    const graph::Viewport vp(v);
+    const graph::Viewport vp = mainViewport(ctx); FX_PANE_GEO(vp);
     if (isYType(p.type)) cursorV_ = vp.xAt(std::round((Cols - 1) / 2.0));
     else if (isXType(p.type)) cursorV_ = vp.yAt(std::round((Rows - 1) / 2.0));
     else cursorV_ = v.tmin;
-    if (tableDraw(ctx)) cursorV_ = ctx.ws.table.start;
+    // GPH-CON/GPH-PLT: the pointer starts on the first row of the table (E4: the
+    // rows, not Start/Step, because of Variable = LIST and edited rows).
+    if (tableDraw(ctx)) cursorV_ = ctx.ws.table.rows.empty() ? ctx.ws.table.start : ctx.ws.table.rows.front();
     mode_ = Mode::Trace;
 }
 
@@ -882,10 +934,16 @@ void GraphApp::traceMove(Context& ctx, int steps) {
     if (cursorPlot_ < 0 || cursorPlot_ >= static_cast<int>(plots.size())) return;
     const graph::Plot& p = plots[static_cast<std::size_t>(cursorPlot_)];
     ViewWindow& v = ctx.ws.view;
-    const graph::Viewport vp(v);
+    const graph::Viewport vp = mainViewport(ctx); FX_PANE_GEO(vp);
     if (tableDraw(ctx)) {
-        const TableRange& t = ctx.ws.table;
-        cursorV_ = std::clamp(cursorV_ + steps * t.step, t.start, t.end);
+        // From one row of the table to the next (manual 5-36: Trace on the table graph).
+        const auto& rows = ctx.ws.table.rows;
+        if (rows.empty()) return;
+        std::size_t at = 0;
+        for (std::size_t i = 1; i < rows.size(); ++i)
+            if (std::abs(rows[i] - cursorV_) < std::abs(rows[at] - cursorV_)) at = i;
+        const long next = std::clamp<long>(static_cast<long>(at) + steps, 0, static_cast<long>(rows.size()) - 1);
+        cursorV_ = rows[static_cast<std::size_t>(next)];
         return;
     }
     if (isYType(p.type)) {
@@ -925,10 +983,11 @@ void GraphApp::traceKey(Context& ctx, const KeyEvent& ev) {
             const int i = (cursorPlot_ + (ev.is(Key::Up) ? n - k : k)) % n;
             const graph::Plot& to = plots[static_cast<std::size_t>(i)];
             if ((action_ == Action::Tangent || action_ == Action::Normal) && to.type == GraphType::Polar) continue;
+            if (static_cast<std::size_t>(i) < onMain_.size() && !onMain_[static_cast<std::size_t>(i)]) continue;   // G+G: main screen only
             cursorPlot_ = i;
             // Same x for functions of x; otherwise the centre of the new graph.
             if (isYType(to.type) != isYType(from.type) || isXType(to.type) != isXType(from.type) || isTType(to.type) != isTType(from.type)) {
-                const graph::Viewport vp(ctx.ws.view);
+                const graph::Viewport vp = mainViewport(ctx); FX_PANE_GEO(vp);
                 cursorV_ = isYType(to.type) ? vp.xAt(std::round((Cols - 1) / 2.0)) : isXType(to.type) ? vp.yAt(std::round((Rows - 1) / 2.0)) : ctx.ws.view.tmin;
             }
             return;
@@ -951,31 +1010,44 @@ void GraphApp::traceKey(Context& ctx, const KeyEvent& ev) {
             if (!std::isfinite(dx) || !std::isfinite(dy) || (dx == 0 && dy == 0)) throw MathError("Math ERROR: direzione non definita");
             SketchItem s;
             s.kind = action_ == Action::Tangent ? SketchItem::Kind::Tangent : SketchItem::Kind::Normal;
+            // E1: Sketch Line and Plot/LineCol of the Setup, or the FORMAT of the operation (manual 5-52, 5-53).
+            const GraphSettings& gs = ctx.ws.graph.settings;
+            s.color = sketchFormatSet_ ? sketchFormat_.color : gs.plotColor;
+            s.style = sketchFormatSet_ ? sketchFormat_.style : gs.sketchLine;
             s.x0 = x; s.y0 = y;
             if (action_ == Action::Tangent) { s.x1 = dx; s.y1 = dy; } else { s.x1 = -dy; s.y1 = dx; }
             addSketch(ctx, s);
             return;
         }
+        if (builtLayout_ == Layout::GraphTable) storeGtoT(ctx, p);    // Graph to Table (manual 5-55)
         if (marks_.size() >= MaxMarks) marks_.erase(marks_.begin());
         const bool strict = isStrictInequality(p.type);
         marks_.push_back({x, y, !strict});
         return;
     }
     case Key::Del: if (!marks_.empty()) marks_.pop_back(); return;
-    case Key::F1: case Key::Exit: mode_ = Mode::View; action_ = Action::None; return;
+    case Key::F1: case Key::Exit: mode_ = Mode::View; action_ = Action::None; sketchFormatSet_ = false; return;
     case Key::Char:
-        if (!ev.ctrl && (std::isdigit(static_cast<unsigned char>(ev.ch)) || ev.ch == '-' || ev.ch == '.' || ev.ch == '(')) {
+        if (ev.ctrl) return;
+        if (std::isdigit(static_cast<unsigned char>(ev.ch)) || ev.ch == '-' || ev.ch == '.' || ev.ch == '(' ||
+            ev.ch == 'x' || ev.ch == 'X' || ev.ch == 't' || ev.ch == 'T') {
+            // A digit, or the X,θ,T key, opens the pop-up for the value (manual 5-54).
             const graph::Plot& p = plots[static_cast<std::size_t>(cursorPlot_)];
             const char* var = p.type == GraphType::Polar ? "\xCE\xB8:" : p.type == GraphType::Param ? "T:" : isXType(p.type) ? "Y:" : "X:";
-            ask(Ask::TraceValue, var, std::string(1, ev.ch));
+            const bool digit = !(ev.ch == 'x' || ev.ch == 'X' || ev.ch == 't' || ev.ch == 'T');
+            ask(Ask::TraceValue, var, digit ? std::string(1, ev.ch) : std::string());
         }
         return;
-    case Key::F2: case Key::F3: case Key::F4: case Key::F5: case Key::F6: case Key::Optn:
+    case Key::Optn:
+        // FORMAT during Tangent / Norm (manual 5-52, step 7).
+        if (action_ == Action::Tangent || action_ == Action::Normal) { sketchFormatOpen(ctx); return; }
+        [[fallthrough]];
+    case Key::F2: case Key::F3: case Key::F4: case Key::F5: case Key::F6:
         // The other tools start from the plain graph (the trace point is kept for ZOOM IN/OUT).
         {
             double x, y;
             if (tracePoint(x, y)) {
-                const graph::Viewport vp(ctx.ws.view);
+                const graph::Viewport vp = mainViewport(ctx); FX_PANE_GEO(vp);
                 px_ = std::clamp(static_cast<int>(std::lround(vp.screenX(x))), L, R); py_ = std::clamp(static_cast<int>(std::lround(vp.screenY(y))), T, B);
                 keepPointer_ = ev.is(Key::F2);
             }
@@ -988,6 +1060,8 @@ void GraphApp::traceKey(Context& ctx, const KeyEvent& ev) {
 }
 
 void GraphApp::startPointer(Action purpose) {
+    const gfx::Rect pr = graphview::paneRect(mainPane_);
+    const int L = pr.x, T = pr.y, R = pr.x + pr.w - 1, B = pr.y + pr.h - 1;
     action_ = purpose;
     mode_ = Mode::Pointer;
     havePoint1_ = false; penDown_ = false; panGrab_ = false;
@@ -1001,6 +1075,8 @@ void GraphApp::startPointer(Action purpose) {
 }
 
 void GraphApp::pointerKey(Context& ctx, const KeyEvent& ev) {
+    const gfx::Rect pr = graphview::paneRect(mainPane_);
+    const int L = pr.x, T = pr.y, R = pr.x + pr.w - 1, B = pr.y + pr.h - 1;
     switch (ev.key) {
     case Key::Left: case Key::Right: case Key::Up: case Key::Down: {
         // Held arrows accelerate (the STM32 repeats them every 100 ms).
@@ -1013,7 +1089,7 @@ void GraphApp::pointerKey(Context& ctx, const KeyEvent& ev) {
         if (action_ == Action::Pan && panGrab_) {
             // The grabbed point follows the pointer: the window moves the other way.
             ViewWindow& v = ctx.ws.view;
-            const graph::Viewport vp(v);
+            const graph::Viewport vp = mainViewport(ctx); FX_PANE_GEO(vp);
             const double mx = -dx * vp.xdot(), my = dy * vp.ydot();
             v.xmin += mx; v.xmax += mx; v.ymin += my; v.ymax += my;
             ctx.markDirty();
@@ -1022,18 +1098,31 @@ void GraphApp::pointerKey(Context& ctx, const KeyEvent& ev) {
         px_ = std::clamp(px_ + dx, L, R); py_ = std::clamp(py_ + dy, T, B);
         if (action_ == Action::Pen && penDown_ &&
             pen_.size() < 2 * std::min(MaxPenPoints, MaxSketchPenPoints - std::min(MaxSketchPenPoints, sketchPenPoints(ctx.ws.graph.sketch)))) {
-            const graph::Viewport vp(ctx.ws.view);
+            const graph::Viewport vp = mainViewport(ctx); FX_PANE_GEO(vp);
             pen_.push_back(static_cast<float>(vp.mathX(px_))); pen_.push_back(static_cast<float>(vp.mathY(py_)));
         }
         return;
     }
     case Key::Exe: pointerDone(ctx); return;
+    case Key::Optn:
+        // FORMAT during a SKETCH operation (manual 5-52, step 7): style and colour of what follows.
+        if (action_ >= Action::Plot && action_ <= Action::Pen) sketchFormatOpen(ctx);
+        return;
     case Key::Exit:
         if (action_ == Action::Pen && penDown_) { pointerDone(ctx); }
-        mode_ = Mode::View; action_ = Action::None; havePoint1_ = false; panGrab_ = false;
+        mode_ = Mode::View; action_ = Action::None; havePoint1_ = false; panGrab_ = false; sketchFormatSet_ = false;
         return;
     default: return;
     }
+}
+
+// FORMAT during a SKETCH operation (manual 5-52): the dialog starts from the
+// Setup values (or the last FORMAT of the operation) and applies to the
+// elements drawn next in the same operation.
+void GraphApp::sketchFormatOpen(Context& ctx) {
+    const GraphSettings& gs = ctx.ws.graph.settings;
+    if (!sketchFormatSet_) sketchFormat_ = {gs.plotColor, gs.sketchLine};
+    openFormat(ctx, -1, -2);
 }
 
 void GraphApp::addSketch(Context& ctx, SketchItem item) {
@@ -1047,11 +1136,12 @@ void GraphApp::addSketch(Context& ctx, SketchItem item) {
 }
 
 void GraphApp::pointerDone(Context& ctx) {
-    const graph::Viewport vp(ctx.ws.view);
+    const graph::Viewport vp = mainViewport(ctx); FX_PANE_GEO(vp);
     const double x = vp.mathX(px_), y = vp.mathY(py_);
     const GraphSettings& gs = ctx.ws.graph.settings;
     SketchItem s;
-    s.color = gs.plotColor; s.style = gs.sketchLine;
+    s.color = sketchFormatSet_ ? sketchFormat_.color : gs.plotColor;
+    s.style = sketchFormatSet_ ? sketchFormat_.style : gs.sketchLine;
     s.x0 = x; s.y0 = y;
     switch (action_) {
     case Action::ZoomBox:
@@ -1128,7 +1218,11 @@ void GraphApp::startSelect(Context& ctx, Action purpose) {
     if (purpose == Action::XCal)
         selectable_.erase(std::remove_if(selectable_.begin(), selectable_.end(), [&](int i) { return isTType(plots[static_cast<std::size_t>(i)].type); }), selectable_.end());
     if (purpose == Action::Format)
-        selectable_.erase(std::remove_if(selectable_.begin(), selectable_.end(), [&](int i) { return plots[static_cast<std::size_t>(i)].function < 0; }), selectable_.end());
+        // E3: pasted graphs can be formatted here (manual 5-31); overwrite and List graphs cannot (5-28, 5-30).
+        selectable_.erase(std::remove_if(selectable_.begin(), selectable_.end(), [&](int i) {
+            const graph::Plot& p = plots[static_cast<std::size_t>(i)];
+            return (p.function < 0 && !p.pasted) || p.variants > 1;
+        }), selectable_.end());
     const bool two = purpose == Action::Isect || purpose == Action::IntIsect || purpose == Action::IntMixed;
     if (selectable_.size() < (two ? 2u : 1u)) throw MathError(two ? "Math ERROR: servono due grafici Y=" : "Math ERROR: nessun grafico adatto");
     selectIndex_ = 0;
@@ -1176,7 +1270,17 @@ void GraphApp::selected(Context& ctx, int plot) {
     }
     case Action::Integral: case Action::IntRoot: beginIntegral(ctx, action_, plot, -1); return;
     case Action::IntIsect: case Action::IntMixed: beginIntegral(ctx, action_, firstChoice_, plot); return;
-    case Action::Format: openFormat(ctx, plots[static_cast<std::size_t>(plot)].function, -1); return;
+    case Action::Format: {
+        const graph::Plot& p = plots[static_cast<std::size_t>(plot)];
+        if (p.pasted) {
+            int k = 0;
+            for (int i = 0; i < plot; ++i) if (plots[static_cast<std::size_t>(i)].pasted) ++k;
+            openFormat(ctx, -1, -1, k);
+        } else {
+            openFormat(ctx, p.function, -1);
+        }
+        return;
+    }
     case Action::Inverse: {
         SketchItem s;
         s.kind = SketchItem::Kind::Inverse;
@@ -1295,7 +1399,7 @@ void GraphApp::beginIntegral(Context& ctx, Action what, int f, int g) {
         if (integral_.stops.size() < (what == Action::IntMixed ? 1u : 2u)) throw MathError("Math ERROR: Not Found");
         cursorV_ = integral_.stops[0];
     } else {
-        const graph::Viewport vp(v);
+        const graph::Viewport vp = mainViewport(ctx); FX_PANE_GEO(vp);
         cursorV_ = vp.xAt(std::round((Cols - 1) / 2.0));
     }
     cursorPlot_ = f;
@@ -1304,7 +1408,7 @@ void GraphApp::beginIntegral(Context& ctx, Action what, int f, int g) {
 }
 
 void GraphApp::integralKey(Context& ctx, const KeyEvent& ev) {
-    const graph::Viewport vp(ctx.ws.view);
+    const graph::Viewport vp = mainViewport(ctx); FX_PANE_GEO(vp);
     auto& st = integral_;
     if (st.stage >= 2) { if (ev.is(Key::Exit) || ev.is(Key::Exe)) { mode_ = Mode::View; } return; }
     const bool free = action_ == Action::Integral;
@@ -1375,7 +1479,7 @@ void GraphApp::finishIntegral(Context& ctx) {
     ctx.markDirty();
     st.stage = 2;
     // Shading between the curve and the x axis (or the other graph).
-    const graph::Viewport vp(ctx.ws.view);
+    const graph::Viewport vp = mainViewport(ctx); FX_PANE_GEO(vp);
     shade_.clear();
     const int c0 = std::max(L, static_cast<int>(std::ceil(vp.screenX(st.lo)))), c1 = std::min(R, static_cast<int>(std::floor(vp.screenX(st.hi))));
     for (int x = c0; x <= c1; ++x) {
@@ -1394,16 +1498,18 @@ void GraphApp::finishIntegral(Context& ctx) {
 void GraphApp::zoomTo(Context& ctx, const ViewWindow& v) {
     const std::string e = validateView(v);
     if (!e.empty()) throw MathError(e);
-    if (!haveOriginal_) { original_ = ctx.ws.view; haveOriginal_ = true; }
-    zoomStack_.push_back(ctx.ws.view);
+    ViewWindow& target = zoomTarget(ctx);                      // G+G: the sub-screen (D2)
+    if (!haveOriginal_) { original_ = target; haveOriginal_ = true; }
+    zoomStack_.push_back(target);
     if (zoomStack_.size() > 16) zoomStack_.erase(zoomStack_.begin());
-    ctx.ws.view = v;
-    marks_.clear();
+    target = v;
+    if (&target == &ctx.ws.view) marks_.clear();
     ctx.markDirty(); ctx.ws.graph.projectModified = true;
 }
 
 void GraphApp::zoomAction(Context& ctx, int choice) {
-    const ViewWindow& v = ctx.ws.view;
+    const ViewWindow& v = ctx.ws.view;                         // G+G: from the main V-Window to the sub-screen (D2)
+    const int rows = mainViewport(ctx).rows();
     double cx = 0.5 * (v.xmin + v.xmax), cy = 0.5 * (v.ymin + v.ymax);
     double tx, ty;
     if ((mode_ == Mode::Trace || mode_ == Mode::Results) && cursor(tx, ty)) { cx = tx; cy = ty; }
@@ -1414,7 +1520,7 @@ void GraphApp::zoomAction(Context& ctx, int choice) {
     case 3: startPointer(Action::ZoomOut); return;
     case 4: {
         // AUTO: Y range from the values of the Y= graphs on the screen.
-        const graph::Viewport vp(v);
+        const graph::Viewport vp = mainViewport(ctx); FX_PANE_GEO(vp);
         std::vector<double> values;
         for (const auto& p : engine_.plots()) {
             if (!isYType(p.type)) continue;
@@ -1426,13 +1532,13 @@ void GraphApp::zoomAction(Context& ctx, int choice) {
         return;
     }
     case 5:
-        if (haveOriginal_) { ctx.ws.view = original_; zoomStack_.clear(); marks_.clear(); ctx.markDirty(); }
+        if (haveOriginal_) { zoomTarget(ctx) = original_; zoomStack_.clear(); marks_.clear(); ctx.markDirty(); }
         return;
-    case 6: zoomTo(ctx, graph::squareWindow(v)); return;
-    case 7: zoomTo(ctx, graph::roundWindow(v, cx, cy)); return;
-    case 8: zoomTo(ctx, graph::integerWindow(v, cx, cy)); return;
+    case 6: zoomTo(ctx, graph::squareWindow(v, rows)); return;
+    case 7: zoomTo(ctx, graph::roundWindow(v, cx, cy, rows)); return;
+    case 8: zoomTo(ctx, graph::integerWindow(v, cx, cy, rows)); return;
     case 9:
-        if (!zoomStack_.empty()) { ctx.ws.view = zoomStack_.back(); zoomStack_.pop_back(); marks_.clear(); ctx.markDirty(); }
+        if (!zoomStack_.empty()) { zoomTarget(ctx) = zoomStack_.back(); zoomStack_.pop_back(); marks_.clear(); ctx.markDirty(); }
         return;
     case 10: zoomTo(ctx, graph::trigWindow(v, ctx.ws.settings.angle)); return;
     case 11: zoomTo(ctx, graph::standardWindow(v)); return;
@@ -1442,16 +1548,19 @@ void GraphApp::zoomAction(Context& ctx, int choice) {
 }
 
 void GraphApp::pasteGraph(Context& ctx) {
+    dualOnly(ctx, "Incolla");                                  // only with Dual Screen Off (manual 5-31)
     if (!ctx.clipboard) throw MathError("Argument ERROR: appunti vuoti");
     std::string text = ast::serialize(*ctx.clipboard);
     if (pasted_.size() >= graph::MaxPasted) throw MathError("Memory ERROR: massimo 10 grafici incollati");
     (void)engine_.makePlot(text, GraphType::Y, 0, LineStyle::Normal);   // Syntax ERROR before adding
     pasted_.push_back(std::move(text));
+    pastedFormat_.emplace_back(static_cast<std::uint8_t>(0), LineStyle::Normal);   // blue, Normal (manual 5-31)
     built_ = false;
 }
 
 // ---------------------------------------------------------------- plot menus
 void GraphApp::sketchAction(Context& ctx, Action a) {
+    sketchFormatSet_ = false;                    // a new operation starts from Sketch Line and Plot/LineCol
     switch (a) {
     case Action::Tangent: case Action::Normal: startTrace(ctx, a); return;
     case Action::Inverse: startSelect(ctx, a); return;
@@ -1499,7 +1608,7 @@ void GraphApp::plotMenu(Context& ctx, Menu menu, int c) {
         sketchAction(ctx, acts[c]);
         return;
     }
-    case Menu::SketchPlot: { static const Action a[] = {Action::Plot, Action::PlotOn, Action::PlotOff, Action::PlotChg}; startPointer(a[c]); return; }
+    case Menu::SketchPlot: { static const Action a[] = {Action::Plot, Action::PlotOn, Action::PlotOff, Action::PlotChg}; sketchFormatSet_ = false; startPointer(a[c]); return; }
     case Menu::SketchLine: sketchAction(ctx, c == 0 ? Action::Line : Action::FLine); return;
     case Menu::SketchItems: sketchSelected_ = c; showMenu(Menu::SketchItem, "ELEMENTO", {"Elimina", "FORMAT (stile, colore)"}); return;
     case Menu::SketchItem:
@@ -1526,7 +1635,11 @@ void GraphApp::plotMenu(Context& ctx, Menu menu, int c) {
         switch (c) {
         case 0: showMenu(Menu::Picture, "PICTURE", {"STORE (Pict 1-20)", "SAVE\xE2\x80\xA2" "AS", "RECALL (Pict 1-20)", "OPEN", "Esporta BMP"}); return;
         case 1: startPointer(Action::Pan); return;
-        case 2: askValue(Ask::Fade, "Fade I/O (0-100%):", std::to_string(ctx.ws.graph.settings.fade)); return;
+        case 2:
+            // Fade I/O: a slider moved with the cursor keys in steps of 5 % (manual 5-12).
+            if (background_.empty()) throw MathError("Argument ERROR: nessuna immagine di sfondo");
+            fadeSlider_ = true;
+            return;
         case 3:
             if (background_.empty()) throw MathError("Argument ERROR: nessuna immagine di sfondo");
             showMenu(Menu::BgvWin, "BGV-WIN", {"SAVE", "SAVE\xE2\x80\xA2" "AS"});
@@ -1535,17 +1648,64 @@ void GraphApp::plotMenu(Context& ctx, Menu menu, int c) {
         case 5: ctx.open(AppId::Table); return;
         default: showMenu(Menu::File, "FILE (progetto)", {"NEW", "OPEN", "SAVE", "SAVE AS", "RENAME", "DELETE"}); return;
         }
+    case Menu::DualOptn: {
+        // v1.18.0: OPTN of the Dual Screen (manual 5-23, 5-37, 5-55): the item text tells the action.
+        const std::string item = c >= 0 && c < static_cast<int>(menu_.items.size()) ? menu_.items[static_cast<std::size_t>(c)] : std::string();
+        GraphDual& d = ctx.ws.graph.dual;
+        if (item == "COPY") {
+            // The graphs of the main screen are drawn in the sub-screen too ("E").
+            for (std::size_t i = 0; i < MaxGraphFunctions; ++i)
+                if (d.side[i] == DualSide::Main && ctx.ws.functions[i].selected && ctx.ws.functions[i].defined()) d.side[i] = DualSide::Both;
+            changed(ctx);
+        } else if (item == "SWAP") {
+            // The two screens exchange graphs and V-Windows.
+            for (auto& side : d.side) side = side == DualSide::Main ? DualSide::Sub : side == DualSide::Sub ? DualSide::Main : side;
+            std::swap(ctx.ws.view, d.sub);
+            marks_.clear(); haveOriginal_ = false; zoomStack_.clear();
+            changed(ctx);
+        } else if (item == "CHANGE") {
+            if (builtLayout_ == Layout::TableGraph) {
+                // T+G: the table becomes active again, the graph stays drawn (manual 5-37).
+                ctx.ws.table.shown = ctx.ws.table.draw;
+                ctx.ws.table.draw = TableRange::Draw::None;
+                ctx.open(AppId::Table);
+                return;
+            }
+            mode_ = Mode::View; action_ = Action::None;
+            tableActive_ = true;                                   // GtoT (manual 5-55)
+        } else if (item == "PAN") {
+            if (builtLayout_ == Layout::GraphGraph || builtLayout_ == Layout::GraphTable)
+                throw MathError("Argument ERROR: PAN non disponibile con il Dual Screen G+G o GtoT");
+            startPointer(Action::Pan);
+        } else if (item == "FORMAT") {
+            startSelect(ctx, Action::Format);
+        } else if (item.rfind("PICTURE", 0) == 0) {
+            showMenu(Menu::Picture, "PICTURE", {"STORE (Pict 1-20)", "SAVE\xE2\x80\xA2" "AS", "RECALL (Pict 1-20)", "OPEN", "Esporta BMP"});
+        } else if (item.rfind("FILE", 0) == 0) {
+            showMenu(Menu::File, "FILE (progetto)", {"NEW", "OPEN", "SAVE", "SAVE AS", "RENAME", "DELETE"});
+        } else {
+            ctx.open(AppId::Table);
+        }
+        return;
+    }
+    case Menu::GtoTOptn:
+        if (c == 0) { tableActive_ = false; return; }             // CHANGE: the graph is active again
+        ask(Ask::GtoTListMem, "LISTMEM: colonna in List (1-26):");
+        return;
     case Menu::Picture:
+        // A split screen cannot be saved as a picture (manual 5-21).
+        if ((c == 0 || c == 1) && builtLayout_ != Layout::Full)
+            throw MathError("Argument ERROR: uno schermo diviso non si salva in un'immagine (Dual Screen)");
         switch (c) {
         case 0: ask(Ask::PictStore, "STORE Pict (1-20):"); return;
-        case 1: ask(Ask::PictSaveAs, "SAVE\xE2\x80\xA2" "AS nome (max 8):", {}, true); return;
+        case 1: openFiles(ctx, Browse::PictSaveAs); return;          // folder, then the name (manual 5-21)
         case 2: ask(Ask::PictRecall, "RECALL Pict (1-20):"); return;
         case 3: openFiles(ctx, Browse::Pictures); return;
         default: ask(Ask::BmpSaveAs, "BMP nome (max 8):", {}, true); return;
         }
     case Menu::BgvWin:
         if (c == 0) confirm(Confirm::BgvSave, "Aggiornare la V-Window dell'immagine di sfondo?");
-        else ask(Ask::BgvSaveAs, "Sfondo SAVE\xE2\x80\xA2" "AS (max 8):", {}, true);
+        else openFiles(ctx, Browse::BgvSaveAs);                   // folder, then the name (manual 5-11)
         return;
     default: return;
     }
@@ -1590,12 +1750,12 @@ bool GraphApp::plotAnswer(Context& ctx, Ask a, const std::string& text) {
     case Ask::PictRecall: recallPicture(ctx, files::join(files::PictFolder, pict::memoryFileName(index(pict::PictMemories))), false); return true;
     case Ask::PictSaveAs: {
         if (!files::validName(text, 8)) throw MathError("Argument ERROR: nome di 1-8 caratteri A-Z 0-9 _ -");
-        storePicture(ctx, files::join(files::PictFolder, text + files::PictExtension));
+        storePicture(ctx, files::join(saveFolder_.empty() ? std::string(files::PictFolder) : saveFolder_, text + files::PictExtension));
         return true;
     }
     case Ask::BgvSaveAs: {
         if (!files::validName(text, 8)) throw MathError("Argument ERROR: nome di 1-8 caratteri A-Z 0-9 _ -");
-        bgvSave(ctx, files::join(files::PictFolder, text + files::PictExtension));
+        bgvSave(ctx, files::join(saveFolder_.empty() ? std::string(files::PictFolder) : saveFolder_, text + files::PictExtension));
         return true;
     }
     case Ask::BmpSaveAs: {
@@ -1606,14 +1766,45 @@ bool GraphApp::plotAnswer(Context& ctx, Ask a, const std::string& text) {
         capturePending_ = true;
         return true;
     }
+    case Ask::FolderNew: {
+        // A folder of pictures under PICOCALC/PICT (one level, like the storage memory folders).
+        if (!files::validName(text, 8)) throw MathError("Argument ERROR: nome di 1-8 caratteri A-Z 0-9 _ -");
+        files::FileSystem* fs = fileSystem(ctx, true);
+        const files::Status st = fs->makeDirs(files::join(files::PictFolder, text));
+        if (st != files::Status::Ok) throw MathError(std::string("Storage ERROR: ") + files::statusMessage(st));
+        openFiles(ctx, files_.purpose);
+        return true;
+    }
+    case Ask::GtoTListMem: {
+        // LISTMEM of the GtoT table: the column under the cursor into List n.
+        const double n = number();
+        if (n != std::floor(n) || n < 1 || n > static_cast<double>(ctx.ws.lists.size()))
+            throw MathError("Argument ERROR: List da 1 a " + std::to_string(ctx.ws.lists.size()));
+        const auto& rows = ctx.ws.graph.dual.gtot;
+        if (rows.empty()) throw MathError("Argument ERROR: tabella vuota");
+        ctx.ws.checkListLength(static_cast<std::size_t>(n) - 1, rows.size());
+        if (!gtotColumns(ctx)) throw MathError(gtotError_);
+        graphview::TableData d{&engine_, &gtotCols_, &rows, ctx.ws.graph.dual.gtotType, ctx.ws.settings.display};
+        std::vector<double> values;
+        values.reserve(rows.size());
+        for (int r = 0; r < static_cast<int>(rows.size()); ++r) {
+            double x;
+            if (!graphview::tableCell(d, r, gtotCursor_.col, x)) throw MathError("Math ERROR: valore non definito alla riga " + std::to_string(r + 1));
+            values.push_back(x);
+        }
+        ctx.ws.setList(static_cast<std::size_t>(n) - 1, std::move(values));
+        ctx.markDirty();
+        ctx.toast("Copiata in List " + std::to_string(static_cast<int>(n)));
+        return true;
+    }
     case Ask::SketchText: {
         if (text.size() > MaxSketchText) throw MathError("Argument ERROR: massimo 32 caratteri");
-        const graph::Viewport vp(ctx.ws.view);
+        const graph::Viewport vp = mainViewport(ctx); FX_PANE_GEO(vp);
         SketchItem s;
         s.kind = SketchItem::Kind::Text;
         s.x0 = vp.mathX(px_); s.y0 = vp.mathY(py_);
         s.text = text;
-        s.color = ctx.ws.graph.settings.plotColor;
+        s.color = sketchFormatSet_ ? sketchFormat_.color : ctx.ws.graph.settings.plotColor;
         addSketch(ctx, s);
         return true;
     }

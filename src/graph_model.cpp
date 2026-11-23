@@ -47,6 +47,19 @@ bool parseLineStyleName(const std::string& name, LineStyle& out) noexcept {
     for (std::size_t i = 0; i < LineStyleCount; ++i) if (name == kStyles[i]) { out = static_cast<LineStyle>(i); return true; }
     return false;
 }
+const char* dualScreenName(DualScreen d) noexcept {
+    switch (d) {
+    case DualScreen::GraphGraph: return "G+G";
+    case DualScreen::GraphTable: return "GtoT";
+    case DualScreen::Off: break;
+    }
+    return "Off";
+}
+bool parseDualScreenName(const std::string& s, DualScreen& out) noexcept {
+    for (DualScreen d : {DualScreen::Off, DualScreen::GraphGraph, DualScreen::GraphTable})
+        if (s == dualScreenName(d)) { out = d; return true; }
+    return false;
+}
 const char* graphColorName(std::uint8_t c) noexcept { return c < GraphColorCount ? kColors[c] : kColors[0]; }
 bool parseGraphColorName(const std::string& name, std::uint8_t& out) noexcept {
     for (std::uint8_t i = 0; i < GraphColorCount; ++i) if (name == kColors[i]) { out = i; return true; }

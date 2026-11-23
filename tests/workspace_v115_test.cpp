@@ -230,7 +230,8 @@ int main() {
         // v1.17.0: sulla Plus anche le sezioni delle modalita' Base compilate.
         const std::size_t base = features::kSpreadsheet + features::kDynaGraph + features::kRecursion + features::kConicGraphs + features::kProgram +
                                  features::kFinancial + features::kLink + features::kGeometry + features::kPicturePlot + features::kPython;
-        CHECK(n == (features::kEActivity ? 1u : 0u) + base);
+        // v1.18.0: su entrambe le schede le sezioni del Dual Screen di Graph (0x0104) e Table (0x0106).
+        CHECK(n == (features::kEActivity ? 1u : 0u) + base + 2u);
     }
     return testutil::finish("workspace_v115_test");
 }

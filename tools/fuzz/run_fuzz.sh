@@ -5,7 +5,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 B="$(cd "${1:?cartella di build}" && pwd)"; T="${2:-300}"
-C="$B/corpus"; mkdir -p "$C"/{expr,ws,csv,pcg,eq,ui,g3d,tf,te,prog,ea,sheet,link,modes,py}
+C="$B/corpus"; mkdir -p "$C"/{expr,ws,csv,pcg,eq,ui,g3d,tf,te,prog,ea,sheet,link,modes,py,dual}
 "$B/gen_seeds" "$C"
 # Espressioni dalle stringhe dei test (primo byte: modo 0 = Comp).
 grep -ohE '"[^"\\]{2,80}"' "$ROOT"/tests/*_test.cpp | sort -u | head -3000 | sed 's/^"//; s/"$//' |
@@ -35,6 +35,11 @@ run fuzz_typedfile tf 4000; run fuzz_texteditor te 600
 [ -x "$B/fuzz_program" ] && run fuzz_program prog 2000
 run fuzz_eactivity ea 6000                              # v1.16.0: documenti e controller
 FXAI_FUZZ_EACT_DOCS=1 run fuzz_eactivity ea 30000 fuzz_eactivity_docs   # solo documenti .pceact
+# v1.18.0: Dual Screen di Graph/Table (G+G, GtoT, T+G) con tasti, V-Window e tabelle casuali
+printf '\000\001\002\003\002\001\000\100\200\100\200\050\206\207\210\206\212\206' > "$C/dual/gg"
+printf '\001\000\001\002\000\000\000\100\200\100\200\000\206\201\212\212\210\001\203' > "$C/dual/gtot"
+printf '\002\000\001\002\000\000\000\100\200\100\200\000\005\201\212\207\001' > "$C/dual/tg"
+run fuzz_dual dual 300
 # v1.17.0 (solo Pico Plus 2 W): formule del foglio, protocollo di Link, decoder delle modalita' Base, MicroPython
 printf '\000A1=2\nB1==A1*3\nC1==Sum(A1:B1)+$A$1\nD1==D1\n!x\001\002\n#=A1+1\n' > "$C/sheet/a"
 printf '\000A1==B1\nB1==Mean(A1:A9)/0\nZ999==Z998\n' > "$C/sheet/b"

@@ -1,11 +1,14 @@
-# TABLE — v1.8.0
+# TABLE — v1.18.0 (parità completa con la fx-CG50)
 
 Tabelle numeriche delle funzioni della lista delle relazioni, come nella
-modalità Table della fx-CG50 (manuale, capitolo 5, pagine 5-32…5-35; il
+modalità Table della fx-CG50 (manuale, capitolo 5, pagine 5-32…5-37; il
 manuale è usato solo come riferimento di comportamento). Codice:
 `include/table_model.hpp`, `src/table_model.cpp` (logica, senza interfaccia),
 `src/apps/table_app.cpp` (modalità), `src/apps/graph_plot.cpp`
-(GPH-CON/GPH-PLT disegnati da GRAPH).
+(GPH-CON/GPH-PLT disegnati da GRAPH), `src/apps/graph_view.cpp` (v1.18.0:
+riquadro della tabella e grafico dei punti, condivisi con GRAPH per il T+G e il
+GtoT). Dalla v1.18.0 Table ha la **parità completa** su entrambe le schede:
+tabella voce per voce in [GRAPH_PARITY.md](GRAPH_PARITY.md) (§9, T01–T13).
 
 ## Funzioni
 
@@ -25,9 +28,12 @@ le righe di altri tipi (X=, disequazioni, …) sono mostrate in grigio e non
 entrano nella tabella. Una riga vuota prende il tipo della tabella.
 
 Tasti della lista: F1 SELECT, F2 DELETE (con conferma), F3 TYPE, F4 STYLE
-(colore della colonna e del grafico), F5 SET, F6 TABLE, EXE o → per
-modificare la riga (editor naturale: F1 a/b, F2 √, F3 potenza, F4 variabile,
-F5 |x|), digitare per sostituirla. SETUP apre il Setup della modalità.
+(stile della linea del grafico di GPH-CON, v1.18.0), F5 SET, F6 TABLE, EXE o →
+per modificare la riga (editor naturale: F1 a/b, F2 √, F3 potenza, F4
+variabile, F5 |x|, OPTN › ANGLE °/ʳ/ᵍ dalla v1.18.0), digitare per
+sostituirla. OPTN › FORMAT (Line Style, Line Color) cambia il colore della
+colonna e del grafico (manuale 5-33, come FORMAT di Graph). SETUP apre il Setup
+della modalità.
 
 ## Variabile (Setup "Variable") e SET
 
@@ -36,7 +42,8 @@ F5 |x|), digitare per sostituirla. SETUP apre il Setup della modalità.
   dà esattamente 0 al centro).
 - **List 1…6**: i valori della lista diventano la variabile.
 - Setup di TABLE: Variable (Range, List 1–26 dalla v1.11.0), Derivative (On/Off), Angle
-  (Deg/Rad/Gra). Derivative e Angle sono condivisi con GRAPH.
+  (Deg/Rad/Gra), **Dual Screen** (T+G / Off, v1.18.0). Derivative e Angle sono
+  condivisi con GRAPH; Dual Screen di Table è separato da quello di Graph.
 
 Limiti: **999 righe** (Memory ERROR oltre); lista vuota → Dimension ERROR;
 Step ≤ 0 o End < Start → Argument ERROR (il modulo SET torna ai valori
@@ -67,8 +74,20 @@ Tasti della tabella:
 | F3 ROW | DELETE (riga), INSERT (copia della riga sopra di essa), ADD (copia sotto); poi EDIT cambia il valore |
 | F4 EDIT / EXE | nuovo valore della variabile della riga (anche espressioni: `pi/4`); un valore non valido (1/0) dà errore e lascia il valore originale |
 | cifra, `-`, `.`, `(` | come EDIT, con il primo carattere digitato |
-| F5 GPH-CON / F6 GPH-PLT | GRAPH disegna i punti della tabella collegati / isolati (Y=: (x, y); r=: polare; Param: (Xt, Yt)); G⇔T o EXIT torna alla tabella |
-| OPTN → LISTMEM | copia la colonna del cursore (anche la variabile) in List 1–26 (v1.11.0); limiti della scheda (255 / 999 valori per lista, 1 530 / 20 000 in tutte le liste), una cella non definita dà errore |
+| F5 GPH-CON / F6 GPH-PLT | GRAPH disegna i punti della tabella collegati / isolati (Y=: (x, y); r=: polare; Param: (Xt, Yt)); G⇔T, EXIT o AC tornano alla tabella; TRACE va da una riga della tabella all'altra (anche con Variable = LIST o righe modificate, v1.18.0); Zoom, Sketch, FORMAT e PAN funzionano |
+| OPTN → LISTMEM | copia la colonna del cursore (anche la variabile) in List 1–26 (v1.11.0); 999 valori per lista su entrambe le schede (v1.18.0), 1 530 / 20 000 in tutte le liste (Pico 2 W / Plus); una cella non definita dà errore |
+
+## T+G: tabella e grafico insieme (v1.18.0, manuale 5-36, 5-37)
+
+Con SET UP › Dual Screen = **T+G** la schermata della tabella è divisa: il
+grafico sta **sopra** (320×140) e la tabella **sotto** (sulla fx-CG50 a
+sinistra e a destra: la PicoCalc ha uno schermo quadrato, differenza DI-1 di
+[GRAPH_PARITY.md](GRAPH_PARITY.md)). La tabella resta attiva con tutti i suoi
+tasti; GPH-CON / GPH-PLT disegnano i punti nel riquadro sopra e rendono attivo
+il grafico (TRACE sulle righe, con la riga della tabella che segue il
+puntatore; Zoom, Sketch, PAN); OPTN › CHANGE o AC rendono attiva di nuovo la
+tabella e il grafico resta disegnato fino a FORMULA, DELETE o una tabella
+nuova. Screenshot 159, 160.
 
 Le colonne delle funzioni non si modificano direttamente (manuale 5-34).
 
@@ -76,7 +95,9 @@ Le colonne delle funzioni non si modificano direttamente (manuale 5-34).
 
 - Workspace in flash, **versione 4**: variabile, lista, tipo, righe generate
   (anche modificate) e stato della tabella; i record v1–v3 sono letti (la
-  tabella va generata di nuovo).
+  tabella va generata di nuovo). v1.18.0: il Dual Screen T+G nella sezione
+  `0x0106` del record (scritta solo se attivo, su entrambe le schede) e nella
+  chiave `tabledual=On` del `.pcgraph`.
 - Progetto `.pcgraph`: `table=Start;End;Step`, `tablevar=Range|List1…6`,
   `tablefunc=Y=|r=|Param` (chiavi aggiunte in modo compatibile). Le righe
   non fanno parte del progetto e non lo marcano come modificato.
@@ -89,16 +110,21 @@ derivate usano Ridders). Il motore è ricompilato solo quando cambiano
 funzioni, variabili A–Z, liste, angolo, Derivative o tipo (impronta FNV-1a).
 Tempi sul RP2350 da misurare (vedi `docs/HARDWARE_TEST_v1.8.0.md`, HW-34).
 
-## Differenze dichiarate rispetto alla CG50
+## Scelte e differenze rispetto alla CG50
 
 - INSERT/ADD inseriscono una copia della riga (il valore si cambia con
-  EDIT); la CG50 non documenta il valore della nuova riga.
-- Liste di 999 elementi come la CG50 sul Pimoroni Pico Plus 2 W; sul Pico 2 W
-  255 (record del workspace da 64 KB): lì LISTMEM di tabelle più lunghe dà
-  Dimension ERROR.
+  EDIT): il manuale dice solo «insert/add row» e non il valore della riga
+  nuova, quindi non è una differenza.
+- Liste di 999 elementi come la CG50 su **entrambe le schede** (v1.18.0,
+  decisione D4); sul Pico 2 W tutte le liste insieme restano al più 1 530
+  elementi (record del workspace da 59,75 KB): una sola lista piena da 999.
 - Con una sovrapposizione `[A=…]` senza Derivative la colonna usa il primo
   valore di A.
-- Dual Screen (T+G) e Graph to Table non sono ancora implementati (v1.9.0).
+- T+G sopra/sotto invece che sinistra/destra; «dY/dX=» nella riga del valore
+  in basso (la riga in alto è la barra di stato): differenze DI-1 e DI-5 di
+  [GRAPH_PARITY.md](GRAPH_PARITY.md).
+- Il Dual Screen di Table vale anche per Recursion sulla fx-CG50: Recursion è
+  una modalità Base e lo avrà con la sua parità.
 
 ## Test
 
@@ -109,3 +135,8 @@ derivate, r= e Param, flussi da tastiera (lista, SET, TABLE, modifica della
 funzione e aggiornamento, scorrimento, EDIT, ROW, LISTMEM, GPH-CON, DELETE,
 Variable = List, Setup, STYLE, SELECT, 999 righe), persistenza v4 e lettura
 v3, chiavi `.pcgraph`. Screenshot `32`, `35`–`37`.
+
+v1.18.0: `table_v118_test` (42 controlli: FORMAT e STYLE, ANGLE, AC dopo
+GPH-CON, TRACE sulle righe, PAN, T+G, LISTMEM a 999), `workspace_v118_test`
+(sezione `0x0106`, parte Dual delle strisce), `graph_v118_test` (GtoT).
+Screenshot `159`, `160`.

@@ -179,6 +179,12 @@ struct TableRange {
     GraphType funcType{GraphType::Y};        // Table Func: Y=, r= or Param, one type per table (manual 5-34)
     std::vector<double> rows;                // the generated table: values of x / θ / T, editable (ROW, EDIT)
     bool generated{false};                   // false: TABLE shows the relation list (no table)
+    // v1.18.0: Setup «Dual Screen» di TABLE = T+G (manuale 5-36; sezione 0x0106):
+    // tabella nel sotto-schermo, grafico GPH-CON/GPH-PLT nel principale.
+    bool dual{false};
+    // Grafico gia' disegnato nel principale del T+G (non salvato): resta visibile
+    // mentre la tabella e' attiva, fino a FORMULA, DELETE o a una tabella nuova.
+    Draw shown{Draw::None};
 };
 
 // Dati della modalita' EQUATION (record v8). I coefficienti sono numeri con la
@@ -455,11 +461,21 @@ constexpr std::uint8_t Equation = 5;   // coefficienti, Solver e soluzioni di EQ
 constexpr std::uint8_t Matrices = 6;   // Mat A-Z, Vct A-Z, MatAns, VctAns, ListAns
 constexpr std::uint8_t Graph3D = 7;    // le tre funzioni, la V-Window e il Setup del 3D Graph, lo zoom
 constexpr std::uint8_t Count = 8;
+// v1.18.0: Dual Screen di Graph e Table (G+G/GtoT, V-Window del sotto-schermo,
+// indicatori, tabella del GtoT, T+G). encodeParts la aggiunge da sola, solo se
+// le parti chiedono Graph o Table e lo stato non e' quello iniziale: un
+// documento senza Dual Screen resta leggibile dai firmware precedenti.
+constexpr std::uint8_t Dual = 8;
 // v1.17.0 (solo Plus): la sezione di una modalita' Base come parte (strisce di
 // eActivity delle modalita' nuove): id ModeBase + AppId, la codifica della sezione.
 constexpr std::uint8_t ModeBase = 0x40;
 } // namespace part
 std::vector<std::uint8_t> encodePart(const Workspace& ws, std::uint8_t part);
+// v1.18.0: codifica del Dual Screen di Graph (sezione 0x0104 del record e parte Dual):
+// u8 modo, V-Window del sotto-schermo (9 x f64), 20 x u8 indicatori, u8 tipo e
+// u16 + f64 della tabella del GtoT. false: dati non validi.
+void encodeGraphDual(const GraphDual& d, std::vector<std::uint8_t>& out);
+bool decodeGraphDual(const std::uint8_t* data, std::size_t size, GraphDual& out);
 // Sostituisce la parte con i dati; false (workspace invariato) se non sono validi.
 bool decodePart(Workspace& ws, std::uint8_t part, const std::uint8_t* data, std::size_t size);
 // Riporta la parte ai valori iniziali (striscia nuova, documento nuovo).

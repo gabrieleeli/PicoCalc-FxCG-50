@@ -1,6 +1,7 @@
 #include "pict.hpp"
 #include "limits.hpp"
 #include "storage.hpp"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -48,17 +49,63 @@ bool encode(const std::uint16_t* pixels, int stride, int w, int h, Image& out, s
     return true;
 }
 
+// Row by row (one row buffer of `width` pixels), so it also fits the SRAM heap
+// of the Pico 2 W.
+bool compose(Image& img, std::size_t maxBytes) {
+    const int w = img.width;
+    std::vector<std::uint16_t> row(static_cast<std::size_t>(w));
+    std::vector<std::uint8_t> rle;
+    std::size_t ib = 0, ig = 0;
+    auto take = [&](const std::vector<std::uint8_t>& src, std::size_t& i, bool overlay) {
+        int x = 0;
+        while (x < w) {
+            if (i + 4 > src.size()) return false;
+            const int n = src[i] | (src[i + 1] << 8);
+            const auto c = static_cast<std::uint16_t>(src[i + 2] | (src[i + 3] << 8));
+            i += 4;
+            if (n <= 0 || x + n > w) return false;
+            if (!overlay || c != Transparent) std::fill_n(row.begin() + x, n, c);
+            x += n;
+        }
+        return true;
+    };
+    for (int y = 0; y < img.height; ++y) {
+        if (!take(img.backLayer, ib, false) || !take(img.graphLayer, ig, true)) return false;
+        for (int x = 0; x < w;) {
+            const std::uint16_t c = row[static_cast<std::size_t>(x)];
+            int n = 1;
+            while (x + n < w && row[static_cast<std::size_t>(x + n)] == c && n < 0xFFFF) ++n;
+            if (rle.size() + 4 > maxBytes) return false;
+            put16(rle, static_cast<std::uint32_t>(n)); put16(rle, c);
+            x += n;
+        }
+    }
+    if (ib != img.backLayer.size() || ig != img.graphLayer.size()) return false;
+    img.rle.swap(rle);
+    return true;
+}
+
 std::vector<std::uint8_t> serialize(const Image& img) {
+    // v1.18.0: two layers -> version 2 (background layer, then graph layer);
+    // a single-layer image keeps the version 1 bytes.
+    const bool layered = img.layered();
     std::vector<std::uint8_t> o;
-    o.reserve(HeaderSize + img.rle.size() + 4);
+    o.reserve(HeaderSize + (layered ? img.backLayer.size() + img.graphLayer.size() + 4 : img.rle.size()) + 4);
     o.insert(o.end(), Magic, Magic + 8);
-    put16(o, FormatVersion); put16(o, img.width); put16(o, img.height);
-    o.push_back(1);                       // flags: bit 0 = V-Window present
+    put16(o, layered ? 2 : 1); put16(o, img.width); put16(o, img.height);
+    o.push_back(layered ? 3 : 1);         // flags: bit 0 = V-Window present, bit 1 = two layers
     o.push_back(img.fade);
     const ViewWindow& v = img.view;
     for (double d : {v.xmin, v.xmax, v.xscl, v.ymin, v.ymax, v.yscl, v.tmin, v.tmax, v.tstep}) putF64(o, d);
-    put32(o, static_cast<std::uint32_t>(img.rle.size()));
-    o.insert(o.end(), img.rle.begin(), img.rle.end());
+    if (layered) {
+        put32(o, static_cast<std::uint32_t>(img.backLayer.size()));
+        o.insert(o.end(), img.backLayer.begin(), img.backLayer.end());
+        put32(o, static_cast<std::uint32_t>(img.graphLayer.size()));
+        o.insert(o.end(), img.graphLayer.begin(), img.graphLayer.end());
+    } else {
+        put32(o, static_cast<std::uint32_t>(img.rle.size()));
+        o.insert(o.end(), img.rle.begin(), img.rle.end());
+    }
     put32(o, storage::crc32(o.data(), o.size()));
     return o;
 }
@@ -75,7 +122,8 @@ std::string parse(const std::uint8_t* data, std::size_t size, Image& out) {
     img.height = static_cast<std::uint16_t>(get16(data + 12));
     const std::uint8_t flags = data[14];
     img.fade = data[15];
-    if (img.width == 0 || img.height == 0 || img.width > 4096 || img.height > 4096 || flags > 1 || img.fade > 100) return "intestazione non valida";
+    const std::uint8_t maxFlags = version >= 2 ? 3 : 1;
+    if (img.width == 0 || img.height == 0 || img.width > 4096 || img.height > 4096 || flags > maxFlags || img.fade > 100) return "intestazione non valida";
     const std::uint8_t* p = data + 16;
     double d[9];
     for (double& x : d) { x = getF64(p); p += 8; }
@@ -84,6 +132,21 @@ std::string parse(const std::uint8_t* data, std::size_t size, Image& out) {
     const std::uint32_t n = get32(p);
     p += 4;
     if (n > maxEncodedBytes()) return "immagine troppo grande per la memoria";
+    if (flags & 2) {
+        // v1.18.0: background layer, then graph layer; the composite is what the readers draw.
+        if (HeaderSize + n + 4 + 4 > size) return "lunghezza dei dati errata";
+        const std::uint32_t m = get32(p + n);
+        if (m > maxEncodedBytes() || static_cast<std::uint64_t>(n) + m > maxEncodedBytes()) return "immagine troppo grande per la memoria";
+        if (HeaderSize + n + 4 + m + 4 != size) return "lunghezza dei dati errata";
+        img.backLayer.assign(p, p + n);
+        img.graphLayer.assign(p + n + 4, p + n + 4 + m);
+        if (img.graphLayer.empty() || !forEachRun(img.backLayer, img.width, img.height, [](int, int, int, std::uint16_t) {}) ||
+            !forEachRun(img.graphLayer, img.width, img.height, [](int, int, int, std::uint16_t) {}))
+            return "dati dell'immagine danneggiati";
+        if (!compose(img)) return "immagine troppo grande per la memoria";
+        out = std::move(img);
+        return {};
+    }
     if (HeaderSize + n + 4 != size) return "lunghezza dei dati errata";
     img.rle.assign(p, p + n);
     if (!forEachSpan(img, [](int, int, int, std::uint16_t) {})) return "dati dell'immagine danneggiati";

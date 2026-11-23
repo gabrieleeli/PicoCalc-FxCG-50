@@ -1542,6 +1542,8 @@ namespace {
 // v1.17.0: parte di una modalita' Base = la sua sezione del record.
 const SectionCodec* modePartCodec(std::uint8_t which) noexcept {
     if (which < part::ModeBase) return nullptr;
+    // v1.18.0: Graph and Table have a section (Dual Screen) but travel as part::Graph, Table and Dual.
+    if (which == part::ModeBase + 4 || which == part::ModeBase + 6) return nullptr;
     std::size_t count = 0;
     const SectionCodec* codecs = workspaceSectionCodecs(count);
     const auto id = static_cast<std::uint16_t>(section::ModeBase + (which - part::ModeBase));
@@ -1550,10 +1552,48 @@ const SectionCodec* modePartCodec(std::uint8_t which) noexcept {
 }
 } // namespace
 #endif
+void encodeGraphDual(const GraphDual& d, std::vector<std::uint8_t>& out) {
+    Writer w;
+    w.u8(static_cast<std::uint8_t>(d.mode));
+    for (double v : {d.sub.xmin, d.sub.xmax, d.sub.xscl, d.sub.ymin, d.sub.ymax, d.sub.yscl, d.sub.tmin, d.sub.tmax, d.sub.tstep}) w.f64(v);
+    for (DualSide side : d.side) w.u8(static_cast<std::uint8_t>(side));
+    w.u8(static_cast<std::uint8_t>(d.gtotType));
+    w.u16(static_cast<std::uint16_t>(std::min(d.gtot.size(), MaxGtoTRows)));
+    for (std::size_t i = 0; i < d.gtot.size() && i < MaxGtoTRows; ++i) w.f64(d.gtot[i]);
+    out.insert(out.end(), w.out.begin(), w.out.end());
+}
+bool decodeGraphDual(const std::uint8_t* data, std::size_t size, GraphDual& out) {
+    Reader r{data, size};
+    GraphDual d;
+    const std::uint8_t mode = r.u8();
+    if (!r.ok || mode > 2) return false;
+    d.mode = static_cast<DualScreen>(mode);
+    double v[9];
+    for (double& x : v) x = r.f64();
+    d.sub = {v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8]};
+    if (!r.ok || !validateView(d.sub).empty()) return false;
+    for (DualSide& side : d.side) { const std::uint8_t b = r.u8(); if (b > 2) return false; side = static_cast<DualSide>(b); }
+    const std::uint8_t type = r.u8();
+    if (!r.ok || type >= GraphTypeCount || !(type == static_cast<std::uint8_t>(GraphType::Y) || type == static_cast<std::uint8_t>(GraphType::Polar) || type == static_cast<std::uint8_t>(GraphType::Param))) return false;
+    d.gtotType = static_cast<GraphType>(type);
+    const std::uint16_t n = r.u16();
+    if (!r.ok || n > MaxGtoTRows || !r.need(static_cast<std::size_t>(n) * 8)) return false;
+    d.gtot.resize(n);
+    for (double& x : d.gtot) { x = r.f64(); if (!std::isfinite(x)) return false; }
+    if (!r.ok || r.i != r.n) return false;
+    out = std::move(d);
+    return true;
+}
+
 std::vector<std::uint8_t> encodePart(const Workspace& ws, std::uint8_t which) {
     Writer w;
     w.u8(which);
     switch (which) {
+    case part::Dual: {
+        w.u8(ws.table.dual ? 1 : 0);
+        encodeGraphDual(ws.graph.dual, w.out);
+        break;
+    }
     case part::History: writeHistoryPart(w, ws.history); break;
     case part::Graph: writeGraphPart(w, ws); break;
     case part::Table: {
@@ -1588,6 +1628,15 @@ bool decodePart(Workspace& ws, std::uint8_t which, const std::uint8_t* data, std
         std::vector<HistoryEntry> h;
         if (!readHistoryPart(r, h) || r.i != r.n) return false;
         ws.history.swap(h);
+        return true;
+    }
+    case part::Dual: {
+        const std::uint8_t tableDual = r.u8();
+        if (!r.ok || tableDual > 1) return false;
+        GraphDual d;
+        if (!decodeGraphDual(r.p + r.i, r.n - r.i, d)) return false;
+        ws.table.dual = tableDual != 0;
+        ws.graph.dual = std::move(d);
         return true;
     }
     case part::Graph: {
@@ -1677,8 +1726,10 @@ void resetPart(Workspace& ws, std::uint8_t which) {
         ws.graph.settings = GraphSettings{};
         ws.graph.sketch.clear();
         ws.graph.commandGraphs.clear();
+        ws.graph.dual = GraphDual{};                 // v1.18.0
         break;
     case part::Table: ws.table = TableRange{}; break;
+    case part::Dual: ws.graph.dual = GraphDual{}; ws.table.dual = false; break;
     case part::Lists: for (auto& l : ws.lists) l.clear(); for (auto& n : ws.listNames) n.clear(); break;
     case part::Equation: ws.equation = EquationState{}; break;
     case part::Matrices: ws.matrices.clear(); break;
@@ -1696,7 +1747,11 @@ void resetPart(Workspace& ws, std::uint8_t which) {
     }
 }
 
-std::vector<std::uint8_t> encodeParts(const Workspace& ws, const std::vector<std::uint8_t>& parts) {
+std::vector<std::uint8_t> encodeParts(const Workspace& ws, const std::vector<std::uint8_t>& requested) {
+    // v1.18.0: the Dual Screen goes with Graph and Table, only when it is not the initial state.
+    std::vector<std::uint8_t> parts = requested;
+    const bool graphOrTable = std::find(parts.begin(), parts.end(), part::Graph) != parts.end() || std::find(parts.begin(), parts.end(), part::Table) != parts.end();
+    if (graphOrTable && std::find(parts.begin(), parts.end(), part::Dual) == parts.end() && (!ws.graph.dual.initial() || ws.table.dual)) parts.push_back(part::Dual);
     Writer w;
     w.u8(static_cast<std::uint8_t>(parts.size()));
     for (std::uint8_t p : parts) {
@@ -1726,9 +1781,10 @@ bool decodeParts(Workspace& ws, const std::uint8_t* data, std::size_t size) {
 #if FXAI_BOARD_PICO_PLUS_2W
     if (!r.ok || n > 32) return false;
 #else
-    if (!r.ok || n > part::Count) return false;
+    if (!r.ok || n > part::Count + 1) return false;
 #endif
     struct Item { std::uint8_t id; const std::uint8_t* p; std::size_t len; };
+    bool seenDual = false;
     std::vector<Item> items;
 #if FXAI_BOARD_PICO_PLUS_2W
     std::uint32_t seen = 0;
@@ -1738,6 +1794,13 @@ bool decodeParts(Workspace& ws, const std::uint8_t* data, std::size_t size) {
     for (std::uint8_t k = 0; k < n; ++k) {
         const auto id = r.u8();
         const auto len = r.u32();
+        if (id == part::Dual) {
+            if (!r.ok || seenDual || !r.need(len)) return false;
+            seenDual = true;
+            items.push_back({id, r.p + r.i, len});
+            r.i += len;
+            continue;
+        }
 #if FXAI_BOARD_PICO_PLUS_2W
         // Parti delle modalita' Base: bit 8 + (id - ModeBase), al piu' 23 modalita'.
         const bool modePart = modePartCodec(id) != nullptr && id - part::ModeBase < 23;
@@ -1758,6 +1821,12 @@ bool decodeParts(Workspace& ws, const std::uint8_t* data, std::size_t size) {
     probe->listFiles = ws.listFiles;
     for (const Item& it : items) if (!decodePart(*probe, it.id, it.p, it.len)) return false;
     for (const Item& it : items) (void)decodePart(ws, it.id, it.p, it.len);
+    // v1.18.0: without the Dual part the Dual Screen of the parts is the initial one.
+    if (!seenDual)
+        for (const Item& it : items) {
+            if (it.id == part::Graph) ws.graph.dual = GraphDual{};
+            if (it.id == part::Table) ws.table.dual = false;
+        }
     return true;
 }
 } // namespace fx

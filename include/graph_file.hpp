@@ -32,6 +32,12 @@ struct Project {
     bool tableFromList{false};                                         // TABLE Setup "Variable": range or list
     std::uint8_t tableList{0};                                         // List 1..26 (0-based)
     GraphType tableFunc{GraphType::Y};                                 // Table Func: Y=, r=, Param
+    // v1.18.0: Dual Screen (chiavi "dual", "subview", "side", "tabledual",
+    // scritte solo se diverse dai valori iniziali; ignorate dai lettori precedenti).
+    DualScreen dual{DualScreen::Off};
+    ViewWindow subView{};
+    std::array<DualSide, MaxGraphFunctions> side{};
+    bool tableDual{false};
     Project();
 };
 

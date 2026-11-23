@@ -56,7 +56,26 @@ bool eactDecode(Workspace& ws, std::uint16_t, const std::uint8_t* d, std::size_t
     ws.eactivity = std::move(e);
     return true;
 }
+// ---- v1.18.0: Dual Screen di Graph (sezione 0x0104) e di Table (0x0106), su
+// entrambe le schede (eccezione al congelamento del Pico 2 W per Graph e Table):
+// scritte solo se lo stato non e' quello iniziale, quindi un record senza Dual
+// Screen resta identico a quello della v1.17.0; i firmware v1.15.0-v1.17.0
+// conservano le due sezioni intatte (preservedSections) e le ignorano.
+constexpr std::uint16_t GraphId = section::ModeBase + static_cast<std::uint16_t>(app::AppId::Graph);
+constexpr std::uint16_t TableId = section::ModeBase + static_cast<std::uint16_t>(app::AppId::Table);
+bool graphPresent(const Workspace& ws) { return !ws.graph.dual.initial(); }
+void graphEncode(const Workspace& ws, std::vector<std::uint8_t>& out) { encodeGraphDual(ws.graph.dual, out); }
+bool graphDecode(Workspace& ws, std::uint16_t, const std::uint8_t* d, std::size_t n) { return decodeGraphDual(d, n, ws.graph.dual); }
+bool tablePresent(const Workspace& ws) { return ws.table.dual; }
+void tableEncode(const Workspace& ws, std::vector<std::uint8_t>& out) { out.push_back(ws.table.dual ? 1 : 0); }
+bool tableDecode(Workspace& ws, std::uint16_t, const std::uint8_t* d, std::size_t n) {
+    if (n != 1 || d[0] > 1) return false;
+    ws.table.dual = d[0] != 0;
+    return true;
+}
 #if FXAI_BOARD_PICO_PLUS_2W
+void graphReset(Workspace& ws) { ws.graph.dual = GraphDual{}; }
+void tableReset(Workspace& ws) { ws.table.dual = false; }
 // ---- v1.17.0 (solo Pimoroni Pico Plus 2 W): le sezioni delle modalita' Base.
 // Ognuna e' la codifica dello stato del nucleo della modalita' (versione 1);
 // vuota (= valori iniziali) non viene scritta. La stessa codifica serve le
@@ -74,9 +93,11 @@ const SectionCodec kCodecs[] = {
 #if FXAI_MODE_SPREADSHEET
     FXAI_MODE_CODEC(sheet, sheet, Spreadsheet),
 #endif
+    {GraphId, 1, graphPresent, graphEncode, graphDecode, graphReset},
 #if FXAI_MODE_DYNAGRAPH
     FXAI_MODE_CODEC(dyna, dyna, DynaGraph),
 #endif
+    {TableId, 1, tablePresent, tableEncode, tableDecode, tableReset},
 #if FXAI_MODE_RECURSION
     FXAI_MODE_CODEC(rec, recursion, Recursion),
 #endif
@@ -111,16 +132,20 @@ const SectionCodec* workspaceSectionCodecs(std::size_t& count) noexcept {
     count = sizeof kCodecs / sizeof kCodecs[0] - 1;
     return count ? kCodecs : nullptr;
 }
-#else   // Pico 2 W congelato: la tabella della v1.16.0
+#else   // Pico 2 W congelato: la tabella della v1.16.0 piu' Graph e Table (v1.18.0)
 const SectionCodec kCodecs[] = {
+#if FXAI_MODE_EACTIVITY
     {EActivityId, 1, eactPresent, eactEncode, eactDecode},
+#endif
+    {GraphId, 1, graphPresent, graphEncode, graphDecode},
+    {TableId, 1, tablePresent, tableEncode, tableDecode},
 };
 } // namespace
 
 const SectionCodec* workspaceSectionCodecs(std::size_t& count) noexcept {
-    // v1.16.0: eActivity (su entrambe le schede, se la modalita' e' compilata).
-    count = features::kEActivity ? sizeof kCodecs / sizeof kCodecs[0] : 0;
-    return count ? kCodecs : nullptr;
+    // v1.16.0: eActivity (se compilata); v1.18.0: Dual Screen di Graph e Table.
+    count = sizeof kCodecs / sizeof kCodecs[0];
+    return kCodecs;
 }
 #endif
 #if FXAI_BOARD_PICO_PLUS_2W

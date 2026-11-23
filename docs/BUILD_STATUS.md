@@ -1,7 +1,51 @@
-# Build status — v1.17.0 (base di tutte le modalità; Raspberry Pi Pico 2 W congelato)
+# Build status — v1.18.0 (Graph e Table alla parità completa su entrambe le schede)
 
 Stato delle build per versione; le novità sono in [CHANGELOG.md](CHANGELOG.md).
-Le sezioni dopo "v1.17.0" descrivono le build delle versioni precedenti.
+Le sezioni dopo "v1.18.0" descrivono le build delle versioni precedenti.
+
+## v1.18.0 — branch `claude/graph-table-parity-v118-1is1v6`
+
+Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`;
+sul Pico 2 W `-Os` per i sorgenti di `FXAI_PICO2W_SIZE_SOURCES`, a cui si
+aggiunge `src/apps/graph_dual.cpp`), nello stesso ambiente della v1.17.0 (Pico
+SDK 2.2.0, `gcc-arm-none-eabi` 13.2.1). Novità: Graph e Table alla parità
+completa, Dual Screen G+G, GtoT e T+G nel motore condiviso di Graph/Table,
+immagini `.pcpict` v2, liste da 999 elementi anche sul Pico 2 W
+([reports/SVILUPPO_v1.18.0.md](reports/SVILUPPO_v1.18.0.md)). `picotool info
+-a`: «PicoCalc FX-CG50 AI», versione `1.18.0 (pico_plus_2w)` / `1.18.0
+(pico2w)`, SDK 2.2.0, `binary end` `0x1028852c` / `0x101e1980`. **Nessuna
+prova su hardware.**
+
+> **Raspberry Pi Pico 2 W: eccezione al congelamento solo per Graph/Table.**
+> Tutto il resto è identico byte per byte alla v1.17.0 (manifesto
+> `tests/fixtures/pico2w_frozen_v1_17_0.txt` verificato da `architecture_test`).
+> Immagine 1 972 608 B ≤ 2 015 232 B (partizione da 2 064 384 B meno la
+> riserva di 48 KB, controllo bloccante del build): restano **42 624 B** oltre la
+> riserva. RAM statica +120 B (limite +8 KB). Nessuna modalità nuova aperta.
+
+| Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (5 312 000 byte) | `build/pico2w/picocalc_fxai_pico2w.uf2` (3 945 984 byte) |
+| Immagine flash | 2 655 532 byte (`__flash_binary_end` = `0x1028852C`) = 63 % della partizione da 4 MB (budget < 90 %: 3 774 873 B); +30 060 byte rispetto alla v1.17.0 | **1 972 608 byte** (`0x101E1980`) = 94 % dei 2 MB; +28 380 byte; budget della v1.18.0 2 015 232 B (riserva di 48 KB) |
+| Codice nuovo nell'immagine | `graph_view` (riquadri, cornice, curve e tabella condivisi da Graph e Table), `graph_dual` (G+G, GtoT, T+G), sezioni 0x0104/0x0106, parte Dual, `.pcpict` v2, cartelle delle immagini, funzioni di `Graph Y=`/`r=` di Run-Matrix | gli stessi, una sola implementazione (mappa: **169** oggetti/simboli esclusi, nessuno nell'immagine) |
+| Moduli toccati (byte nell'immagine del Pico 2 W, v1.17.0 → v1.18.0) | — | `graph_plot` 69 593 → 73 195; `graph_app` 37 064 → 39 674; `table_app` 29 139 → 28 065; `graph_files` 15 373 → 16 846; `graph_file` 28 764 → 30 174; `graph_commands` 26 049 → 29 818; `workspace` 55 795 → 58 428; `graph_engine` 32 294 → 32 378; nuovi `graph_view` 9 196, `graph_dual` 2 802 (Plus, `-O2`: 3 160); `pict` 6 651 |
+| RAM statica | 310 832 byte fino a `__end__` = `0x2004BE30` (+120); 312 880 byte con la sezione `.heap` minima | 305 356 byte (`0x2004A8CC`, +120); 307 404 byte con `.heap` |
+| Heap SRAM | 180 688 byte (`__end__` → `0x20078000`) | 186 164 byte |
+| Memoria del Dual Screen | sull'heap solo con Graph o Table aperta: curve del sotto-schermo, colonne della tabella del GtoT (≤ 999 righe), il secondo livello di un'immagine durante STORE; nessun buffer statico | come la Plus |
+| Frame di stack (`-fstack-usage`) | massimo invariato `SystemApp::enter` 2 016 B; codice toccato: `GraphApp::openProject` 1 832 B, `openSetup` 1 504 B, `loadWindowForm` 720 B, `drawPaneLayers` 632 B, `drawOverlays` 544 B | `SystemApp::enter` 1 968 B; `openProject` 1 856 B, `newProject` 1 824 B, `openSetup` 1 504 B |
+| Warning | **nessuno** del compilatore | nessuno |
+| SHA-256 dell'UF2 locale | `e7f28ab0ab518f35094780a054a67d83ea7d16c022380208325cff0d31b9391e` | `ef998676424e02d934ec71767b7fcd0cb14b1ecdef9a6fcd2a58fe87ed1967b9` |
+
+### Test
+
+| Suite | Pico Plus 2 W | Pico 2 W |
+|---|---|---|
+| CTest (`tests/run_host_tests.sh`) | 64/64: 61 suite C++ con **19 594** controlli, `mem_pools_smoke`, `sd_interop_test`, `link_tool_test` | 57/57: 55 suite con **17 352** controlli, `mem_pools_smoke`, `sd_interop_test` |
+| AddressSanitizer + UBSan bloccante (`--sanitize`) | 64/64 | 57/57 |
+| ThreadSanitizer (`--tsan`) | superato | superato |
+| Relay AI (Python, `unittest`) | 15/15 | — |
+| Fuzzing (≥ 300 s per harness nuovo o toccato) | nuovo: `fuzz_dual` 7 774 esecuzioni in 320 s (Graph e Table interi a ogni input); toccati: `fuzz_ui` 3 165 in 307 s, `fuzz_workspace` 2 322 626 in 302 s, `fuzz_pcgraph` 3 849 422 in 304 s, `fuzz_eactivity` 3 790 con il controller in 311 s e 5 813 979 sui soli documenti in 306 s; nessun crash, timeout né artefatto | `fuzz_dual` 7 973 in 301 s, `fuzz_workspace` 1 851 614 in 303 s: nessun crash né artefatto |
+| Simulatore (`tools/sim_compare.py`) | 150: **137 precedenti identici** (nessuno rigenerato), 13 nuovi (148–160, `tests/sim/graph_v118.txt`) | — |
 
 ## v1.17.0 — `main`
 

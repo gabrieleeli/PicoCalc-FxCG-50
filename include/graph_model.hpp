@@ -19,6 +19,10 @@ namespace fx {
 namespace graphgeo {
 constexpr int Left = 0, Top = 18, Columns = 320, Rows = 282;
 constexpr int Right = Left + Columns - 1, Bottom = Top + Rows - 1;
+// v1.18.0, Dual Screen (manuale 5-23, 5-36, 5-55): principale sopra (righe
+// 18..157), due righe di separazione, sotto-schermo o tabella sotto (160..299).
+constexpr int SplitRows = 140, SubTop = Top + SplitRows + 2;
+static_assert(SubTop + SplitRows == Top + Rows, "the two panes fill the plot area");
 } // namespace graphgeo
 
 // Values 0..5 keep the encoding of the v1.6/v1.7 records.
@@ -160,6 +164,24 @@ struct CommandGraph {
 };
 constexpr std::size_t MaxCommandGraphs = 10;
 
+// v1.18.0: Dual Screen di Graph (Setup «Dual Screen», manuale 1-36, 5-23, 5-55).
+enum class DualScreen : std::uint8_t { Off = 0, GraphGraph = 1, GraphTable = 2 };
+// Dove si disegna una funzione in G+G: solo nel principale, solo nel
+// sotto-schermo (indicatore «S», la «R» della fx-CG50) o in entrambi («E», la «B»).
+enum class DualSide : std::uint8_t { Main = 0, Sub = 1, Both = 2 };
+constexpr std::size_t MaxGtoTRows = 999;             // righe della tabella del Graph to Table (come TABLE)
+struct GraphDual {
+    DualScreen mode{DualScreen::Off};
+    ViewWindow sub{};                                 // V-Window del sotto-schermo (G+G)
+    std::array<DualSide, MaxGraphFunctions> side{};   // indicatori delle 20 funzioni
+    GraphType gtotType{GraphType::Y};                 // tipo della tabella del GtoT (Y=, r=, Param)
+    std::vector<double> gtot;                         // valori della variabile memorizzati con EXE (GtoT)
+    bool operator==(const GraphDual&) const = default;
+    bool initial() const noexcept { return *this == GraphDual{}; }
+};
+const char* dualScreenName(DualScreen d) noexcept;    // "Off", "G+G", "GtoT"
+bool parseDualScreenName(const std::string& s, DualScreen& out) noexcept;
+
 constexpr std::size_t VWindowMemories = 6;           // V-Win1..V-Win6
 constexpr std::size_t GraphMemories = 20;            // G-Mem1..G-Mem20
 constexpr std::size_t MaxGraphMemoryBytes = 24 * 1024;   // all graph memories together
@@ -182,6 +204,8 @@ struct GraphState {
     // v1.12.0: StoPict n eseguito da Run-Matrix (non salvato): GRAPH salva la
     // schermata del grafico in Pict n quando la disegna (0 = nessuna richiesta).
     std::uint8_t storePict{};
+    // v1.18.0: Dual Screen (sezione 0x0104 del record, chiavi del .pcgraph).
+    GraphDual dual;
 };
 std::size_t graphMemoryBytes(const GraphState& g) noexcept;
 } // namespace fx

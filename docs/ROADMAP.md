@@ -1,4 +1,4 @@
-# Roadmap — dopo la v1.17.0
+# Roadmap — dopo la v1.18.0
 
 **Piano dalla v1.17.0** ([reports/ANALISI_FONTI_v1.17.0.md](reports/ANALISI_FONTI_v1.17.0.md)):
 la v1.17.0 è la **base di tutte le modalità** (ogni modalità del registro si
@@ -15,9 +15,9 @@ budget, relay, documentazione) e un solo commit su `main`.
 | v1.15.0 | fondamenta comuni (fatta) | ModeShell, file tipizzati, record v11, StepTask, TextEdit; Graph2D, Binding, Interp solo Plus | entrambe |
 | v1.16.0 | **eActivity** (cap. 10, fatta); il **Pico 2 W è congelato** | | entrambe |
 | v1.17.0 | **base di tutte le modalità** (fatta) | stato Base, `apps_init_test`, record v12, dieci modalità Base | Plus (inizializzazione: entrambe) |
-| **v1.18.0** | **Statistics** (cap. 6) | regressioni sinusoidale e logistica, test χ²/F/2 campioni/ANOVA nell'interfaccia, grafici a torta e a barre, tutto il capitolo; **Distribution** (cap. 18) entra nel registro come modalità Base (risposta Q1 della v1.17.0) | Plus |
-| v1.19.0 | Graph e Table | Dual Screen G+G/GtoT/T+G, Graph to Table, FORMAT nello SKETCH | Plus |
-| v1.20.0 | Recursion (5-45) | bn, cn, an = f(n), grafico di fase, convergenza | Plus |
+| **v1.18.0** | **Graph e Table** (cap. 5: 5-1…5-41, 5-52…5-63; Setup 1-35…1-37) (fatta) | Dual Screen G+G, GtoT (Graph to Table) e T+G, FORMAT nello SKETCH, suffissi °/ʳ/ᵍ negli editor, immagini a due livelli, cartelle delle immagini, LISTMEM a 999 anche sul Pico 2 W, errori E1–E6 corretti ([reports/SVILUPPO_v1.18.0.md](reports/SVILUPPO_v1.18.0.md)) | **entrambe** (eccezione al congelamento solo per Graph e Table) |
+| **v1.19.0** | **Statistics** (cap. 6) | regressioni sinusoidale e logistica, test χ²/F/2 campioni/ANOVA nell'interfaccia, grafici a torta e a barre, tutto il capitolo; **Distribution** (cap. 18) entra nel registro come modalità Base (risposta Q1 della v1.17.0, spostata dalla v1.18.0) | Plus |
+| v1.20.0 | Recursion (5-45) | bn, cn, an = f(n), grafico di fase, convergenza, Dual Screen T+G di Recursion (5-37) | Plus |
 | v1.21.0 | Dyna Graph (5-42) | BUILT-IN, Locus, Dynamic Graph Memory | Plus |
 | v1.22.0 | Conic Graphs (5-50) | forme polari e parametriche, direttrice, asse, latus rectum, ZOOM | Plus |
 | v1.23.0 | Financial (cap. 7) | Cost/Sell/Margin, Depreciation, Bond, grafici, 360 giorni | Plus |
@@ -27,19 +27,24 @@ budget, relay, documentazione) e un solo commit su `main`.
 | v1.27.0 | Geometry (cap. 14) | Construct, trasformazioni, animazioni, testo | Plus |
 | v1.28.0 | Memory, System e Link (cap. 11–13) | Link: più file, immagini dello schermo | Plus |
 | v1.29.0 | Python (cap. 17) | menu delle funzioni, CATALOG, moduli `random`, `turtle`, `matplotl` | Plus |
-| v1.30.0 | Distribution (cap. 18) | dalla Base della v1.18.0 | Plus |
+| v1.30.0 | Distribution (cap. 18) | dalla Base della v1.19.0 | Plus |
 | v1.31.0 | chiusura: revisione completa e recap | | entrambe |
 
-Solo la v1.18.0 (Statistics) è fissata; l'ordine delle versioni seguenti è una
-proposta da confermare all'inizio di ognuna (cosa manca a ogni modalità Base è
-nel campo `missing` del registro e in [FEATURE_MATRIX.md](FEATURE_MATRIX.md)).
-E-CON4 resta External.
+La v1.19.0 (Statistics con Distribution come Base) è la prossima; l'ordine
+delle versioni seguenti è una proposta da confermare all'inizio di ognuna
+(cosa manca a ogni modalità Base è nel campo `missing` del registro e in
+[FEATURE_MATRIX.md](FEATURE_MATRIX.md)). E-CON4 resta External.
 
-Il **Raspberry Pi Pico 2 W è congelato alla v1.16.0**: le versioni successive
+Il **Raspberry Pi Pico 2 W è congelato**: le versioni successive alla v1.16.0
 aggiungono funzioni solo alla Pimoroni Pico Plus 2 W; sul Pico 2 W entrano
-soltanto correzioni di errori condivise (controllo in `architecture_test`, che
-fallisce se cambia l'insieme delle modalità aperte del Pico 2 W). Le prove su
-hardware continuano la numerazione: la v1.17.0 arriva a HW-245.
+soltanto correzioni di errori condivise. **Unica eccezione: Graph e Table
+nella v1.18.0**, realizzati nel motore condiviso (servizio GraphCore) e quindi
+uguali sulle due schede; `architecture_test` la verifica con il manifesto
+delle impronte dei file del Pico 2 W alla v1.17.0 e l'elenco esplicito dei file
+di Graph/Table, oltre al controllo sull'insieme delle modalità aperte. Il
+margine bloccante del Pico 2 W lascia 48 KB alle correzioni future (immagine ≤
+2 015 232 B; v1.18.0: 1 972 608 B). Le prove su hardware continuano la
+numerazione: la v1.18.0 arriva a HW-265.
 
 La v1.14.0 completa il **3D Graph** (capitolo 16 del manuale fx-CG50: modelli
 Line, Plane, Sphere, Cylinder, Cone, grafici Z=, Param, Rot X/Y, V-Window con
@@ -57,7 +62,8 @@ tale: le tabelle sotto elencano ciò che manca. Fanno eccezione **Run-Matrix**
 (dalla v1.13.0, [reports/SVILUPPO_v1.13.0.md](reports/SVILUPPO_v1.13.0.md)),
 **EQUATION** (dalla v1.12.0, [reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md))
 **3D Graph** (dalla v1.14.0, [reports/SVILUPPO_v1.14.0.md](reports/SVILUPPO_v1.14.0.md))
-ed **eActivity** (dalla v1.16.0, [reports/SVILUPPO_v1.16.0.md](reports/SVILUPPO_v1.16.0.md)),
+**eActivity** (dalla v1.16.0, [reports/SVILUPPO_v1.16.0.md](reports/SVILUPPO_v1.16.0.md)),
+**Graph** e **Table** (dalla v1.18.0, su entrambe le schede, [reports/SVILUPPO_v1.18.0.md](reports/SVILUPPO_v1.18.0.md)),
 con ogni voce della tabella di parità presente o documentata come differenza
 inevitabile. Le dieci modalità della v1.17.0 sono **Base**: si usano, ma la
 parità non c'è ancora ([reports/SVILUPPO_v1.17.0.md](reports/SVILUPPO_v1.17.0.md)). Il documento storico
@@ -169,9 +175,9 @@ Stato e progetto di ogni modalità in [APPLICATIONS_ARCHITECTURE.md](APPLICATION
 
 | Modalità | Contenuto da realizzare |
 |---|---|
-| Statistics | **prossima versione (v1.18.0)**: regressioni sinusoidale e logistica; test χ², F, 2 campioni, ANOVA nell'interfaccia; grafici a torta e a barre; con la modalità Base **Distribution** |
-| Graph | Dual Screen G+G/GtoT, Graph to Table, FORMAT nello SKETCH (i comandi grafici di Run-Matrix sono completi dalla v1.13.0) (dettaglio in [GRAPH_PARITY.md](GRAPH_PARITY.md)) |
-| Table | Dual Screen T+G (LISTMEM con 999 elementi già sulla Plus; 255 sul Pico 2 W) |
+| Statistics | **prossima versione (v1.19.0)**: regressioni sinusoidale e logistica; test χ², F, 2 campioni, ANOVA nell'interfaccia; grafici a torta e a barre; con la modalità Base **Distribution** |
+| Graph | **parità completata nella v1.18.0** su entrambe le schede ([GRAPH_PARITY.md](GRAPH_PARITY.md)); differenze documentate DI-1…DI-9 (Dual Screen sopra/sotto, `.pcpict`, …) |
+| Table | **parità completata nella v1.18.0** su entrambe le schede ([TABLE.md](TABLE.md)): T+G, LISTMEM a 999 |
 | Equation | **parità completata nella v1.12.0** ([EQUATION.md](EQUATION.md)); restano come estensioni: interfaccia per i sistemi di disequazioni; forme esatte di quozienti complessi (`1/(1+i)`) e delle radici cubiche |
 | Recursion, Conic Graphs, Dyna Graph | **Base dalla v1.17.0** (solo Plus): mancano bn/cn, an = f(n), fase (Recursion); BUILT-IN, Locus, memoria (Dyna); forme polari/parametriche, direttrice, asse, latus rectum, ZOOM (Conic) |
 | Financial | **Base dalla v1.17.0** (SMPL, CMPD, CASH, AMT, CNVT, DAYS): mancano Cost/Sell/Margin, Depreciation, Bond, grafici, 360 giorni |

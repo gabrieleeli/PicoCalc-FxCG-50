@@ -244,6 +244,7 @@ void GraphEngine::build(const GraphSource& source, const std::vector<std::string
                     p.bindValue = evalNumber(c.text.values[static_cast<std::size_t>(k)]);
                     p.detail = std::string(1, c.text.overwrite) + "=" + c.text.values[static_cast<std::size_t>(k)];
                     if (k > 0) { p.color = kOverwriteColors[(start + k) % 5]; p.style = LineStyle::Normal; }
+                    else p.color = start;            // cyan / yellow -> default colour of the line (manual 5-28)
                     plots_.push_back(std::move(p));
                 }
                 continue;
@@ -263,6 +264,7 @@ void GraphEngine::build(const GraphSource& source, const std::vector<std::string
                     p.listIndex = static_cast<int>(k);
                     p.detail = "List[" + std::to_string(k + 1) + "]";
                     if (k > 0) { p.color = kOverwriteColors[(start + k) % 5]; p.style = LineStyle::Normal; }
+                    else p.color = start;            // cyan / yellow -> default colour of the line (manual 5-30)
                     plots_.push_back(std::move(p));
                 }
                 continue;
@@ -587,15 +589,17 @@ ViewWindow zoomBox(const ViewWindow& in, double x0, double y0, double x1, double
     v.ymin = std::min(y0, y1); v.ymax = std::max(y0, y1);
     return checked(v);
 }
-ViewWindow squareWindow(const ViewWindow& in) {
+// v1.18.0: rows = height of the pane the window is for (282, or 140 in the Dual Screen).
+ViewWindow squareWindow(const ViewWindow& in, int rows) {
     ViewWindow v = in;
-    const double c = 0.5 * (in.xmin + in.xmax), half = 0.5 * viewYdot(in) * (graphgeo::Columns - 1);
+    const double ydot = (in.ymax - in.ymin) / (rows - 1);
+    const double c = 0.5 * (in.xmin + in.xmax), half = 0.5 * ydot * (graphgeo::Columns - 1);
     v.xmin = c - half; v.xmax = c + half;
     return checked(v);
 }
-ViewWindow squareXBase(const ViewWindow& in) {
+ViewWindow squareXBase(const ViewWindow& in, int rows) {
     ViewWindow v = in;
-    const double c = 0.5 * (in.ymin + in.ymax), half = 0.5 * viewXdot(in) * (graphgeo::Rows - 1);
+    const double c = 0.5 * (in.ymin + in.ymax), half = 0.5 * viewXdot(in) * (rows - 1);
     v.ymin = c - half; v.ymax = c + half;
     return checked(v);
 }
@@ -606,21 +610,21 @@ double roundDot(double d) {
     return r > 0 ? r : e;
 }
 } // namespace
-ViewWindow roundWindow(const ViewWindow& in, double cx, double cy) {
+ViewWindow roundWindow(const ViewWindow& in, double cx, double cy, int rows) {
     ViewWindow v = in;
-    const double dx = roundDot(viewXdot(in)), dy = roundDot(viewYdot(in));
+    const double dx = roundDot(viewXdot(in)), dy = roundDot((in.ymax - in.ymin) / (rows - 1));
     v.xmin = std::round((cx - 0.5 * dx * (graphgeo::Columns - 1)) / dx) * dx;
     v.xmax = v.xmin + dx * (graphgeo::Columns - 1);
-    v.ymin = std::round((cy - 0.5 * dy * (graphgeo::Rows - 1)) / dy) * dy;
-    v.ymax = v.ymin + dy * (graphgeo::Rows - 1);
+    v.ymin = std::round((cy - 0.5 * dy * (rows - 1)) / dy) * dy;
+    v.ymax = v.ymin + dy * (rows - 1);
     return checked(v);
 }
-ViewWindow integerWindow(const ViewWindow& in, double cx, double cy) {
+ViewWindow integerWindow(const ViewWindow& in, double cx, double cy, int rows) {
     ViewWindow v = in;
     v.xmin = std::round(cx - 0.5 * (graphgeo::Columns - 1));
     v.xmax = v.xmin + (graphgeo::Columns - 1);
-    v.ymin = std::round(cy - 0.5 * (graphgeo::Rows - 1));
-    v.ymax = v.ymin + (graphgeo::Rows - 1);
+    v.ymin = std::round(cy - 0.5 * (rows - 1));
+    v.ymax = v.ymin + (rows - 1);
     return checked(v);
 }
 bool autoWindow(ViewWindow& v, std::vector<double> values) {

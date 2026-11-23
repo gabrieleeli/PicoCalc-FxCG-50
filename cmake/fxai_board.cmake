@@ -50,7 +50,9 @@ if(_fxai_board_upper STREQUAL "PICO2W")
     set(_fxai_default_fw_partition 2097152)       # 2 MiB firmware partition
     set(_fxai_record_size 131072)                 # 2 x 64 KiB, v1.8.0 location (last 128 KiB)
     set(_fxai_record_tail_guard 0)                # saves are capped instead (see storage.hpp)
-    set(_fxai_fw_margin 32768)                    # v1.15.0: 32 KiB kept free for future fixes (image <= 2 064 384 B)
+    # v1.15.0: 32 KiB kept free (image <= 2 064 384 B); v1.18.0: plus 48 KiB of that
+    # budget kept for future fixes after Graph/Table (image <= 2 015 232 B).
+    set(_fxai_fw_margin 81920)
 elseif(_fxai_board_upper STREQUAL "PICO_PLUS_2W")
     set(_fxai_pico_board pimoroni_pico_plus2_w_rp2350)
     set(FXAI_BOARD_SUFFIX pico_plus_2w)

@@ -1,9 +1,13 @@
 # Documentazione
 
-## Documenti attuali (v1.17.0)
+## Documenti attuali (v1.18.0)
 
 | Documento | Contenuto |
 |---|---|
+| [reports/ANALISI_FONTI_v1.18.0.md](reports/ANALISI_FONTI_v1.18.0.md) | v1.18.0: audit voce per voce di Graph e Table sul manuale v3.60 (capitolo 5 e Setup), voci aperte, sei comportamenti errati E1–E6, progetto del Dual Screen sui 320×320, persistenza, regole del Pico 2 W, stime, domande D1–D4 e risposte prima del codice |
+| [reports/SVILUPPO_v1.18.0.md](reports/SVILUPPO_v1.18.0.md) | v1.18.0: parità finale di Graph e Table, differenze inevitabili, differenze tra le schede, test, fuzzing, simulatore, firmware e memoria, eccezione al congelamento del Pico 2 W, cancello |
+| [HARDWARE_TEST_v1.18.0.md](HARDWARE_TEST_v1.18.0.md) | collaudo della v1.18.0 su entrambe le schede: Dual Screen G+G, GtoT, T+G, TRACE, FORMAT dello SKETCH, simboli d'angolo, cartelle e immagini a due livelli, liste da 999, persistenza e ritorno alla v1.17.0 (HW-246…HW-265) |
+| [GRAPH_PARITY.md](GRAPH_PARITY.md) · [TABLE.md](TABLE.md) | Graph e Table alla parità completa (v1.18.0): tabella voce per voce con la prova di ogni voce, differenze inevitabili DI-1…DI-9 |
 | [reports/ANALISI_FONTI_v1.17.0.md](reports/ANALISI_FONTI_v1.17.0.md) | v1.17.0: fonti, fondamenta riusate, stato Base, casi d'inizializzazione C1–C7 e controlli K1–K6, progetto delle dieci modalità Base e del record v12, domande e risposte prima del codice |
 | [reports/SVILUPPO_v1.17.0.md](reports/SVILUPPO_v1.17.0.md) | v1.17.0: fase 1 (inizializzazione di tutte le modalità, errori trovati), fase 2 (dieci modalità Base, cosa manca alla parità), differenze, test, fuzzing, simulatore, firmware e flash per modalità, cancello |
 | [HARDWARE_TEST_v1.17.0.md](HARDWARE_TEST_v1.17.0.md) | collaudo della v1.17.0: segni Base, ogni modalità sul dispositivo, Python (coroutine, MSPLIM, AC), Link sulla USB con il PC, record v11 → v12 e ritorno, solo SRAM, Pico 2 W invariato (HW-220…HW-245) |
@@ -20,7 +24,6 @@
 | [reports/RECAP_v1.14.0.md](reports/RECAP_v1.14.0.md) | recap del progetto alla v1.14.0 e parità con la fx-CG50 modalità per modalità (3 complete, 2 quasi, 3 parziali, 10 con solo il modello, Python assente, E-CON4 non realizzabile) |
 | [BUILD_STATUS.md](BUILD_STATUS.md) | ambiente di build, audit della v1.5.4, risultati di build e test, cosa non è verificato |
 | [FEATURE_MATRIX.md](FEATURE_MATRIX.md) | stato di ogni funzione (NOT STARTED … TESTED ON SIMULATOR … TESTED ON HARDWARE) |
-| [GRAPH_PARITY.md](GRAPH_PARITY.md) | GRAPH: audit della v1.7.0 e matrice di parità voce per voce con il capitolo 5 del manuale fx-CG50 |
 | [GRAPH_ENGINE.md](GRAPH_ENGINE.md) | motore dei grafici: modello, coordinate, campionamento, rendering, ZOOM, G-Solve, memoria e stack |
 | [STORAGE.md](STORAGE.md) | flash interna e microSD: workspace (record v12 della Plus dalla v1.17.0: firma, CRC per sezione, sezioni isolate, ritorno alla v1.16.0), file store, FatFs, protocollo SD, pin SPI0 |
 | [PCGRAPH_FORMAT.md](PCGRAPH_FORMAT.md) | formati `.pcgraph`, `PCGMEM`, `.pcpict`, BMP; scrittura atomica e recupero |

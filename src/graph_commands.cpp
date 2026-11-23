@@ -41,6 +41,27 @@ const Keyword kKeywords[] = {
     {"Horizontal", Cmd::Horizontal}, {"Text", Cmd::Text}, {"PxlOn", Cmd::PxlOn}, {"PxlOff", Cmd::PxlOff},
     {"PxlChg", Cmd::PxlChg}, {"Tangent", Cmd::Tangent}, {"Normal", Cmd::Normal}, {"Inverse", Cmd::Inverse}, {"Cls", Cmd::Cls},
 };
+// v1.18.0: grafici delle funzioni predefinite (manuale 5-26): "Graph Y=sin"
+// disegna y = sin x e "Graph r=sin" r = sin θ: la variabile non si scrive.
+// Solo quando l'espressione e' una funzione predefinita da sola, cosi' un
+// errore di sintassi qualsiasi resta un errore.
+std::string builtInGraph(std::string body, GraphType type) {
+    const std::string v = type == GraphType::Polar ? "theta" : "x";
+    while (!body.empty() && body.back() == ' ') body.pop_back();
+    while (!body.empty() && body.front() == ' ') body.erase(0, 1);
+    if (body.size() >= 2 && body.compare(body.size() - 2, 2, "()") == 0) body.resize(body.size() - 2);
+    else if (!body.empty() && body.back() == '(') body.pop_back();
+    static const char* const prefix[] = {"sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "asinh", "acosh", "atanh",
+                                         "sqrt", "\xE2\x88\x9A", "cbrt", "\xE2\x88\x9B", "log", "ln", "10^", "e^", "d/dx"};
+    for (const char* p : prefix) if (body == p) return body + "(" + v + ")";
+    static const char* const square[] = {"^2", "^(2)", "\xC2\xB2"};
+    for (const char* p : square) if (body == p) return "(" + v + ")^(2)";
+    static const char* const inverse[] = {"^-1", "^(-1)", "\xE2\x81\xBB\xC2\xB9", "^(\xE2\x88\x92" "1)"};
+    for (const char* p : inverse) if (body == p) return "(" + v + ")^(-1)";
+    if (body == "derivative2" || body == "d\xC2\xB2/dx\xC2\xB2") return "derivative2(" + v + "," + v + ")";
+    if (body == "integral" || body == "\xE2\x88\xAB" || body == "\xE2\x88\xAB" "dx") return "integral(" + v + ",0," + v + ")";
+    return body;
+}
 const char* const kMenu[] = {"Cls", "ViewWindow ", "Graph Y=", "Graph r=", "Graph X=", "Graph(X,Y)=(",
                              "Graph Y>", "Graph Y<", "Graph Y\xE2\x89\xA5", "Graph Y\xE2\x89\xA4", "Graph X>", "Graph X<",
                              "Graph X\xE2\x89\xA5", "Graph X\xE2\x89\xA4", "G\xE2\x88\xAB" "dx ", "Plot ", "PlotOn ", "PlotOff ",
@@ -256,7 +277,7 @@ struct Runner {
                 const auto parts = splitArgs(sub, 0);
                 if (parts.size() != 2 || parts[0].text.empty() || parts[1].text.empty()) syntax("Graph(X,Y)=(xt,yt)", c.origin[keyLength], 1);
                 cg.expr = parts[0].text; cg.expr2 = parts[1].text;
-            } else cg.expr = body;
+            } else cg.expr = (cmd == Cmd::GraphY || cmd == Cmd::GraphR) ? builtInGraph(body, cg.type) : body;
             for (const std::string* e : {&cg.expr, &cg.expr2}) {
                 if (e->empty()) continue;
                 if (e->size() > MaxGraphExpression) throw MathError("Memory ERROR: espressione troppo lunga");

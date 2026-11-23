@@ -1,20 +1,27 @@
 # CONTINUE — punto di ripresa del progetto PicoCalc FX-CG50 AI
 
 Documento di checkpoint per riprendere lo sviluppo esattamente da qui.
-Ultimo aggiornamento: **v1.17.0 — base di tutte le modalità**, branch
-**`main`**, tag `v1.17.0` creato dal workflow `.github/workflows/release.yml`.
-Rapporti: `docs/reports/ANALISI_FONTI_v1.17.0.md` (fonti, stato Base, casi
-d'inizializzazione, progetto delle dieci modalità e del record v12, domande e
-risposte prima del codice), `docs/reports/SVILUPPO_v1.17.0.md` (fase 1, fase 2,
-test, firmware, cancello). Versioni precedenti: `ANALISI_FONTI_v1.15.0.md`,
-`SVILUPPO_v1.15.0.md`, `ANALISI_FONTI_v1.16.0.md`, `SVILUPPO_v1.16.0.md`.
+Ultimo aggiornamento: **v1.18.0 — Graph e Table alla parità completa**,
+branch di sessione `claude/graph-table-parity-v118-1is1v6`, un solo commit
+«PicoCalc FxCG-50 v1.18.0: …». Rapporti: `docs/reports/ANALISI_FONTI_v1.18.0.md`
+(audit sul manuale v3.60, 114 voci, errori E1–E6, progetto del Dual Screen,
+decisioni D1–D4 con le risposte), `docs/reports/SVILUPPO_v1.18.0.md` (parità
+finale, differenze, test, firmware, cancello). Versioni precedenti:
+`ANALISI_FONTI_v1.17.0.md`, `SVILUPPO_v1.17.0.md` e prima.
 
-> **Pico 2 W congelato alla v1.16.0.** Nessuna funzione, schermata o crescita
-> dell'immagine sul Raspberry Pi Pico 2 W, salvo correzioni di errori
-> condivise (nella v1.17.0: Conversion che non segnava Ans da salvare, +16 B).
-> `architecture_test` fallisce se cambia l'insieme delle modalità aperte del
-> Pico 2 W o se una modalità Base vi compare. Le modalità nuove sono solo per
-> la Pimoroni Pico Plus 2 W. Budget del Pico 2 W: immagine ≤ 2 064 384 B.
+> **Pico 2 W congelato** (alla v1.16.0 per le modalità, alla v1.17.0 per i
+> file). Nessuna funzione, schermata o crescita dell'immagine sul Raspberry Pi
+> Pico 2 W, salvo correzioni di errori condivise. **Unica eccezione: Graph e
+> Table nella v1.18.0** (parità completa con lo stesso codice della Plus, nel
+> servizio GraphCore). `architecture_test` fallisce se cambia l'insieme delle
+> modalità aperte del Pico 2 W, se una modalità Base vi compare, o se cambia un
+> file del manifesto `tests/fixtures/pico2w_frozen_v1_17_0.txt` (impronte dei
+> file del Pico 2 W alla v1.17.0) fuori dall'elenco esplicito
+> `kGraphTableV118`; un sorgente nuovo del Pico 2 W deve stare in quell'elenco.
+> Una correzione condivisa futura aggiorna la riga del file nel manifesto
+> (`tools/freeze_manifest.py`) con il motivo nel rapporto. Budget del Pico 2 W:
+> immagine ≤ **2 015 232 B** (2 064 384 B meno 48 KB riservati alle
+> correzioni; margine di 81 920 B, controllo bloccante); v1.18.0: 1 972 608 B.
 
 ## 0. Piano (dalla v1.17.0)
 
@@ -34,15 +41,18 @@ commit su `main`** in fast-forward («PicoCalc FxCG-50 v<ver>: <contenuto>»).
 | v1.15.0 | fondamenta comuni F1–F9 | **fatta** |
 | v1.16.0 | eActivity su entrambe le schede; Pico 2 W congelato | **fatta** |
 | v1.17.0 | base di tutte le modalità: stato Base, `apps_init_test`, record v12, dieci modalità Base sulla Plus | **fatta** |
-| **v1.18.0** | **Statistics alla parità completa (cap. 6)**, solo Plus; **Distribution** (cap. 18) entra come modalità Base | **PROSSIMA** |
-| v1.19.0… | una modalità per versione: Graph/Table (Dual Screen), Recursion, Dyna Graph, Conic Graphs, Financial, Spreadsheet, Program, Picture Plot, Geometry, Memory/System/Link, Python, Distribution, chiusura | proposta in `docs/ROADMAP.md`, da confermare a ogni versione |
+| v1.18.0 | **Graph e Table alla parità completa** su entrambe le schede (Dual Screen G+G/GtoT/T+G, FORMAT nello SKETCH, immagini a due livelli, cartelle, LISTMEM a 999, E1–E6); eccezione al congelamento del Pico 2 W solo per Graph/Table | **fatta** |
+| **v1.19.0** | **Statistics alla parità completa (cap. 6)**, solo Plus; **Distribution** (cap. 18) entra come modalità Base (spostate dalla v1.18.0) | **PROSSIMA** |
+| v1.20.0… | una modalità per versione: Recursion, Dyna Graph, Conic Graphs, Financial, Spreadsheet, Program, Picture Plot, Geometry, Memory/System/Link, Python, Distribution, chiusura | proposta in `docs/ROADMAP.md`, da confermare a ogni versione |
 
 Regole fisse: manuale fx-CG50 v3.60 solo come descrizione del comportamento
 (niente codice, grafica o testi copiati da Casio); `ANALISI_FONTI_v<ver>.md`
 con la tabella di parità **prima** del codice; un test per voce; una modalità è
 Available solo con la tabella completa; nessun «TESTED ON HARDWARE» senza prova
-fisica; HARDWARE_TEST con numerazione continua (ultima usata: **HW-245**).
-Plus: immagine < 90 % della partizione da 4 MB (controllo bloccante).
+fisica; HARDWARE_TEST con numerazione continua (ultima usata: **HW-265**).
+Plus: immagine < 90 % della partizione da 4 MB (controllo bloccante); Pico 2 W:
+immagine ≤ 2 015 232 B (controllo bloccante). Screenshot esistenti identici
+(ultimo usato: **160**).
 
 ### Decisioni prese
 
@@ -53,8 +63,15 @@ Plus: immagine < 90 % della partizione da 4 MB (controllo bloccante).
   `third_party/micropython`, solo Plus; coroutine con pila propria (ucontext
   sul PC, cambio di contesto Cortex-M33 con MSPLIM sul dispositivo), heap
   separato 512 KB PSRAM / 48 KB SRAM, AC → KeyboardInterrupt.
-- **Distribution**: entra nel registro nella v1.18.0 come Base, insieme alla
-  parità di Statistics (risposta Q1 della v1.17.0).
+- **Distribution**: entra nel registro nella **v1.19.0** come Base, insieme alla
+  parità di Statistics (risposta Q1 della v1.17.0, spostata dalla v1.18.0).
+- **Dual Screen** (v1.18.0, D1–D4): principale sopra e sotto-schermo/tabella
+  sotto (320×140); in G+G il principale è sempre attivo e lo ZOOM scrive la
+  V-Window del sotto-schermo; immagini `.pcpict` v2 a due livelli; liste da 999
+  elementi anche sul Pico 2 W con il totale invariato (1 530).
+- **Eccezione al congelamento** del Pico 2 W per Graph/Table della v1.18.0:
+  codice nuovo nel servizio GraphCore (`graph_view.cpp`, `graph_dual.cpp`),
+  niente codice per scheda; `-Os` sul Pico 2 W per `graph_dual.cpp`.
 - **Record v12 solo sulla Plus** (firma e CRC per sezione, sezione danneggiata
   isolata); il Pico 2 W scrive ancora la v11. Limite noto: un firmware ≤ v1.16.0
   non legge un record v12 (`docs/STORAGE.md`).
@@ -66,6 +83,16 @@ Plus: immagine < 90 % della partizione da 4 MB (controllo bloccante).
   e disegno (`FXAI_PICO2W_SIZE_SOURCES`); la Plus resta a `-O2`.
 
 ## 1. Stato attuale
+
+**v1.18.0** (sopra la v1.17.0): Graph e Table hanno la **parità completa** con
+la fx-CG50 su entrambe le schede (`docs/GRAPH_PARITY.md`, 114 voci; differenze
+DI-1…DI-9). Codice nuovo: `src/apps/graph_view.cpp` (riquadri, cornice, curve,
+tabella), `src/apps/graph_dual.cpp` (Dual Screen), curve per riquadro in
+`graph_plot.cpp`, T+G in `table_app.cpp`, sezioni `0x0104`/`0x0106`, parte Dual
+delle strisce, `.pcpict` v2, cartelle delle immagini. Test nuovi
+`graph_v118_test`, `table_v118_test`, `workspace_v118_test`, `fuzz_dual`;
+screenshot 148–160. **Nessuna prova su hardware**:
+`docs/HARDWARE_TEST_v1.18.0.md` (HW-246…HW-265).
 
 **v1.17.0** (sopra la v1.16.0): tutte le modalità del registro si aprono tranne
 E-CON4 (External). Sulla **Pimoroni Pico Plus 2 W** dieci modalità **Base**:
@@ -82,10 +109,10 @@ ogni modalità per la parità: campo `missing` del registro
 `docs/BUILD_STATUS.md`. **Nessuna prova su hardware**:
 `docs/HARDWARE_TEST_v1.17.0.md` (HW-220…HW-245).
 
-## 2. Prossima sessione: v1.18.0 = Statistics alla parità completa (solo Plus)
+## 2. Prossima sessione: v1.19.0 = Statistics alla parità completa (solo Plus)
 
 1. `git fetch origin main`; branch di sessione da `main`.
-2. `docs/reports/ANALISI_FONTI_v1.18.0.md` con la tabella di parità del
+2. `docs/reports/ANALISI_FONTI_v1.19.0.md` con la tabella di parità del
    capitolo 6 (Statistics) **prima del codice**: editor delle liste completo
    (pagine dei menu, SORT, DEL, DEL-ALL, INS, ADD, sottonomi, CSV), tutti i
    grafici (Scatter, xyLine, NPP, istogramma, box plot, normale, barre, torta,
@@ -95,10 +122,11 @@ ogni modalità per la parità: campo `missing` del registro
    (cap. 18) come modalità Base (registro, sezione, tipo di file se serve).
 3. Codice delle funzioni nuove **solo sulla Plus** (`#if FXAI_BOARD_PICO_PLUS_2W`
    con il codice della v1.16.0 nell'`#else`, come nella v1.17.0): Statistics
-   resta Available sul Pico 2 W con le funzioni della v1.16.0, schermate e
-   immagine identiche (≤ 1 944 228 B salvo correzioni condivise).
+   resta Available sul Pico 2 W con le funzioni della v1.16.0 e i file del
+   manifesto del congelamento invariati (l'eccezione `kGraphTableV118` vale
+   solo per la v1.18.0; immagine ≤ 2 015 232 B).
 4. Statistics sulla Plus resta Available (lo è dalla v1.8.0) ma deve avere la
-   tabella di parità completa alla fine della v1.18.0; `architecture_test`
+   tabella di parità completa alla fine della v1.19.0; `architecture_test`
    controlla che le modalità della v1.16.0 restino Available sulla Plus.
 5. `apps_init_test` copre da solo Distribution appena è nel registro come
    Base; aggiungere i suoi casi a `base_modes_test`/`base_flow_test`.
@@ -107,6 +135,7 @@ ogni modalità per la parità: campo `missing` del registro
 
 | Area | Contenuto |
 |---|---|
+| v1.18.0 | fase 0 `ANALISI_FONTI_v1.18.0.md` (audit sul manuale v3.60, risposte D1–D4); `graph_view.cpp`, `graph_dual.cpp`, Dual Screen G+G/GtoT/T+G, voci piccole ed errori E1–E6, persistenza, `.pcpict` v2, cartelle, liste da 999; test `graph_v118_test`, `table_v118_test`, `workspace_v118_test`, manifesto del congelamento in `architecture_test`; `fuzz_dual`; screenshot 148–160 |
 | Git (v1.17.0) | partenza da `main` = `eb2338a` (v1.16.0); commit intermedi su `claude/eager-lamport-9fht7w`; un solo commit su `main` in fast-forward; tag e release dal workflow |
 | v1.17.0 fase 0 | `ANALISI_FONTI_v1.17.0.md`; risposte: Distribution nella v1.18.0, Program C/C++/C#, MicroPython vero, record v12 solo Plus |
 | v1.17.0 fase 1 | `tests/apps_init_test.cpp` (casi C1–C7, controlli K1–K6, due profili, `mem_new` per le perdite); errore trovato e corretto: Conversion non segnava Ans da salvare |
@@ -116,7 +145,7 @@ ogni modalità per la parità: campo `missing` del registro
 
 ## 4. Collaudo fisico
 
-Resta prioritario appena la PicoCalc è disponibile: HW-01…HW-245 (log USB
+Resta prioritario appena la PicoCalc è disponibile: HW-01…HW-265 (log USB
 dall'accensione, righe `[psram]`, `[flash]`, `[mem]`, `[DIAG]`, `[fault]`,
 foto). Per la v1.17.0 in particolare: la coroutine di Python sul Cortex-M33
 (cambio di contesto, MSPLIM, KeyboardInterrupt, RecursionError senza
@@ -193,6 +222,7 @@ build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph3d_v114.txt   # 3
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/foundations_v115.txt # MEMORY › FILES (105-107)
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/eactivity.txt        # eActivity v1.16.0 (108-127)
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/base_v117.txt        # modalità Base v1.17.0 (128-147)
+build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph_v118.txt       # Graph e Table v1.18.0 (148-160)
 ```
 
 ```bash
@@ -214,7 +244,7 @@ make -C third_party/micropython MICROPYTHON_TOP=/tmp/micropython
 # Fuzzing leggero (v1.13.1): clang con libFuzzer (Ubuntu: libclang-rt-18-dev), ASan + UBSan
 CC=clang CXX=clang++ cmake -S tools/fuzz -B build/fuzz -G Ninja -DFXAI_TEST_BOARD=PICO_PLUS_2W
 cmake --build build/fuzz
-tools/fuzz/run_fuzz.sh build/fuzz 300       # secondi per harness (16 harness dalla v1.17.0); crash in build/fuzz/artifacts
+tools/fuzz/run_fuzz.sh build/fuzz 300       # secondi per harness (17 harness dalla v1.18.0, con fuzz_dual); crash in build/fuzz/artifacts
 FUZZ_ONLY="fuzz_workspace fuzz_program" tools/fuzz/run_fuzz.sh build/fuzz 300   # solo gli harness nuovi o toccati
 ```
 
@@ -237,4 +267,10 @@ cd relay && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt &
 python3 tools/map_sizes.py build/pico2w/picocalc_fxai_pico2w.elf.map --group
 # Stack sul target: il firmware è compilato con -fstack-usage (file .su)
 find build/pico_plus_2w/CMakeFiles/picocalc_fxai.dir/src -name '*.su' | xargs cat | sort -t$'\t' -k2 -n -r | head
+```
+
+```bash
+# Congelamento del Pico 2 W (v1.18.0): rigenerare il manifesto dopo una correzione
+# condivisa approvata (scriverne il motivo nel rapporto della versione)
+python3 tools/freeze_manifest.py . build/host-pico2w/build.ninja <commit> tests/fixtures/pico2w_frozen_v1_17_0.txt
 ```

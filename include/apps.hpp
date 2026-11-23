@@ -11,6 +11,7 @@
 #include "graph_engine.hpp"
 #include "graph3d.hpp"
 #include "table_model.hpp"
+#include "graph_view.hpp"
 #include "pict.hpp"
 #include "statistics.hpp"
 #include "step_task.hpp"
@@ -553,6 +554,7 @@ public:
     int probePixel(Context& ctx, gfx::Canvas& c, int row, int column) override;
 
     enum class Screen : std::uint8_t { List, Edit, Plot, Window, Setup, Format, Files };
+    struct SketchStyle { std::uint8_t color; LineStyle style; };   // colour and style of a SKETCH element
     // Plot screen states: plain graph, Trace (cursor on a curve), free pointer,
     // choice of a graph, G-Solve results, integral limits, Modify.
     enum class Mode : std::uint8_t { View, Trace, Pointer, Select, Results, Integral, Modify };
@@ -570,6 +572,21 @@ public:
     const std::vector<graph::Curve>& curves() const noexcept { return curves_; }
     bool cursor(double& x, double& y) const noexcept;    // trace/pointer position in graph coordinates
     const std::string& infoText() const noexcept { return bottomText_; }   // coordinates line shown last
+    const std::string& titleText() const noexcept { return topText_; }     // v1.18.0: first line shown last
+    const std::string& pointerLabel() const noexcept { return pointerLabel_; }   // v1.18.0: coordinates next to the trace pointer
+    // v1.18.0, Dual Screen (manual 5-23, 5-36, 5-55): G+G, GtoT (Graph) and T+G (TABLE's GPH-CON).
+    enum class Layout : std::uint8_t { Full, GraphGraph, GraphTable, TableGraph };
+    Layout layout(Context& ctx) const;
+    Layout builtLayout() const noexcept { return builtLayout_; }
+    const std::vector<graph::Curve>& subCurves() const noexcept { return subCurves_; }
+    const std::vector<table::Column>& gtotTable() const noexcept { return gtotCols_; }
+    bool tableActive() const noexcept { return tableActive_; }          // GtoT: the table pane has the keys
+    const graphview::TableCursor& gtotCursor() const noexcept { return gtotCursor_; }
+    bool windowEditsSub() const noexcept { return windowSub_; }         // V-Window form of the sub-screen (F6 SOTTO)
+    const SketchStyle& sketchPen() const noexcept { return sketchFormat_; }      // v1.18.0: FORMAT of the running SKETCH operation
+    bool traceLines() const noexcept { return traceLines_; }            // supplementary lines of TRACE (manual 5-54)
+    bool fadeSliderOpen() const noexcept { return fadeSlider_; }        // Fade I/O slider (manual 5-12)
+    const std::string& filesFolder() const noexcept { return files_.folder; }
     static constexpr int PlotLeft = graphgeo::Left, PlotRight = graphgeo::Right, PlotTop = graphgeo::Top, PlotBottom = graphgeo::Bottom;
 
     // What the pointer, the trace cursor, the graph choice or a pop-up is for.
@@ -584,15 +601,17 @@ public:
         None, Type, Convert, Tool, Style, GMem, BuiltIn, File, ListOptn, EditMore, EditVars, EditList,
         Zoom, Sketch, SketchPlot, SketchLine, SketchItems, SketchItem, Solve, SolveIntegral, PlotOptn,
         Picture, PictureStore, PictureRecall, BgvWin, VMem, Square, Color, StyleSketch,
+        DualOptn, GtoTOptn, EditAngle,                  // v1.18.0
     };
     // Number / text pop-up purposes.
     enum class Ask : std::uint8_t {
         None, TraceValue, XValue, YValue, IntLower, IntUpper, ModifyValue, ModifyStep, GMemStore, GMemRecall,
         VMemStore, VMemRecall, PictStore, PictRecall, PictSaveAs, BmpSaveAs, ProjectSaveAs, ProjectRename, SketchText,
         RefY, RefR, RefXt, RefYt, RefX, Factor, FactorY, Fade, BgvSaveAs,
+        GtoTListMem, FolderNew,                         // v1.18.0
     };
-    enum class Browse : std::uint8_t { Projects, Pictures, Background };
-    enum class Confirm : std::uint8_t { None, DeleteFunction, DeleteFile, Overwrite, NewProject, OpenProject, BgvLoad, BgvSave, ClearSketch };
+    enum class Browse : std::uint8_t { Projects, Pictures, Background, PictSaveAs, BgvSaveAs };   // v1.18.0: folders and SAVE•AS
+    enum class Confirm : std::uint8_t { None, DeleteFunction, DeleteFile, Overwrite, NewProject, OpenProject, BgvLoad, BgvSave, ClearSketch, GtoTDeleteAll };
 
 private:
     struct Line { int fn; int sub; };                    // relation list line (sub 1 = Yt of a parametric pair)
@@ -624,7 +643,7 @@ private:
     void openSetup(Context& ctx);
     void applySetup(Context& ctx);
     void formatKey(Context& ctx, const KeyEvent& ev);
-    void openFormat(Context& ctx, int function, int sketchItem);
+    void openFormat(Context& ctx, int function, int sketchItem, int pasted = -1);   // sketchItem -2: the running SKETCH operation
     void menuChoice(Context& ctx, Menu menu, int choice);
     void showMenu(Menu m, const char* title, std::vector<std::string> items);
     void ask(Ask a, const std::string& prompt, const std::string& initial = {}, bool text = false);
@@ -664,7 +683,20 @@ private:
     void zoomAction(Context& ctx, int choice);
     void plotMenu(Context& ctx, Menu menu, int choice);
     bool plotAnswer(Context& ctx, Ask a, const std::string& text);
-    void bgvSave(Context& ctx, const std::string& path);
+    void bgvSave(Context& ctx, const std::string& path, bool keepView = false);
+    // v1.18.0: Dual Screen
+    graph::Viewport mainViewport(const Context& ctx) const { return graphview::viewport(ctx.ws.view, mainPane_); }
+    graph::Viewport subViewport(const Context& ctx) const { return graphview::viewport(ctx.ws.graph.dual.sub, graphview::Pane::Sub); }
+    bool onPane(const Context& ctx, const graph::Plot& p, bool sub) const;
+    // parts: bit 0 = background layer (picture with Fade, grid, axes, labels), bit 1 = graph layer.
+    void drawPaneLayers(Context& ctx, gfx::Canvas& c, bool sub, int parts = 3);
+    void drawTablePane(Context& ctx, gfx::Canvas& c);
+    void tableKeyGtoT(Context& ctx, const KeyEvent& ev);
+    void storeGtoT(Context& ctx, const graph::Plot& p);
+    bool gtotColumns(Context& ctx);
+    void dualOnly(Context& ctx, const char* what) const;             // error when the Dual Screen is not Off
+    ViewWindow& zoomTarget(Context& ctx);                             // G+G: ZOOM writes the sub-screen V-Window (D2)
+    void sketchFormatOpen(Context& ctx);
     void sketchAction(Context& ctx, Action a);
     void pointerDone(Context& ctx);
     void addSketch(Context& ctx, SketchItem item);
@@ -681,7 +713,7 @@ private:
     void newProject(Context& ctx);
     void saveProject(Context& ctx, const std::string& name);
     void openProject(Context& ctx, const std::string& name);
-    void openFiles(Context& ctx, Browse purpose);
+    void openFiles(Context& ctx, Browse purpose, const std::string& folder = {});
     void filesKey(Context& ctx, const KeyEvent& ev);
     void drawFiles(Context& ctx, gfx::Canvas& c);
     void storeGraphMemory(Context& ctx, int n);
@@ -754,6 +786,7 @@ private:
     // files
     struct FileList { std::vector<files::Entry> entries; int selected{0}, first{0}; Browse purpose{Browse::Projects}; std::string folder; std::string status; } files_;
     std::string pendingName_;
+    std::string saveFolder_;                             // v1.18.0: folder chosen for PICTURE / BGV-WIN SAVE•AS
     std::vector<std::string> windowText_;                // V-Window texts when the form was filled
     std::uint32_t lastBlink_{0};
     std::vector<std::int16_t> shade_;                    // integral shading: column, y0, y1 triples
@@ -775,6 +808,26 @@ private:
     bool keepPointer_{false};                            // next pointer starts at the trace point
     std::uint64_t fingerprint_{0};                       // data the plots were built from
     std::uint64_t sourceFingerprint(Context& ctx) const;
+    // v1.18.0: Dual Screen and the other parity items
+    graphview::Pane mainPane_{graphview::Pane::Full};
+    Layout builtLayout_{Layout::Full};
+    ViewWindow builtSub_{};
+    std::vector<graph::Curve> subCurves_;                // G+G: curves of the sub-screen
+    std::vector<char> onMain_;                           // plot drawn in the main screen (all but the G+G "S" ones)
+    std::size_t subRenderPlot_{0};
+    bool forceFull_{false};                              // PxlTest from Run-Matrix: always the full screen
+    bool tableActive_{false};
+    graphview::TableCursor gtotCursor_, tgCursor_;
+    std::vector<table::Column> gtotCols_;
+    std::string gtotError_;
+    std::uint64_t gtotKey_{0};
+    bool windowSub_{false};
+    std::vector<std::pair<std::uint8_t, LineStyle>> pastedFormat_;   // colour and style of the pasted graphs
+    int formatPasted_{-1};                               // FORMAT of a pasted graph (index in pasted_)
+    SketchStyle sketchFormat_{0, LineStyle::Normal};             // FORMAT during a SKETCH operation (style, colour)
+    bool sketchFormatSet_{false};
+    std::string pointerLabel_;
+    bool fadeSlider_{false};                             // Fade I/O slider (manual 5-12)
 };
 
 // TABLE: values of the Y= functions of the shared relation list (Y1..Y20,
@@ -800,7 +853,7 @@ public:
     bool cell(Context& ctx, int row, int column, double& out);
     std::string cellText(Context& ctx, int row, int column);
 private:
-    enum class Menu : std::uint8_t { None, Type, Style, Row, Optn };
+    enum class Menu : std::uint8_t { None, Type, Style, Row, Optn, Angle, Format, FormatStyle, FormatColor, Setup };
     enum class Ask : std::uint8_t { None, EditValue, ListMem };
     enum class Confirm : std::uint8_t { None, DeleteFunction, DeleteTable };
     struct Line { int fn; int sub; };                    // relation list line (sub 1 = Yt of a parametric pair)

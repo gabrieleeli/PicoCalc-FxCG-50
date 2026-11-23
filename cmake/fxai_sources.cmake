@@ -71,6 +71,8 @@ set(FXAI_CORE_SOURCES
   ${FXAI_ROOT}/src/apps/graph_app.cpp
   ${FXAI_ROOT}/src/apps/graph_plot.cpp
   ${FXAI_ROOT}/src/apps/graph_files.cpp
+  ${FXAI_ROOT}/src/apps/graph_view.cpp
+  ${FXAI_ROOT}/src/apps/graph_dual.cpp
   ${FXAI_ROOT}/src/apps/table_app.cpp
   ${FXAI_ROOT}/src/apps/system_app.cpp
   ${FXAI_ROOT}/src/apps/memory_app.cpp
@@ -193,7 +195,9 @@ set(FXAI_PICO2W_SIZE_SOURCES
   ${FXAI_ROOT}/src/workspace.cpp ${FXAI_ROOT}/src/workspace_sections.cpp ${FXAI_ROOT}/src/graph_file.cpp
   ${FXAI_ROOT}/src/apps/graph_files.cpp ${FXAI_ROOT}/src/csv_io.cpp ${FXAI_ROOT}/src/typed_files.cpp
   ${FXAI_ROOT}/src/apps/system_app.cpp ${FXAI_ROOT}/src/apps/memory_app.cpp ${FXAI_ROOT}/src/apps/ai_chat_app.cpp
-  ${FXAI_ROOT}/src/ai_protocol.cpp ${FXAI_ROOT}/src/apps/mode_shell.cpp)
+  ${FXAI_ROOT}/src/ai_protocol.cpp ${FXAI_ROOT}/src/apps/mode_shell.cpp
+  # v1.18.0: Dual Screen di Graph/Table (logica, non il disegno delle curve)
+  ${FXAI_ROOT}/src/apps/graph_dual.cpp)
 # Sorgenti compilati (relativi al repository), per architecture_test.
 set(FXAI_COMPILED_SOURCES)
 foreach(_s ${FXAI_CORE_SOURCES})

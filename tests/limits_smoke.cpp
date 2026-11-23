@@ -23,7 +23,8 @@ int main() {
         CHECK(kHistoryEntries == 200 && kListMaxLength == 999);       // fx-CG50 lists, larger history
         CHECK(cfg::kFlashRecordSize == 1024u * 1024u);
     } else {
-        CHECK(kHistoryEntries == 40 && kListMaxLength == 255);        // v1.8.0 values, unchanged record
+        CHECK(kHistoryEntries == 40 && kListMaxLength == 999);        // v1.18.0 (D4): 999 per list, same total (kListStoreElements)
+        CHECK(kListStoreElements == 1530);                            // the record and the RAM of the lists do not grow
         CHECK(cfg::kFlashRecordSize == 128u * 1024u);
         CHECK(cfg::kFlashRecordOffset == cfg::kFlashSize - 128u * 1024u);   // v1.8.0 location
     }

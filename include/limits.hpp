@@ -26,7 +26,11 @@ namespace fx::limits {
 
 // ---- Persistent limits (workspace record format v4, both boards) ---------------
 inline constexpr std::size_t kHistoryEntries = board::config::kIsPicoPlus2W ? 200 : 40;   // Run-Matrix history
-inline constexpr std::size_t kListMaxLength = board::config::kIsPicoPlus2W ? 999 : 255;   // statistics lists (fx-CG50: 999)
+// v1.18.0 (decisione D4): 999 elementi per lista anche sul Pico 2 W, come la
+// fx-CG50 (LISTMEM di TABLE). Il totale kListStoreElements non cambia (1 530
+// elementi, ~12 KB sul Pico 2 W): nessun costo di RAM o di record. Un firmware
+// <= v1.17.0 non legge un record del Pico 2 W con una lista di piu' di 255.
+inline constexpr std::size_t kListMaxLength = 999;   // lists (fx-CG50: 999)
 // List 1-26 (v1.11.0, record v7): elementi di tutte le liste insieme. Sul Pico
 // 2 W resta l'occupazione massima della v1.10.0 (6 liste x 255 = 1530 elementi,
 // ~12 KB nel record da 59,75 KB); la Pico Plus 2 W tiene le liste nella PSRAM

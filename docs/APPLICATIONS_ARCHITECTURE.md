@@ -1,4 +1,4 @@
-# Architettura delle applicazioni — v1.17.0
+# Architettura delle applicazioni — v1.18.0
 
 Questo documento descrive **come sono costruite tutte le modalità** (quelle
 disponibili e quelle future), quali servizi condivisi usano, quali dati si
@@ -44,6 +44,16 @@ esclusi.
 **Raspberry Pi Pico 2 W congelato alla v1.16.0.** Sul Pico 2 W le modalità
 aperte sono quelle della v1.14.0 più eActivity, tutte Available e nessuna Base;
 `architecture_test` fallisce se una versione successiva cambia questo insieme.
+**Eccezione della v1.18.0, solo per Graph e Table**: le funzioni della parità
+completa di Graph e Table (Dual Screen, immagini a due livelli, cartelle,
+liste da 999) vanno anche sul Pico 2 W, con lo stesso codice della Plus.
+`architecture_test` lo verifica con il manifesto
+`tests/fixtures/pico2w_frozen_v1_17_0.txt` (impronta FNV-1a di ogni file
+compilato sul Pico 2 W alla v1.17.0, generato da `tools/freeze_manifest.py`):
+un file fuori dall'elenco esplicito `kGraphTableV118` che cambia fa fallire il
+test, e un sorgente nuovo del Pico 2 W deve stare nell'elenco. Il margine del
+Pico 2 W è di 80 KiB (32 KiB + 48 KiB riservati alle correzioni): immagine ≤
+2 015 232 B, controllo bloccante dopo il link (`cmake/fxai_board.cmake`).
 Dalla v1.17.0 le modalità nuove arrivano solo sulla Pimoroni Pico Plus 2 W
 (`boards::PicoPlus2W`, codice dietro `#if FXAI_BOARD_PICO_PLUS_2W` con quello
 della v1.16.0 nell'`#else`);
@@ -123,7 +133,7 @@ display) → `tick()` per lavoro periodico (rete) → `leave()`.
 | RunCore | `run_matrix.hpp` | Run-Matrix, Equation, eActivity (righe di calcolo, v1.16.0); previsto per Program |
 | GraphCmd (v1.11.0) | `graph_commands.hpp` | Run-Matrix: comandi grafici (Plot, F-Line, Graph Y=…) che scrivono V-Window, SKETCH e grafici dei comandi; li disegna Graph |
 | Models | `app_models.hpp` | modelli dati delle modalità future |
-| GraphCore | `graph_model.hpp`, `graph_engine.hpp`, `graph_solve.hpp`, `table_model.hpp` | Graph, Table; previsto per Dyna Graph, Recursion, Conic Graphs (campionamento, viewport, G-Solve) — [GRAPH_ENGINE.md](GRAPH_ENGINE.md) |
+| GraphCore | `graph_model.hpp`, `graph_engine.hpp`, `graph_solve.hpp`, `table_model.hpp`, `graph_view.hpp` (v1.18.0) | Graph, Table; previsto per Dyna Graph, Recursion, Conic Graphs (campionamento, viewport, G-Solve) — [GRAPH_ENGINE.md](GRAPH_ENGINE.md). v1.18.0: `graph_view` (entrambe le schede) disegna i riquadri del **Dual Screen** (principale sopra, sotto-schermo o tabella sotto, 320×140), la cornice di un riquadro, le curve, i punti della tabella e il riquadro della tabella numerica per GraphApp e TableApp, così il T+G non richiede che una modalità chiami l'altra |
 | Files | `file_store.hpp`, `graph_file.hpp`, `pict.hpp` | Graph (progetti `.pcgraph`, immagini `.pcpict`, BMP sulla microSD), eActivity (righe immagine, cartelle); previsto per Picture Plot, Program — [STORAGE.md](STORAGE.md) |
 | Diag | `diagnostics.hpp` | System (SYSTEM → DIAG: memoria, PSRAM, allocatore, flash, LCD, microSD, flash interna, tempi di GRAPH sul dispositivo, log USB) |
 | Graph3D | `graph3d_model.hpp`, `graph3d.hpp`, `limits.hpp` | 3D Graph: modello puro (funzioni, modelli, V-Window, Setup, validazione del manuale, geometria analitica, INTSECT/RELATION, codifica delle G-Mem) e disegno (reticoli, taglio al box, proiezione θ/φ, z-buffer o pittore, sezioni CROSS), budget dalla memoria presente |
@@ -132,7 +142,7 @@ display) → `tick()` per lavoro periodico (rete) → `leave()`.
 | ModeShell (v1.15.0, entrambe) | `mode_shell.hpp` | TABLE, eActivity (barre a pagine e sottomenu, conferme, menu), le dieci modalità Base (v1.17.0, con `TypedFileMenu`, `drawModeHeader` e i campi `numberField`/`textField`/`choiceField`, solo Plus) |
 | TextEdit (v1.15.0, entrambe) | `text_editor.hpp` | eActivity (memo e DETAIL, v1.16.0), Program, Python, Spreadsheet (editor di cella) (v1.17.0) |
 | StepTask (v1.15.0, entrambe) | `step_task.hpp` | 3D Graph (calcolo progressivo), eActivity (ricalcolo fino alla riga di stop, AC → Break), v1.17.0: ricalcolo del foglio, animazione di Dyna, tabella di Recursion, esecuzione di Program e di Python, trasferimenti di Link |
-| Graph2D (v1.15.0, solo Plus) | `graph2d.hpp` | Dyna Graph, Recursion, Conic Graphs, Geometry, Picture Plot (v1.17.0); previsto per Dual Screen |
+| Graph2D (v1.15.0, solo Plus) | `graph2d.hpp` | Dyna Graph, Recursion, Conic Graphs, Geometry, Picture Plot (v1.17.0); il Dual Screen di Graph/Table (v1.18.0) non lo usa: sta in GraphCore, compilato su entrambe le schede |
 | Binding (v1.15.0, solo Plus) | `binding.hpp` | Spreadsheet (celle e intervalli), Dyna Graph (coefficiente), Recursion (`n`, `an`, `an+1`), Program (`fx::calc`) (v1.17.0) |
 | Interp (v1.15.0, solo Plus) | `program.hpp` | Program (v1.17.0): sottoinsiemi interpretati di C, C++ e C# (decisione della v1.15.0, confermata nella v1.17.0) |
 | EActivityCore (v1.16.0, entrambe) | `eactivity.hpp`, `limits.hpp` | eActivity: documento, righe, testo con espressioni e a capo, 24 tipi di striscia, codifica `.pceact`, limite per scheda |
@@ -204,8 +214,8 @@ dell'utente (progetti GRAPH, immagini) sono sulla microSD o nella flash interna
 |---|---|---|---|---|---|
 | Run-Matrix | `RunMatrixApp` + `MatrixEditorView` (`matrix_editor.cpp`) + `AnswerView` (`answer_view.cpp`, v1.11.0) + nucleo `run_matrix.cpp` | calcoli e risultati: input Math o Line (INS, ⌟), forme esatte, matrici/vettori/liste ed editor MAT/VCT con CSV, MatAns/ListAns, cronologia modificabile, variabili, Base-N intera, simboli ingegneristici, Simp, DMS, CLIP; comandi grafici eseguiti da `graph_commands` e disegnati da Graph | Expression, Exact, Editor, MathRender, Format, MathCore, RunCore, Storage, Files, GraphCmd | Settings, Memory, History, Matrices, View e Graph (solo tramite `graph_commands`) | Graph |
 | Statistics | `StatisticsApp` | liste, 1/2-Var, regressioni, grafici statistici, DIST, TEST, INTR | Expression, Stats, Widgets | Settings, Lists, Functions | — |
-| Graph | `GraphApp` (`graph_app.cpp`, `graph_plot.cpp`, `graph_files.cpp`) | grafici Y=, r=, parametrici, X=, disequazioni (Y1–Y20); TRACE, ZOOM, V-Window, SKETCH, G-SOLVE, Modify, memorie, PICT, progetti `.pcgraph` — [GRAPH_PARITY.md](GRAPH_PARITY.md) | Expression, Editor, Format, Widgets, MathRender, Storage, GraphCore, Files | Settings, Memory, Functions, View, Table, Lists, Graph | Table |
-| Table | `TableApp` + `table_model` | tabelle di Y=, r= e parametriche da range o lista, derivate, EDIT/ROW/DELETE, LISTMEM, GPH-CON/GPH-PLT — [TABLE.md](TABLE.md) | Expression, Editor, Format, Widgets, MathRender, Storage, GraphCore | Settings, Memory, Functions, View, Table, Lists, Graph | Graph |
+| Graph | `GraphApp` (`graph_app.cpp`, `graph_plot.cpp`, `graph_files.cpp`, `graph_dual.cpp`, `graph_view.cpp`) | grafici Y=, r=, parametrici, X=, disequazioni (Y1–Y20); TRACE, ZOOM, V-Window, SKETCH, G-SOLVE, Modify, memorie, PICT a due livelli con cartelle, progetti `.pcgraph`; v1.18.0: Dual Screen G+G e GtoT, parità completa — [GRAPH_PARITY.md](GRAPH_PARITY.md) | Expression, Editor, Format, Widgets, MathRender, Storage, GraphCore, Files | Settings, Memory, Functions, View, Table, Lists, Graph | Table |
+| Table | `TableApp` + `table_model` + `graph_view.cpp` | tabelle di Y=, r= e parametriche da range o lista, derivate, EDIT/ROW/DELETE, LISTMEM, GPH-CON/GPH-PLT; v1.18.0: T+G, FORMAT/STYLE, parità completa — [TABLE.md](TABLE.md) | Expression, Editor, Format, Widgets, MathRender, Storage, GraphCore | Settings, Memory, Functions, View, Table, Lists, Graph | Graph |
 | Equation | `EquationApp` + `MathField` (`math_field.cpp`) + motore `equation.cpp` | SIML, POLY e SOLVER come il manuale fx-CG50 (4-1…4-5), disequazioni come estensione | Expression, Exact, Editor, MathRender, Format, RunCore, Solvers, Storage, EquationCore | Settings, Memory, Equation | — |
 | 3D Graph | `Graph3DApp` (`graph3d_app.cpp` lista e input, `graph3d_plot.cpp` grafico) + `graph3d_model.cpp`, `graph3d.cpp` | capitolo 16 della fx-CG50 ([GRAPH3D.md](GRAPH3D.md)): modelli Line/Plane/Sphere/Cylinder/Cone, Z=, Param, Rot X/Y, V-Window, Setup, FORMAT, 3D G-Mem/V-Mem, rotazione e ROTATE, ZOOM e viste, TRACE, SKETCH, G-Solve CROSS/INTSECT/RELATION, PICTURE, CAPTURE, calcolo progressivo | Expression, Widgets, Editor, Format, MathRender, Storage, Files, Graph3D | Settings, Memory, Graph3D | — |
 | Memory | `MemoryApp` | uso e cancellazione dei dati (anche 3D Graph, 3D G-Mem, 3D V-Win) | Widgets, Storage | tutte | — |
@@ -292,6 +302,7 @@ la striscia diventa disponibile da sola (`eact::stripAvailable`).
 | Modelli | validazioni e helper dei modelli delle modalità future |
 | Stato Base (v1.17.0) | le modalità aperte (`isOpen`) hanno controller e sorgenti, le Base hanno un `missing` che dice cosa manca alla parità; sulla Plus le modalità della v1.16.0 restano Available e quelle della v1.17.0 sono Base; sul Pico 2 W l'insieme delle modalità aperte è quello della v1.16.0 e nessuna è Base |
 | ModeCore (v1.17.0) | ogni modalità Base include solo il proprio nucleo (`modeCoreHeaders`) più `mode_codec.hpp` e `limits.hpp`; la regola della V-Window di Graph ammette le modalità Base con Graph2D e `View` |
+| Congelamento del Pico 2 W (v1.18.0) | manifesto delle impronte dei file del Pico 2 W alla v1.17.0 con l'eccezione esplicita `kGraphTableV118`; sorgenti nuovi del Pico 2 W solo nell'eccezione; margine di 81 920 B dichiarato per il Pico 2 W in `cmake/fxai_board.cmake`; Graph e Table Available con `graph_view.cpp`. Prova a mutazione: un commento aggiunto a `statistics_app.cpp` fa fallire il test |
 | Inizializzazione (v1.17.0) | `apps_init_test`: ogni modalità aperta nei casi C1–C7 (freddo, dopo RESET, record v11 valido/corrotto/troncato, solo SRAM, memoria quasi esaurita, microSD assente/presente) con i controlli K1–K6 ([reports/ANALISI_FONTI_v1.17.0.md](reports/ANALISI_FONTI_v1.17.0.md)) |
 
 Il test è stato provato introducendo apposta in Run-Matrix un `#include

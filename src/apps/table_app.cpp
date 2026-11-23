@@ -5,6 +5,7 @@
 // LISTMEM and GPH-CON / GPH-PLT drawn by GRAPH. Every value comes from the
 // GRAPH engine (the shared evaluator) through table_model.
 #include "apps.hpp"
+#include "graph_view.hpp"
 #include "math_renderer.hpp"
 #include <algorithm>
 #include <cctype>
@@ -15,10 +16,9 @@ namespace fx::app {
 using namespace ui::theme;
 
 namespace {
-std::uint16_t lineColor(std::uint8_t c) {
-    static const std::uint16_t pal[GraphColorCount] = {Graph[0], Graph[1], Graph[2], Graph[3], Graph[4], Graph[5], rgb888To565(225, 180, 0)};
-    return pal[c % GraphColorCount];
-}
+std::uint16_t lineColor(std::uint8_t c) { return graphview::lineColor(c); }
+std::vector<std::string> styleItems() { std::vector<std::string> v; for (std::uint8_t i = 0; i < LineStyleCount; ++i) v.emplace_back(lineStyleName(static_cast<LineStyle>(i))); return v; }
+std::vector<std::string> colorItems() { std::vector<std::string> v; for (std::uint8_t i = 0; i < GraphColorCount; ++i) v.emplace_back(graphColorName(i)); return v; }
 std::string prefix(GraphType t, int fn, int sub) {
     const std::string n = std::to_string(fn + 1);
     switch (t) {
@@ -115,6 +115,7 @@ void TableApp::generate(Context& ctx) {
     if (cols_.empty()) throw MathError(std::string("Math ERROR: nessuna funzione ") + graphTypeLabel(t.funcType) + " selezionata");
     t.rows = t.variable == TableRange::Variable::List ? table::listRows(ctx.ws.lists[t.list]) : table::rangeRows(t.start, t.end, t.step);
     t.generated = true;
+    t.shown = TableRange::Draw::None;
     ctx.markDirty();                    // the rows are workspace data, not part of the GRAPH project
     row_ = 0; col_ = cols_.empty() ? -1 : 0; firstRow_ = 0; firstCol_ = 0;
     show(Screen::Table);
@@ -145,7 +146,7 @@ void TableApp::key(Context& ctx, const KeyEvent& ev) {
                 ctx.ws.functions[static_cast<std::size_t>(line.fn)] = emptyGraphFunction(static_cast<std::size_t>(line.fn));
                 ctx.ws.graph.projectModified = true;
             } else {
-                ctx.ws.table.rows.clear(); ctx.ws.table.generated = false;
+                ctx.ws.table.rows.clear(); ctx.ws.table.generated = false; ctx.ws.table.shown = TableRange::Draw::None;
                 show(Screen::List);
             }
             ctx.markDirty();
@@ -182,11 +183,10 @@ void TableApp::listKey(Context& ctx, const KeyEvent& ev) {
         return;
     case ActType: shell_.showMenu("TYPE (tabella)", {"Y=", "r=", "Param"}, static_cast<int>(Menu::Type)); return;
     case ActStyle: {
+        // STYLE: line style of the graph of GPH-CON / GPH-PLT (manual 5-3, 5-17); the colour is in FORMAT.
         if (f.empty()) return;
-        std::vector<std::string> items;
-        for (std::uint8_t i = 0; i < GraphColorCount; ++i) items.emplace_back(graphColorName(i));
-        shell_.showMenu("STYLE (colore)", items, static_cast<int>(Menu::Style));
-        shell_.menu.selected = f.color % GraphColorCount;
+        shell_.showMenu("STYLE", styleItems(), static_cast<int>(Menu::Style));
+        shell_.menu.selected = static_cast<int>(f.style) % LineStyleCount;
         return;
     }
     case ActSet: openSet(ctx); return;
@@ -201,6 +201,10 @@ void TableApp::listKey(Context& ctx, const KeyEvent& ev) {
     case Key::Home: listRow_ = 0; return;
     case Key::End: listRow_ = n - 1; return;
     case Key::Exe: case Key::Right: beginEdit(ctx, true); return;
+    // FORMAT (Line Style, Line Color): the colour of the column and of the graph (manual 5-33, 5-15).
+    case Key::Optn:
+        if (!f.empty()) shell_.showMenu("FORMAT", {"Line Style \xE2\x96\xB6", "Line Color \xE2\x96\xB6"}, static_cast<int>(Menu::Format));
+        return;
     case Key::Exit: ctx.home(); return;
     case Key::Char:
         if (!ev.ctrl) beginEdit(ctx, false, ev.ch);
@@ -268,6 +272,8 @@ void TableApp::editKey(Context& ctx, const KeyEvent& ev) {
     case Key::F3: editor_.insertPower(); return;
     case Key::F4: editor_.insertText(t == GraphType::Polar ? "theta" : t == GraphType::Param ? "t" : "x"); return;
     case Key::F5: editor_.insertAbs(); return;
+    // v1.18.0: OPTN > ANGLE (°, ʳ, ᵍ) as in Graph (manual 5-4).
+    case Key::Optn: shell_.showMenu("ANGLE", {"\xC2\xB0  gradi", "\xCA\xB3  radianti", "\xE1\xB5\x8D  gradi centesimali"}, static_cast<int>(Menu::Angle)); return;
     default: return;
     }
 }
@@ -291,6 +297,7 @@ void TableApp::openSetup(Context& ctx) {
         choice("Variable", vars, t.variable == TableRange::Variable::List ? 1 + t.list : 0),
         choice("Derivative", {"On", "Off"}, ctx.ws.graph.settings.derivative ? 0 : 1),
         choice("Angle", {"Deg", "Rad", "Gra"}, ctx.ws.settings.angle == AngleMode::Degrees ? 0 : ctx.ws.settings.angle == AngleMode::Radians ? 1 : 2),
+        choice("Dual Screen", {"T+G", "Off"}, t.dual ? 0 : 1),           // v1.18.0 (manual 5-36)
     };
     form_.selected = 0;
     if (current() == Screen::Setup || current() == Screen::Set) shell_.screens.replace(static_cast<int>(Screen::Setup));
@@ -318,6 +325,8 @@ void TableApp::formKey(Context& ctx, const KeyEvent& ev) {
             ctx.ws.graph.settings.derivative = form_.fields[1].choice == 0;
             const int a = form_.fields[2].choice;
             ctx.ws.settings.angle = a == 0 ? AngleMode::Degrees : a == 1 ? AngleMode::Radians : AngleMode::Gradians;
+            const bool dual = form_.fields.size() > 3 && form_.fields[3].choice == 0;
+            if (dual != t.dual) { t.dual = dual; t.shown = TableRange::Draw::None; }
             ctx.ws.apply();
         }
         ctx.markDirty(); ctx.ws.graph.projectModified = true;
@@ -334,7 +343,7 @@ void TableApp::tableKey(Context& ctx, const KeyEvent& ev) {
     TableRange& t = ctx.ws.table;
     shell_.fkeys.set(&kTableMenu);
     const int action = shell_.fkeys.key(ev, false);
-    if (action == ActFormula || ev.is(Key::Exit)) { show(Screen::List); return; }   // FORMULA
+    if (action == ActFormula || ev.is(Key::Exit)) { t.shown = TableRange::Draw::None; show(Screen::List); return; }   // FORMULA
     if (!ensure(ctx)) { show(Screen::List); throw MathError(buildError_); }
     const int rows = static_cast<int>(t.rows.size()), cols = static_cast<int>(cols_.size());
     if (rows == 0) { show(Screen::List); return; }
@@ -349,6 +358,7 @@ void TableApp::tableKey(Context& ctx, const KeyEvent& ev) {
         // GPH-CON / GPH-PLT: GRAPH draws the points of the table (manual 5-35).
         if (cols_.empty()) throw MathError("Math ERROR: nessuna funzione selezionata");
         t.draw = action == ActGphCon ? TableRange::Draw::Connect : TableRange::Draw::Plot;
+        t.shown = t.dual ? t.draw : TableRange::Draw::None;         // T+G: the graph stays above the table
         ctx.open(AppId::Graph);
         return;
     default: break;
@@ -366,6 +376,8 @@ void TableApp::tableKey(Context& ctx, const KeyEvent& ev) {
     case Key::Left: col_ = std::max(-1, col_ - 1); return;
     case Key::Right: col_ = std::min(cols - 1, col_ + 1); return;
     case Key::Optn: shell_.showMenu("OPTN", {"LISTMEM (colonna -> List)"}, static_cast<int>(Menu::Optn)); return;
+    case Key::AC:                                   // T+G: AC keeps the table active; otherwise nothing to clear
+        return;
     case Key::Char:
         // A number typed in the table replaces the variable of the row (the other columns cannot be changed).
         if (!ev.ctrl && (std::isdigit(static_cast<unsigned char>(ev.ch)) || ev.ch == '-' || ev.ch == '.' || ev.ch == '('))
@@ -385,13 +397,24 @@ void TableApp::menuChoice(Context& ctx, int tag, int c) {
         ctx.markDirty(); ctx.ws.graph.projectModified = true;
         return;
     }
-    case Menu::Style: {
+    case Menu::Style: case Menu::FormatStyle: case Menu::FormatColor: {
         const auto ls = lines(ctx);
         const Line line = ls[static_cast<std::size_t>(std::clamp(listRow_, 0, static_cast<int>(ls.size()) - 1))];
-        ctx.ws.functions[static_cast<std::size_t>(line.fn)].color = static_cast<std::uint8_t>(c % GraphColorCount);
+        GraphFunction& f = ctx.ws.functions[static_cast<std::size_t>(line.fn)];
+        if (m == Menu::FormatColor) f.color = static_cast<std::uint8_t>(c % GraphColorCount);
+        else f.style = static_cast<LineStyle>(c % LineStyleCount);
         ctx.markDirty(); ctx.ws.graph.projectModified = true;
         return;
     }
+    case Menu::Format: {
+        const auto ls = lines(ctx);
+        const Line line = ls[static_cast<std::size_t>(std::clamp(listRow_, 0, static_cast<int>(ls.size()) - 1))];
+        const GraphFunction& f = ctx.ws.functions[static_cast<std::size_t>(line.fn)];
+        if (c == 0) { shell_.showMenu("Line Style", styleItems(), static_cast<int>(Menu::FormatStyle)); shell_.menu.selected = static_cast<int>(f.style) % LineStyleCount; }
+        else { shell_.showMenu("Line Color", colorItems(), static_cast<int>(Menu::FormatColor)); shell_.menu.selected = f.color % GraphColorCount; }
+        return;
+    }
+    case Menu::Setup: return;
     case Menu::Row: {
         auto& rows = t.rows;
         if (rows.empty()) return;
@@ -410,9 +433,14 @@ void TableApp::menuChoice(Context& ctx, int tag, int c) {
         return;
     }
     case Menu::Optn:
-        shell_.ask.open("LISTMEM: colonna " + (col_ < 0 ? std::string(table::variableName(t.funcType)) : cols_[static_cast<std::size_t>(col_)].title) + " in List (1-6):",
+        shell_.ask.open("LISTMEM: colonna " + (col_ < 0 ? std::string(table::variableName(t.funcType)) : cols_[static_cast<std::size_t>(col_)].title) + " in List (1-26):",
                         static_cast<int>(Ask::ListMem));
         return;
+    case Menu::Angle: {
+        static const char* const suffix[] = {"\xC2\xB0", "\xCA\xB3", "\xE1\xB5\x8D"};
+        editor_.insertSymbol(suffix[std::clamp(c, 0, 2)]);
+        return;
+    }
     case Menu::None: return;
     }
 }
@@ -515,59 +543,35 @@ void TableApp::drawList(Context& ctx, gfx::Canvas& c) {
 
 void TableApp::drawTable(Context& ctx, gfx::Canvas& c) {
     const TableRange& t = ctx.ws.table;
-    const int top = ui::ContentTop + 1, bottom = ui::ContentBottom;
+    const int bottom = ui::ContentBottom;
+    // v1.18.0, T+G (manual 5-36): graph in the main screen (above), table in the sub-screen.
+    const int top = t.dual ? graphgeo::SubTop : ui::ContentTop + 1;
     if (!ensure(ctx)) {
         ui::textCenter(c, ui::ScreenW / 2, 120, buildError_.c_str(), Error, font::Face::Small);
         shell_.fkeys.set(&kErrorMenu);
         shell_.fkeys.draw(c, false);
         return;
     }
-    const int rows = static_cast<int>(t.rows.size()), cols = static_cast<int>(cols_.size());
-    row_ = std::clamp(row_, 0, std::max(0, rows - 1));
-    col_ = std::clamp(col_, -1, cols - 1);
-    const int visibleCols = 4, xW = 58, colW = (ui::ScreenW - xW - 4) / visibleCols, rowH = 18;
-    if (col_ >= 0 && col_ < firstCol_) firstCol_ = col_;
-    if (col_ >= firstCol_ + visibleCols) firstCol_ = col_ - visibleCols + 1;
-    firstCol_ = std::clamp(firstCol_, 0, std::max(0, cols - visibleCols));
-    const int visibleRows = (bottom - top - 18 - 22) / rowH;
-    if (row_ < firstRow_) firstRow_ = row_;
-    if (row_ >= firstRow_ + visibleRows) firstRow_ = row_ - visibleRows + 1;
-    // header: variable, then the function columns with their colour
-    c.rect(0, top, ui::ScreenW, 18, StatusBg, true);
-    ui::textCenter(c, xW / 2, top + 1, table::variableName(t.funcType), Ink);
-    for (int k = 0; k < visibleCols && firstCol_ + k < cols; ++k) {
-        const table::Column& col = cols_[static_cast<std::size_t>(firstCol_ + k)];
-        const int x = xW + 2 + k * colW;
-        c.rect(x + 2, top + 5, 3, 9, lineColor(col.color), true);
-        ui::textCenter(c, x + colW / 2 + 2, top + 1, col.title.c_str(), Ink);
-    }
-    for (int r = 0; r < visibleRows && firstRow_ + r < rows; ++r) {
-        const int rr = firstRow_ + r, y = top + 18 + r * rowH;
-        const bool selRow = rr == row_;
-        if (selRow && col_ < 0) c.rect(1, y, xW - 2, rowH, Select, true);
-        ui::textRight(c, xW - 4, y + 1, cellText(ctx, rr, -1).c_str(), selRow && col_ < 0 ? SelectInk : Ink);
-        for (int k = 0; k < visibleCols && firstCol_ + k < cols; ++k) {
-            const int x = xW + 2 + k * colW, ci = firstCol_ + k;
-            const bool sel = selRow && ci == col_;
-            if (sel) c.rect(x + 1, y, colW - 2, rowH, Select, true);
-            const std::string text = cellText(ctx, rr, ci);
-            ui::textRight(c, x + colW - 4, y + 1, text.c_str(), sel ? SelectInk : text == "ERROR" ? Error : lineColor(cols_[static_cast<std::size_t>(ci)].color));
+    if (t.dual) {
+        const graph::Viewport vp = graphview::viewport(ctx.ws.view, graphview::Pane::Main);
+        if (t.shown != TableRange::Draw::None) {
+            // The graph of the last GPH-CON / GPH-PLT stays drawn while the table is active (5-37).
+            c.setClip(graphview::paneRect(graphview::Pane::Main));
+            graphview::drawFrame(c, vp, ctx.ws.graph.settings);
+            for (const auto& p : engine_.plots()) {
+                if (p.type != t.funcType || p.pasted || p.variant != 0) continue;
+                graph::Curve curve;
+                graphview::tableCurve(engine_, p, t.rows, vp, t.shown == TableRange::Draw::Connect, curve);
+                graphview::drawCurve(c, curve.xy, graphview::penFor(p.style, false), lineColor(p.color));
+            }
+            c.resetClip();
         }
-        c.hLine(0, y + rowH - 1, ui::ScreenW, Grid);
+        graphview::drawSeparator(c);
     }
-    c.vLine(xW, top, 18 + std::min(visibleRows, rows) * rowH, Faint);
-    ui::scrollBar(c, ui::ScreenW - 3, top + 18, visibleRows * rowH, rows, visibleRows, firstRow_);
-    // full value of the selected cell (the cells show at most 6 characters)
-    double v = 0;
-    std::string full;
-    if (col_ < 0) full = std::string(table::variableName(t.funcType)) + "=";
-    else {
-        const table::Column& col = cols_[static_cast<std::size_t>(col_)];
-        full = (col.kind == table::Column::Kind::Derivative ? std::string(table::derivativeName(t.funcType)) : col.title) + "=";
-    }
-    full += cell(ctx, row_, col_, v) ? formatReal(v, ctx.ws.settings.display) : std::string("ERROR");
-    c.hLine(0, bottom - 22, ui::ScreenW, Faint);
-    ui::textFit(c, 6, bottom - 19, full, ui::ScreenW - 12, Ink);
+    graphview::TableData d{&engine_, &cols_, &t.rows, t.funcType, ctx.ws.settings.display};
+    graphview::TableCursor cur{row_, col_, firstRow_, firstCol_};
+    graphview::drawTable(c, top, bottom, d, cur, true);
+    row_ = cur.row; col_ = cur.col; firstRow_ = cur.firstRow; firstCol_ = cur.firstCol;
     shell_.fkeys.set(&kTableMenu);
     shell_.fkeys.draw(c, false);
 }

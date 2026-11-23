@@ -22,7 +22,8 @@ target_compile_definitions(fxai_fuzz_core PUBLIC FXAI_VERSION_STRING="${FXAI_VER
   LFS_NO_DEBUG=1 LFS_NO_WARN=1 LFS_NO_ERROR=1 LFS_NO_ASSERT=1)
 set(FXAI_FUZZERS fuzz_expr fuzz_exactdiff fuzz_workspace fuzz_csv fuzz_pcgraph fuzz_equation fuzz_ui fuzz_graph3d
   fuzz_typedfile fuzz_texteditor                        # v1.15.0
-  fuzz_eactivity)                                       # v1.16.0
+  fuzz_eactivity                                        # v1.16.0
+  fuzz_dual)                                            # v1.18.0: Dual Screen di Graph/Table
 if("FXAI_SERVICE_INTERP=1" IN_LIST FXAI_FEATURE_DEFINITIONS)
   list(APPEND FXAI_FUZZERS fuzz_program)                # v1.15.0, solo Pico Plus 2 W
 endif()

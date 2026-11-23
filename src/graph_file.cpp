@@ -194,6 +194,16 @@ std::string encode(const Project& p) {
     s += std::string("tablevar=") + (p.tableFromList ? "List" + std::to_string(p.tableList + 1) : std::string("Range")) + "\n";
     s += std::string("tablefunc=") + graphTypeName(p.tableFunc) + "\n";
     if (!p.overlay.empty()) s += "overlay=" + escape(p.overlay) + "\n";
+    // v1.18.0: Dual Screen, only when it differs from the initial state.
+    if (p.dual != DualScreen::Off) s += std::string("dual=") + dualScreenName(p.dual) + "\n";
+    if (!(p.subView == ViewWindow{})) s += "subview=" + viewText(p.subView) + "\n";
+    {
+        std::string sides;
+        bool any = false;
+        for (DualSide d : p.side) { sides.push_back(d == DualSide::Sub ? 'S' : d == DualSide::Both ? 'E' : 'M'); any = any || d != DualSide::Main; }
+        if (any) s += "side=" + sides + "\n";
+    }
+    if (p.tableDual) s += "tabledual=On\n";
     for (std::size_t i = 0; i < p.functions.size(); ++i) if (!p.functions[i].empty()) s += functionLine(i, p.functions[i]);
     for (const auto& item : p.sketch) s += sketchLine(item);
     for (const auto& cg : p.commands)
@@ -261,6 +271,16 @@ std::string decode(const std::string& text, Project& out) {
         } else if (key == "tablefunc") {
             ok = parseGraphTypeName(value, p.tableFunc) && (p.tableFunc == GraphType::Y || p.tableFunc == GraphType::Polar || p.tableFunc == GraphType::Param);
         } else if (key == "overlay") ok = unescape(value, p.overlay) && p.overlay.size() <= 64;
+        else if (key == "dual") ok = parseDualScreenName(value, p.dual);
+        else if (key == "subview") ok = parseView(value, p.subView);
+        else if (key == "side") {
+            ok = value.size() == MaxGraphFunctions;
+            for (std::size_t i = 0; ok && i < MaxGraphFunctions; ++i) {
+                const char ch = value[i];
+                ok = ch == 'M' || ch == 'S' || ch == 'E';
+                if (ok) p.side[i] = ch == 'S' ? DualSide::Sub : ch == 'E' ? DualSide::Both : DualSide::Main;
+            }
+        } else if (key == "tabledual") ok = parseOnOff(value, p.tableDual);
         else if (key == "s") {
             if (p.sketch.size() >= MaxSketchItems) return "troppi elementi SKETCH";
             SketchItem item;

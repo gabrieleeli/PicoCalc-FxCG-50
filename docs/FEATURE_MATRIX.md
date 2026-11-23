@@ -1,5 +1,17 @@
-# Feature matrix — v1.17.0
+# Feature matrix — v1.18.0
 
+La v1.18.0 porta **Graph** e **Table** alla **parità completa** con la fx-CG50
+(capitolo 5, pagine 5-1…5-41 e 5-52…5-63, Setup 1-35…1-37) su **entrambe le
+schede**: Dual Screen G+G, GtoT (Graph to Table) e T+G, FORMAT durante lo
+SKETCH, suffissi °/ʳ/ᵍ negli editor, immagini `.pcpict` a due livelli,
+cartelle delle immagini, LISTMEM a 999 anche sul Pico 2 W e sei comportamenti
+corretti (E1–E6). Tabella voce per voce: [GRAPH_PARITY.md](GRAPH_PARITY.md)
+(114 voci, nessuna mancante; differenze documentate DI-1…DI-9). È l'unica
+eccezione al congelamento del Raspberry Pi Pico 2 W, verificata da
+`architecture_test` con il manifesto delle impronte dei suoi file
+([reports/ANALISI_FONTI_v1.18.0.md](reports/ANALISI_FONTI_v1.18.0.md),
+[reports/SVILUPPO_v1.18.0.md](reports/SVILUPPO_v1.18.0.md)). Nessuna voce è
+provata su hardware ([HARDWARE_TEST_v1.18.0.md](HARDWARE_TEST_v1.18.0.md)).
 La v1.17.0 è la **base di tutte le modalità**: ogni modalità del registro si
 apre, fa il suo lavoro principale, salva e rimette a posto il suo stato ed
 esce senza perdite di memoria (`apps_init_test` su tutte le modalità aperte,
@@ -12,7 +24,7 @@ Python (MicroPython), con il record del workspace **v12**
 [reports/SVILUPPO_v1.17.0.md](reports/SVILUPPO_v1.17.0.md)). Il **Raspberry
 Pi Pico 2 W resta congelato alla v1.16.0** (stesse modalità, solo correzioni
 condivise). Dalla v1.18.0 una modalità per versione arriva alla parità
-completa, a partire da Statistics. Nessuna voce è provata su hardware
+completa: prima Graph e Table (v1.18.0), poi Statistics (v1.19.0). Nessuna voce è provata su hardware
 ([HARDWARE_TEST_v1.17.0.md](HARDWARE_TEST_v1.17.0.md)).
 La v1.16.0 (milestone M2) porta **eActivity** alla parità con il capitolo 10
 del manuale fx-CG50 su **entrambe le schede**: ogni voce della tabella di
@@ -233,12 +245,13 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Graph: progetti `.pcgraph` su microSD (NEW/OPEN/SAVE/SAVE AS/RENAME/DELETE) | TESTED ON SIMULATOR | scheda simulata; formato in [PCGRAPH_FORMAT.md](PCGRAPH_FORMAT.md) |
 | Graph: budget dei punti 40 000/400 000 con la PSRAM (6000/24 000 senza) | TESTED ON HOST | `graphics_memory_test`: 20 parametriche dense complete con la PSRAM, troncate senza |
 | Graph: layer statici in PSRAM durante TRACE/puntatore | TESTED ON HOST | immagine identica al pixel a un ridisegno completo (`graphics_memory_test`) |
-| Graph: Dual Screen G+G/GtoT, Graph to Table | NOT STARTED | |
+| Graph: Dual Screen G+G (COPY, SWAP, V-Window del sotto-schermo, indicatori S/E, ZOOM verso il sotto-schermo) e GtoT (Graph to Table: EXE nel TRACE, CHANGE, R•DEL, DEL•ALL, LISTMEM) | TESTED ON SIMULATOR | v1.18.0, entrambe le schede; principale sopra e sotto-schermo sotto (320×140); `graph_v118_test`, `fuzz_dual`, screenshot 148–154 |
+| Graph: FORMAT durante lo SKETCH, Tangent/Norm con il Setup, coordinate accanto al puntatore del TRACE, tasto X,θ,T, «:» delle disequazioni strette, Fade I/O a cursore, cartelle delle immagini, immagini a due livelli, OPTN › ANGLE nell'editor, grafici delle funzioni predefinite di Run-Matrix | TESTED ON SIMULATOR | v1.18.0; `graph_v118_test`, screenshot 155–158 |
 | Graph: disegno dei comandi grafici di Run-Matrix (EXIT torna a Run-Matrix) | TESTED ON SIMULATOR | v1.11.0 |
 | Grafici impliciti (f(x,y)=0) | NOT STARTED | non presenti nella modalità Graph della CG50 (Conic Graphs) |
 | Table: lista delle relazioni, Y=/r=/Param, SET, Variable Range/List, derivate, celle di 6 caratteri | TESTED ON SIMULATOR | [TABLE.md](TABLE.md), screenshot 32, 35–37 |
 | Table: EDIT, ROW DELETE/INSERT/ADD, DELETE, LISTMEM, GPH-CON/GPH-PLT dalle righe | TESTED ON HOST | `table_test` |
-| Table: Dual Screen T+G | NOT STARTED | sessione v1.9.0 |
+| Table: Dual Screen T+G (tabella sotto, grafico GPH-CON/GPH-PLT sopra, CHANGE/AC), FORMAT e STYLE della lista, TRACE sulle righe, AC dopo GPH-CON, LISTMEM a 999 su entrambe le schede | TESTED ON SIMULATOR | v1.18.0; `table_v118_test`, screenshot 159, 160; parità completa in [GRAPH_PARITY.md](GRAPH_PARITY.md) §9 |
 | Equation: schermate e tasti del manuale (Select Type, Number of Unknowns/Degree, SOLVE DELETE CLEAR EDIT, REPEAT, EXE/EXIT) | TESTED ON SIMULATOR | v1.12.0; screenshot 08, 62–76 (`tests/sim/equation.txt`) |
 | Equation: coefficienti come espressioni esatte e complesse, editor Math/Line, EDIT | TESTED ON SIMULATOR | v1.12.0 |
 | Equation SIML 2–6: soluzioni esatte/decimali, No Solution, Infinitely Many Solutions con la formula, complessi, S⇔D | TESTED ON SIMULATOR | v1.12.0 (`equation_v112_test`) |
@@ -304,6 +317,7 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Sezione `0x0102` del record (v1.16.0): cartella, ultimo file, dati del menu principale durante un documento o una striscia, rimessi a posto dopo un'interruzione | TESTED ON HOST (`eactivity_test`, `fuzz_workspace`) |
 | Programmi `.pcprog` e script `.py` (v1.17.0, solo Plus): testo UTF-8 nel file tipizzato, dialetto nella prima riga | TESTED ON HOST (`base_modes_test`, `base_flow_test`) |
 | File `.pcsheet`, `.pcdyna`, `.pcrecur`, `.pcconic`, `.pcfin`, `.pcgeo`, `.pcplot`, `.pclink` (v1.17.0, solo Plus) | TESTED ON HOST (`base_modes_test`, `fuzz_sheet`, `fuzz_modes`, `fuzz_link`) |
+| Sezioni `0x0104` (Dual Screen di Graph, tabella del GtoT) e `0x0106` (T+G) del record (v1.18.0, entrambe le schede; Pico 2 W sempre su v11), parte Dual delle strisce, chiavi `dual`/`subview`/`side`/`tabledual` del `.pcgraph`, `.pcpict` versione 2 | TESTED ON HOST (`workspace_v118_test`, `fuzz_dual`, `fuzz_workspace`, `fuzz_pcgraph`) |
 | Record v12 (v1.17.0, solo Plus): firma della scheda e della versione, CRC per sezione, sezioni `0x0100 + AppId` delle dieci modalità (`0x0103`, `0x0105`, `0x0107`, `0x0108`, `0x010A`, `0x010B`, `0x010D`, `0x0110`, `0x0111`, `0x0114`), sezione danneggiata isolata con avviso all'avvio, migrazione dal record v11 della v1.16.0 (fixture); parti delle modalità nelle strisce dell'eActivity | TESTED ON HOST (`workspace_v117_test`, `apps_init_test`, `fuzz_workspace`) |
 | Matrici e vettori salvati nel workspace (record v6) | TESTED ON HOST (v1.10.0) |
 | Matrici e liste come file CSV (manuale 2-48, 3-18) | TESTED ON HOST (v1.11.0) |
@@ -322,7 +336,7 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Editor di testo multiriga (a capo, ricerca, salto alla riga, clipboard, limiti per scheda, memoria esaurita) | entrambe | TESTED ON HOST (`text_editor_test`, `fuzz_texteditor`) |
 | Lavoro a passi interrompibile (StepTask): budget di unità e di tempo, AC → Break, avanzamento | entrambe | TESTED ON HOST (`step_task_test`) |
 | 3D Graph sul servizio StepTask | entrambe | TESTED ON SIMULATOR (screenshot 88–104 identici) |
-| Grafico 2D condiviso: schermo pieno, G+G, GtoT, T+G; sorgenti di punti; TRACE e ZOOM; disegno incrementale identico al completo | Pico Plus 2 W | TESTED ON HOST (`graph2d_test`) |
+| Grafico 2D condiviso: schermo pieno, G+G, GtoT, T+G; sorgenti di punti; TRACE e ZOOM; disegno incrementale identico al completo | Pico Plus 2 W | TESTED ON HOST (`graph2d_test`); il Dual Screen di Graph/Table (v1.18.0) sta invece in GraphCore (`graph_view`), su entrambe le schede |
 | BindingResolver: variabili legate, celle A1…Z999 e intervalli dallo stesso lexer, Circular ERROR | Pico Plus 2 W | TESTED ON HOST (`binding_test`, `fuzz_expr`) |
 | Nucleo dell'interprete C, C++, C#: macchina iterativa, controllo di flusso, funzioni, array, stringhe, I/O, input in attesa, comandi grafici e `fx::calc`, budget, AC, errori con riga e colonna | Pico Plus 2 W | TESTED ON HOST (`program_core_test`, `fuzz_program`) |
 

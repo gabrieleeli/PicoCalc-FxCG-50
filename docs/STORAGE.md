@@ -278,6 +278,37 @@ svuotano: dopo un'interruzione di alimentazione si ritrovano i dati del menu
 principale; le modifiche non salvate del documento si perdono, come sulla
 fx-CG50. Un errore in questo ripristino non rende il record non valido.
 
+#### Sezioni `0x0104` Graph e `0x0106` Table (v1.18.0, versione 1, entrambe le schede)
+
+Dual Screen di Graph e Table ([GRAPH_PARITY.md](GRAPH_PARITY.md) §4, §9).
+Ognuna è scritta solo quando lo stato non è quello iniziale: un record senza
+Dual Screen è identico a quello della v1.17.0. Il **Raspberry Pi Pico 2 W resta
+sul record v11** (la coda TLV c'è dalla v1.15.0), la Plus sul v12 (con il CRC
+per sezione). Un firmware v1.15.0–v1.17.0 conserva le due sezioni intatte in
+`preservedSections` e le ignora.
+
+| Id | Campo | Contenuto |
+|---|---|---|
+| `0x0104` | `u8` | modo: 0 Off, 1 G+G, 2 GtoT |
+| | 9 × `f64` | V-Window del sotto-schermo (validata con `validateView`) |
+| | 20 × `u8` | indicatori delle funzioni: 0 principale, 1 solo sotto-schermo (S), 2 entrambi (E) |
+| | `u8` | tipo della tabella del GtoT: Y=, r= o Param |
+| | `u16` n, n × `f64` | valori della variabile memorizzati con EXE nel GtoT (n ≤ 999, finiti) |
+| `0x0106` | `u8` | Dual Screen di Table: 0 Off, 1 T+G |
+
+Dati non validi: sul Pico 2 W (v11) il record viene rifiutato e si usa l'altro
+slot; sulla Plus (v12) la sezione viene isolata come le altre. Nelle strisce di
+eActivity il Dual Screen viaggia nella parte `8` (Dual: `u8` T+G, poi la
+codifica di `0x0104`), aggiunta da `encodeParts` solo quando le parti chiedono
+Graph o Table e lo stato non è quello iniziale; un documento senza Dual Screen
+resta leggibile dai firmware precedenti (che rifiutano una parte sconosciuta).
+
+**Liste di 999 elementi sul Pico 2 W (v1.18.0, decisione D4).** La lunghezza
+massima di una lista è 999 anche sul Pico 2 W; il totale di tutte le liste
+resta 1 530 elementi, quindi la dimensione massima del record non cambia. Un
+firmware ≤ v1.17.0 rifiuta un record del Pico 2 W che contiene una lista di più
+di 255 elementi (limite noto dei ritorni indietro).
+
 ### Versione 12 (v1.17.0, solo Pimoroni Pico Plus 2 W): firma e CRC per sezione
 
 La Plus scrive la versione **12**; il Raspberry Pi Pico 2 W, congelato, scrive

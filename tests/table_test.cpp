@@ -311,7 +311,9 @@ int main() {
     {
         TA* t = r.tableWith({"x", "x^2"}, 0, 998, 1);
         r.key(pckey::Home); r.key(pckey::Down);
-        r.key(pckey::F4); r.type("3");                                // STYLE: Green
+        r.key(pckey::F4); r.type("3");                                // STYLE: Broken (v1.18.0: STYLE is the line style)
+        CHECK(ws.functions[1].style == LineStyle::Broken);
+        r.key(pckey::F8); r.type("2"); r.type("3");                   // OPTN > FORMAT > Line Color: Green (manual 5-33)
         CHECK(ws.functions[1].color == 2);
         r.key(pckey::F1);                                             // SELECT: Y2 off
         CHECK(!ws.functions[1].selected);
@@ -322,9 +324,8 @@ int main() {
         CHECK(t->row() == 998 && t->cell(r.ctx(), 998, 0, v) && v == 998);
         r.key(pckey::F3); r.type("3");                                // ADD: over 999 rows
         CHECK(r.error() && r.errorTitle() == "Memory ERROR"); r.closeError();
-        r.key(pckey::F8); r.type("1"); r.enter("1");                  // LISTMEM: lists hold 255 values (999 on the Pico Plus 2 W)
-        if (Workspace::MaxListLength < 999) { CHECK(r.error() && r.errorTitle() == "Dimension ERROR"); r.closeError(); }
-        else CHECK(!r.error() && ws.lists[0].size() == 999 && ws.lists[0][998] == 998);
+        r.key(pckey::F8); r.type("1"); r.enter("1");                  // LISTMEM: 999 values on both boards (v1.18.0, D4)
+        CHECK(!r.error() && ws.lists[0].size() == 999 && ws.lists[0][998] == 998);
         r.key(pckey::F1);
         r.key(pckey::F5); r.enter("0"); r.enter("999"); r.enter("1"); r.key(pckey::Esc);   // 1000 rows
         CHECK(r.error() && r.errorTitle() == "Memory ERROR"); r.closeError();

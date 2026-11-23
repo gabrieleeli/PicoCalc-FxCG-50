@@ -1,5 +1,81 @@
 # Changelog
 
+## v1.18.0 — Graph e Table alla parità completa
+
+Base: `main` = `aa2923c` (v1.17.0). **Graph** e **Table** arrivano alla parità
+completa con la fx-CG50 (manuale v3.60, capitolo 5: 5-1…5-41 e 5-52…5-63,
+Setup 1-35…1-37) su **entrambe le schede**: ogni voce della tabella di parità
+(114 voci, [GRAPH_PARITY.md](GRAPH_PARITY.md)) è presente e provata oppure è
+una differenza documentata. È l'**unica eccezione al congelamento del
+Raspberry Pi Pico 2 W**, solo per Graph e Table, verificata da
+`architecture_test`. Statistics e l'ingresso di Distribution come Base passano
+alla v1.19.0. Analisi: [reports/ANALISI_FONTI_v1.18.0.md](reports/ANALISI_FONTI_v1.18.0.md);
+rapporto: [reports/SVILUPPO_v1.18.0.md](reports/SVILUPPO_v1.18.0.md).
+**Nessuna prova su hardware fisico**: procedura
+[HARDWARE_TEST_v1.18.0.md](HARDWARE_TEST_v1.18.0.md) (HW-246…HW-265).
+
+### Nuovo
+- **Dual Screen** (Setup «Dual Screen»), su uno schermo 320×320 con il
+  principale **sopra** e il sotto-schermo o la tabella **sotto** (320×140):
+  - **G+G** in Graph: V-Window del sotto-schermo (F6 SOTTO/SOPRA), OPTN ›
+    COPY e SWAP, indicatori S (solo sotto) ed E (entrambi) nella lista, SELECT
+    li toglie; TRACE, SKETCH e G-SOLVE sul principale; lo ZOOM parte dalla
+    V-Window del principale e scrive quella del sotto-schermo;
+  - **GtoT** (Graph to Table): EXE nel TRACE memorizza il punto nella tabella
+    sotto il grafico; OPTN › CHANGE la rende attiva (R•DEL, DEL•ALL,
+    LISTMEM); colonne delle derivate con Derivative On;
+  - **T+G** in Table: tabella sotto e grafico GPH-CON/GPH-PLT sopra; la riga
+    della tabella segue il TRACE; CHANGE o AC tornano alla tabella con il
+    grafico che resta disegnato;
+  - restrizioni del manuale: PAN, incolla, MODIFY e PICTURE STORE non sono
+    disponibili con lo schermo diviso.
+- **FORMAT durante lo SKETCH** (OPTN): stile e colore per l'operazione in corso.
+- **TRACE**: coordinate anche accanto al puntatore; il tasto x apre la
+  finestra del valore; «X:»/«Y:» per le disequazioni strette.
+- **OPTN › ANGLE** (°, ʳ, ᵍ) negli editor di Graph e Table.
+- **Fade I/O** come cursore (←/→ a passi del 5 %), salvato nel file dello sfondo.
+- **Immagini `.pcpict` a due livelli** (versione 2: grafico e sfondo
+  separati; Fade I/O schiarisce solo lo sfondo); la versione 1 si legge sempre.
+- **Cartelle delle immagini** sotto `PICOCALC/PICT` per SAVE•AS, OPEN e
+  Background (NEW F crea una cartella).
+- **Grafici delle funzioni predefinite** dei comandi di Run-Matrix
+  (`Graph Y=sin`, `Graph r=cos`…).
+- **Table**: F4 STYLE cambia lo stile della linea, OPTN › FORMAT stile e
+  colore; LISTMEM a **999 valori anche sul Pico 2 W** (totale delle liste
+  invariato, 1 530 elementi).
+- Sezioni del record `0x0104` (Graph) e `0x0106` (Table), su entrambe le schede,
+  scritte solo con il Dual Screen attivo (il Pico 2 W resta sul record v11);
+  parte Dual delle strisce di eActivity; chiavi `dual`, `subview`, `side`,
+  `tabledual` del `.pcgraph`.
+- `src/apps/graph_view.cpp` (disegno condiviso dei riquadri e della tabella,
+  servizio GraphCore) e `src/apps/graph_dual.cpp` (logica del Dual Screen).
+
+### Corretto
+- E1: Tangent e Norm ignoravano Sketch Line e Plot/LineCol.
+- E2: in una sovrapposizione o in un grafico da lista con colore ciano o
+  giallo il primo grafico restava ciano o giallo.
+- E3: FORMAT dal grafico non offriva i grafici incollati e offriva quelli di
+  una sovrapposizione.
+- E4: dopo GPH-CON il TRACE avanzava di Step tra Start ed End invece di
+  seguire le righe della tabella (Variable = LIST, righe modificate).
+- E5: EXE sulla lista delle relazioni di Graph apriva l'editor invece di
+  disegnare (ora → modifica la riga).
+- E6: F4 STYLE di Table cambiava il colore invece dello stile.
+
+### Cambiato
+- Setup di Graph: «Dual Screen» al posto di «Fade I/O» (che sulla fx-CG50 è
+  il cursore di OPTN).
+- PICTURE › SAVE•AS e BGV-WIN › SAVE•AS chiedono prima la cartella.
+- `architecture_test`: manifesto `tests/fixtures/pico2w_frozen_v1_17_0.txt`
+  del Pico 2 W alla v1.17.0 con l'eccezione esplicita di Graph e Table; margine
+  bloccante del Pico 2 W a 80 KiB (immagine ≤ 2 015 232 B).
+- Piano: Statistics e Distribution (Base) nella v1.19.0.
+
+### Test
+- Nuove suite `graph_v118_test`, `table_v118_test`, `workspace_v118_test`;
+  nuovo harness `fuzz_dual`; script del simulatore `tests/sim/graph_v118.txt`
+  (screenshot 148–160); i 137 screenshot precedenti sono identici.
+
 ## v1.17.0 — base di tutte le modalità
 
 Base: `main` = `eb2338a` (v1.16.0). Ogni modalità del registro si apre, fa il

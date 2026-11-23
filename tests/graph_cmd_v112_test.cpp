@@ -9,6 +9,7 @@
 #include "graph_file.hpp"
 #include "run_matrix.hpp"
 #include "test_util.hpp"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -126,7 +127,8 @@ int main() {
         CHECK(w.graph.commandGraphs.size() == 9);                                     // tutto o niente
         // Limite dei punti di DrawStat/DrawR/DrawFTG della scheda
         runCalculation(w, "Cls");
-        std::vector<double> big(limits::kListMaxLength, 1.0);
+        // v1.18.0: two lists that fit the store of the board (999 per list on both boards, 1 530 in all on the Pico 2 W)
+        std::vector<double> big(std::min(limits::kListMaxLength, limits::kListStoreElements / 2), 1.0);
         w.setList(0, big); w.setList(1, big);
         bool limited = false;
         for (int k = 0; k < 30 && !limited; ++k) limited = fails<MathError>(w, "DrawStat");
