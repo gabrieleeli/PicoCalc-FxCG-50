@@ -150,7 +150,12 @@ std::size_t glyphCount(const char* text) noexcept {
     if(!text)return 0;
     std::size_t n=0;
     const auto* p=reinterpret_cast<const unsigned char*>(text);
+#if FXAI_BOARD_PICO_PLUS_2W
+    // v1.18.0: il circonflesso combinante (U+0302, p̂ di Statistics) non occupa una cella.
+    while(*p){if(nextCodepoint(p)!=0x0302)++n;}
+#else
     while(*p){(void)nextCodepoint(p);++n;}
+#endif
     return n;
 }
 int advance(Face face) noexcept {const auto* f=fontFor(face);return f?f->width:6;}
@@ -164,7 +169,11 @@ TextMetrics measure(Face face,const char* text) noexcept {
     if(!text)return {};
     int line=0,maxLine=0,lines=1;const int adv=advance(face);
     const auto* p=reinterpret_cast<const unsigned char*>(text);
+#if FXAI_BOARD_PICO_PLUS_2W
+    while(*p){const std::uint32_t cp=nextCodepoint(p);if(cp=='\n'){maxLine=std::max(maxLine,line);line=0;++lines;}else if(cp!=0x0302)line+=adv;}
+#else
     while(*p){const std::uint32_t cp=nextCodepoint(p);if(cp=='\n'){maxLine=std::max(maxLine,line);line=0;++lines;}else line+=adv;}
+#endif
     maxLine=std::max(maxLine,line);return {maxLine,lines*lineHeight(face)};
 }
 std::size_t drawClipped(gfx::Canvas& canvas,Face face,int x,int y,const char* text,std::uint16_t color,int maxWidth) noexcept {
@@ -173,6 +182,13 @@ std::size_t drawClipped(gfx::Canvas& canvas,Face face,int x,int y,const char* te
     std::size_t drawn=0;const auto* p=reinterpret_cast<const unsigned char*>(text);
     while(*p){const std::uint32_t cp=nextCodepoint(p);
         if(cp=='\n'){x=origin;y+=lineHeight(face);continue;}
+#if FXAI_BOARD_PICO_PLUS_2W
+        if(cp==0x0302){
+            // v1.18.0: circonflesso sopra il glifo precedente (p̂), disegnato dal progetto.
+            if(x>origin){const int cx=x-adv+adv/2-1;canvas.pixel(cx-2,y+2,color);canvas.pixel(cx-1,y+1,color);canvas.pixel(cx,y,color);canvas.pixel(cx+1,y+1,color);canvas.pixel(cx+2,y+2,color);}
+            continue;
+        }
+#endif
         if(x+adv>limit)break;
         if(cp!=' ')drawCodepoint(canvas,face,x,y,cp,color);
         x+=adv;++drawn;}
