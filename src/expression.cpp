@@ -8,6 +8,9 @@
 #include "calc_library.hpp"
 #include "limits.hpp"
 #include "math_engine.hpp"
+#if FXAI_BOARD_PICO_PLUS_2W
+#include "stat_engine.hpp"
+#endif
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -119,7 +122,19 @@ constexpr const char* kSystemNames[] = {"xmin","xmax","xscl","ymin","ymax","yscl
     "reg_a","reg_b","reg_c","reg_d","reg_e","reg_r","reg_r2","reg_mse","stat_q1","stat_q3","stat_med","stat_mod",
     "stat_hstart","stat_hpitch","reg_type","d_start","d_end","d_pitch","r_start","r_end","rec_a0","rec_a1","rec_a2",
     "rec_b0","rec_b1","rec_b2","rec_c0","rec_c1","rec_c2","rec_anstart","rec_bnstart","rec_cnstart",
-    "tvm_n","tvm_i","tvm_pv","tvm_pmt","tvm_fv","tvm_py","tvm_cy","rec_n","rec_an",nullptr};
+    "tvm_n","tvm_i","tvm_pv","tvm_pmt","tvm_fv","tvm_py","tvm_cy","rec_n","rec_an",
+#if FXAI_BOARD_PICO_PLUS_2W
+    // v1.18.0: VARS › STAT › PTS, INPUT e RESULT (TEST, INTR, DIST) dell'ultimo calcolo di Statistics.
+    "stat_x1","stat_y1","stat_x2","stat_y2","stat_x3","stat_y3",
+    "stat_in_n","stat_in_mean","stat_in_sx","stat_in_n1","stat_in_n2","stat_in_mean1","stat_in_mean2","stat_in_sx1","stat_in_sx2","stat_in_sp",
+    "stat_res_p","stat_res_z","stat_res_t","stat_res_chi","stat_res_f","stat_res_phat","stat_res_phat1","stat_res_phat2","stat_res_df",
+    "stat_res_se","stat_res_r","stat_res_r2","stat_res_pa","stat_res_fa","stat_res_adf","stat_res_ssa","stat_res_msa","stat_res_pb",
+    "stat_res_fb","stat_res_bdf","stat_res_ssb","stat_res_msb","stat_res_pab","stat_res_fab","stat_res_abdf","stat_res_ssab","stat_res_msab",
+    "stat_res_edf","stat_res_sse","stat_res_mse",
+    "stat_int_left","stat_int_right","stat_int_phat","stat_int_phat1","stat_int_phat2","stat_int_df",
+    "stat_dist_p","stat_dist_xinv","stat_dist_x1inv","stat_dist_x2inv","stat_dist_zlow","stat_dist_zup","stat_dist_tlow","stat_dist_tup",
+#endif
+    nullptr};
 // Infix operator words (fx-CG50 And/Or/Xor, Int÷ and Rmdr) and their internal op codes.
 struct OpWord { const char* name; char op; };
 constexpr OpWord kOperatorWords[] = {{"and",'&'},{"or",'|'},{"xor",'x'},{"xnor",'X'},{"rmdr",'r'},{"intdiv",'q'}};
@@ -1562,6 +1577,18 @@ double systemValue(const Env& env,const char* name){
     if(env.ctx.names&&env.ctx.names->resolve(name,v))return v;
     throw MathError(std::string("Math ERROR: ")+name+" non disponibile qui");
 }
+#if FXAI_BOARD_PICO_PLUS_2W
+// v1.18.0: la regressione dell'ultimo calcolo di Statistics (tipo e coefficienti di VARS › STAT).
+stats::Fit lastFit(const Env& env,int type){
+    if(type<0||type>=static_cast<int>(stats::Reg::Count))throw MathError("Math ERROR: nessuna regressione calcolata in Statistics");
+    stats::Fit fit;
+    fit.type=static_cast<stats::Reg>(type);
+    fit.ncoef=stats::regCoefficientCount(fit.type);
+    const char* const names[]={"reg_a","reg_b","reg_c","reg_d","reg_e"};
+    for(std::size_t i=0;i<fit.ncoef;++i)fit.coef[i]=systemValue(env,names[i]);
+    return fit;
+}
+#endif
 template<typename T> FXAI_NOINLINE T contextFunction(const ast::Node& n,Env& env){
     const std::string& f=n.text;
     if(n.children.size()!=(f=="pxl_test"?2u:1u)||!n.children[0])throw SyntaxError("Argument ERROR: "+f+" numero di argomenti errato");
@@ -1579,6 +1606,13 @@ template<typename T> FXAI_NOINLINE T contextFunction(const ast::Node& n,Env& env
     if(f=="y_hat"){
         // ŷ = valore stimato dalla regressione dell'ultimo calcolo di Statistics.
         const int type=static_cast<int>(systemValue(env,"reg_type"));
+#if FXAI_BOARD_PICO_PLUS_2W
+        // v1.18.0: i 12 tipi con il nucleo di Statistics (Sin in radianti, Q5).
+        const stats::Fit fit=lastFit(env,type);
+        const double v=fit.predict(a);
+        if(!std::isfinite(v))throw MathError("Math ERROR: \xC5\xB7 non esiste per questo x");
+        return fromReal<T>(v);
+#else
         const double ca=systemValue(env,"reg_a"),cb=systemValue(env,"reg_b");
         double v=0;
         switch(type){
@@ -1593,6 +1627,7 @@ template<typename T> FXAI_NOINLINE T contextFunction(const ast::Node& n,Env& env
         default: throw MathError("Math ERROR: nessuna regressione calcolata in Statistics");
         }
         return fromReal<T>(v);
+#endif
     }
     // PxlTest(riga, colonna)
     if(a!=std::floor(a)||b!=std::floor(b)||a<1||a>282||b<1||b>320)throw MathError("Argument ERROR: PxlTest( riga 1-282, colonna 1-320");
@@ -2979,6 +3014,12 @@ private:
             // x̂(y): stima di x dalla regressione dell'ultimo calcolo (Quad: due valori).
             const double y=realOf(a[0],"\xEE\x80\x80");
             const int type=static_cast<int>(systemValue(env,"reg_type"));
+#if FXAI_BOARD_PICO_PLUS_2W
+            // v1.18.0: i 12 tipi con il nucleo di Statistics (X³, X⁴: radici reali in una lista; Sin: Math ERROR).
+            const std::vector<double> xs=stats::estimateX(lastFit(env,type),y);
+            if(xs.size()==1)out=scalarOf(D::fromDouble(xs[0]));else out=listFromDoubles(xs);
+            return true;
+#else
             const double ca=systemValue(env,"reg_a"),cb=systemValue(env,"reg_b");
             switch(type){
             case 0: case 1: if(ca==0)throw MathError("Math ERROR: a = 0");out=scalarOf(D::fromDouble((y-cb)/ca));return true;
@@ -2994,6 +3035,7 @@ private:
             case 8: if(ca==0||cb==0||y/ca<=0)throw MathError("Math ERROR: \xEE\x80\x80 non esiste");out=scalarOf(D::fromDouble(std::pow(y/ca,1/cb)));return true;
             default: throw MathError("Math ERROR: \xEE\x80\x80 non disponibile per questa regressione");
             }
+#endif
         }
         // Mean, Median, S-Dev, Var con le frequenze facoltative (manuale 3-10).
         const char* label=f=="mean"?"Mean":f=="median"?"Median":f=="s_dev"?"S-Dev":"Var";

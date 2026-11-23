@@ -311,7 +311,11 @@ int main() {
         CHECK(std::abs(ws.history.back().value.real() - 3.937007874) < 1e-9);
         // VARS > STAT, VARS > Str, VARS > A~Z in Hex (variabile v_a)
         ws.setList(0, {2, 4});
+#if FXAI_BOARD_PICO_PLUS_2W
+        r.key(pckey::F9); r.type("5"); r.type("1"); r.type("2"); r.key(pckey::Enter); // v1.18.0: STAT > X > x̄
+#else
         r.key(pckey::F9); r.type("5"); r.type("2"); r.key(pckey::Enter);            // STAT > x̄
+#endif
         CHECK_EQ_STR(last(ws), "3");
         ws.settings.baseMode = Settings::BaseMode::Hex;
         r.key(pckey::F9); r.type("1"); r.key(pckey::Enter);                          // A

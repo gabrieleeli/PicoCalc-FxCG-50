@@ -212,6 +212,7 @@ struct StatisticsApp::View {
     Form form;
     int formKind{-1};                           // TestKind o ActDistBase + indice
     int setGraph{0};
+    int builtData{-1}, builtMany{-1};           // Data e How Many con cui e' stato costruito il modulo
     std::map<std::string, std::pair<std::string, int>> remembered;   // valori dei moduli per etichetta
     SelectList copyList;
     // lavori lunghi
@@ -554,6 +555,8 @@ void buildForm(View& v) {
     v.form.fields = std::move(f);
     restore(v);
     v.form.selected = std::min(std::max(0, selected), static_cast<int>(v.form.fields.size()) - 1);
+    v.builtData = fieldIndex(v.form, "Data") >= 0 ? choiceOf(v.form, "Data") : -1;
+    v.builtMany = fieldIndex(v.form, "How Many") >= 0 ? choiceOf(v.form, "How Many") : -1;
 }
 void openForm(View& v, int kind) {
     if (v.formKind >= 0 && !v.form.fields.empty()) remember(v);
@@ -566,11 +569,10 @@ void openForm(View& v, int kind) {
 }
 // Il cambio di Data o di How Many ricostruisce il modulo (campi diversi).
 void formChanged(View& v) {
-    const int data = fieldIndex(v.form, "Data"), many = fieldIndex(v.form, "How Many");
-    const int oldData = rememberedChoice(v, "Data", -1), oldMany = rememberedChoice(v, "How Many", -1);
     remember(v);
-    if ((data >= 0 && v.form.fields[static_cast<std::size_t>(data)].choice != oldData && oldData >= 0) ||
-        (many >= 0 && v.form.fields[static_cast<std::size_t>(many)].choice != oldMany && oldMany >= 0)) buildForm(v);
+    const int data = fieldIndex(v.form, "Data") >= 0 ? choiceOf(v.form, "Data") : -1;
+    const int many = fieldIndex(v.form, "How Many") >= 0 ? choiceOf(v.form, "How Many") : -1;
+    if (data != v.builtData || many != v.builtMany) buildForm(v);
 }
 stats::Sample sampleOf(Context& ctx, const Form& f, const std::string& sfx, bool withSd) {
     stats::Sample s;
@@ -769,6 +771,8 @@ void continueDraw(Context& ctx, View& v) {
     for (const auto& p : plots)
         if (p.g.type == GraphType::Hist || p.g.type == GraphType::Broken) { vars.emplace_back(stats::VHStart, p.hist.start); vars.emplace_back(stats::VHPitch, p.hist.width); }
     if (!vars.empty()) storeVars(ctx, vars);
+    // G12: Pie con % Sto List: le percentuali delle fette nella lista scelta.
+    for (const auto& p : plots) if (p.g.type == GraphType::Pie && p.g.pieStore > 0) saveRes(ctx, p.g.pieStore, p.pie);
     v.plots = std::move(plots);
     v.window = ctx.ws.statistics.statWindManual ? viewWindow(ctx.ws.view) : statplot::autoWindow(v.plots);
     v.tracing = false;
@@ -1244,7 +1248,10 @@ void StatisticsApp::key(Context& ctx, const KeyEvent& ev) {
     }
     if (ev.is(Key::Setup) && !v.editing && v.screen != Screen::Setup) { openSetup(ctx, v); return; }
     switch (v.screen) {
-    case Screen::Lists: listsKey(ctx, v, ev); return;
+    case Screen::Lists:
+        // Un errore di un'azione dell'editor riporta la barra alla prima pagina (come EXIT da un'altra schermata).
+        try { listsKey(ctx, v, ev); } catch (...) { if (v.screen == Screen::Lists && !v.editing) barFor(v); throw; }
+        return;
     case Screen::Results: {
         const int a = v.shell.fkeys.key(ev, false);
         if (a == ActCopy && v.kind == View::Kind::Reg) { openCopy(ctx, v); return; }
@@ -1322,6 +1329,8 @@ void StatisticsApp::key(Context& ctx, const KeyEvent& ev) {
     case Screen::HistAsk: {
         if (v.form.editing()) { (void)v.form.key(ctx, ev); return; }
         if (ev.is(Key::Exit)) { goBack(v); return; }
+        // EXE su Start passa a Width; EXE su Width disegna (come la finestra della fx-CG50).
+        if (ev.is(Key::Exe) && v.form.selected == 0) { v.form.selected = 1; return; }
         if (ev.is(Key::Exe) && v.form.selected == 1) {
             stats::StatGraph& g = ctx.ws.statistics.graphs[v.histGraph];
             const double start = numberOf(ctx, v.form, "Start"), width = numberOf(ctx, v.form, "Width");

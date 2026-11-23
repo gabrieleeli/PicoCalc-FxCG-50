@@ -2,6 +2,7 @@
 // Pimoroni Pico Plus 2 W): per ogni modalita' apri dal menu, usa, salva il file
 // tipizzato, esci, riapri e riavvia (il record v12 conserva lo stato).
 #include "app_rig.hpp"
+#include "calc_library.hpp"
 #include "link_protocol.hpp"
 #include "pict.hpp"
 #include "storage.hpp"
@@ -387,6 +388,64 @@ void python(std::unique_ptr<testrig::Rig>& r) {
     reboot(r);
     CHECK(r->ws().python.lastScript == "DEMO.py");
 }
+#if FXAI_MODE_DISTRIBUTION
+// v1.18.0: Distribution (Base): menu delle 24 funzioni, modulo, CALC in Ans,
+// List in ListAns e Save Res, DRAW, AC sulle inverse in lista, stato dopo il riavvio.
+void distribution(std::unique_ptr<testrig::Rig>& r) {
+    r->type("o");
+    CHECK(r->fw.apps().activeId() == AppId::Distribution && screen<DistributionApp>(*r) == "menu");
+    r->key(pk::Enter);                                                      // Normal C.D (iniziale)
+    CHECK(screen<DistributionApp>(*r) == "input");
+    r->key(pk::F1);                                                         // CALC
+    r->settle();
+    CHECK(screen<DistributionApp>(*r) == "results" && std::abs(r->ws().memory.answer() - 0.682689492137) < 1e-11);
+    r->key(pk::F6);                                                         // DRAW
+    CHECK(screen<DistributionApp>(*r) == "graph");
+    r->key(pk::Esc); r->key(pk::Esc);
+    CHECK(screen<DistributionApp>(*r) == "input");
+    r->key(pk::F6);                                                         // DRAW dal modulo: calcola e disegna
+    r->settle();
+    CHECK(screen<DistributionApp>(*r) == "graph");
+    r->key(pk::Esc); r->key(pk::Esc); r->key(pk::Esc);
+    CHECK(screen<DistributionApp>(*r) == "menu");
+    // Binomial P.D con Data List: risultati in ListAns e in List 3 (Save Res)
+    r->ws().setList(0, {0, 1, 2, 3});
+    for (int i = 0; i < 11; ++i) r->key(pk::Down);                          // Bpd (indice 12)
+    r->key(pk::Enter);
+    CHECK(r->ws().distribution.kind == 12);
+    r->key(pk::Right);                                                      // Data: List (le scelte ciclano)
+    CHECK(r->ws().distribution.listData);
+    for (int i = 0; i < 4; ++i) r->key(pk::Down);                           // List, Numtrial, p, Save Res
+    r->key(pk::Right); r->key(pk::Right); r->key(pk::Right);               // Save Res: List 3
+    r->key(pk::F1);
+    r->settle();
+    CalcValue la;
+    CHECK(!r->error() && screen<DistributionApp>(*r) == "results" && r->ws().collection(CollectionResolver::Memory::List, CollectionResolver::Answer, la) &&
+          la.size() == 4 && std::abs(la.re[2] - calclib::binomialPD(2, 10, 0.5)) < 1e-15 && r->ws().lists[2].size() == 4);
+    r->key(pk::Esc); r->key(pk::Esc);
+    // Inverse Student-t con 999 aree in lista: step::Task interrotto con AC
+    std::vector<double> areas(999);
+    for (int i = 0; i < 999; ++i) areas[static_cast<std::size_t>(i)] = 0.001 + 0.998 * i / 998.0;
+    r->ws().setList(0, areas);
+    for (int i = 0; i < 7; ++i) r->key(pk::Up);                             // Invt (indice 5)
+    r->key(pk::Enter);
+    CHECK(r->ws().distribution.kind == 5);
+    if (!r->ws().distribution.listData) r->key(pk::Right);
+    r->key(pk::F1);
+    CHECK(screen<DistributionApp>(*r) == "running");
+    r->key(pk::Break);
+    CHECK(r->error() && (r->errorTitle() + r->errorDetail()).find("Break") != std::string::npos);
+    r->closeError();
+    CHECK(screen<DistributionApp>(*r) == "input");
+    // Lo stato resta dopo l'uscita e il riavvio (sezione 0x0117).
+    r->home();
+    reboot(r);
+    CHECK(r->ws().distribution.kind == 5 && r->ws().distribution.listData && r->ws().distribution.hasResult);
+    r->type("o");
+    CHECK(screen<DistributionApp>(*r) == "menu");
+    r->home();
+}
+#endif
 } // namespace
 
 int main() {
@@ -403,6 +462,9 @@ int main() {
     geometry(r);
     picturePlot(r);
     python(r);
+#if FXAI_MODE_DISTRIBUTION
+    distribution(r);
+#endif
     CHECK(r->fw.apps().activeId() == AppId::MainMenu);
     return testutil::finish("base_flow_test");
 }
