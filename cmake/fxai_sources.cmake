@@ -161,6 +161,12 @@ fxai_feature(MODE FINANCIAL    BOARDS PICO_PLUS_2W SYMBOLS FinancialApp SOURCES 
 fxai_feature(MODE LINK         BOARDS PICO_PLUS_2W SYMBOLS LinkApp SOURCES src/link_protocol.cpp src/apps/link_app.cpp)
 fxai_feature(MODE GEOMETRY     BOARDS PICO_PLUS_2W SYMBOLS GeometryApp SOURCES src/geometry.cpp src/apps/geometry_app.cpp)
 fxai_feature(MODE PICTUREPLOT  BOARDS PICO_PLUS_2W SYMBOLS PicturePlotApp SOURCES src/picture_plot.cpp src/apps/picture_plot_app.cpp)
+# v1.18.0: Statistics alla parita' del capitolo 6 (nucleo, distribuzioni condivise,
+# controller) e Distribution come modalita' Base, solo sulla Pimoroni Pico Plus 2 W;
+# sul Pico 2 W congelato Statistics resta il codice della v1.16.0 (statistics_app.cpp).
+fxai_feature(SERVICE STATFULL  BOARDS PICO_PLUS_2W SYMBOLS FitTask AnovaTask StatPlusView
+  SOURCES src/stat_engine.cpp src/dist_core.cpp src/apps/statistics_plus_app.cpp src/apps/stat_plot.cpp)
+fxai_feature(MODE DISTRIBUTION BOARDS PICO_PLUS_2W SYMBOLS DistributionApp SOURCES src/distribution.cpp src/apps/distribution_app.cpp)
 # Python: MicroPython v1.24.1 (porta embed, third_party/micropython) compilato in C
 # senza warning ne' sanitizer (codice di terzi, come FatFs e LittleFS).
 file(GLOB _fxai_mp_py RELATIVE ${FXAI_ROOT} ${FXAI_ROOT}/third_party/micropython/micropython_embed/py/*.c)
