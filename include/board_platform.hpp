@@ -34,6 +34,7 @@ public:
     std::uint32_t benchmarkPresent() override { return board::benchmarkFullPresent(); }
 #if FXAI_BOARD_PICO_PLUS_2W
     link::Port* serialPort() override { return board::serialPort(); }
+    net::Fetcher* fetcher() override { return board::fetcher(); }
 #endif
 };
 } // namespace fx

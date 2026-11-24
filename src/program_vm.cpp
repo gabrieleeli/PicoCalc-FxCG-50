@@ -1009,6 +1009,8 @@ void Vm::execute(std::size_t stopDepth) {
 struct Machine::Impl {
     std::unique_ptr<Vm> vm;
     std::unique_ptr<coro::Coroutine> coro;
+    // debug: valori espandibili mostrati (handle = indice + 1), validi fino al prossimo passo
+    mutable std::vector<std::pair<Value, TypeP>> handles;
     bool finished{false};
     bool aborted{false};
     std::unique_ptr<Error> error;
@@ -1149,6 +1151,7 @@ void Machine::setBreakpoints(const std::vector<std::pair<std::string, int>>& fil
     }
 }
 void Machine::resume(StepMode mode) {
+    impl_->handles.clear();
     Vm& vm = *impl_->vm;
     vm.stepMode = mode;
     vm.paused = false;
@@ -1167,6 +1170,129 @@ std::vector<FrameInfo> Machine::callStack() const {
         fi.line = static_cast<int>(p.line);
         fi.column = p.column;
         out.push_back(fi);
+    }
+    return out;
+}
+std::string debugValue(Vm& vm, const Value& v, TypeP t, Dialect d, bool& expandable);
+namespace {
+VarInfo varInfo(Vm& vm, const std::string& name, const Value& v, TypeP t, Dialect d, std::vector<std::pair<Value, TypeP>>& handles) {
+    VarInfo vi;
+    vi.name = name;
+    vi.type = t ? t->name() : std::string();
+    bool expandable = false;
+    try {
+        vi.value = debugValue(vm, v, t, d, expandable);
+    } catch (...) {
+        vi.value = "?";
+    }
+    vi.expandable = expandable;
+    if (expandable && handles.size() < 4096) {
+        handles.emplace_back(v, t);
+        vi.handle = static_cast<std::uint32_t>(handles.size());
+    }
+    return vi;
+}
+} // namespace
+std::vector<VarInfo> Machine::variables(std::size_t frame) const {
+    std::vector<VarInfo> out;
+    Vm& vm = *impl_->vm;
+    // la cornice `frame` contando dalla piu' interna (come callStack)
+    std::size_t k = 0;
+    const Frame* fr = nullptr;
+    for (std::size_t i = vm.frames.size(); i-- > 0;) {
+        if (vm.frames[i].fn->name == "<init>") continue;
+        if (k++ == frame) { fr = &vm.frames[i]; break; }
+    }
+    if (fr) {
+        const Dialect d = fr->fn->lang;
+        const std::int32_t pc = fr->pc > 0 ? fr->pc - 1 : 0;
+        for (const LocalInfo& l : fr->fn->locals) {
+            if (l.name.empty() || l.name[0] == '#' || pc < l.from || pc >= l.to) continue;
+            const std::size_t at = fr->base + static_cast<std::size_t>(l.slot);
+            if (at >= vm.stack.size()) continue;
+            Value v = vm.stack[at];
+            if (l.boxed && v.holdsObj() && v.o->kind == OK::Box) v = static_cast<BoxObj*>(v.o)->v;
+            bool dup = false;
+            for (VarInfo& o : out) if (o.name == l.name) { o = varInfo(vm, l.name, v, l.type, d, impl_->handles); dup = true; }
+            if (!dup) out.push_back(varInfo(vm, l.name, v, l.type, d, impl_->handles));
+        }
+    }
+    const Program& p = *vm.prog_;
+    if (vm.globals) {
+        for (std::size_t i = 0; i < p.globalNames.size() && i < vm.globals->count; ++i) {
+            const std::string& n = p.globalNames[i];
+            if (n.empty() || n[0] == '#' || n.find('#') != std::string::npos) continue;
+            out.push_back(varInfo(vm, "::" + n, vm.globals->get(static_cast<std::uint32_t>(i)), i < p.globalTypes.size() ? p.globalTypes[i] : nullptr,
+                                  p.dialect, impl_->handles));
+        }
+    }
+    return out;
+}
+std::vector<VarInfo> Machine::children(std::uint32_t handle) const {
+    std::vector<VarInfo> out;
+    if (handle == 0 || handle > impl_->handles.size()) return out;
+    Vm& vm = *impl_->vm;
+    const auto [v0, t0] = impl_->handles[handle - 1];
+    const Dialect d = vm.prog_->dialect;
+    Value v = v0;
+    try {
+        if (v.k == VK::Ptr && v.f != 2 && v.idx != Whole && v.o && v.o->kind != OK::Array) v = vm.loadPtr(v);
+        if (!v.holdsObj() || v.o->dead()) return out;
+        Obj* o = v.o;
+        constexpr std::size_t Max = 200;
+        switch (o->kind) {
+        case OK::Inst: {
+            InstObj* x = static_cast<InstObj*>(o);
+            if (!x->cls) {
+                const TypeP a = t0 && t0->k == TK::Native && t0->args.size() > 0 ? t0->args[0] : nullptr;
+                const TypeP b = t0 && t0->k == TK::Native && t0->args.size() > 1 ? t0->args[1] : nullptr;
+                out.push_back(varInfo(vm, d == Dialect::CSharp ? "Key" : "first", x->fields[0], a, d, impl_->handles));
+                out.push_back(varInfo(vm, d == Dialect::CSharp ? "Value" : "second", x->fields[1], b, d, impl_->handles));
+                break;
+            }
+            for (const ClassInfo* c = x->cls; c; c = c->base)
+                for (const FieldInfo& f : c->fields) {
+                    if (f.isStatic || f.slot < 0 || static_cast<std::uint32_t>(f.slot) >= x->nfields || f.name.empty() || f.name[0] == '#' || f.name[0] == '<') continue;
+                    out.push_back(varInfo(vm, f.name, x->fields[f.slot], f.type, c->lang, impl_->handles));
+                }
+            break;
+        }
+        case OK::Array: {
+            ArrayObj* a = static_cast<ArrayObj*>(o);
+            if (a->ek == VK::Void) break;
+            for (std::uint32_t i = 0; i < a->count && out.size() < Max; ++i) {
+                std::string n = "[" + std::to_string(i) + "]";
+                if (a->rank == 2 && a->cols) n = "[" + std::to_string(i / a->cols) + "," + std::to_string(i % a->cols) + "]";
+                out.push_back(varInfo(vm, n, a->get(i), a->elem, d, impl_->handles));
+            }
+            break;
+        }
+        case OK::Vec: {
+            VecObj* vv = static_cast<VecObj*>(o);
+            const TypeP et = vv->type && !vv->type->args.empty() ? vv->type->args[0] : nullptr;
+            for (std::size_t i = 0; i < vv->items.size() && out.size() < Max; ++i) out.push_back(varInfo(vm, "[" + std::to_string(i) + "]", vv->items[i], et, d, impl_->handles));
+            break;
+        }
+        case OK::Map: {
+            MapObj* m = static_cast<MapObj*>(o);
+            const TypeP kt = m->type && !m->type->args.empty() ? m->type->args[0] : nullptr;
+            const TypeP vt = m->type && m->type->args.size() > 1 ? m->type->args[1] : nullptr;
+            std::vector<std::uint32_t> cells;
+            if (m->mode == 0) cells.assign(m->order.begin(), m->order.end());
+            else for (std::uint32_t c = 0; c < m->keys.size(); ++c) if (m->used[c]) cells.push_back(c);
+            for (std::uint32_t c : cells) {
+                if (out.size() >= Max) break;
+                bool e = false;
+                const std::string key = debugValue(vm, m->keys[c], kt, d, e);
+                if (m->isSet) out.push_back(varInfo(vm, key, m->keys[c], kt, d, impl_->handles));
+                else out.push_back(varInfo(vm, "[" + key + "]", m->vals[c], vt, d, impl_->handles));
+            }
+            break;
+        }
+        case OK::Box: out.push_back(varInfo(vm, "valore", static_cast<BoxObj*>(o)->v, t0, d, impl_->handles)); break;
+        default: break;
+        }
+    } catch (...) {
     }
     return out;
 }

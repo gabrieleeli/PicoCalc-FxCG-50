@@ -11,6 +11,7 @@ namespace fx::files { class FileSystem; }
 // the PicoCalc (RP2350) and by src/platform/host/board_host.cpp for host tests
 // and the screenshot simulator.
 namespace fx::link { class Port; }
+namespace fx::net { class Fetcher; }
 namespace board {
 void init();
 gfx::Canvas& graphics() noexcept;
@@ -60,6 +61,8 @@ const char* name();
 // v1.17.0 (Link, solo Plus): la USB seriale come canale di Link (USB CDC sul
 // dispositivo, il tubo dei test sul PC); nullptr se non c'e'.
 fx::link::Port* serialPort();
+// v1.20.0 (LIB, solo Plus): download HTTPS delle librerie (nullptr se non c'e').
+fx::net::Fetcher* fetcher();
 #endif
 // Statistics for the System app (bytes sent to the LCD by the last present()).
 std::size_t lastFlushBytes();

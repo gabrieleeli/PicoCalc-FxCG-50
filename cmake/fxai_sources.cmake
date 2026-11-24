@@ -154,7 +154,7 @@ fxai_feature(SERVICE INTERP     BOARDS PICO_PLUS_2W SYMBOLS 4prog
           src/program_compile.cpp src/program_compile_decl.cpp src/program_compile_stmt.cpp src/program_compile_expr.cpp
           src/program_compile_call.cpp src/program_natives.cpp src/program_vm.cpp src/program_heap.cpp src/program_format.cpp
           src/program_lib.cpp src/program_lib_c.cpp src/program_lib_cpp.cpp src/program_lib_cs.cpp src/program_fx.cpp
-          src/program_project.cpp)
+          src/program_project.cpp src/sha256.cpp src/json_lite.cpp src/lib_manager.cpp src/lib_fetch.cpp src/code_store.cpp)
 # Modalita' non ancora realizzate (nessun sorgente fino alla loro milestone):
 # l'opzione esiste gia' perche' il registro dichiara su quali schede possono esistere.
 fxai_feature(MODE EACTIVITY    BOARDS PICO_PLUS_2W PICO2W SYMBOLS EActivityApp SOURCES src/eactivity.cpp src/apps/eactivity_app.cpp)

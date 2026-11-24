@@ -202,25 +202,36 @@ void financial(std::unique_ptr<testrig::Rig>& r) {
 }
 
 void program(std::unique_ptr<testrig::Rig>& r) {
+    // v1.20.0: programmi come file sorgente standard sulla SD (PICOCALC/CODE/<LING>)
+    auto put = [&](const std::string& path, const std::string& text) {
+        auto& card = board::host::ramCard();
+        CHECK(card.makeDirs(path.substr(0, path.rfind('/'))) == files::Status::Ok);
+        CHECK(files::writeAtomic(card, path, reinterpret_cast<const std::uint8_t*>(text.data()), text.size()) == files::Status::Ok);
+    };
     r->type("b");
     CHECK(r->fw.apps().activeId() == AppId::Program && screen<ProgramApp>(*r) == "list");
-    r->key(pk::F3); r->enter("HELLO");                                      // NEW
-    CHECK(screen<ProgramApp>(*r) == "edit" && fileExists("PICOCALC/PROG/HELLO.pcprog"));
+    r->key(pk::Home); r->key(pk::Down); r->key(pk::Enter);                  // CODE/CPP (C, CPP, CS, JAVA, PY)
+    r->key(pk::F3); r->key(pk::Enter);                                      // NEW > File
+    r->enter("HELLO");
+    CHECK(screen<ProgramApp>(*r) == "edit" && fileExists("PICOCALC/CODE/CPP/HELLO.cpp"));
+    {
+        std::vector<std::uint8_t> data;
+        CHECK(files::readAll(board::host::ramCard(), "PICOCALC/CODE/CPP/HELLO.cpp", data, 4096) == files::Status::Ok);
+        const std::string text(data.begin(), data.end());
+        CHECK(text.rfind("#include <iostream>", 0) == 0 && text.find("pcprog") == std::string::npos);   // nessuna riga aggiunta
+    }
     r->key(pk::F1);                                                         // RUN
     r->settle();
     CHECK(screen<ProgramApp>(*r) == "done");
     r->key(pk::Esc);
-    // input da tastiera
-    auto put = [&](const char* name, const std::string& text) {
-        files::TypedStore ts(board::host::ramCard());
-        CHECK(ts.save(files::FileType::Program, name, std::vector<std::uint8_t>(text.begin(), text.end())) == files::Status::Ok);
-    };
-    put("ASK.pcprog", "// pcprog: C++\n#include <iostream>\nint main() { int n; std::cin >> n; std::cout << n * 2; fx::setVar(\"B\", n); return 0; }\n");
-    put("BAD.pcprog", "// pcprog: C\nint main() {\n    return y;\n}\n");
-    put("LOOP.cpp", "int main() { while (true) { } }\n");
-    r->home(); r->type("b");
-    r->key(pk::Home);
-    r->key(pk::Enter);                                                      // ASK (primo in ordine)
+    CHECK(screen<ProgramApp>(*r) == "edit");
+    r->key(pk::Esc);
+    CHECK(screen<ProgramApp>(*r) == "list");
+    put("PICOCALC/CODE/CPP/ASK.cpp", "#include <iostream>\nint main() { int n; std::cin >> n; std::cout << n * 2; fx::setVar(\"B\", n); return 0; }\n");
+    put("PICOCALC/CODE/CPP/BAD.cpp", "int main() {\n    return y;\n}\n");
+    put("PICOCALC/CODE/CPP/LOOP.cpp", "int main() { while (true) { } }\n");
+    r->key(pk::Esc); r->key(pk::Enter);                                     // fuori e dentro: l'elenco si aggiorna
+    r->key(pk::Home); r->key(pk::Enter);                                    // ASK (primo in ordine)
     r->settle();
     CHECK(screen<ProgramApp>(*r) == "input");
     r->enter("21");
@@ -228,7 +239,7 @@ void program(std::unique_ptr<testrig::Rig>& r) {
     CHECK(screen<ProgramApp>(*r) == "done" && r->ws().memory.recall('B') == 21);
     r->key(pk::Esc);
     r->key(pk::Home); r->key(pk::Down); r->key(pk::Enter);                  // BAD: errore con riga e cursore
-    CHECK(r->error() && r->errorDetail().find("riga 2") != std::string::npos);   // la riga del dialetto non conta
+    CHECK(r->error() && r->errorDetail().find("riga 2") != std::string::npos);
     r->closeError();
     CHECK(screen<ProgramApp>(*r) == "edit");
     r->key(pk::Esc);
@@ -240,7 +251,7 @@ void program(std::unique_ptr<testrig::Rig>& r) {
     r->closeError();
     r->home();
     reboot(r);
-    CHECK(r->ws().program.lastFile == "LOOP.cpp");
+    CHECK(r->ws().program.lastFile == "PICOCALC/CODE/CPP/LOOP.cpp");
 }
 
 void linkMode(std::unique_ptr<testrig::Rig>& r) {

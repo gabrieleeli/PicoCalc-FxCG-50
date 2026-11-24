@@ -14,6 +14,7 @@ namespace fx {
 namespace net { class ChatTransport; }
 namespace files { class FileSystem; }
 namespace link { class Port; }
+namespace net { class Fetcher; }
 
 namespace app {
 
@@ -38,6 +39,8 @@ public:
 #if FXAI_BOARD_PICO_PLUS_2W
     // v1.17.0 (Link): la USB seriale (nullptr se non c'e').
     virtual link::Port* serialPort() { return nullptr; }
+    // v1.20.0 (LIB): download HTTPS delle librerie (nullptr se non c'e').
+    virtual net::Fetcher* fetcher() { return nullptr; }
 #endif
 };
 
