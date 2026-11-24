@@ -107,7 +107,34 @@ INPUT, TEST, INTR, DIST). Tutti gli altri sono identici pixel per pixel.
 
 ## 8. Firmware e memoria
 
-FIRMWARE
+| Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| Immagine | **2 807 216 B** = 66 % della partizione da 4 MB (+181 744 B sulla v1.17.0; budget 3 774 873 B: restano 967 657 B) | **1 944 228 B** = 92 % della partizione da 2 MB, **identica** alla v1.17.0 salvo la stringa della versione e la data di compilazione (5 punti, nessun byte di codice); restano 120 156 B sotto il budget di 2 064 384 B |
+| RAM statica | 312 608 B fino a `__end__` = `0x2004C520` (+1 896 B: oggetti statici degli accessori e tabelle della vista); heap SRAM 178 912 B | 305 236 B (invariata); heap SRAM 186 284 B |
+| Oggetti esclusi nella mappa | 0 (tutto compilato) | 179 oggetti/simboli della Plus (anche `stat_engine`, `dist_core`, i controller nuovi, `FitTask`, `AnovaTask`, `DistributionApp`), nessuno nell'immagine |
+| Warning del compilatore | nessuno | nessuno |
+
+Flash dei moduli nuovi sulla Plus (oggetti della mappa e `arm-none-eabi-size`):
+
+| Modulo | Flash (B) |
+|---|---:|
+| `apps/statistics_plus_app.cpp` (editor, menu, moduli, lavori a passi) | 88 644 |
+| `stat_engine.cpp` (nucleo) | 77 662 |
+| `apps/stat_plot.cpp` (grafici) | 19 696 |
+| `apps/distribution_app.cpp` | 18 042 |
+| `dist_core.cpp` (24 distribuzioni, condiviso) | 15 316 |
+| `distribution.cpp` (sezione `0x0117`) | 7 303 |
+
+Il controller della v1.16.0 (`statistics_app.cpp`) non è più nell'immagine
+della Plus (è nell'`#else`), da qui la crescita netta minore della somma.
+Stack (`-fstack-usage`, Plus): frame più grandi del codice nuovo
+`stats::decode` 1 792 B e `stats::reset` 1 640 B (uno `PlusState` temporaneo:
+garanzia forte), `drawRegression` 976 B, `StatisticsApp::key` 880 B; il massimo
+del firmware resta `SystemApp::enter` (2 016 B). Nessuna ricorsione nuova salvo
+la ricerca delle radici di x̂ (profondità ≤ 4, grado del polinomio) e l'ordine
+delle formule delle liste (≤ 26 livelli).
+
+Dettagli e hash degli UF2: [BUILD_STATUS.md](../BUILD_STATUS.md).
 
 ## 9. Cancello
 
@@ -118,7 +145,7 @@ FIRMWARE
 | `--sanitize --tsan` | 62/62 e 54/54, TSan superato su entrambi |
 | Fuzzing ≥ 300 s per harness nuovo o toccato | 7 corse (1 nuovo, 5 toccati, `fuzz_eactivity` anche sui soli documenti), ognuna ≥ 300 s: nessun crash |
 | Simulatore | 134 identici, 3 rigenerati con il motivo, 27 nuovi |
-| Firmware | CANCELLO_FW |
+| Firmware | due schede `--clean`, nessun warning; Plus 66 % (< 90 %); Pico 2 W 1 944 228 B, identico alla v1.17.0 salvo versione e data |
 | Congelamento del Pico 2 W | `architecture_test` («Pico 2 W frozen at v1.16.0», 23 modalità, nessuna Base); immagine identica alla v1.17.0 salvo i 4 byte della stringa della versione |
 | Relay | 15/15 |
 | Documentazione | ANALISI_FONTI e SVILUPPO v1.18.0, STATISTICS, DISTRIBUTION, HARDWARE_TEST_v1.18.0, FEATURE_MATRIX, ROADMAP (Geometry alla v1.19.0, Program e Python alla v1.20.0/v1.21.0, le altre rinumerate), BUILD_STATUS, CHANGELOG, APPLICATIONS_ARCHITECTURE, STORAGE, FILE_FORMATS, TESTING, README, docs/README, releases/v1.18.0, CONTINUE, VERSION |
