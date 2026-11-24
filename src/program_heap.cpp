@@ -114,6 +114,7 @@ void Vm::markRoots(std::vector<Obj*>& work) {
     if (coutObj) work.push_back(coutObj);
     if (cinObj) work.push_back(cinObj);
     val(strtokState);
+    for (const auto& t : typeCache) if (t.second) work.push_back(t.second);
 }
 void Heap::collect() {
     if (collecting_) return;
@@ -839,8 +840,9 @@ Value Vm::castTo(const Value& v, TypeP t) {
                 a->esize = elemSize(a->ek);
                 a->count = static_cast<std::uint32_t>(n);
                 const std::size_t bytes = static_cast<std::size_t>(n) * a->esize;
+                if (a->data && bytes > a->rawBytes) { heap_.free(a->data); a->data = nullptr; }   // elementi piu' grandi dei byte riservati
                 if (bytes) {
-                    a->data = static_cast<std::uint8_t*>(heap_.raw(bytes, 8));
+                    if (!a->data) a->data = static_cast<std::uint8_t*>(heap_.raw(bytes, 8));
                     std::memset(a->data, 0, bytes);
                     if (!packed(k)) {
                         for (std::uint32_t i = 0; i < a->count; ++i) new (a->data + static_cast<std::size_t>(i) * sizeof(Value)) Value();

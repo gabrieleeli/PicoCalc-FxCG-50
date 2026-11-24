@@ -455,6 +455,7 @@ std::string Vm::format(const Value& v, Dialect d) {
                 if (cs) return "[" + format(x->fields[0], d) + ", " + format(x->fields[1], d) + "]";
                 return "(" + format(x->fields[0], d) + ", " + format(x->fields[1], d) + ")";
             }
+            if (cs && x->cls == prog_->typeClass && x->nfields > 1) return utf8(x->fields[1]);
             if (cs || java) {
                 auto it = x->cls->selectors.find(java ? "toString/0" : "ToString/0");
                 if (it != x->cls->selectors.end() && it->second->defined) {

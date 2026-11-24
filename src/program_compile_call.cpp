@@ -198,6 +198,7 @@ EV Compiler::callOverloads(const std::vector<Function*>& fns, const std::vector<
         if (lang_ == Dialect::CSharp || lang_ == Dialect::Java) {
             const bool argRef = (a->mods & (MRef | MOut)) != 0 || a->k == K::Declarator;
             if (argRef != byRef) return -1;
+            if (byRef && a->k == K::Declarator && p.type && p.type->k == TK::Dynamic && p.type->size == -2) return 0;   // out var x
             if (byRef) return stripRef(p.type) == stripRef(pt) ? 0 : -1;
         }
         if (byRef) {
@@ -264,11 +265,13 @@ EV Compiler::callOverloads(const std::vector<Function*>& fns, const std::vector<
         std::vector<std::pair<std::string, TypeP>> bind;
         for (std::size_t i = 0; i < targs.size() && i < names.size(); ++i) bind.push_back({names[i], targs[i]});
         bool ok = true;
+        // i parametri dati in <...> non si deducono: gli argomenti si convertono (maxi<double>(2.5, 1))
+        std::vector<std::string> deducible(names.begin() + static_cast<std::ptrdiff_t>(std::min(targs.size(), names.size())), names.end());
         // contesto del template per i tipi dei parametri
         auto saveT = tbind_;
         for (std::size_t i = 0; i < fn->list.size() && i < args.size() && ok; ++i) {
             if (!probes[i].type) continue;
-            ok = deduce(fn->list[i]->type, probes[i].type, bind, names);
+            ok = deduce(fn->list[i]->type, probes[i].type, bind, deducible);
         }
         tbind_ = saveT;
         if (!ok) continue;
@@ -1096,6 +1099,9 @@ EV Compiler::incdec(Node* n, bool pre, bool dec) {
 }
 
 EV Compiler::conditional(Node* n) {
+    // prima la condizione: i nomi dei pattern (o is Q q ? q.Area() : 0) valgono nei rami
+    condition(n->a);
+    const std::int32_t jz = emit(Op::Jz, 0);
     EV pa = exprType(n->b);
     EV pb = exprType(n->c);
     TypeP ta = stripRef(pa.type), tb = stripRef(pb.type);
@@ -1114,8 +1120,6 @@ EV Compiler::conditional(Node* n) {
         else if (ta->k == TK::Void && tb->k == TK::Void) rt = tVoid_;
         else error("i due rami di ?: hanno tipi diversi (" + typeName(ta) + " e " + typeName(tb) + ")", n->pos);
     } else if (ta->k == TK::Array && (lang_ == Dialect::C || lang_ == Dialect::Cpp)) rt = ptrTo(ta->elem);
-    condition(n->a);
-    const std::int32_t jz = emit(Op::Jz, 0);
     if (rt->k == TK::Void) discard(n->b); else rvalue(n->b, rt);
     const std::int32_t j = emit(Op::Jmp, 0);
     patch(jz, here());
@@ -1187,18 +1191,28 @@ EV Compiler::isExpr(Node* n) {
     EV v = expr(n->a);
     load(v, n->pos);
     if (t->k != TK::Class || !t->cls) {
-        if (isNumeric(t) || t->k == TK::Str) {
-            // x is int / x is string: controllo del tipo dinamico
-            emit(Op::CallN, nativeIndex("", "object", "#is", "bool(any,long)"), 2, 1);
-            fn_->code.pop_back();
-            fn_->pos.pop_back();
-            fn_->stmt.pop_back();
+        if (isNumeric(t) || t->k == TK::Str || t->k == TK::Bool || t->k == TK::Enum || t->k == TK::Nullable || t->k == TK::Array || t->k == TK::Native) {
+            // x is int / x is string / x is int n: controllo del tipo dinamico (e legame se vero)
+            const std::int32_t tmp = addLocal("", tObject_, n->pos).slot;
+            convert(v.type, tObject_, n->pos, true);
+            emit(Op::StoreL, tmp);
+            emit(Op::LoadL, tmp);
             pushInt(t->index, VK::I64);
             emit(Op::CallN, nativeIndex("", "object", "#is", "bool(any,long)"), 2, 1);
-            if (n->sym) error("pattern 'is T nome' con un tipo valore non supportato", n->pos);
+            if (n->sym) {
+                TypeP bt = t->k == TK::Nullable && t->elem ? t->elem : t;
+                LocalVar& lv = addLocal(syms_[n->sym], bt, n->pos);
+                const std::int32_t slot = lv.slot;
+                emit(Op::Dup);
+                const std::int32_t skip = emit(Op::Jz, 0);
+                emit(Op::LoadL, tmp);
+                convert(tObject_, bt, n->pos, true);
+                emit(Op::StoreL, slot);
+                patch(skip, here());
+            }
             return r;
         }
-        error("is vuole una classe", n->pos);
+        error("is vuole un tipo", n->pos);
     }
     if (n->sym) {
         LocalVar& lv = addLocal(syms_[n->sym], t, n->pos);
@@ -1337,9 +1351,9 @@ EV Compiler::newExpr(Node* n) {
         return r;
     }
     if (cfam) {
-        // new int(5): una cella sullo heap
+        // new int(5): una cella sullo heap (c = 5: esplicita, non un array: delete senza [])
         pushInt(1, VK::I64);
-        emit(Op::NewArr, t->index, 1, 1);
+        emit(Op::NewArr, t->index, 1, 5);
         if (!n->list.empty() || n->a) {
             emit(Op::Dup);
             pushInt(0, VK::I64);
@@ -1582,15 +1596,18 @@ EV Compiler::lambda(Node* n, TypeP want) {
     ClassInfo* saveCls = cls_;
     const bool saveStmt = stmtStart_;
     lambdas_.push_back(&lc);
-    // slot 0 = la chiusura; parametri da 1
+    // C++ [] senza catture: una funzione semplice (puntatore a funzione), parametri da 0;
+    // altrimenti slot 0 = la chiusura e parametri da 1
+    const bool plainFn = lang_ == Dialect::Cpp && n->list2.empty() && !n->flags;
+    const std::int32_t first = plainFn ? 0 : 1;
     beginFunction(f);
-    f->nlocals = 1 + static_cast<std::int32_t>(f->params.size());
+    f->nlocals = first + static_cast<std::int32_t>(f->params.size());
     for (std::size_t i = 0; i < f->params.size(); ++i) {
         LocalVar v;
         v.name = f->params[i].name;
         v.type = f->params[i].byRef ? f->params[i].type->elem : f->params[i].type;
         v.isRef = f->params[i].byRef;
-        v.slot = static_cast<std::int32_t>(i + 1);
+        v.slot = static_cast<std::int32_t>(i) + first;
         scopes_.back().vars.push_back(v);
         LocalInfo li; li.name = v.name; li.type = f->params[i].type; li.slot = v.slot; f->locals.push_back(li);
     }
@@ -1647,8 +1664,10 @@ EV Compiler::lambda(Node* n, TypeP want) {
             if (isValueType(v->type)) emit(Op::Copy, v->type->k == TK::Class && v->type->cls ? v->type->cls->id : -1);
         }
     }
-    if (lc.sources.empty() && lang_ == Dialect::Cpp && n->list2.empty() && !n->flags) emit(Op::PushFn, f->index);
-    else emit(Op::MkClosure, f->index, static_cast<std::uint8_t>(lc.sources.size()));
+    if (plainFn) {
+        if (!lc.sources.empty()) error("la lambda [] usa una variabile locale senza catturarla (scrivi [&] o [=])", n->pos);
+        emit(Op::PushFn, f->index);
+    } else emit(Op::MkClosure, f->index, static_cast<std::uint8_t>(lc.sources.size()));
     std::vector<TypeP> fps;
     for (const Param& p : f->params) fps.push_back(p.type);
     r.type = funcOf(f->ret, fps);

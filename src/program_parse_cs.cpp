@@ -29,12 +29,44 @@ public:
         Node* root = pool_.node(K::Unit, cur().pos);
         unit_.root = root;
         while (isWord("using") && !isP(peek(), LParen) && !(peek().t == T::Ident && isWord(peek(), "var"))) usingDirective(root->list);
+        // istruzioni di primo livello (C# 9): diventano Program.Main(string[] args); le
+        // funzioni locali di primo livello diventano metodi static di Program
+        Node* top = pool_.node(K::Class, cur().pos);
+        top->sym = syms_.intern("Program");
+        top->mods = MStatic | MInternal;
+        Node* body = pool_.node(K::Block, cur().pos);
         while (!atEnd()) {
             if (isWord("using") && !isP(peek(), LParen) && !isWord(peek(), "var") && !isWord(peek(), "static")) { usingDirective(root->list); continue; }
             if (isWord("namespace")) { root->list.push_back(namespaceDecl()); continue; }
             if (startsTypeDecl()) { root->list.push_back(typeDecl()); continue; }
-            // istruzioni di primo livello (C# 9)
-            root->list2.push_back(statement());
+            classStack_.push_back(top);
+            const bool saveStatic = staticCtx_;
+            staticCtx_ = true;
+            Node* st = statement();
+            staticCtx_ = saveStatic;
+            classStack_.pop_back();
+            if (st->k != K::Empty || st->ival != 1) body->list.push_back(st);
+        }
+        if (!body->list.empty() || !top->list.empty()) {
+            if (!body->list.empty()) {
+                Node* m = pool_.node(K::Func, body->list.front()->pos);
+                m->sym = syms_.intern("Main");
+                m->type = pool_.type(TF::Named, m->pos);
+                m->type->name = syms_.intern("void");
+                m->type->builtin = true;
+                m->mods = MStatic;
+                Node* prm = pool_.node(K::Param, m->pos);
+                prm->sym = syms_.intern("args");
+                TypeNode* st = pool_.type(TF::Named, m->pos);
+                st->name = syms_.intern("string");
+                st->builtin = true;
+                prm->type = pool_.type(TF::Array, m->pos);
+                prm->type->inner = st;
+                m->list.push_back(prm);
+                m->b = body;
+                top->list.push_back(m);
+            }
+            root->list.push_back(top);
         }
     }
 
@@ -168,6 +200,7 @@ public:
         expect(LBrace);
         const Sym saveClass = className_;
         className_ = c->sym;
+        classStack_.push_back(c);
         if (c->op == 4) {
             while (!isP(RBrace)) {
                 Node* e = pool_.node(K::Enumerator, cur().pos);
@@ -185,6 +218,7 @@ public:
             ++p_;
         }
         className_ = saveClass;
+        classStack_.pop_back();
         accept(Semi);
         return generic(c);
     }
@@ -381,6 +415,8 @@ public:
     }
     Node* methodBody(Node* f) {
         if (accept(Semi)) return nullptr;
+        struct StaticCtx { bool& r; bool s; ~StaticCtx() { r = s; } } guard{staticCtx_, staticCtx_};
+        staticCtx_ = (f->mods & MStatic) != 0;
         if (accept(FatArrow)) {
             Node* b = pool_.node(K::Block, cur().pos);
             Node* e = expression();
@@ -678,10 +714,18 @@ public:
                 n->a = statement();
                 return n;
             }
+            // funzione locale static: static int F(int x) => ...;
+            if (w == "static") {
+                const std::size_t save = p_;
+                ++p_;
+                TypeNode* t = nullptr;
+                if (tryTypeThenName(&t) && isP(peek(), LParen)) return localFunction(t, at, true);
+                p_ = save;
+            }
             // dichiarazione locale?
             TypeNode* t = nullptr;
             if (tryTypeThenName(&t)) {
-                if (isP(peek(), LParen) || (isP(peek(), Lt) && false)) error("funzioni locali non supportate: dichiarale come metodi della classe");
+                if (isP(peek(), LParen)) return localFunction(t, at, false);
                 Node* v = localDecl(t, at, 0);
                 expect(Semi);
                 return v;
@@ -690,6 +734,23 @@ public:
         Node* e = pool_.node(K::ExprStmt, at);
         e->a = expression();
         expect(Semi);
+        return e;
+    }
+    // Funzione locale: diventa un metodo (privato) della classe che la contiene,
+    // static se lo e' il metodo; usa i campi e i parametri propri, non le
+    // variabili locali del metodo (passale come parametri).
+    Node* localFunction(TypeNode* t, Pos at, bool isStatic) {
+        if (classStack_.empty()) error("funzione locale fuori da una classe");
+        Node* f = pool_.node(K::Func, at);
+        f->sym = ident("il nome della funzione locale");
+        f->type = t;
+        f->mods = MPrivate | ((isStatic || staticCtx_) ? MStatic : 0u);
+        f->list = parameters();
+        f->b = methodBody(f);
+        if (!f->b) error("funzione locale senza corpo");
+        classStack_.back()->list.push_back(f);
+        Node* e = pool_.node(K::Empty, at);
+        e->ival = 1;                                     // segnaposto della funzione locale
         return e;
     }
     Node* forStmt() {
@@ -731,7 +792,12 @@ public:
                 if (cur().t == T::Ident && !keyword(cur().sym)) c->sym = ident();
                 expect(RParen);
             }
-            if (isWord("when")) error("catch ... when non supportato");
+            if (acceptWord("when")) {
+                // filtro dell'eccezione: catch (E e) when (condizione)
+                expect(LParen);
+                c->b = expression();
+                expect(RParen);
+            }
             c->a = block();
             n->list.push_back(c);
         }
@@ -974,7 +1040,38 @@ public:
                 if (accept(LParen)) { n->type = type(); expect(RParen); }
                 return n;
             }
-            if (w == "typeof" || w == "nameof" || w == "sizeof" || w == "stackalloc" || w == "delegate" || w == "checked" || w == "unchecked")
+            if (w == "sizeof" || w == "typeof") {
+                // sizeof(int) = 4; typeof(T) -> System.Type (op = 1)
+                ++p_;
+                Node* n = pool_.node(K::SizeofType, at);
+                n->op = w == "typeof" ? 1 : 0;
+                expect(LParen);
+                n->type = type();
+                expect(RParen);
+                return n;
+            }
+            if (w == "nameof") {
+                // nameof(x), nameof(p.Campo), nameof(Classe.Metodo): l'ultimo nome, come testo
+                ++p_;
+                expect(LParen);
+                Sym last = 0;
+                int depth = 0;
+                while (depth > 0 || !isP(RParen)) {
+                    if (atEnd()) error("manca ')' di nameof");
+                    if (isP(LParen) || isP(Lt)) ++depth;
+                    else if (isP(RParen) || isP(Gt)) --depth;
+                    else if (cur().t == T::Ident && depth == 0) last = cur().sym;
+                    ++p_;
+                }
+                expect(RParen);
+                if (!last) error("nameof vuole un nome");
+                Node* n = pool_.node(K::StrLit, at);
+                unit_.strings.push_back(syms_[last]);
+                n->str = static_cast<std::uint32_t>(unit_.strings.size() - 1);
+                n->flags = 1;
+                return n;
+            }
+            if (w == "stackalloc" || w == "delegate" || w == "checked" || w == "unchecked")
                 error(w + " non supportato");
             if (w == "throw") { ++p_; Node* n = pool_.node(K::ThrowExpr, at); n->a = expression(); return n; }
             if (predefined(t)) {
@@ -1244,6 +1341,8 @@ public:
     int depth_{0};
     std::size_t polls_{0};
     Sym className_{0};
+    std::vector<Node*> classStack_;                     // classi aperte (funzioni locali)
+    bool staticCtx_{false};                             // corpo di un metodo static
     std::vector<std::pair<std::size_t, P>> splits_;
 };
 

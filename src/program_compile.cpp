@@ -94,7 +94,7 @@ std::string TypeRef::name() const {
     case TK::Class: case TK::Enum: return cls ? cls->name : "?";
     case TK::Nullable: return (elem ? elem->name() : std::string("?")) + "?";
     case TK::Func: return "funzione";
-    case TK::Dynamic: return size == -2 ? "auto" : "?";
+    case TK::Dynamic: return size == -2 ? "auto" : size >= 0x10000 ? std::to_string(size - 0x10000) : "?";
     case TK::Native: {
         static const char* const names[] = {"", "std::vector", "std::map", "std::set", "std::unordered_map", "std::unordered_set",
             "std::pair", "std::stack", "std::queue", "std::deque", "std::list", "std::ostream", "std::istream", "std::ifstream",
@@ -148,6 +148,7 @@ Compiler::Compiler(Program& prog, std::vector<Unit>& units, Symbols& syms, NodeP
     tVoidPtr_ = ptrTo(tVoid_);
     tCStr_ = ptrTo(tChar8_);
     TypeRef o; o.k = TK::Dynamic; o.size = -3; tObject_ = intern(o);   // object di C#: qualsiasi valore
+    TypeRef ai; ai.k = TK::Dynamic; ai.size = -4; tAnyIter_ = intern(ai);
     for (int i = 0; i < 3; ++i) { TypeRef m; m.k = TK::Dynamic; m.size = -10 - i; tArg_[i] = intern(m); }
     for (int i = 0; i < 3; ++i) { TypeRef m; m.k = TK::Dynamic; m.size = -13 - i; tElem_[i] = intern(m); }
     for (TK k : {TK::Void, TK::Bool, TK::C8, TK::C16, TK::I8, TK::U8, TK::I16, TK::U16, TK::I32, TK::U32, TK::I64, TK::U64, TK::F32, TK::F64})
@@ -346,7 +347,9 @@ NsEntry* Compiler::lookupGlobalName(const std::string& n, Namespace* from, Class
         if (it != ns->members.end()) return &it->second;
         for (Namespace* u : ns->usings) {
             const auto ui = u->members.find(n);
-            if (ui != u->members.end() && ui->second.kind != NsEntry::Namespace) return &ui->second;
+            // C++: using namespace geo rende visibili anche i namespace annidati (piano::area);
+            // C#: using System non importa System.Collections come "Collections"
+            if (ui != u->members.end() && (ui->second.kind != NsEntry::Namespace || lang_ == Dialect::Cpp)) return &ui->second;
         }
     }
     if (qualified) return lookupScoped(root_.get(), n);
@@ -468,6 +471,25 @@ void Compiler::setupNativeClasses() {
         f[static_cast<int>(FaultKind::NotImplemented)] = nie;
         f[static_cast<int>(FaultKind::Generic) + 20] = fxe;     // eccezioni della libreria fx
         (void)ane;
+        // System.Type di GetType(): Name e FullName (sola lettura)
+        ClassInfo* ty = newClass("Type", Dialect::CSharp);
+        ty->isNative = true;
+        ty->complete = true;
+        ty->isSealed = true;
+        for (const char* nm : {"Name", "FullName"}) {
+            FieldInfo fi; fi.name = nm; fi.type = tCsStr_; fi.access = Access::Public; fi.isReadonly = true; fi.owner = ty;
+            fi.slot = static_cast<std::int32_t>(ty->fields.size());
+            ty->fields.push_back(fi);
+        }
+        ty->slotCount = 2;
+        classType(ty);
+        nativeClasses_["cs:Type"] = ty;
+        NsEntry te;
+        te.kind = NsEntry::Class;
+        te.cls = ty;
+        namespaceFor(root_.get(), "System", true)->members["Type"] = te;
+        ty->qualified = "System::Type";
+        prog_.typeClass = ty;
     }
 }
 ClassInfo* Compiler::exceptionClass(Dialect d, const std::string& nm) {
@@ -565,6 +587,16 @@ TypeP Compiler::resolveType(TypeNode* t, bool allowVoid) {
         if (w == "string") return stringType(lang_ == Dialect::C ? Dialect::Cpp : lang_);
         if (w == "object") return tObject_;
         error("tipo '" + w + "' non supportato", t->pos);
+    }
+    // argomento intero di un template (Pila<int, 4>): segnaposto con il valore
+    if (w == "#value") {
+        std::int64_t v = 0;
+        if (!t->size || !constInt(t->size, v)) error("l'argomento del template deve essere una costante intera", t->pos);
+        if (v < 0 || v > 0x3FFFFFFF) error("argomento intero del template fuori campo (0..1073741823)", t->pos);
+        TypeRef r;
+        r.k = TK::Dynamic;
+        r.size = static_cast<std::int32_t>(v + 0x10000);
+        return intern(r);
     }
     // parametro di template legato
     if (t->qual.empty() && !t->inner) {

@@ -822,13 +822,107 @@ void objIs(Vm& vm, NativeCall& c) {
     TypeP t = ti >= 0 && static_cast<std::size_t>(ti) < vm.program().types.size() ? vm.program().typeAt(static_cast<std::int32_t>(ti)) : nullptr;
     bool r = false;
     if (t) {
+        if (t->k == TK::Nullable && t->elem) t = t->elem;          // x is int? / x as int?
         if (t->k == TK::Str) r = v.holdsObj() && (v.o->kind == OK::StrW || v.o->kind == OK::StrB);
-        else if (isNumeric(t) || t->k == TK::Bool) r = v.k == vkOf(t);
+        else if (t->k == TK::Enum) r = v.k == VK::I32 && v.f == 0x45 && t->cls && v.aux == static_cast<std::uint32_t>(t->cls->id);
+        else if (isNumeric(t) || t->k == TK::Bool) r = v.k == vkOf(t) && v.f != 0x45;
+        else if (t->k == TK::Array) r = v.holdsObj() && v.o->kind == OK::Array && (!t->elem || static_cast<const ArrayObj*>(v.o)->elem == t->elem);
+        else if (t->k == TK::Class && t->cls) r = v.holdsObj() && v.o->kind == OK::Inst && static_cast<const InstObj*>(v.o)->cls && static_cast<const InstObj*>(v.o)->cls->derivesFrom(t->cls);
+        else if (t->k == TK::Native) {
+            if (v.holdsObj()) {
+                switch (t->nk) {
+                case NK::CsList: case NK::CsQueue: case NK::CsStack: r = v.o->kind == OK::Vec; break;
+                case NK::CsDict: r = v.o->kind == OK::Map && !static_cast<const MapObj*>(v.o)->isSet; break;
+                case NK::CsHashSet: r = v.o->kind == OK::Map && static_cast<const MapObj*>(v.o)->isSet; break;
+                case NK::CsStringBuilder: r = v.o->kind == OK::Sb; break;
+                default: r = v.o->kind == OK::Native && static_cast<const NativeObj*>(v.o)->nk == t->nk; break;
+                }
+            }
+        } else if (t->k == TK::Dynamic) r = !v.isNull();
     }
     c.ret = Value::boolean(r);
 }
 void objToString(Vm& vm, NativeCall& c) { c.ret = vm.toLangString(c.args[0], vm.lang()); }
 void objToStringFmt(Vm& vm, NativeCall& c) { c.ret = str(vm, formatCsSpec(vm, c.args[0], S(vm, c, 1))); }
+// C#: un solo System.Type per nome completo, cosi' GetType() == typeof(T) confronta i riferimenti
+Value typeObject(Vm& vm, const std::string& name, const std::string& full) {
+    for (const auto& t : vm.typeCache) if (t.first == full) return Value::ref(t.second);
+    ClassInfo* tc = vm.program().typeClass;
+    if (!tc) vm.fault(FaultKind::NotSupported, "System.Type non disponibile");
+    InstObj* t = vm.newInstance(tc, false);
+    vm.typeCache.push_back({full, t});
+    t->fields[0] = str(vm, name);
+    t->fields[1] = str(vm, full);
+    return Value::ref(t);
+}
+// C#: GetType() -> System.Type con Name e FullName (come .NET per i tipi del sottoinsieme)
+void objGetType(Vm& vm, NativeCall& c) {
+    const Value& v = c.args[0];
+    std::string name, ns = "System";
+    switch (v.k) {
+    case VK::Null: case VK::Void: vm.fault(FaultKind::NullPointer, "GetType() su null");
+    case VK::Bool: name = "Boolean"; break;
+    case VK::C8: case VK::C16: name = "Char"; break;
+    case VK::I8: name = "SByte"; break;
+    case VK::U8: name = "Byte"; break;
+    case VK::I16: name = "Int16"; break;
+    case VK::U16: name = "UInt16"; break;
+    case VK::I32:
+        if (v.f == 0x45 && v.aux < vm.program().classes.size()) {
+            const ClassInfo* e = vm.program().classes[v.aux].get();
+            name = e->name;
+            ns.clear();
+            const std::size_t sep = e->qualified.rfind("::");
+            if (sep != std::string::npos) ns = e->qualified.substr(0, sep);
+        } else name = "Int32";
+        break;
+    case VK::U32: name = "UInt32"; break;
+    case VK::I64: name = "Int64"; break;
+    case VK::U64: name = "UInt64"; break;
+    case VK::F32: name = "Single"; break;
+    case VK::F64: name = "Double"; break;
+    case VK::Fn: name = "Delegate"; break;
+    default: {
+        const Obj* o = v.o;
+        if (!o) vm.fault(FaultKind::NullPointer, "GetType() su null");
+        switch (o->kind) {
+        case OK::StrW: case OK::StrB: name = "String"; break;
+        case OK::Sb: name = "StringBuilder"; ns = "System.Text"; break;
+        case OK::Array: {
+            const ArrayObj* a = static_cast<const ArrayObj*>(o);
+            const TypeRef* et = a->elem;
+            name = !et ? "Object" : et->k == TK::I32 ? "Int32" : et->k == TK::F64 ? "Double" : et->k == TK::Str ? "String" :
+                   et->k == TK::Bool ? "Boolean" : et->k == TK::C16 ? "Char" : et->k == TK::I64 ? "Int64" : et->name();
+            name += a->rank == 2 ? "[,]" : "[]";
+            break;
+        }
+        case OK::Vec: name = "List`1"; ns = "System.Collections.Generic"; break;
+        case OK::Map: name = static_cast<const MapObj*>(o)->isSet ? "HashSet`1" : "Dictionary`2"; ns = "System.Collections.Generic"; break;
+        case OK::Inst: {
+            const InstObj* x = static_cast<const InstObj*>(o);
+            if (!x->cls) { name = "KeyValuePair`2"; ns = "System.Collections.Generic"; break; }
+            name = x->cls->name;
+            const std::size_t lt = name.find('<');
+            if (lt != std::string::npos) {
+                // Pila<int> -> Pila`1
+                int n = 1, depth = 0;
+                for (std::size_t i = lt + 1; i < name.size(); ++i) { if (name[i] == '<') ++depth; else if (name[i] == '>') --depth; else if (name[i] == ',' && depth == 0) ++n; }
+                name = name.substr(0, lt) + "`" + std::to_string(n);
+            }
+            ns.clear();
+            std::string q = x->cls->qualified;
+            const std::size_t sep = q.rfind("::", q.find('<'));
+            if (sep != std::string::npos) ns = q.substr(0, sep);
+            break;
+        }
+        default: name = "Object"; break;
+        }
+    }
+    }
+    for (std::size_t p = ns.find("::"); p != std::string::npos; p = ns.find("::")) ns.replace(p, 2, ".");
+    c.ret = typeObject(vm, name, ns.empty() ? name : ns + "." + name);
+}
+void typeMake(Vm& vm, NativeCall& c) { c.ret = typeObject(vm, S(vm, c, 0), S(vm, c, 1)); }
 void objEquals(Vm& vm, NativeCall& c) { c.ret = Value::boolean(vm.equalValues(c.args[0], c.args[1])); }
 void objHash(Vm& vm, NativeCall& c) { c.ret = Value::i32(static_cast<std::int32_t>(vm.hashValue(c.args[0]))); }
 void objCompareTo(Vm& vm, NativeCall& c) {
@@ -1049,6 +1143,8 @@ const NativeEntry kCore[] = {
     {L::Cs, "", "object", "ToString", "string(string)", objToStringFmt, 0},
     {L::Cs, "", "object", "Equals", "bool(object)", objEquals, 0},
     {L::Cs, "", "object", "GetHashCode", "int()", objHash, 0},
+    {L::Cs, "", "object", "GetType", "class:Type()", objGetType, 0},
+    {L::Cs, "", "Type", "#make", "class:Type(string,string)", typeMake, St},
     {L::Cs, "", "object", "CompareTo", "int(object)", objCompareTo, 0},
     {L::Java, "", "object", "equals", "bool(object)", objEquals, 0},
     {L::Java, "", "object", "hashCode", "int()", objHash, 0},

@@ -156,6 +156,11 @@ int Compiler::convCost(TypeP from, TypeP to, const EV* src) const {
     TypeP toBase = to && to->k == TK::Ref ? to->elem : to;
     if (!from || !toBase) return -1;
     if (from == toBase) return 0;
+    if (toBase->k == TK::Dynamic && toBase->size == -4) {
+        // anyiter: iteratori di qualsiasi contenitore e puntatori (costruttori da un intervallo)
+        if (from->k == TK::Ptr || from->k == TK::Array || (from->k == TK::Native && (from->nk == NK::Iter || from->nk == NK::MapIter))) return 1;
+        return -1;
+    }
     if (toBase->k == TK::Dynamic) return toBase->size == -3 ? 3 : 1;   // object: dopo le conversioni vere
     if (from->k == TK::Dynamic) return 2;
     const bool cs = lang_ == Dialect::CSharp, java = lang_ == Dialect::Java, cfam = lang_ == Dialect::C || lang_ == Dialect::Cpp;
@@ -283,6 +288,12 @@ void Compiler::convert(TypeP from, TypeP to, Pos at, bool explicitCast, const EV
     switch (to->k) {
     case TK::Bool:
         if (cfam && (from->k == TK::Ptr || from->k == TK::Null || from->k == TK::Array || from->k == TK::Func)) { emit(Op::ToBool); return; }
+        if (lang_ == Dialect::Cpp && explicitCast && from->k == TK::Native &&
+            (from->nk == NK::IStream || from->nk == NK::OStream || from->nk == NK::IFStream || from->nk == NK::OFStream || from->nk == NK::FStream || from->nk == NK::StringStream)) {
+            // (bool)f, static_cast<bool>(cin): lo stato del flusso (operator bool esplicito)
+            callBuiltinOnStack("ios", "#bool", "bool(self)", 1, from);
+            return;
+        }
         break;
     case TK::Ptr: {
         if (from->k == TK::Null) return;
@@ -525,6 +536,7 @@ bool Compiler::constInt(Node* n, std::int64_t& out) {
     }
     case K::SizeofType: {
         if (!fn_ && !ns_) return false;
+        if (n->op == 1) return false;                       // typeof
         try { out = sizeOf(resolveType(n->type, false), n->pos); return true; } catch (const Error&) { return false; }
     }
     case K::Name: case K::Scope: case K::Member: {
@@ -675,6 +687,31 @@ EV Compiler::expr(Node* n) {
     case K::Cast: e = cast(n); break;
     case K::SizeofType: {
         TypeP t = resolveType(n->type, false);
+        if (n->op == 1) {
+            // typeof(T): lo stesso System.Type di GetType()
+            const auto [nm, full] = csTypeNames(t);
+            pushString(nm, lang_, false);
+            pushString(full, lang_, false);
+            emit(Op::CallN, nativeIndex("", "Type", "#make", "class:Type(string,string)"), 2, 1);
+            e.type = exceptionClass(Dialect::CSharp, "Type") ? classType(exceptionClass(Dialect::CSharp, "Type")) : tObject_;
+            break;
+        }
+        if (lang_ == Dialect::CSharp) {
+            // sizeof di C#: solo i tipi primitivi (e gli enum), risultato int
+            std::int64_t sz = 0;
+            switch (t->k) {
+            case TK::Bool: case TK::I8: case TK::U8: sz = 1; break;
+            case TK::C16: case TK::I16: case TK::U16: sz = 2; break;
+            case TK::I32: case TK::U32: case TK::F32: case TK::Enum: sz = 4; break;
+            case TK::I64: case TK::U64: case TK::F64: sz = 8; break;
+            default: error("sizeof(" + typeName(t) + ") non e' una costante in C# (solo i tipi primitivi)", n->pos);
+            }
+            pushInt(sz, VK::I32);
+            e.type = tI32_;
+            e.hasConst = true;
+            e.constValue = Value::i32(static_cast<std::int32_t>(sz));
+            break;
+        }
         if (t->k == TK::Class && t->cls) completeClass(t->cls);
         pushInt(sizeOf(t, n->pos), VK::U64);
         e.type = tU64_;
@@ -729,7 +766,19 @@ EV Compiler::expr(Node* n) {
         EV v = expr(n->a);
         load(v, n->pos);
         TypeP t = resolveType(n->type, false);
-        if (t->k != TK::Class || !t->cls || t->cls->valueType) error("as vuole una classe (riferimento)", n->pos);
+        if (t->k == TK::Str || t->k == TK::Nullable || t->k == TK::Array || t->k == TK::Native) {
+            // o as string, o as int?, o as int[], o as List<int>: il valore se il tipo e' giusto, altrimenti null
+            emit(Op::Dup);
+            pushInt(t->index, VK::I64);
+            emit(Op::CallN, nativeIndex("", "object", "#is", "bool(any,long)"), 2, 1);
+            const std::int32_t ok = emit(Op::Jnz, 0);
+            emit(Op::Pop);
+            emit(Op::PushNull);
+            patch(ok, here());
+            e.type = t;
+            break;
+        }
+        if (t->k != TK::Class || !t->cls || t->cls->valueType) error("as vuole un tipo riferimento o nullable", n->pos);
         emit(Op::DynCast, t->cls->id);
         e.type = t;
         break;
@@ -777,7 +826,7 @@ EV Compiler::expr(Node* n) {
     case K::TypeExpr: {
         e.cat = EV::TypeName;
         e.type = resolveType(n->type, false);
-        if (e.type->k == TK::Class) e.typeCls = e.type->cls;
+        if (e.type->k == TK::Class || e.type->k == TK::Enum) e.typeCls = e.type->cls;
         break;
     }
     case K::ThrowExpr: {
@@ -1024,6 +1073,67 @@ std::string Compiler::scopePath(const Node* n) const {
     if (n->k == K::TypeExpr && n->type) { std::string s; for (Sym q : n->type->qual) s += syms_[q] + "::"; return s + syms_[n->type->name]; }
     return "?";
 }
+// Nomi di System.Type come .NET (typeof(int).Name = "Int32", FullName = "System.Int32").
+std::pair<std::string, std::string> Compiler::csTypeNames(TypeP t) {
+    t = stripRef(t);
+    std::string name, ns = "System";
+    switch (t->k) {
+    case TK::Bool: name = "Boolean"; break;
+    case TK::C8: case TK::C16: name = "Char"; break;
+    case TK::I8: name = "SByte"; break;
+    case TK::U8: name = "Byte"; break;
+    case TK::I16: name = "Int16"; break;
+    case TK::U16: name = "UInt16"; break;
+    case TK::I32: name = "Int32"; break;
+    case TK::U32: name = "UInt32"; break;
+    case TK::I64: name = "Int64"; break;
+    case TK::U64: name = "UInt64"; break;
+    case TK::F32: name = "Single"; break;
+    case TK::F64: name = "Double"; break;
+    case TK::Str: name = "String"; break;
+    case TK::Void: name = "Void"; break;
+    case TK::Array: {
+        const auto inner = csTypeNames(t->elem);
+        const std::string dims = t->rank == 2 ? "[,]" : "[]";
+        return {inner.first + dims, inner.second + dims};
+    }
+    case TK::Class: case TK::Enum: {
+        name = t->cls ? t->cls->name : "Object";
+        const std::size_t lt = name.find('<');
+        if (lt != std::string::npos) {
+            int n = 1, depth = 0;
+            for (std::size_t i = lt + 1; i < name.size(); ++i) { if (name[i] == '<') ++depth; else if (name[i] == '>') --depth; else if (name[i] == ',' && depth == 0) ++n; }
+            name = name.substr(0, lt) + "`" + std::to_string(n);
+        }
+        ns.clear();
+        if (t->cls) {
+            const std::string& q = t->cls->qualified;
+            const std::size_t sep = q.rfind("::", q.find('<'));
+            if (sep != std::string::npos) ns = q.substr(0, sep);
+        }
+        break;
+    }
+    case TK::Native:
+        ns = "System.Collections.Generic";
+        switch (t->nk) {
+        case NK::CsList: name = "List`1"; break;
+        case NK::CsDict: name = "Dictionary`2"; break;
+        case NK::CsHashSet: name = "HashSet`1"; break;
+        case NK::CsQueue: name = "Queue`1"; break;
+        case NK::CsStack: name = "Stack`1"; break;
+        case NK::CsKvp: name = "KeyValuePair`2"; break;
+        case NK::CsStringBuilder: name = "StringBuilder"; ns = "System.Text"; break;
+        case NK::CsStreamReader: name = "StreamReader"; ns = "System.IO"; break;
+        case NK::CsStreamWriter: name = "StreamWriter"; ns = "System.IO"; break;
+        case NK::CsRandom: name = "Random"; ns = "System"; break;
+        default: name = "Object"; ns = "System"; break;
+        }
+        break;
+    default: name = "Object"; break;
+    }
+    for (std::size_t p = ns.find("::"); p != std::string::npos; p = ns.find("::")) ns.replace(p, 2, ".");
+    return {name, ns.empty() ? name : ns + "." + name};
+}
 // Membro statico di una classe (o di un tipo): Classe::x, Classe.Metodo, Enum.Valore.
 EV Compiler::staticMember(EV& left, const std::string& member, Node* n) {
     EV e;
@@ -1234,6 +1344,17 @@ EV Compiler::member(Node* n, bool arrow) {
         error("'.' su un puntatore: usa ->", n->pos);
     }
     base.type = t;
+    if (n->type2) {
+        // d.B::f(): B e' la classe dell'oggetto o una sua base; niente chiamata virtuale
+        TypeP q = resolveType(n->type2, false);
+        if (q->k != TK::Class || !q->cls || t->k != TK::Class || !t->cls) error("qualificazione " + typeName(q) + "::" + m + " non valida", n->pos);
+        bool ok = false;
+        for (ClassInfo* k = t->cls; k; k = k->base) if (k == q->cls) ok = true;
+        if (!ok) error(q->cls->name + " non e' una base di " + t->cls->name, n->pos);
+        base.type = q;
+        base.superCall = true;
+        return memberOfType(base, q, m, n);
+    }
     return memberOfType(base, t, m, n);
 }
 EV Compiler::memberOfType(EV& base, TypeP t, const std::string& m, Node* n) {

@@ -130,7 +130,20 @@ Value Vm::makeException(ClassInfo* c, const std::string& msg) {
     if (d == Dialect::CSharp || d == Dialect::Java) {
         if (k == FaultKind::Stack) fatal(d == Dialect::Java ? "StackOverflowError: " + msg : "StackOverflowException: " + msg);
         if (!c) c = prog_->faultClass[static_cast<int>(d)][static_cast<int>(FaultKind::Generic)];
-        if (c) throwValue(makeException(c, msg));
+        // C#: i messaggi standard di .NET per i guasti del linguaggio (e.Message come sul PC)
+        std::string text = msg;
+        if (d == Dialect::CSharp) {
+            switch (k) {
+            case FaultKind::Index: text = "Index was outside the bounds of the array."; break;
+            case FaultKind::DivZero: text = "Attempted to divide by zero."; break;
+            case FaultKind::NullPointer: case FaultKind::DeadPointer: text = "Object reference not set to an instance of an object."; break;
+            case FaultKind::Overflow: text = "Arithmetic operation resulted in an overflow."; break;
+            case FaultKind::Memory: text = "Insufficient memory to continue the execution of the program."; break;
+            case FaultKind::Cast: if (msg.rfind("Unable to cast", 0) != 0) text = "Specified cast is not valid."; break;
+            default: break;
+            }
+        }
+        if (c) throwValue(makeException(c, text));
     }
     if (d == Dialect::Cpp && k == FaultKind::Memory && c) throwValue(makeException(c, "std::bad_alloc"));
     // nomi della fx-CG50
@@ -230,6 +243,7 @@ bool Vm::readLine(std::string& out) {
     for (;;) {
         if (abortRequested) throw ProgramAbort{};
         if (host_.readLine(out)) { waitingInput = false; return true; }
+        if (host_.inputEnded()) { waitingInput = false; inputEof = true; return false; }
         waitingInput = true;
         if (!coroutine || !coroutine->inside()) { waitingInput = false; return false; }
         coroutine->yield();
@@ -810,6 +824,12 @@ void Vm::execute(std::size_t stopDepth) {
                     const std::uint32_t tix = in.c >> 1;
                     call.type = tix && tix < prog_->types.size() ? prog_->typeAt(static_cast<std::int32_t>(tix)) : nullptr;
                     const std::size_t mark = temps_.size();
+                    if ((f->lang == Dialect::CSharp || f->lang == Dialect::Java) && in.b > 0 && call.args[0].k == VK::Null) {
+                        // metodo d'istanza della libreria su null: NullReferenceException / NullPointerException
+                        const NativeEntry& ne = nativeEntry(in.a);
+                        if (!(ne.flags & (NF::Static | NF::Ctor)) && ne.owner[0] && ne.owner[0] != '#' && ne.name[0] != '#' && std::strcmp(ne.owner, "nullable") != 0)
+                            fault(FaultKind::NullPointer, std::string("chiamata di ") + ne.name + " su null");
+                    }
                     ++nativeDepth;
                     try {
                         nativeAt(in.a)(*this, call);
@@ -886,7 +906,7 @@ void Vm::execute(std::size_t stopDepth) {
                         return outer;
                     };
                     ArrayObj* a = build(0, et);
-                    if (explicitAlloc) a->flags |= FArrayNew;
+                    if (explicitAlloc && !(in.c & 4)) a->flags |= FArrayNew;
                     FX_PUSH(Value::ref(a));
                     break;
                 }
@@ -964,6 +984,13 @@ void Vm::execute(std::size_t stopDepth) {
                     if (!ok) {
                         if (in.op == Op::DynCast) { S[sp - 1] = v.k == VK::Ptr ? Value::null() : Value::null(); break; }
                         if (in.b == 1) raise("bad_cast", "std::bad_cast");
+                        if (f->lang == Dialect::CSharp) {
+                            std::string from = o && o->kind == OK::Inst && static_cast<InstObj*>(o)->cls ? static_cast<InstObj*>(o)->cls->qualified : std::string("System.Object");
+                            if (o && (o->kind == OK::StrW || o->kind == OK::StrB)) from = "System.String";
+                            std::string to = c->qualified;
+                            for (std::string* t : {&from, &to}) for (std::size_t q = t->find("::"); q != std::string::npos; q = t->find("::")) t->replace(q, 2, ".");
+                            fault(FaultKind::Cast, "Unable to cast object of type '" + from + "' to type '" + to + "'.");
+                        }
                         fault(FaultKind::Cast, "impossibile convertire un oggetto di tipo " + std::string(o && o->kind == OK::Inst ? static_cast<InstObj*>(o)->cls->name : "?") + " in " + c->name);
                     }
                     break;
@@ -993,7 +1020,9 @@ void Vm::execute(std::size_t stopDepth) {
                 case Op::Halt: frames.resize(stopDepth); break;
                 default: fatal("Syntax ERROR: istruzione non valida");
                 }
-                if (temps_.size() > tempMark && nativeDepth == 0) unroot(tempMark);
+                // i temporanei dell'istruzione tornano liberi; quelli dei nativi che hanno
+                // chiamato questo ciclo (sotto tempMark) restano radici
+                if (temps_.size() > tempMark) unroot(tempMark);
             }
             return;
         } catch (ProgramThrow& t) {

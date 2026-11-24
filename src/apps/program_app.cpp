@@ -1279,6 +1279,13 @@ void ProgramApp::key(Context& ctx, const KeyEvent& ev) {
                 v.input.clear();
                 return;
             }
+            if (ev.ctrl && ev.key == Key::Char && (ev.ch == 'd' || ev.ch == 'D')) {
+                // Ctrl+D: fine dell'input (EOF), dopo l'eventuale riga gia' scritta
+                if (!v.input.text().empty()) { v.host->output += v.input.text() + "\n"; v.host->input.push_back(v.input.text()); v.input.clear(); }
+                v.host->output += "^D\n";
+                v.host->endOfInput = true;
+                return;
+            }
             (void)v.input.key(ev);
             return;
         }

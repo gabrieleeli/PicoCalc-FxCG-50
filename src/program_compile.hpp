@@ -291,6 +291,7 @@ public:
     std::map<std::string, TypeP> typeIndex_;
     TypeP tVoid_{}, tBool_{}, tChar8_{}, tChar16_{}, tI8_{}, tU8_{}, tI16_{}, tU16_{}, tI32_{}, tU32_{}, tI64_{}, tU64_{}, tF32_{}, tF64_{};
     TypeP tNull_{}, tDyn_{}, tCppStr_{}, tCsStr_{}, tVoidPtr_{}, tCStr_{}, tObject_{};
+    TypeP tAnyIter_{};                                  // firme native: un iteratore o un puntatore qualsiasi
     TypeP tArg_[3] = {};                       // firme native: "arg0"... = tipo dell'argomento
     TypeP tElem_[3] = {};                      // firme native: "E0"... = tipo dell'elemento dell'argomento
     TypeP substMarkers(TypeP t, const std::vector<EV>& probes);
@@ -411,6 +412,7 @@ public:
     EV entryValue(NsEntry* ent, const std::string& nm, ast::Node* n);
     std::string scopePath(const ast::Node* n) const;
     EV staticMember(EV& left, const std::string& member, ast::Node* n);
+    std::pair<std::string, std::string> csTypeNames(TypeP t);    // Name e FullName di System.Type
     EV nativeMember(const std::vector<std::int32_t>& nat, TypeP t, const std::string& m, ast::Node* n);
     std::string headerHint(const std::string& nm) const;
     EV construct(TypeP t, const std::vector<ast::Node*>& args, ast::Pos at, bool braces);

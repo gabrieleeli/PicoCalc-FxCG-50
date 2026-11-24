@@ -333,6 +333,7 @@ public:
     // Classi del nucleo usate dalla macchina (eccezioni per i guasti del linguaggio).
     ClassInfo* faultClass[DialectCount][24] = {};
     ClassInfo* exceptionRoot[DialectCount] = {};
+    ClassInfo* typeClass{nullptr};                       // System.Type di C# (GetType())
     std::size_t sourceBytes{0};
     // Tipi di base per le funzioni native (creati dal compilatore).
     const TypeRef* prim[16] = {};                        // per TK (Void ... F64)

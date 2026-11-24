@@ -291,7 +291,8 @@ void Compiler::declareVariables(Namespace* ns, Node* n, ClassInfo* owner) {
         if (owner && !isStatic) {
             if (t->k == TK::Dynamic && t->size == -2) error("auto non e' ammesso per i campi", d->pos);
             if (t->k == TK::Array && t->size == -4) error("un campo array vuole una dimensione costante", d->pos);
-            if (t->k == TK::Class && t->cls == owner) error("la classe " + owner->name + " non puo' contenere se stessa (usa un puntatore)", d->pos);
+            // per valore (C/C++, struct di C#) una classe non contiene se stessa; i riferimenti di C# e Java si'
+            if (t->k == TK::Class && t->cls == owner && owner->valueType) error("la classe " + owner->name + " non puo' contenere se stessa (usa un puntatore)", d->pos);
             FieldInfo f;
             f.name = nm;
             f.type = t;

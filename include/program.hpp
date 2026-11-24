@@ -122,6 +122,8 @@ public:
     virtual void print(const std::string& text) = 0;                    // testo sul display (con '\n')
     // Una riga digitata: false se non c'e' ancora (la macchina aspetta).
     virtual bool readLine(std::string& out) = 0;
+    // Fine dell'input (Ctrl+D nella console): readLine() non dara' altre righe.
+    virtual bool inputEnded() { return false; }
     virtual void clearText() {}
     virtual void locate(int column, int row, const std::string& text) { (void)column; (void)row; print(text); }
     virtual int getKey() { return 0; }                                  // codice del Getkey, 0 = nessun tasto
@@ -213,6 +215,7 @@ public:
     explicit WorkspaceHost(Workspace& ws) : ws_(ws) {}
     void print(const std::string& text) override { output += text; }
     bool readLine(std::string& out) override;
+    bool inputEnded() override { return endOfInput && input.empty(); }
     void clearText() override { output.clear(); }
     void graphics(const std::string& command) override;
     double calc(const std::string& expression, const std::vector<std::pair<std::string, double>>& locals) override;
@@ -231,6 +234,7 @@ public:
     std::uint32_t millis() override { return clock; }
     std::string output;
     std::vector<std::string> input;
+    bool endOfInput{false};                             // dopo `input` arriva la fine (EOF)
     std::vector<std::string> commands;                  // comandi grafici eseguiti
     files::FileSystem* fs{nullptr};                     // file del programma (test: RamFileSystem)
     std::string folder;                                 // cartella del programma

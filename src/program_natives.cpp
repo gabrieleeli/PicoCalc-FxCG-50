@@ -184,6 +184,7 @@ TypeP Compiler::parseSig(const char* sig, std::vector<TypeP>& params, bool& vari
         else if (t == "voidptr") r = tVoidPtr_;
         else if (t == "file") r = ptrTo(nativeOf(NK::CFile, {}));
         else if (t == "any" || t == "func") r = tDyn_;
+        else if (t == "anyiter") r = tAnyIter_;
         else if (t == "object") r = cs ? tObject_ : tDyn_;
         else if (t == "self") r = recvBase ? recvBase : tDyn_;
         else if (t == "T") r = targs.size() > 0 ? targs[0] : tDyn_;

@@ -269,6 +269,7 @@ public:
     std::uint32_t randState{1};                  // rand() del C
     bool randSeeded{false};
     Value strtokState;                           // strtok: posizione nella stringa
+    std::vector<std::pair<std::string, Obj*>> typeCache;   // C#: un System.Type per tipo (== per riferimento)
     std::string lastIoError;                     // perror / errno
     int lastErrno{0};
     int nativeDepth{0};

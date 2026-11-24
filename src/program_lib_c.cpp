@@ -442,6 +442,12 @@ void cMalloc(Vm& vm, NativeCall& c) {
     try {
         ArrayObj* a = vm.newArray(vm.program().prim[static_cast<int>(TK::Void)], static_cast<std::uint32_t>(n), true);
         a->flags |= FExplicit;
+        // i byte si riservano subito: senza memoria malloc restituisce NULL (il blocco prende
+        // il tipo alla prima conversione e riusa questa memoria)
+        if (n > 0) {
+            a->data = static_cast<std::uint8_t*>(vm.heap().raw(static_cast<std::size_t>(n), 8));
+            a->bytes += static_cast<std::uint32_t>(std::min<std::int64_t>(n, 0xFFFFFFFF));
+        }
         c.ret = Value::ptr(a, 0);
     } catch (std::bad_alloc&) {
         c.ret = Value::null();
@@ -484,6 +490,7 @@ void cRealloc(Vm& vm, NativeCall& c) {
     try {
         if (a->ek == VK::Void) {
             b = vm.newArray(vm.program().prim[static_cast<int>(TK::Void)], static_cast<std::uint32_t>(n), true);
+            b->data = static_cast<std::uint8_t*>(vm.heap().raw(static_cast<std::size_t>(n), 8));
         } else {
             const std::int64_t es = vm.sizeOfType(a->elem);
             if (es <= 0 || n % es != 0) vm.fault(FaultKind::Argument, "realloc di " + std::to_string(n) + " byte non e' un multiplo di sizeof(" + (a->elem ? a->elem->name() : std::string("?")) + ")");

@@ -107,6 +107,10 @@ private:
         return false;
     }
     bool knownTemplate(const std::string& path) const { return lookup(templates_, path); }
+    bool isTParam(const std::string& path) const {
+        for (const auto& tp : tparams_) for (Sym s : tp) if (syms_[s] == path) return true;
+        return false;
+    }
     bool lookup(const std::set<std::string>& set, const std::string& path) const {
         // classe e namespace che racchiudono (dal piu' interno), poi la radice, poi using namespace
         std::vector<std::string> scopes;
@@ -310,7 +314,9 @@ private:
             }
             if (isP(Scope) && peek().t == T::Ident) {
                 const std::string longer = path + "::" + syms_[peek().sym];
-                if (knownType(longer) || nsKnown(path) || !t->args.empty() || knownType(path)) {
+                // Tipo::nome e' un tipo solo se lo e' il percorso completo (Col::Verde, B::s() sono valori;
+                // T::value_type di un parametro del template resta un tipo dipendente)
+                if (knownType(longer) || nsKnown(path) || !t->args.empty() || isTParam(path)) {
                     if (!t->args.empty()) {
                         // Nome<T>::membro: tipo annidato del template (iterator...)
                         t->qual.push_back(s);
@@ -344,7 +350,11 @@ private:
                 // argomento intero (template<int N>)
                 TypeNode* v = pool_.type(TF::Named, cur().pos);
                 v->name = syms_.intern("#value");
-                v->size = conditional();
+                // il '>' chiude gli argomenti (Pila<int, 4> p): non e' un confronto
+                const bool saved = noGt_;
+                noGt_ = true;
+                v->size = binary(1);
+                noGt_ = saved;
                 args.push_back(v);
             }
             if (isP(Gt)) { ++p_; break; }
@@ -1238,6 +1248,7 @@ private:
             const P p = cur().p;
             const int pr = precOf(p);
             if (pr < 0 || pr < minPrec) break;
+            if (noGt_ && (p == Gt || p == Shr)) break;
             Node* n = pool_.node(K::Binary, cur().pos);
             ++p_;
             n->op = p;
@@ -1549,6 +1560,13 @@ private:
                 else if (cpp_ && isWord("template")) { ++p_; m->sym = ident(); }
                 else if (cpp_ && isWord("operator")) m->sym = operatorName();
                 else m->sym = ident("il nome di un membro");
+                // d.B::f(): membro della classe base B, chiamata non virtuale
+                while (cpp_ && isP(Scope) && peek().t == T::Ident) {
+                    if (!m->type2) { m->type2 = pool_.type(TF::Named, at); m->type2->name = m->sym; }
+                    else { m->type2->qual.push_back(m->type2->name); m->type2->name = m->sym; }
+                    ++p_;
+                    m->sym = ident("il nome di un membro");
+                }
                 if (isP(Lt) && templateArgsAhead() && knownTemplate(syms_[m->sym])) m->targs = templateArgs();
                 e = m;
                 continue;
@@ -1590,6 +1608,7 @@ private:
     Symbols& syms_;
     NodePool& pool_;
     bool cpp_{false};
+    bool noGt_{false};                                  // dentro gli argomenti di un template
     std::size_t p_{0};
     int depth_{0};
     std::size_t polls_{0};

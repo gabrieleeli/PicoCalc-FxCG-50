@@ -754,6 +754,9 @@ void Compiler::returnStmt(Node* n) {
         (void)a;
     } else if (n->a->k == K::InitList) {
         initFromList(rt, n->a, n->a->pos);
+    } else if (n->a->k == K::Lambda) {
+        // return x => ...: i tipi dei parametri dal tipo del risultato (Func<int, Func<int, int>>)
+        rvalue(n->a, rt);
     } else {
         EV e = expr(n->a);
         // restituire una variabile locale per valore: niente copia, niente distruttore
@@ -797,6 +800,53 @@ void Compiler::tryStmt(Node* n) {
     std::vector<std::int32_t> exits;
     exits.push_back(emit(Op::Jmp, 0));
     std::vector<Handler> catches;
+    bool filtered = false;
+    for (Node* c : n->list) if (c->b) filtered = true;
+    if (filtered && (lang_ == Dialect::CSharp || lang_ == Dialect::Java)) {
+        // catch ... when (filtro): un solo gestore che prova le clausole in ordine;
+        // se nessuna accetta, l'eccezione prosegue (rilancio con la pila originale)
+        Handler h;
+        h.start = tryStart;
+        h.end = tryEnd;
+        h.target = here();
+        h.catches = prog_.exceptionRoot[static_cast<int>(lang_)];
+        pushScope();
+        LocalVar& tmp = addLocal("", tObject_, n->pos);
+        const std::int32_t tmpSlot = tmp.slot;
+        h.slot = tmpSlot;
+        catches.push_back(h);
+        for (Node* c : n->list) {
+            std::vector<std::int32_t> skip;
+            pushScope();
+            TypeP ct = tObject_;
+            if (c->type) {
+                ct = stripRef(resolveType(c->type, false));
+                if (ct->k != TK::Class || !ct->cls || !ct->cls->isException) error("catch vuole una classe di eccezione", c->pos);
+                completeClass(ct->cls);
+                emit(Op::LoadL, tmpSlot);
+                emit(Op::InstOf, ct->cls->id);
+                skip.push_back(emit(Op::Jz, 0));
+            }
+            if (c->sym) {
+                LocalVar& v = addLocal(syms_[c->sym], ct, c->pos);
+                emit(Op::LoadL, tmpSlot);
+                emit(Op::StoreL, v.slot);
+            }
+            if (c->b) {
+                setPos(c->b->pos);
+                condition(c->b);
+                skip.push_back(emit(Op::Jz, 0));
+            }
+            catchSlots_.push_back(tmpSlot);
+            block(c->a);
+            catchSlots_.pop_back();
+            popScope();
+            exits.push_back(emit(Op::Jmp, 0));
+            for (std::int32_t x : skip) patch(x, here());
+        }
+        emit(Op::Rethrow, tmpSlot);
+        popScope();
+    } else
     for (Node* c : n->list) {
         Handler h;
         h.start = tryStart;
