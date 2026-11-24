@@ -1,0 +1,38 @@
+// Generatore della fixture geometry_v1_17_0.inc (sorgenti della v1.17.0/v1.18.0, commit a7c861b, profilo Pico Plus 2 W).
+// Sezione 0x0110 e file .pcgeo (con l'intestazione dei file tipizzati) scritti dal nucleo di Geometry
+// della v1.17.0 (formato 1: coordinate copiate in ogni oggetto), per il test di migrazione della v1.19.0.
+#include "geometry.hpp"
+#include "typed_files.hpp"
+#include "workspace.hpp"
+#include <cstdio>
+#include <memory>
+using namespace fx;
+static void dump(const char* name, const std::vector<std::uint8_t>& b) {
+    std::printf("const unsigned char %s[] = {\n", name);
+    for (std::size_t i = 0; i < b.size(); ++i) std::printf("0x%02X,%s", b[i], (i % 20 == 19) ? "\n" : "");
+    std::printf("\n};\n");
+}
+int main() {
+    geo::State s;
+    geo::add(s, geo::Object{geo::Kind::Point, {-3, 1}});
+    geo::add(s, geo::Object{geo::Kind::Segment, {0, 0, 3, 4}});
+    geo::add(s, geo::Object{geo::Kind::Line, {0, -5, 1, -4}});
+    geo::add(s, geo::Object{geo::Kind::Circle, {5, 5, 5, 7}});
+    geo::add(s, geo::Object{geo::Kind::Polygon, {0, 0, 4, 0, 4, 3, 0, 3}});
+    s.view.cx = 1.5; s.view.cy = -0.5; s.view.scale = 36;
+    s.file = "SCUOLA.pcgeo";
+    std::vector<std::uint8_t> section;
+    geo::encode(s, section);
+    const auto file = files::encodeTypedFile(files::FileType::Geometry, geo::encodeFile(s));
+    auto ws = std::make_unique<Workspace>();
+    ws->geometry = s;
+    const auto rec = serializeWorkspace(*ws);
+    std::printf("// Geometry della v1.17.0 (formato 1), generata con i sorgenti a7c861b (v1.18.0, nucleo di Geometry invariato\n");
+    std::printf("// dalla v1.17.0), profilo Pico Plus 2 W: punto (-3,1), segmento (0,0)-(3,4), retta (0,-5)-(1,-4),\n");
+    std::printf("// circonferenza centro (5,5) per (5,7), rettangolo (0,0) (4,0) (4,3) (0,3); vista (1.5, -0.5) scala 36; file SCUOLA.pcgeo.\n");
+    std::printf("// kGeometryV1Section: sezione 0x0110; kGeometryV1File: file .pcgeo completo; kGeometryV1Record: record v12 del workspace.\n");
+    dump("kGeometryV1Section", section);
+    dump("kGeometryV1File", file);
+    dump("kGeometryV1Record", rec);
+    return 0;
+}
