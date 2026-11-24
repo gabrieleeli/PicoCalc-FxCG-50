@@ -56,5 +56,6 @@ printf '\002\012\001\002\003\004\005\006\007\010\011\012\012\002\003\005\007\013
 printf '\003\001\001\010\001\002\003\004\005\006\007\010\005\012\002\003\004\005\006' > "$C/stats/test"
 printf '\004\014\001\001\001\002\002\002\003\003\003\001\002\003' > "$C/stats/anova"
 printf '\005\001\000\001\000\002\001\003' > "$C/stats/dist"; printf '\001\001\001\000\000\000\000\000\000\000\000\000\000\000\000\000' > "$C/stats/dmode"
+for f in "$ROOT"/tests/fixtures/fuzz/fuzz_stats_*; do if [ -f "$f" ]; then cp "$f" "$C/stats/"; fi; done   # casi gia' trovati
 [ -x "$B/fuzz_stats" ] && run fuzz_stats stats 2000
 ls "$B"/artifacts/*/ 2>/dev/null
