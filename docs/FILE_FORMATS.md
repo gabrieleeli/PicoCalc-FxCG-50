@@ -142,6 +142,14 @@ porta, rumore) vengono scartati e il ricevitore si risincronizza sul prossimo
 `0x7E 'P'`. Lo stesso formato è scritto in Python in `tools/picocalc_link.py`
 ([LINK.md](LINK.md)).
 
+## Statistics e Distribution (v1.18.0, solo Pimoroni Pico Plus 2 W)
+
+Nessun tipo di file nuovo: lo stato di Statistics (StatGraph, SET, SET UP,
+colori e formule delle liste, risultati) è nella sezione `0x0101` del record
+v12 e quello di Distribution nella sezione `0x0117`
+([STORAGE.md](STORAGE.md)); le liste continuano a uscire e a entrare in CSV
+(`PICOCALC/CSV`) e i risultati vanno nelle liste con Save Res.
+
 ## File di testo
 
 I sorgenti di Program (C, C++, C#) e gli script Python non hanno intestazione

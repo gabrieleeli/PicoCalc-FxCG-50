@@ -123,6 +123,21 @@ int main() {
         auto* st = r.active<app::StatisticsApp>();
         CHECK(st != nullptr);
         for (int i = 0; i < 25; ++i) r.key(pckey::Right);                    // colonna di List 26
+#if FXAI_BOARD_PICO_PLUS_2W
+        // v1.18.0: editor delle liste della Plus (stesso comportamento, accessori propri)
+        CHECK(st && st->cursorColumn() == 25 && st->firstColumn() > 0);
+        r.enter("4"); r.enter("8");
+        CHECK(r.ws().lists[25] == std::vector<double>({4, 8}));
+        r.key(pckey::Up); r.key(pckey::Up); r.key(pckey::Up);                // riga SUB sopra la prima cella
+        CHECK(st && st->cursorRow() == app::StatisticsApp::SubRow);
+        r.enter("QTY");
+        CHECK(r.ws().listName(25) == "QTY");
+        CHECK(st && st->cursorRow() == 0);                                    // EXE scende alla prima cella
+        r.ws().statistics.var1X = 25;                                         // SET di CALC: 1Var XList = List 26
+        r.key(pckey::F2); r.key(pckey::F1);                                   // CALC > 1-VAR
+        CHECK(!r.error() && st && st->screen() == app::StatisticsApp::Screen::Results);
+        CHECK(st && st->results().title == "1-Variable  (List 26)");
+#else
         CHECK(st && st->grid().col == 25 && st->grid().firstColumn() > 0);
         r.enter("4"); r.enter("8");
         CHECK(r.ws().lists[25] == std::vector<double>({4, 8}));
@@ -136,11 +151,15 @@ int main() {
         r.key(pckey::F2); r.key(pckey::Enter);                                  // CALC > 1-Var
         CHECK(!r.error() && st && st->screen() == app::StatisticsApp::Screen::Results);
         CHECK(st && st->results().title == "1-Variable (List26)");
+#endif
         bool mean6 = false;
         if (st) for (const auto& row : st->results().rows) if (row.second == "6") mean6 = true;
         CHECK(mean6);
         r.key(pckey::Esc);
         r.ws().settings.statXList = 0;
+#if FXAI_BOARD_PICO_PLUS_2W
+        r.ws().statistics.var1X = 0;
+#endif
         r.home();
     }
     // ================================================================ CSV: codifica e decodifica

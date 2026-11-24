@@ -13,6 +13,10 @@
 #include "table_model.hpp"
 #include "pict.hpp"
 #include "statistics.hpp"
+#if FXAI_BOARD_PICO_PLUS_2W
+#include "dist_core.hpp"
+#include "stat_engine.hpp"
+#endif
 #include "step_task.hpp"
 #include "mode_shell.hpp"
 #include "eactivity.hpp"
@@ -499,6 +503,75 @@ private:
     bool recallValid_{false};
 };
 
+#if FXAI_BOARD_PICO_PLUS_2W
+// v1.18.0 (solo Pimoroni Pico Plus 2 W): STATISTICS alla parita' del capitolo 6
+// (statistics_plus_app.cpp, stat_plot.cpp; nucleo stat_engine.hpp e dist_core.hpp):
+// editor delle liste a tre pagine (SRT-A/D su piu' liste, DEL, DEL-ALL, INS,
+// ADD, JUMP, colori, formule nella testa, List File, CSV), StatGraph1-3 con
+// SET/SELECT/Stat Wind/TRACE/V-Window, CALC 1/2-Var e 12 regressioni con
+// residui e COPY, TEST, INTR e DIST con Save Res e DRAW, SET UP della modalita';
+// i lavori lunghi (Sin/Logistic, ANOVA, inverse e liste della DIST) in step::Task con AC.
+// La vista esiste solo mentre la modalita' e' aperta (pImpl).
+class StatisticsApp final : public App {
+public:
+    StatisticsApp();
+    ~StatisticsApp() override;
+    AppId id() const override { return AppId::Statistics; }
+    void enter(Context& ctx) override;
+    void leave(Context& ctx) override;
+    void key(Context& ctx, const KeyEvent& ev) override;
+    void draw(Context& ctx, gfx::Canvas& c) override;
+    bool tick(Context& ctx) override;
+    bool ownsSetup() const override { return true; }
+    enum class Screen { Lists, Results, Graph, Form, Set, Select, CalcSet, Setup, VWindow, HistAsk, Copy, Running, DistGraph, Interaction };
+    Screen screen() const noexcept;
+    std::string screenName() const;                        // test, simulatore
+    const ResultList& results() const noexcept;
+    int cursorRow() const noexcept;                         // riga dell'editor (-1 SUB, -2 testa della lista)
+    int cursorColumn() const noexcept;
+    int firstColumn() const noexcept;
+    const Form& form() const noexcept;
+    const FileDialog& fileDialog() const noexcept;
+    const char* const* softKeyLabels(Context& ctx) const;  // etichette F1-F6 mostrate (test)
+    std::size_t drawnPlots() const noexcept;                // grafici dell'ultimo disegno (test)
+    std::string traceText() const;                          // riga del TRACE (test)
+    static constexpr int SubRow = -1, HeadRow = -2;
+    struct View;
+private:
+    std::unique_ptr<View> v_;
+};
+
+// v1.18.0: disegno dei grafici statistici (stat_plot.cpp) e delle distribuzioni
+// (widgets.cpp, comune a Statistics e Distribution).
+namespace statplot {
+struct Plot {
+    std::size_t index{0};                                   // StatGraph n - 1
+    stats::StatGraph g;
+    std::vector<double> x, y, f;                            // dati (f vuota = frequenze 1)
+    stats::Histogram hist;
+    stats::BoxModel box;
+    std::vector<double> nx, nz, pie;
+    std::array<std::vector<double>, 3> bars;
+    stats::Fit fit;
+    bool hasFit{false};
+    double mean{0}, sd{1};                                  // N-Dist
+};
+struct Window { double xmin{-1}, xmax{1}, xscl{1}, ymin{-1}, ymax{1}, yscl{1}; };
+gfx::Rect plotArea();
+// Modello di StatGraph n dalle liste del workspace (MathError se i dati non vanno).
+Plot build(const Workspace& ws, std::size_t index, const stats::StatGraph& g, stats::QuartileRule rule);
+Window autoWindow(const std::vector<Plot>& plots);
+// overlay: curva di una regressione di CALC sopra i punti.
+void draw(gfx::Canvas& c, const Window& w, const std::vector<Plot>& plots, const stats::Fit* overlay, const Workspace& ws);
+// TRACE: numero di posizioni del grafico, coordinate e testo della posizione k.
+std::size_t traceCount(const Plot& p);
+bool tracePoint(const Plot& p, std::size_t k, double& x, double& y, std::string& label);
+void drawTraceCursor(gfx::Canvas& c, const Window& w, double x, double y);
+void drawInteraction(gfx::Canvas& c, const stats::AnovaTable& t);
+std::uint16_t paletteColor(std::uint8_t index) noexcept;
+} // namespace statplot
+void drawDistributionGraph(gfx::Canvas& c, gfx::Rect area, const dist::GraphModel& g, const std::vector<std::string>& lines);
+#else   // Pico 2 W congelato: la classe della v1.16.0
 class StatisticsApp final : public App {
 public:
     AppId id() const override { return AppId::Statistics; }
@@ -535,6 +608,8 @@ private:
     stats::Regression reg_{};
     bool hasReg_{false};
 };
+
+#endif
 
 // GRAPH (fx-CG50 chapter 5): relation list Y1..Y20 with every graph type,
 // V-Window, Setup, Trace, Zoom, Sketch, G-Solve, Modify, graph and V-Window
@@ -1163,6 +1238,9 @@ FXAI_BASE_APP(PicturePlotApp, PicturePlot)
 #endif
 #if FXAI_MODE_PYTHON
 FXAI_BASE_APP(PythonApp, Python)
+#endif
+#if FXAI_MODE_DISTRIBUTION
+FXAI_BASE_APP(DistributionApp, Distribution)    // v1.18.0
 #endif
 #undef FXAI_BASE_APP
 #endif

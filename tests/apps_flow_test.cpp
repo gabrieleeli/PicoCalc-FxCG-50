@@ -18,6 +18,7 @@ struct Rig {
     Firmware fw{platform, board::storageFlash()};
     Rig() { fw.boot(); frame(); }
     void frame() { if (fw.step()) { fw.draw(board::graphics()); board::present(); } }
+    void settle() { for (int i = 0; i < 400; ++i) { board::host::advance(5); if (!fw.step()) break; fw.draw(board::graphics()); board::present(); } }
     void raw(std::uint16_t r) { fw.rawKey(r); board::host::advance(20); frame(); }
     void key(std::uint8_t code) { raw(press(code)); raw(press(code, 3)); }
     void type(const std::string& s) { for (char c : s) raw(press(static_cast<std::uint8_t>(c))); }
@@ -91,6 +92,31 @@ int main() {
     CHECK(ws.lists[1].size() == 6);
     r.key(pckey::Up); r.key(pckey::Del);           // delete it again
     CHECK(ws.lists[1].size() == 5);
+#if FXAI_BOARD_PICO_PLUS_2W
+    // v1.18.0: barre F1-F6 della fx-CG50 (CALC › 1-VAR, CALC › REG › X › ax+b, COPY, DRAW, DIST › NORM › Ncd)
+    r.key(pckey::F2); r.key(pckey::F1);                   // CALC -> 1-VAR
+    auto* st = r.app<app::StatisticsApp>();
+    CHECK(st->screen() == app::StatisticsApp::Screen::Results);
+    CHECK_EQ_STR(st->results().rows[0].second, "3");      // mean of List1
+    r.key(pckey::Esc);
+    r.key(pckey::F2); r.key(pckey::F3); r.key(pckey::F1); r.key(pckey::F1);   // CALC -> REG -> X -> ax+b
+    r.settle();
+    CHECK(!r.error());
+    CHECK(st->screen() == app::StatisticsApp::Screen::Results);
+    CHECK_EQ_STR(st->results().rows[0].first, "a");
+    CHECK_NEAR(std::stod(st->results().rows[0].second), 1.99, 1e-9);
+    CHECK_NEAR(std::stod(st->results().rows[1].second), 0.05, 1e-9);
+    r.key(pckey::F5); r.key(pckey::Enter);                // COPY -> first empty GRAPH slot (selected)
+    CHECK(!ws.functions[1].expr.empty());
+    r.key(pckey::F6);                                     // DRAW
+    CHECK(st->screen() == app::StatisticsApp::Screen::Graph);
+    r.key(pckey::Esc); r.key(pckey::Esc);
+    r.key(pckey::F5); r.key(pckey::F1); r.key(pckey::F2); // DIST -> NORM -> Ncd (defaults -1..1)
+    r.key(pckey::F1);
+    r.settle();
+    CHECK(!r.error());
+    r.home();
+#else
     r.key(pckey::F2); r.type("1");                        // CALC -> 1-Var
     auto* st = r.app<app::StatisticsApp>();
     CHECK(st->screen() == app::StatisticsApp::Screen::Results);
@@ -110,6 +136,7 @@ int main() {
     r.key(pckey::F1);
     CHECK(!r.error());
     r.home();
+#endif
     // ---------------- GRAPH + G-SOLVE + TABLE
     r.type("5"); CHECK(r.fw.apps().activeId() == AppId::Graph);
     ws.functions[1].expr.clear();

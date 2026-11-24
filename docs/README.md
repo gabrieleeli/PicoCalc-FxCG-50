@@ -1,9 +1,13 @@
 # Documentazione
 
-## Documenti attuali (v1.17.0)
+## Documenti attuali (v1.18.0)
 
 | Documento | Contenuto |
 |---|---|
+| [reports/ANALISI_FONTI_v1.18.0.md](reports/ANALISI_FONTI_v1.18.0.md) | v1.18.0: tabella di parità del capitolo 6 voce per voce (stato, cosa manca, test previsto), progetto di Distribution Base, verifica numerica indipendente con le tolleranze, domande e risposte prima del codice |
+| [reports/SVILUPPO_v1.18.0.md](reports/SVILUPPO_v1.18.0.md) | v1.18.0: tabella di parità finale, nucleo e controller, Distribution, errori trovati (fuzzing), test, simulatore, firmware, cancello |
+| [STATISTICS.md](STATISTICS.md) · [DISTRIBUTION.md](DISTRIBUTION.md) | guide di Statistics (parità con il capitolo 6, Plus) e di Distribution (Base, Plus) |
+| [HARDWARE_TEST_v1.18.0.md](HARDWARE_TEST_v1.18.0.md) | collaudo della v1.18.0: editor, grafici, regressioni (tempi di Sin/Logistic), TEST/INTR/DIST, VARS, Distribution, record, Pico 2 W invariato (HW-246…HW-271) |
 | [reports/ANALISI_FONTI_v1.17.0.md](reports/ANALISI_FONTI_v1.17.0.md) | v1.17.0: fonti, fondamenta riusate, stato Base, casi d'inizializzazione C1–C7 e controlli K1–K6, progetto delle dieci modalità Base e del record v12, domande e risposte prima del codice |
 | [reports/SVILUPPO_v1.17.0.md](reports/SVILUPPO_v1.17.0.md) | v1.17.0: fase 1 (inizializzazione di tutte le modalità, errori trovati), fase 2 (dieci modalità Base, cosa manca alla parità), differenze, test, fuzzing, simulatore, firmware e flash per modalità, cancello |
 | [HARDWARE_TEST_v1.17.0.md](HARDWARE_TEST_v1.17.0.md) | collaudo della v1.17.0: segni Base, ogni modalità sul dispositivo, Python (coroutine, MSPLIM, AC), Link sulla USB con il PC, record v11 → v12 e ritorno, solo SRAM, Pico 2 W invariato (HW-220…HW-245) |

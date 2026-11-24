@@ -5,7 +5,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 B="$(cd "${1:?cartella di build}" && pwd)"; T="${2:-300}"
-C="$B/corpus"; mkdir -p "$C"/{expr,ws,csv,pcg,eq,ui,g3d,tf,te,prog,ea,sheet,link,modes,py}
+C="$B/corpus"; mkdir -p "$C"/{expr,ws,csv,pcg,eq,ui,g3d,tf,te,prog,ea,sheet,link,modes,py,stats}
 "$B/gen_seeds" "$C"
 # Espressioni dalle stringhe dei test (primo byte: modo 0 = Comp).
 grep -ohE '"[^"\\]{2,80}"' "$ROOT"/tests/*_test.cpp | sort -u | head -3000 | sed 's/^"//; s/"$//' |
@@ -51,4 +51,11 @@ printf 'import math, casioplot\ncasioplot.set_pixel(1,2,(1,2,3))\nprint(math.sqr
 [ -x "$B/fuzz_link" ] && run fuzz_link link 8000
 [ -x "$B/fuzz_modes" ] && run fuzz_modes modes 6000
 [ -x "$B/fuzz_python" ] && run fuzz_python py 2000
+# v1.18.0 (solo Pico Plus 2 W): nucleo di Statistics, distribuzioni, sezioni 0x0101 e 0x0117
+printf '\002\012\001\002\003\004\005\006\007\010\011\012\012\002\003\005\007\013\015\021\023\027\031\001\011' > "$C/stats/reg"
+printf '\003\001\001\010\001\002\003\004\005\006\007\010\005\012\002\003\004\005\006' > "$C/stats/test"
+printf '\004\014\001\001\001\002\002\002\003\003\003\001\002\003' > "$C/stats/anova"
+printf '\005\001\000\001\000\002\001\003' > "$C/stats/dist"; printf '\001\001\001\000\000\000\000\000\000\000\000\000\000\000\000\000' > "$C/stats/dmode"
+for f in "$ROOT"/tests/fixtures/fuzz/fuzz_stats_*; do if [ -f "$f" ]; then cp "$f" "$C/stats/"; fi; done   # casi gia' trovati
+[ -x "$B/fuzz_stats" ] && run fuzz_stats stats 2000
 ls "$B"/artifacts/*/ 2>/dev/null

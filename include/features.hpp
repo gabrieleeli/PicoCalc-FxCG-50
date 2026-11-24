@@ -20,6 +20,9 @@ inline constexpr bool kLink = FXAI_MODE_LINK != 0;
 inline constexpr bool kGeometry = FXAI_MODE_GEOMETRY != 0;
 inline constexpr bool kPicturePlot = FXAI_MODE_PICTUREPLOT != 0;
 inline constexpr bool kPython = FXAI_MODE_PYTHON != 0;
+// v1.18.0 (solo Plus): Distribution (Base) e Statistics alla parita' del capitolo 6.
+inline constexpr bool kDistribution = FXAI_MODE_DISTRIBUTION != 0;
+inline constexpr bool kStatFull = FXAI_SERVICE_STATFULL != 0;
 inline constexpr bool kTypedFiles = FXAI_SERVICE_TYPEDFILES != 0;
 inline constexpr bool kModeShell = FXAI_SERVICE_MODESHELL != 0;
 inline constexpr bool kTextEdit = FXAI_SERVICE_TEXTEDIT != 0;

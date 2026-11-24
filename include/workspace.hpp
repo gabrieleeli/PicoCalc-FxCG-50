@@ -40,6 +40,13 @@
 #if FXAI_MODE_PYTHON
 #include "python_port.hpp"
 #endif
+// v1.18.0 (solo Plus): Statistics alla parita' (sezione 0x0101) e Distribution (sezione 0x0117).
+#if FXAI_BOARD_PICO_PLUS_2W
+#include "stat_engine.hpp"
+#endif
+#if FXAI_MODE_DISTRIBUTION
+#include "distribution.hpp"
+#endif
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -357,6 +364,14 @@ struct Workspace final : NameResolver, CollectionResolver, ServiceResolver {
 #endif
 #if FXAI_MODE_PYTHON
     py::State python;
+#endif
+#if FXAI_BOARD_PICO_PLUS_2W
+    // ---- v1.18.0: StatGraph1-3, SET di CALC, SET UP, colori e formule delle
+    // liste e risultati dell'ultimo calcolo di Statistics (VARS › STAT).
+    stats::PlusState statistics;
+#endif
+#if FXAI_MODE_DISTRIBUTION
+    dmode::State distribution;                  // modalita' Base Distribution
 #endif
 #if FXAI_BOARD_PICO_PLUS_2W
     // Record v12: sezioni di modalita' danneggiate trovate all'ultima lettura e

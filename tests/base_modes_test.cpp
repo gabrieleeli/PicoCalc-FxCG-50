@@ -14,6 +14,11 @@
 #include "recursion.hpp"
 #include "spreadsheet.hpp"
 #include "statistics.hpp"
+#include "calc_library.hpp"
+#if FXAI_MODE_DISTRIBUTION
+#include "dist_core.hpp"
+#include "distribution.hpp"
+#endif
 #include "test_util.hpp"
 #include "workspace.hpp"
 #include <algorithm>
@@ -701,6 +706,61 @@ void python() {
     py::State back;
     CHECK(py::decode(back, b.data(), b.size()) && back == st);
 }
+#if FXAI_MODE_DISTRIBUTION
+// v1.18.0: nucleo della modalita' Base Distribution (stato, sezione 0x0117) sul
+// nucleo delle distribuzioni condiviso con il DIST di Statistics.
+void distribution() {
+    dmode::State s;
+    dmode::reset(s);
+    CHECK(dmode::validate(s).empty() && s.kind == 1 && !s.listData);
+    // Parametri iniziali di ogni funzione dalla tabella di dist_core.
+    for (std::size_t k = 0; k < dmode::kKinds; ++k) CHECK(dmode::paramsOf(s, k).size() == dist::paramSpecs(dist::kindAt(k)).size());
+    CHECK(dmode::paramsOf(s, 1) == std::vector<double>({-1, 1, 1, 0}));          // Normal C.D: Lower, Upper, sigma, mu
+    // Andata e ritorno della sezione con valori cambiati
+    s.kind = 14; s.params[14] = {0.6, 20, 0.35}; s.params[1] = {-2, 2, 1.5, 0.5}; s.tail = 2; s.listData = true;
+    s.list1 = 3; s.list2 = 4; s.saveRes = 7; s.hasResult = true; s.lastResult = 0.25;
+    std::vector<std::uint8_t> b;
+    dmode::encode(s, b);
+    dmode::State back;
+    CHECK(dmode::decode(back, b.data(), b.size()) && back == s);
+    // Troncata in ogni punto: rifiutata senza toccare lo stato.
+    for (std::size_t n = 0; n < b.size(); ++n) { dmode::State t; CHECK(!dmode::decode(t, b.data(), n) && t == dmode::State{}); }
+    // Numero di parametri sbagliato, NaN, indici fuori limite: rifiutati.
+    dmode::State bad = s;
+    bad.params[14] = {0.6, 20};
+    b.clear(); dmode::encode(bad, b);
+    CHECK(!dmode::decode(back, b.data(), b.size()));
+    bad = s; bad.params[1][0] = NAN;
+    b.clear(); dmode::encode(bad, b);
+    CHECK(!dmode::decode(back, b.data(), b.size()) && !dmode::validate(bad).empty());
+    bad = s; bad.kind = 30;
+    CHECK(!dmode::validate(bad).empty());
+    bad = s; bad.saveRes = 27;
+    CHECK(!dmode::validate(bad).empty());
+    // Il nucleo condiviso: lo stesso risultato del DIST di Statistics (calc_library).
+    dist::Input in; in.values = dmode::paramsOf(s, 14);
+    CHECK(dist::compute(dist::kindAt(14), in).main == calclib::invBinomialCD(0.6, 20, 0.35));
+    // La sezione nel record v12: solo se diversa dai valori iniziali, isolata se danneggiata.
+    Workspace ws;
+    std::vector<std::uint8_t> rec = serializeWorkspace(ws);
+    Workspace w2; CHECK(deserializeWorkspace(rec.data(), rec.size(), w2) && w2.distribution == dmode::State{});
+    ws.distribution = s;
+    rec = serializeWorkspace(ws);
+    CHECK(deserializeWorkspace(rec.data(), rec.size(), w2) && w2.distribution == s);
+    bool isolated = false;
+    for (std::size_t i = 0; i + 3 < rec.size(); ++i) {
+        if (rec[i] == 0x17 && rec[i + 1] == 0x01 && rec[i + 2] == 0x01) {    // id 0x0117, versione 1
+            std::vector<std::uint8_t> bad2 = rec;
+            bad2[i + 14] ^= 0x33;
+            Workspace w3;
+            isolated = deserializeWorkspace(bad2.data(), bad2.size(), w3) && w3.distribution == dmode::State{} &&
+                       std::find(w3.damagedSections.begin(), w3.damagedSections.end(), 0x0117) != w3.damagedSections.end();
+            break;
+        }
+    }
+    CHECK(isolated);
+}
+#endif
 } // namespace
 
 int main() {
@@ -714,5 +774,8 @@ int main() {
     geometry();
     picturePlot();
     python();
+#if FXAI_MODE_DISTRIBUTION
+    distribution();
+#endif
     return testutil::finish("base_modes_test");
 }

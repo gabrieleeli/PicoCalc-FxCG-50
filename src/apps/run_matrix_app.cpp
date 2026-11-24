@@ -185,10 +185,37 @@ MenuList varsSub(Context& ctx, const std::string& name) {
                {"PreAns = " + formatValue({m.previousAnswer(), m.previousAnswerImag()}, ctx.ws.settings.complex, f), "txt:PreAns"}};
     } else if (name == "VWIN") add({"xmin", "xmax", "xscl", "ymin", "ymax", "yscl", "tmin", "tmax", "tptch"});
     else if (name == "VFACT") add({"xfct", "yfct"});
-    else if (name == "VSTAT") add({"stat_n", "stat_meanx", "stat_sumx", "stat_sumx2", "stat_popsdx", "stat_sdx", "stat_minx", "stat_maxx",
-                                   "stat_meany", "stat_sumy", "stat_sumy2", "stat_sumxy", "stat_popsdy", "stat_sdy", "stat_miny", "stat_maxy",
-                                   "reg_a", "reg_b", "reg_c", "reg_d", "reg_e", "reg_r", "reg_r2", "reg_mse", "stat_q1", "stat_q3", "stat_med",
-                                   "stat_mod", "stat_hstart", "stat_hpitch"});
+    else if (name == "VSTAT") {
+#if FXAI_BOARD_PICO_PLUS_2W
+        // v1.18.0: VARS › STAT come la fx-CG50: X, Y, GRAPH, PTS, INPUT, RESULT (TEST, INTR, DIST).
+        out = {{"X  n \xEE\x80\x81 \xCE\xA3x \xCF\x83x sx minX", "sub:VSTATX"}, {"Y  \xEE\x80\x82 \xCE\xA3y \xCE\xA3xy \xCF\x83y", "sub:VSTATY"},
+               {"GRAPH  a b c d e r r\xC2\xB2 MSe Q1 Med", "sub:VSTATG"}, {"PTS  x1 y1 x2 y2 x3 y3", "sub:VSTATP"},
+               {"INPUT  n \xEE\x80\x81 sx n1 n2 sp", "sub:VSTATI"}, {"TEST  p z t \xCF\x87\xC2\xB2 F df ANOVA", "sub:VSTATT"},
+               {"INTR  Left Right p\xCC\x82 df", "sub:VSTATN"}, {"DIST  p xInv zLow zUp", "sub:VSTATD"}};
+#else
+        add({"stat_n", "stat_meanx", "stat_sumx", "stat_sumx2", "stat_popsdx", "stat_sdx", "stat_minx", "stat_maxx",
+             "stat_meany", "stat_sumy", "stat_sumy2", "stat_sumxy", "stat_popsdy", "stat_sdy", "stat_miny", "stat_maxy",
+             "reg_a", "reg_b", "reg_c", "reg_d", "reg_e", "reg_r", "reg_r2", "reg_mse", "stat_q1", "stat_q3", "stat_med",
+             "stat_mod", "stat_hstart", "stat_hpitch"});
+#endif
+    }
+#if FXAI_BOARD_PICO_PLUS_2W
+    else if (name == "VSTATX") add({"stat_n", "stat_meanx", "stat_sumx", "stat_sumx2", "stat_popsdx", "stat_sdx", "stat_minx", "stat_maxx"});
+    else if (name == "VSTATY") add({"stat_meany", "stat_sumy", "stat_sumy2", "stat_sumxy", "stat_popsdy", "stat_sdy", "stat_miny", "stat_maxy"});
+    else if (name == "VSTATG") add({"reg_a", "reg_b", "reg_c", "reg_d", "reg_e", "reg_r", "reg_r2", "reg_mse", "stat_q1", "stat_q3", "stat_med",
+                                    "stat_mod", "stat_hstart", "stat_hpitch"});
+    else if (name == "VSTATP") add({"stat_x1", "stat_y1", "stat_x2", "stat_y2", "stat_x3", "stat_y3"});
+    else if (name == "VSTATI") add({"stat_in_n", "stat_in_mean", "stat_in_sx", "stat_in_n1", "stat_in_n2", "stat_in_mean1", "stat_in_mean2",
+                                    "stat_in_sx1", "stat_in_sx2", "stat_in_sp"});
+    else if (name == "VSTATT") add({"stat_res_p", "stat_res_z", "stat_res_t", "stat_res_chi", "stat_res_f", "stat_res_phat", "stat_res_phat1",
+                                    "stat_res_phat2", "stat_res_df", "stat_res_se", "stat_res_r", "stat_res_r2", "stat_res_pa", "stat_res_fa",
+                                    "stat_res_adf", "stat_res_ssa", "stat_res_msa", "stat_res_pb", "stat_res_fb", "stat_res_bdf", "stat_res_ssb",
+                                    "stat_res_msb", "stat_res_pab", "stat_res_fab", "stat_res_abdf", "stat_res_ssab", "stat_res_msab",
+                                    "stat_res_edf", "stat_res_sse", "stat_res_mse"});
+    else if (name == "VSTATN") add({"stat_int_left", "stat_int_right", "stat_int_phat", "stat_int_phat1", "stat_int_phat2", "stat_int_df"});
+    else if (name == "VSTATD") add({"stat_dist_p", "stat_dist_xinv", "stat_dist_x1inv", "stat_dist_x2inv", "stat_dist_zlow", "stat_dist_zup",
+                                    "stat_dist_tlow", "stat_dist_tup"});
+#endif
     else if (name == "VGRAPH") {
         for (const char* kind : {"Y", "r", "Xt", "Yt", "X"})
             for (int k = 1; k <= 20; ++k) out.push_back({std::string(kind) + std::to_string(k), std::string("sym:@") + kind + std::to_string(k)});

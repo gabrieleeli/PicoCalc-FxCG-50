@@ -1,9 +1,44 @@
-# Build status — v1.17.0 (base di tutte le modalità; Raspberry Pi Pico 2 W congelato)
+# Build status — v1.18.0 (Statistics alla parità sulla Plus, Distribution Base; Raspberry Pi Pico 2 W congelato)
 
 Stato delle build per versione; le novità sono in [CHANGELOG.md](CHANGELOG.md).
-Le sezioni dopo "v1.17.0" descrivono le build delle versioni precedenti.
+Le sezioni dopo "v1.18.0" descrivono le build delle versioni precedenti.
 
-## v1.17.0 — `main`
+## v1.18.0 — `main`
+
+Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`;
+sul Pico 2 W `-Os` per i sorgenti di `FXAI_PICO2W_SIZE_SOURCES`), nello stesso
+ambiente della v1.17.0 (Pico SDK 2.2.0, `gcc-arm-none-eabi` 13.2.1). Novità:
+Statistics alla parità con il capitolo 6 e Distribution Base sulla Plus
+([reports/SVILUPPO_v1.18.0.md](reports/SVILUPPO_v1.18.0.md)). **Nessuna prova su hardware.**
+
+> **Raspberry Pi Pico 2 W congelato alla v1.16.0**: 1 944 228 byte, identico
+> alla v1.17.0 salvo la stringa della versione e la data di compilazione
+> (confronto byte per byte); stesse modalità, stessa RAM statica.
+
+| Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (5 615 104 byte) | `build/pico2w/picocalc_fxai_pico2w.uf2` (3 889 152 byte) |
+| Immagine flash | 2 807 216 byte (`__flash_binary_end` = `0x102AD5B0`) = 66 % della partizione da 4 MB (budget < 90 %: 3 774 873 B); +181 744 byte rispetto alla v1.17.0: controller di Statistics 108 340 B, nucleo 77 662 B, distribuzioni 15 316 B, Distribution 25 345 B, meno il controller della v1.16.0 | **1 944 228 byte** (`0x101DAAA4`) = 92 % della partizione da 2 MB; invariato |
+| Codice nuovo nell'immagine | `stat_engine`, `dist_core`, `statistics_plus_app`, `stat_plot`, `distribution`, `distribution_app`; blocchi `#if` in expression, calc_library, run_matrix_app, workspace, launcher, widgets, font_renderer | nessuno (mappa: **179** oggetti/simboli esclusi, nessuno nell'immagine) |
+| RAM statica | 312 608 byte fino a `__end__` = `0x2004C520` (+1 896) | 305 236 byte (`0x2004A854`, invariata) |
+| Heap SRAM | 178 912 byte (`__end__` → `0x20078000`) | 186 284 byte (invariato) |
+| Frame di stack (`-fstack-usage`) | massimo invariato `SystemApp::enter` 2 016 B; codice nuovo: `stats::decode` 1 792 B, `stats::reset` 1 640 B, `drawRegression` 976 B, `StatisticsApp::key` 880 B | invariati |
+| Warning | **nessuno** del compilatore | nessuno |
+| SHA-256 dell'UF2 locale | `2a9990e3063659878abc8581be688c63b1660b1fa92246bb018221de97433f88` | `c56b8f66e58bc087b0563241e1476948ba0b4de27ff245be302a72c87a98a443` |
+
+### Test
+
+| Suite | Pico Plus 2 W | Pico 2 W |
+|---|---|---|
+| CTest (`tests/run_host_tests.sh`) | 62/62: 59 suite C++ con **20 063** controlli, `mem_pools_smoke`, `sd_interop_test`, `link_tool_test` | 54/54: 52 suite con **16 343** controlli, `mem_pools_smoke`, `sd_interop_test` |
+| AddressSanitizer + UBSan bloccante (`--sanitize`) | 62/62 | 54/54 |
+| ThreadSanitizer (`--tsan`) | superato | superato |
+| Riferimenti numerici (`tools/stat_reference.py --check`) | 483 valori di scipy/numpy/statsmodels identici | — |
+| Relay AI (Python, `unittest`) | 15/15 | — |
+| Fuzzing (≥ 300 s per harness nuovo o toccato) | nuovo: `fuzz_stats` 1 378 441 esecuzioni; toccati: `fuzz_modes` 1 479 362, `fuzz_ui` 16 122, `fuzz_workspace` 2 262 380, `fuzz_expr` 680 923, `fuzz_eactivity` 979 con il controller e 9 130 371 sui soli documenti: nessun crash sul codice finale (tre errori trovati durante lo sviluppo e corretti) | — |
+| Simulatore (`tools/sim_compare.py`) | 164 identici: 134 precedenti invariati, 3 rigenerati per cambiamenti voluti (52, 53, 84), 27 nuovi (148–174) | — |
+
+## v1.17.0
 
 Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`;
 sul Pico 2 W `-Os` per i sorgenti di `FXAI_PICO2W_SIZE_SOURCES`), nello stesso

@@ -1,8 +1,9 @@
 // v1.17.0 — Fuzzing dei decoder delle modalita' Base (sezioni del record v12,
-// file .pcdyna/.pcrecur/.pcconic/.pcfin/.pcgeo/.pcplot, .pcprog): ogni dato
+// file .pcdyna/.pcrecur/.pcconic/.pcfin/.pcgeo/.pcplot, .pcprog; v1.18.0: Distribution): ogni dato
 // accettato si ricodifica e si rilegge identico, e i calcoli sullo stato letto
 // (coniche, TVM, misure, evidenziazione) non vanno in crash.
 #include "conic.hpp"
+#include "distribution.hpp"
 #include "dyna.hpp"
 #include "financial.hpp"
 #include "geometry.hpp"
@@ -32,9 +33,11 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* d, size_t n) {
     const std::size_t m = n - 1;
     bool ok = false;
     try {
-        switch (d[0] % 15) {
+        switch (d[0] % 16) {
         case 0: { dyna::State s; roundtrip(p, m, dyna::decode, dyna::encode, s, ok); if (ok) (void)dyna::validate(s); break; }
         case 1: { rec::State s; roundtrip(p, m, rec::decode, rec::encode, s, ok); break; }
+        // v1.18.0: sezione 0x0117 di Distribution (valida per costruzione dopo la lettura).
+        case 15: { dmode::State s; roundtrip(p, m, dmode::decode, dmode::encode, s, ok); if (ok && !dmode::validate(s).empty()) std::abort(); break; }
         // File .pcdyna, .pcrecur, .pcfin: accettati solo validi, ricodificati identici.
         case 12: {
             dyna::FileData f;

@@ -466,6 +466,22 @@ const Name kNames[] = {
     {"stat_maxy", "maxY"}, {"reg_a", "a"}, {"reg_b", "b"}, {"reg_c", "c"}, {"reg_d", "d"}, {"reg_e", "e"}, {"reg_r", "r"},
     {"reg_r2", "r\xC2\xB2"}, {"reg_mse", "MSe"}, {"stat_q1", "Q1"}, {"stat_q3", "Q3"}, {"stat_med", "Med"}, {"stat_mod", "Mod"},
     {"stat_hstart", "H-Start"}, {"stat_hpitch", "H-pitch"},
+#if FXAI_BOARD_PICO_PLUS_2W
+    // v1.18.0: VARS › STAT › PTS, INPUT, RESULT (TEST, INTR, DIST).
+    {"stat_x1", "x1"}, {"stat_y1", "y1"}, {"stat_x2", "x2"}, {"stat_y2", "y2"}, {"stat_x3", "x3"}, {"stat_y3", "y3"},
+    {"stat_in_n", "n"}, {"stat_in_mean", "\xEE\x80\x81"}, {"stat_in_sx", "sx"}, {"stat_in_n1", "n1"}, {"stat_in_n2", "n2"},
+    {"stat_in_mean1", "\xEE\x80\x81" "1"}, {"stat_in_mean2", "\xEE\x80\x81" "2"}, {"stat_in_sx1", "sx1"}, {"stat_in_sx2", "sx2"}, {"stat_in_sp", "sp"},
+    {"stat_res_p", "p"}, {"stat_res_z", "z"}, {"stat_res_t", "t"}, {"stat_res_chi", "\xCF\x87\xC2\xB2"}, {"stat_res_f", "F"},
+    {"stat_res_phat", "p\xCC\x82"}, {"stat_res_phat1", "p\xCC\x82" "1"}, {"stat_res_phat2", "p\xCC\x82" "2"}, {"stat_res_df", "df"},
+    {"stat_res_se", "se"}, {"stat_res_r", "r"}, {"stat_res_r2", "r\xC2\xB2"}, {"stat_res_pa", "pa"}, {"stat_res_fa", "Fa"},
+    {"stat_res_adf", "Adf"}, {"stat_res_ssa", "SSa"}, {"stat_res_msa", "MSa"}, {"stat_res_pb", "pb"}, {"stat_res_fb", "Fb"},
+    {"stat_res_bdf", "Bdf"}, {"stat_res_ssb", "SSb"}, {"stat_res_msb", "MSb"}, {"stat_res_pab", "pab"}, {"stat_res_fab", "Fab"},
+    {"stat_res_abdf", "ABdf"}, {"stat_res_ssab", "SSab"}, {"stat_res_msab", "MSab"}, {"stat_res_edf", "Edf"}, {"stat_res_sse", "SSe"},
+    {"stat_res_mse", "MSe"}, {"stat_int_left", "Left"}, {"stat_int_right", "Right"}, {"stat_int_phat", "p\xCC\x82"},
+    {"stat_int_phat1", "p\xCC\x82" "1"}, {"stat_int_phat2", "p\xCC\x82" "2"}, {"stat_int_df", "df"},
+    {"stat_dist_p", "p"}, {"stat_dist_xinv", "xInv"}, {"stat_dist_x1inv", "x1InvN"}, {"stat_dist_x2inv", "x2InvN"},
+    {"stat_dist_zlow", "zLow"}, {"stat_dist_zup", "zUp"}, {"stat_dist_tlow", "tLow"}, {"stat_dist_tup", "tUp"},
+#endif
 };
 const CatalogEntry kCatalog[] = {
     {"Abs", "abs("}, {"Amt_BAL(", "amt_bal("}, {"Amt_INT(", "amt_int("}, {"Amt_PRN(", "amt_prn("}, {"Amt_\xCE\xA3INT(", "amt_sint("},

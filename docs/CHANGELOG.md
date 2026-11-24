@@ -1,5 +1,58 @@
 # Changelog
 
+## v1.18.0 — Statistics alla parità, Distribution Base
+
+Base: `main` = `aa2923c` (v1.17.0). Sulla **Pimoroni Pico Plus 2 W**
+**Statistics** arriva alla **parità completa** con il capitolo 6 del manuale
+fx-CG50 e **Distribution** (capitolo 18) entra nel registro come modalità
+**Base**. Il **Raspberry Pi Pico 2 W resta congelato** alla v1.16.0 (immagine
+identica salvo la stringa della versione). Analisi e tabella di parità:
+[reports/ANALISI_FONTI_v1.18.0.md](reports/ANALISI_FONTI_v1.18.0.md);
+rapporto: [reports/SVILUPPO_v1.18.0.md](reports/SVILUPPO_v1.18.0.md); guide:
+[STATISTICS.md](STATISTICS.md), [DISTRIBUTION.md](DISTRIBUTION.md).
+**Nessuna prova su hardware fisico**: procedura
+[HARDWARE_TEST_v1.18.0.md](HARDWARE_TEST_v1.18.0.md) (HW-246…HW-271).
+
+### Nuovo (solo Pimoroni Pico Plus 2 W)
+- **Editor delle liste** su tre pagine (GRAPH CALC TEST INTR DIST / SRT-A SRT-D
+  DEL DEL-ALL INS / ADD JUMP COLOR FILE CSV): ordinamento di più liste con la
+  lista base, inserimento sopra e sotto, JUMP, **colori** delle liste,
+  **formule nella testa** con ricalcolo automatico e Circular ERROR, List File
+  dall'editor, CSV dalla barra.
+- **StatGraph1–3** con SET (20 tipi: Scatter, xyLine, NPPlot, Pie, Hist,
+  MedBox, N-Dist, Broken, 11 regressioni, Bar), DefG, SELECT, Mark Type, Graph
+  Color, Color Link, Outliers, Start/Width, % Sto List, Stick Style; Stat Wind
+  Auto/Manual, TRACE, V-Window, CALC dal grafico.
+- **CALC**: 1-VAR e 2-VAR con le frequenze, Q1Q3 Type Std/OnData; **12
+  regressioni** (anche a+bx, **Sin** e **Logistic**, calcolate a passi con AC)
+  con r, r², MSe secondo il manuale, residui nella Resid List, COPY nell'elenco
+  Y1–Y20 di Graph, DRAW.
+- **TEST** (Z 1-S/2-S/1-P/2-P, t 1-S/2-S con Pooled, LinearReg t, χ² GOF con
+  CNTRB, χ² 2-way con la matrice attesa, 2-Sample F, ANOVA a una e due vie con
+  il grafico d'interazione), **INTR** (Z e t), **DIST** con le 24 funzioni (PD,
+  CD, inverse; Data List/Variable; Ans, ListAns, Save Res; DRAW con l'area).
+- **SET UP** di Statistics; **VARS › STAT** in Run-Matrix con X, Y, GRAPH,
+  PTS, INPUT, TEST, INTR, DIST (valori dell'ultimo calcolo); x̂( e ŷ( per i 12
+  tipi.
+- **Distribution** (MENU › O, 24ª icona, Base): le 24 funzioni con Data
+  Variable/List, Ans/ListAns, Save Res, DRAW, AC; sezione `0x0117`; stesso
+  nucleo (`dist_core`) del DIST di Statistics.
+- Record v12: sezioni `0x0101` (Statistics) e `0x0117` (Distribution).
+- Nucleo `stat_engine` e `dist_core` verificati contro **scipy, numpy e
+  statsmodels** (`tools/stat_reference.py`, 483 valori, tolleranze dichiarate).
+
+### Corretto
+- Trovati dal fuzzing (`fuzz_stats`) nel codice nuovo e corretti prima della
+  pubblicazione: risultati infiniti con dati enormi (ora Math ERROR), InvN con
+  la coda destra e un'area minuscola, F C.D con gradi di libertà enormi (NaN).
+
+### Test
+- `statistics_test` esteso (nucleo contro i riferimenti), **`statistics_flow_test`**
+  nuovo (un caso per voce), Distribution in `apps_init_test`, `base_modes_test`,
+  `base_flow_test`; `architecture_test` (Distribution Base solo sulla Plus,
+  motore DIST unico, Pico 2 W con 23 modalità); fuzzer **`fuzz_stats`**;
+  screenshot 148–174 (52, 53 e 84 rigenerati: editor e VARS › STAT nuovi).
+
 ## v1.17.0 — base di tutte le modalità
 
 Base: `main` = `eb2338a` (v1.16.0). Ogni modalità del registro si apre, fa il

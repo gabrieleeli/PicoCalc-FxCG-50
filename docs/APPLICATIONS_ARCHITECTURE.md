@@ -12,7 +12,7 @@ Lo stato funzionale di ogni voce è in [FEATURE_MATRIX.md](FEATURE_MATRIX.md).
 ## 1. Il registro: una sola fonte di verità
 
 `include/app_registry.hpp` + `src/app_registry.cpp` contengono una tabella con
-le 23 modalità del menu principale. Per ognuna dichiarano:
+le 23 modalità del menu principale (24 sulla Pimoroni Pico Plus 2 W dalla v1.18.0, con Distribution in coda all'enum). Per ognuna dichiarano:
 
 | Campo | Significato |
 |---|---|
@@ -113,7 +113,7 @@ display) → `tick()` per lavoro periodico (rete) → `leave()`.
 | Format | `number_format.hpp` | tutte (Norm/Fix/Sci/Eng, complessi) |
 | Solvers | `solvers.hpp` | Equation (disequazioni, estensione), Conic Graphs (v1.17.0) |
 | EquationCore (v1.12.0) | `equation.hpp` | solo Equation: coefficienti esatti, SIML, POLY, SOLVER, visualizzazione delle soluzioni |
-| Stats | `statistics.hpp` | Statistics, Spreadsheet, Picture Plot (v1.17.0: regressioni sopra lo sfondo) |
+| Stats | `statistics.hpp`; sulla Plus dalla v1.18.0 anche `stat_engine.hpp` (nucleo alla parità del cap. 6) e `dist_core.hpp` (24 distribuzioni, una sola tabella sul motore di `calc_library`) | Statistics, Spreadsheet, Picture Plot (v1.17.0: regressioni sopra lo sfondo), Distribution (v1.18.0) |
 | MathCore | `math_engine.hpp` | Run-Matrix (Base-N, DMS, Pol/Rec), angolo |
 | Widgets | `ui_kit.hpp`, `app_widgets.hpp` | tutte |
 | Network | `net.hpp`, `ai_protocol.hpp` | AI Chat, System |
@@ -203,7 +203,7 @@ dell'utente (progetti GRAPH, immagini) sono sulla microSD o nella flash interna
 | Modalità | Controller | Responsabilità | Servizi | Dati | Collegamenti |
 |---|---|---|---|---|---|
 | Run-Matrix | `RunMatrixApp` + `MatrixEditorView` (`matrix_editor.cpp`) + `AnswerView` (`answer_view.cpp`, v1.11.0) + nucleo `run_matrix.cpp` | calcoli e risultati: input Math o Line (INS, ⌟), forme esatte, matrici/vettori/liste ed editor MAT/VCT con CSV, MatAns/ListAns, cronologia modificabile, variabili, Base-N intera, simboli ingegneristici, Simp, DMS, CLIP; comandi grafici eseguiti da `graph_commands` e disegnati da Graph | Expression, Exact, Editor, MathRender, Format, MathCore, RunCore, Storage, Files, GraphCmd | Settings, Memory, History, Matrices, View e Graph (solo tramite `graph_commands`) | Graph |
-| Statistics | `StatisticsApp` | liste, 1/2-Var, regressioni, grafici statistici, DIST, TEST, INTR | Expression, Stats, Widgets | Settings, Lists, Functions | — |
+| Statistics | `StatisticsApp`; sulla Plus dalla v1.18.0 `statistics_plus_app.cpp` (editor, menu, moduli, lavori a passi) e `stat_plot.cpp` (grafici), nucleo `stat_engine` e `dist_core` (servizio Stats); sul Pico 2 W il codice della v1.16.0 (`statistics_app.cpp`, nell'`#else`) | parità completa con il capitolo 6 sulla Plus ([STATISTICS.md](STATISTICS.md)): editor a tre pagine, StatGraph1–3, CALC con 12 regressioni, TEST, INTR, DIST, SET UP, VARS › STAT | Expression, Stats, Widgets, Storage, Files; Plus: ModeShell, StepTask | Settings, Lists, Functions; Plus: View, Memory, Matrices, StatData (`0x0101`) | — |
 | Graph | `GraphApp` (`graph_app.cpp`, `graph_plot.cpp`, `graph_files.cpp`) | grafici Y=, r=, parametrici, X=, disequazioni (Y1–Y20); TRACE, ZOOM, V-Window, SKETCH, G-SOLVE, Modify, memorie, PICT, progetti `.pcgraph` — [GRAPH_PARITY.md](GRAPH_PARITY.md) | Expression, Editor, Format, Widgets, MathRender, Storage, GraphCore, Files | Settings, Memory, Functions, View, Table, Lists, Graph | Table |
 | Table | `TableApp` + `table_model` | tabelle di Y=, r= e parametriche da range o lista, derivate, EDIT/ROW/DELETE, LISTMEM, GPH-CON/GPH-PLT — [TABLE.md](TABLE.md) | Expression, Editor, Format, Widgets, MathRender, Storage, GraphCore | Settings, Memory, Functions, View, Table, Lists, Graph | Graph |
 | Equation | `EquationApp` + `MathField` (`math_field.cpp`) + motore `equation.cpp` | SIML, POLY e SOLVER come il manuale fx-CG50 (4-1…4-5), disequazioni come estensione | Expression, Exact, Editor, MathRender, Format, RunCore, Solvers, Storage, EquationCore | Settings, Memory, Equation | — |
@@ -213,6 +213,7 @@ dell'utente (progetti GRAPH, immagini) sono sulla microSD o nella flash interna
 | Conversion | `ConversionApp` | conversioni di unità, risultato in Ans | Expression, Units | Settings, Memory | — |
 | AI Chat | `AiChatApp` | chat con Claude/ChatGPT tramite relay | Network, Editor | Settings, Chat | System |
 | Symbols | `SymbolsApp` | guida dei simboli | Help | — | — |
+| Distribution (v1.18.0, **Base**, solo Plus) | `DistributionApp` (`distribution_app.cpp`) + nucleo `distribution.cpp` (ModeCore) | 24 funzioni di distribuzione con Data Variable/List, Ans/ListAns, Save Res, DRAW — [DISTRIBUTION.md](DISTRIBUTION.md); stesso nucleo `dist_core` del DIST di Statistics | Expression, Widgets, Editor, Format, Stats, Storage, ModeShell, TypedFiles, StepTask, ModeCore | Settings, Memory, Lists, Distribution (`0x0117`) | — |
 | eActivity (v1.16.0, entrambe) | `EActivityApp` (`eactivity_app.cpp`) + nucleo `eactivity.cpp` | capitolo 10 della fx-CG50: elenco dei file e cartelle, righe di testo con espressioni Math, righe di calcolo (nucleo di Run-Matrix) e ricalcolo fino alla riga di stop, colori, marcatori, memo, immagini, strisce, Notes, memorie per file, SAVE/SAVE·AS/OPT/CAPACITY | Expression, Exact, Editor, MathRender, Format, Widgets, RunCore, Storage, Files, TypedFiles, ModeShell, TextEdit, StepTask, EActivityCore | Settings, Memory, Matrices, Lists (memorie del file), EActivity; le parti delle strisce solo con `encodeParts`/`decodeParts`/`resetPart` | Run-Matrix, Graph, Table, Statistics, Equation, 3D Graph (sessione da striscia del `Context`) |
 
 ### Modalità Base (v1.17.0, solo Pimoroni Pico Plus 2 W)
@@ -252,8 +253,9 @@ risultati (nessun riferimento a grafici, liste, tabelle o conversioni).
 
 Dalla v1.17.0 tutte le modalità del registro si aprono, tranne **E-CON4**
 (External). Le modalità Base (§5) arrivano alla parità completa una per
-versione, a partire da **Statistics** (v1.18.0, insieme a **Distribution** come
-nuova modalità Base); il piano è in [ROADMAP.md](ROADMAP.md) e in `CONTINUE.md`.
+versione: **Statistics** è alla parità dalla v1.18.0 (sulla Plus), quando
+**Distribution** è entrata come nuova modalità Base; la prossima è Geometry
+(v1.19.0). Il piano è in [ROADMAP.md](ROADMAP.md) e in `CONTINUE.md`.
 Sul Raspberry Pi Pico 2 W (congelato alla v1.16.0) le modalità della Plus
 restano `Planned` con il testo «Non disponibile sul Raspberry Pi Pico 2 W…».
 

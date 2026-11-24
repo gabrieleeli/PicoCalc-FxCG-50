@@ -1,22 +1,25 @@
 # CONTINUE — punto di ripresa del progetto PicoCalc FX-CG50 AI
 
 Documento di checkpoint per riprendere lo sviluppo esattamente da qui.
-Ultimo aggiornamento: **v1.17.0 — base di tutte le modalità**, branch
-**`main`**, tag `v1.17.0` creato dal workflow `.github/workflows/release.yml`.
-Rapporti: `docs/reports/ANALISI_FONTI_v1.17.0.md` (fonti, stato Base, casi
-d'inizializzazione, progetto delle dieci modalità e del record v12, domande e
-risposte prima del codice), `docs/reports/SVILUPPO_v1.17.0.md` (fase 1, fase 2,
-test, firmware, cancello). Versioni precedenti: `ANALISI_FONTI_v1.15.0.md`,
-`SVILUPPO_v1.15.0.md`, `ANALISI_FONTI_v1.16.0.md`, `SVILUPPO_v1.16.0.md`.
+Ultimo aggiornamento: **v1.18.0 — Statistics alla parità completa (capitolo 6)
+sulla Pimoroni Pico Plus 2 W, Distribution Base**, branch **`main`**, tag
+`v1.18.0` creato dal workflow `.github/workflows/release.yml`.
+Rapporti: `docs/reports/ANALISI_FONTI_v1.18.0.md` (tabella di parità del
+capitolo 6 voce per voce, progetto di Distribution, verifica numerica con le
+tolleranze, domande Q1–Q16 e risposte prima del codice),
+`docs/reports/SVILUPPO_v1.18.0.md` (tabella finale, codice, errori trovati,
+test, firmware, cancello). Versioni precedenti: `ANALISI_FONTI_v1.15.0…v1.17.0.md`,
+`SVILUPPO_v1.15.0…v1.17.0.md`.
 
 > **Pico 2 W congelato alla v1.16.0.** Nessuna funzione, schermata o crescita
 > dell'immagine sul Raspberry Pi Pico 2 W, salvo correzioni di errori
-> condivise (nella v1.17.0: Conversion che non segnava Ans da salvare, +16 B).
+> condivise. Nella v1.18.0 l'immagine del Pico 2 W è **identica** a quella
+> della v1.17.0 salvo i 4 byte della stringa della versione (1 944 228 B).
 > `architecture_test` fallisce se cambia l'insieme delle modalità aperte del
-> Pico 2 W o se una modalità Base vi compare. Le modalità nuove sono solo per
-> la Pimoroni Pico Plus 2 W. Budget del Pico 2 W: immagine ≤ 2 064 384 B.
+> Pico 2 W (23 modalità) o se una modalità Base vi compare. Le modalità nuove
+> sono solo per la Pimoroni Pico Plus 2 W. Budget del Pico 2 W: immagine ≤ 2 064 384 B.
 
-## 0. Piano (dalla v1.17.0)
+## 0. Piano (dalla v1.17.0; ordine aggiornato nella v1.18.0)
 
 La v1.17.0 è la **base**: ogni modalità del registro si apre, fa il suo lavoro
 principale, salva e rimette a posto lo stato ed esce senza perdite
@@ -34,14 +37,16 @@ commit su `main`** in fast-forward («PicoCalc FxCG-50 v<ver>: <contenuto>»).
 | v1.15.0 | fondamenta comuni F1–F9 | **fatta** |
 | v1.16.0 | eActivity su entrambe le schede; Pico 2 W congelato | **fatta** |
 | v1.17.0 | base di tutte le modalità: stato Base, `apps_init_test`, record v12, dieci modalità Base sulla Plus | **fatta** |
-| **v1.18.0** | **Statistics alla parità completa (cap. 6)**, solo Plus; **Distribution** (cap. 18) entra come modalità Base | **PROSSIMA** |
-| v1.19.0… | una modalità per versione: Graph/Table (Dual Screen), Recursion, Dyna Graph, Conic Graphs, Financial, Spreadsheet, Program, Picture Plot, Geometry, Memory/System/Link, Python, Distribution, chiusura | proposta in `docs/ROADMAP.md`, da confermare a ogni versione |
+| v1.18.0 | **Statistics alla parità completa (cap. 6)**, solo Plus; **Distribution** (cap. 18) come modalità Base | **fatta** |
+| **v1.19.0** | **Geometry alla parità completa (cap. 14)**, solo Plus | **PROSSIMA** |
+| v1.20.0, v1.21.0 | Program (cap. 8 come modalità), Python (cap. 17) | proposte |
+| v1.22.0… | Graph/Table (Dual Screen), Recursion, Dyna Graph, Conic Graphs, Financial, Spreadsheet, Picture Plot, Memory/System/Link, Distribution (v1.30.0), chiusura (v1.31.0) | proposta in `docs/ROADMAP.md`, da confermare a ogni versione |
 
 Regole fisse: manuale fx-CG50 v3.60 solo come descrizione del comportamento
 (niente codice, grafica o testi copiati da Casio); `ANALISI_FONTI_v<ver>.md`
 con la tabella di parità **prima** del codice; un test per voce; una modalità è
 Available solo con la tabella completa; nessun «TESTED ON HARDWARE» senza prova
-fisica; HARDWARE_TEST con numerazione continua (ultima usata: **HW-245**).
+fisica; HARDWARE_TEST con numerazione continua (ultima usata: **HW-271**).
 Plus: immagine < 90 % della partizione da 4 MB (controllo bloccante).
 
 ### Decisioni prese
@@ -53,7 +58,13 @@ Plus: immagine < 90 % della partizione da 4 MB (controllo bloccante).
   `third_party/micropython`, solo Plus; coroutine con pila propria (ucontext
   sul PC, cambio di contesto Cortex-M33 con MSPLIM sul dispositivo), heap
   separato 512 KB PSRAM / 48 KB SRAM, AC → KeyboardInterrupt.
-- **Distribution**: entra nel registro nella v1.18.0 come Base, insieme alla
+- **Distribution**: Base dalla v1.18.0 (MENU › O, 24ª icona solo sulla Plus,
+  `AppId::Distribution` in coda all'enum solo sulla Plus), sezione `0x0117`,
+  nessun tipo di file; nucleo `dist_core` condiviso con il DIST di Statistics.
+- **Statistics (Plus)**: sezione `0x0101` (StatGraph, SET, SET UP, colori e
+  formule delle liste, risultati di VARS › STAT); DefG = ripristino dello
+  StatGraph; quartili OnData; Sin in radianti; ANOVA a due vie bilanciata;
+  valori verificati con `tools/stat_reference.py` (scipy, numpy, statsmodels).
   parità di Statistics (risposta Q1 della v1.17.0).
 - **Record v12 solo sulla Plus** (firma e CRC per sezione, sezione danneggiata
   isolata); il Pico 2 W scrive ancora la v11. Limite noto: un firmware ≤ v1.16.0
@@ -67,46 +78,42 @@ Plus: immagine < 90 % della partizione da 4 MB (controllo bloccante).
 
 ## 1. Stato attuale
 
-**v1.17.0** (sopra la v1.16.0): tutte le modalità del registro si aprono tranne
-E-CON4 (External). Sulla **Pimoroni Pico Plus 2 W** dieci modalità **Base**:
-Spreadsheet, Dyna Graph, Recursion, Conic Graphs, Program, Financial, Link,
-Geometry, Picture Plot, Python; ognuna su `ModeShell` con il suo nucleo puro
-(servizio ModeCore), la sua sezione `0x0100 + AppId` del record v12, il suo
-tipo di file in MEMORY › FILES, le operazioni lunghe in `step::Task` con AC; le
-strisce di eActivity delle modalità della Plus sono disponibili. Cosa manca a
-ogni modalità per la parità: campo `missing` del registro
-(`src/app_registry.cpp`) e `docs/FEATURE_MATRIX.md`. Guide:
-`docs/SPREADSHEET.md`, `DYNA_GRAPH.md`, `RECURSION.md`, `CONIC_GRAPHS.md`,
-`FINANCIAL.md`, `PROGRAM.md`, `LINK.md`, `GEOMETRY.md`, `PICTURE_PLOT.md`,
-`PYTHON.md`. Numeri in `docs/reports/SVILUPPO_v1.17.0.md` e
+**v1.18.0** (sopra la v1.17.0): sulla **Pimoroni Pico Plus 2 W** Statistics è
+alla **parità completa** con il capitolo 6 (editor a tre pagine con formule e
+colori, StatGraph1–3 con 20 tipi, 12 regressioni con residui, TEST, INTR, DIST
+con le 24 funzioni, SET UP, VARS › STAT; guida `docs/STATISTICS.md`) e
+**Distribution** è una modalità **Base** (`docs/DISTRIBUTION.md`). Modalità
+con la parità: Run-Matrix, EQUATION, 3D Graph, eActivity, Statistics (Plus).
+Modalità Base (solo Plus): Spreadsheet, Dyna Graph, Recursion, Conic Graphs,
+Program, Financial, Link, Geometry, Picture Plot, Python, Distribution; cosa
+manca è nel campo `missing` del registro (`src/app_registry.cpp`) e in
+`docs/FEATURE_MATRIX.md`. Numeri in `docs/reports/SVILUPPO_v1.18.0.md` e
 `docs/BUILD_STATUS.md`. **Nessuna prova su hardware**:
-`docs/HARDWARE_TEST_v1.17.0.md` (HW-220…HW-245).
+`docs/HARDWARE_TEST_v1.18.0.md` (HW-246…HW-271).
 
-## 2. Prossima sessione: v1.18.0 = Statistics alla parità completa (solo Plus)
+## 2. Prossima sessione: v1.19.0 = Geometry alla parità completa (solo Plus)
 
 1. `git fetch origin main`; branch di sessione da `main`.
-2. `docs/reports/ANALISI_FONTI_v1.18.0.md` con la tabella di parità del
-   capitolo 6 (Statistics) **prima del codice**: editor delle liste completo
-   (pagine dei menu, SORT, DEL, DEL-ALL, INS, ADD, sottonomi, CSV), tutti i
-   grafici (Scatter, xyLine, NPP, istogramma, box plot, normale, barre, torta,
-   regressioni con tutti i tipi incluse sinusoidale e logistica), CALC 1/2-Var
-   e regressioni con i residui, TEST (Z, t, χ², F, 2 campioni, ANOVA a una e
-   due vie), INTR, DIST complete; più il progetto di **Distribution**
-   (cap. 18) come modalità Base (registro, sezione, tipo di file se serve).
-3. Codice delle funzioni nuove **solo sulla Plus** (`#if FXAI_BOARD_PICO_PLUS_2W`
-   con il codice della v1.16.0 nell'`#else`, come nella v1.17.0): Statistics
-   resta Available sul Pico 2 W con le funzioni della v1.16.0, schermate e
-   immagine identiche (≤ 1 944 228 B salvo correzioni condivise).
-4. Statistics sulla Plus resta Available (lo è dalla v1.8.0) ma deve avere la
-   tabella di parità completa alla fine della v1.18.0; `architecture_test`
-   controlla che le modalità della v1.16.0 restino Available sulla Plus.
-5. `apps_init_test` copre da solo Distribution appena è nel registro come
-   Base; aggiungere i suoi casi a `base_modes_test`/`base_flow_test`.
+2. `docs/reports/ANALISI_FONTI_v1.19.0.md` con la tabella di parità del
+   capitolo 14 (Geometry) **prima del codice**: menu File/Edit/View/Draw/
+   Construct/Transform/Animate, oggetti e vincoli, misure con la casella di
+   misura, trasformazioni (riflessione, traslazione, rotazione, dilatazione,
+   simmetria), animazioni (Trace, tabella delle animazioni, Add/Replace/Run),
+   testo ed etichette, colori e stili, file; una voce = un test.
+3. Codice solo sulla Plus (`#if FXAI_BOARD_PICO_PLUS_2W`, il Pico 2 W non ha
+   Geometry): nucleo `geometry.hpp/.cpp` (ModeCore) esteso, controller
+   `src/apps/geometry_app.cpp`, sezione `0x0110`, file `.pcgeo` con versione nuova
+   e lettura dei file della v1.17.0; operazioni lunghe in `step::Task` con AC.
+4. Alla fine Geometry passa da Base ad Available (solo con la tabella completa);
+   `architecture_test` aggiornato.
+5. Poi v1.20.0 Program e v1.21.0 Python (ROADMAP).
 
 ## 3. Cosa è stato fatto nelle ultime sessioni (v1.15.0, v1.16.0, v1.17.0)
 
 | Area | Contenuto |
 |---|---|
+| Git (v1.18.0) | partenza da `main` = `aa2923c` (v1.17.0); commit intermedi su `claude/eager-wozniak-bg3tqx`; un solo commit su `main` in fast-forward |
+| v1.18.0 | `ANALISI_FONTI_v1.18.0.md` (tabella del cap. 6, Q1–Q16); nucleo `stat_engine` e `dist_core` contro scipy/numpy/statsmodels (`tools/stat_reference.py`, `tests/fixtures/stat_reference.inc`); controller `statistics_plus_app.cpp`, `stat_plot.cpp`; Distribution (`distribution.cpp`, `distribution_app.cpp`); VARS › STAT e x̂/ŷ in Run-Matrix; test `statistics_test` esteso, `statistics_flow_test` (una voce un caso), casi di Distribution in `apps_init_test`, `base_modes_test`, `base_flow_test`; `fuzz_stats` (tre errori trovati e corretti); screenshot 148–174 |
 | Git (v1.17.0) | partenza da `main` = `eb2338a` (v1.16.0); commit intermedi su `claude/eager-lamport-9fht7w`; un solo commit su `main` in fast-forward; tag e release dal workflow |
 | v1.17.0 fase 0 | `ANALISI_FONTI_v1.17.0.md`; risposte: Distribution nella v1.18.0, Program C/C++/C#, MicroPython vero, record v12 solo Plus |
 | v1.17.0 fase 1 | `tests/apps_init_test.cpp` (casi C1–C7, controlli K1–K6, due profili, `mem_new` per le perdite); errore trovato e corretto: Conversion non segnava Ans da salvare |
@@ -116,7 +123,7 @@ ogni modalità per la parità: campo `missing` del registro
 
 ## 4. Collaudo fisico
 
-Resta prioritario appena la PicoCalc è disponibile: HW-01…HW-245 (log USB
+Resta prioritario appena la PicoCalc è disponibile: HW-01…HW-271 (log USB
 dall'accensione, righe `[psram]`, `[flash]`, `[mem]`, `[DIAG]`, `[fault]`,
 foto). Per la v1.17.0 in particolare: la coroutine di Python sul Cortex-M33
 (cambio di contesto, MSPLIM, KeyboardInterrupt, RecursionError senza
@@ -126,6 +133,12 @@ test e corretto; solo le voci provate passano a TESTED ON HARDWARE (data,
 modulo, revisione della scheda).
 
 ## 5. Problemi noti / da verificare
+
+- v1.18.0: tempi di SinReg/LogisticReg e dell'ANOVA con 999 dati sul Cortex-M33
+  (sul PC pochi decimi di secondo; HW-259, HW-263); colori dei marcatori e
+  delle aree sul pannello reale; Sin e Logistic con un metodo iterativo proprio
+  (su dati mal condizionati la calcolatrice può dare un altro minimo locale);
+  la striscia «Stat Graph» di eActivity porta le liste e non gli StatGraph.
 
 - v1.17.0: la pila della coroutine di Python (24 KB, margine 4 KB) e il cambio
   di contesto Cortex-M33 sono provati solo sul PC (ucontext con ASan);
@@ -193,6 +206,13 @@ build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/graph3d_v114.txt   # 3
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/foundations_v115.txt # MEMORY › FILES (105-107)
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/eactivity.txt        # eActivity v1.16.0 (108-127)
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/base_v117.txt        # modalità Base v1.17.0 (128-147)
+build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/statistics_v118.txt  # Statistics e Distribution v1.18.0 (148-174)
+```
+
+```bash
+# Riferimenti numerici di Statistics e Distribution (v1.18.0): scipy, numpy, statsmodels
+pip install scipy numpy statsmodels pandas
+python3 tools/stat_reference.py --check      # fixture identica ai riferimenti rigenerati
 ```
 
 ```bash
@@ -214,7 +234,7 @@ make -C third_party/micropython MICROPYTHON_TOP=/tmp/micropython
 # Fuzzing leggero (v1.13.1): clang con libFuzzer (Ubuntu: libclang-rt-18-dev), ASan + UBSan
 CC=clang CXX=clang++ cmake -S tools/fuzz -B build/fuzz -G Ninja -DFXAI_TEST_BOARD=PICO_PLUS_2W
 cmake --build build/fuzz
-tools/fuzz/run_fuzz.sh build/fuzz 300       # secondi per harness (16 harness dalla v1.17.0); crash in build/fuzz/artifacts
+tools/fuzz/run_fuzz.sh build/fuzz 300       # secondi per harness (17 harness dalla v1.18.0); crash in build/fuzz/artifacts
 FUZZ_ONLY="fuzz_workspace fuzz_program" tools/fuzz/run_fuzz.sh build/fuzz 300   # solo gli harness nuovi o toccati
 ```
 

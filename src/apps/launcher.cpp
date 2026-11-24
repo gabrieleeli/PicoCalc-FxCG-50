@@ -116,6 +116,21 @@ void drawAppIcon(gfx::Canvas& c, AppId id, int x, int y, int w, int h, bool avai
         break;
     }
     case AppId::Symbols: txt(x + 8, y + 4, "\xCE\xB1\xCE\xA3\xCF\x80"); txt(x + 10, y + 19, "\xE2\x88\x9A\xE2\x88\xAB"); break;
+#if FXAI_BOARD_PICO_PLUS_2W
+    case AppId::Distribution: {
+        // v1.18.0: campana con l'area evidenziata.
+        int py = 0;
+        for (int i = 0; i <= 40; ++i) {
+            const double t = (i - 20) / 7.0;
+            const int yy = y + 34 - static_cast<int>(24 * std::exp(-0.5 * t * t));
+            if (i >= 24) c.vLine(x + 8 + i, yy, y + 34 - yy, W);
+            if (i) c.line(x + 7 + i, py, x + 8 + i, yy, W);
+            py = yy;
+        }
+        c.hLine(x + 6, y + 34, 44, W);
+        break;
+    }
+#endif
     default: break;
     }
 }

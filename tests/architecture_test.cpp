@@ -43,7 +43,11 @@ namespace {
 const std::string kRoot = FXAI_SOURCE_ROOT;
 const char* const kIdNames[AppCount] = {"RunMatrix", "Statistics", "EActivity", "Spreadsheet", "Graph", "DynaGraph", "Table",
     "Recursion", "ConicGraphs", "Equation", "Program", "Financial", "ECon4", "Link", "Memory", "System", "Geometry",
-    "PicturePlot", "Graph3D", "Conversion", "Python", "AiChat", "Symbols"};
+    "PicturePlot", "Graph3D", "Conversion", "Python", "AiChat", "Symbols",
+#if FXAI_BOARD_PICO_PLUS_2W
+    "Distribution",                                           // v1.18.0, solo Plus
+#endif
+};
 
 std::string readFile(const std::string& relative) {
     std::ifstream in(kRoot + "/" + relative, std::ios::binary);
@@ -227,6 +231,30 @@ int main() {
             for (AppId id : v117Base)
                 ::testutil::report(appInfo(id).status == AppStatus::Base || !modeCompiled(id), "v1.17.0 modes are Base on the Plus", appInfo(id).name, 0, "Plus");
         }
+#if FXAI_BOARD_PICO_PLUS_2W
+        // v1.18.0: Statistics alla parita' (Available, guscio comune e lavori a passi),
+        // Distribution Base in coda al registro; un solo motore delle distribuzioni
+        // (dist_core su calc_library) usato dal DIST di Statistics e da Distribution.
+        {
+            const AppInfo& st = appInfo(AppId::Statistics);
+            CHECK(st.status == AppStatus::Available && (st.services & service::ModeShell) && (st.services & service::StepTask) && (st.data & data::StatData));
+            CHECK(static_cast<std::size_t>(AppId::Distribution) == AppCount - 1 && std::string(appInfo(AppId::Distribution).key) == "O");
+            ::testutil::report(appInfo(AppId::Distribution).status == AppStatus::Base || !modeCompiled(AppId::Distribution), "v1.18.0 Distribution e' Base", "Distribution", 0, "Plus");
+            const std::string distCore = codeOnly(readFile("src/dist_core.cpp"));
+            CHECK(distCore.find("calclib::normCD(") != std::string::npos && distCore.find("calclib::invHypergeoCD(") != std::string::npos);
+            CHECK(codeOnly(readFile("src/apps/statistics_plus_app.cpp")).find("dist::compute(") != std::string::npos);
+            CHECK(codeOnly(readFile("src/apps/distribution_app.cpp")).find("dist::compute(") != std::string::npos);
+            // Le funzioni di distribuzione non sono riscritte nei controller.
+            for (const char* src : {"src/apps/statistics_plus_app.cpp", "src/apps/distribution_app.cpp", "src/apps/stat_plot.cpp"})
+                ::testutil::report(codeOnly(readFile(src)).find("calclib::") == std::string::npos, "DIST solo da dist_core", src, 0, "calclib");
+            // statistics_app.cpp: sulla Plus il codice della v1.16.0 e' tutto nell'#else.
+            const std::string old = readFile("src/apps/statistics_app.cpp");
+            CHECK(old.find("#if FXAI_BOARD_PICO_PLUS_2W") != std::string::npos && old.find("#else") != std::string::npos);
+        }
+#else
+        // v1.18.0: sul Pico 2 W congelato nessuna modalita' nuova (23 modalita', come la v1.16.0).
+        CHECK(AppCount == 23);
+#endif
         // E-CON4 resta External su entrambe le schede.
         CHECK(appInfo(AppId::ECon4).status == AppStatus::External);
         // Il controllo sulla mappa del linker usa questi nomi (cmake/fxai_sources.cmake).
