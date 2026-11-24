@@ -1,875 +1,1181 @@
-// Macchina a pila dei programmi C, C++ e C# (v1.15.0, F9; solo Pimoroni Pico Plus 2 W).
-//
-// Esegue il bytecode di program_lang.cpp un'istruzione alla volta dentro un
-// ciclo: le chiamate del programma sono frame in un vettore (al piu'
-// MaxCallDepth, "Nesting ERROR" oltre), quindi l'esecuzione non usa la
-// ricorsione nativa. Ogni istruzione consuma un'unita' del budget di step::Task:
-// la modalita' la esegue a passi e AC la interrompe. Memoria: array e stringhe
-// contano su un budget di celle ("Memory ERROR" oltre). WorkspaceHost collega
-// i servizi della calcolatrice (graph_commands, parser unico, A-Z).
-#include "program_internal.hpp"
-#include "binding.hpp"
-#include "expression.hpp"
-#include "graph_commands.hpp"
-#include "workspace.hpp"
+// Macchina dei programmi (v1.20.0): ciclo delle istruzioni, cornici,
+// chiamate (anche dalle funzioni native), eccezioni e loro propagazione,
+// guasti per linguaggio, debug passo passo, esecuzione nella coroutine e
+// API pubblica Machine. Vedi program_vm.hpp e program.hpp.
+#include "program_vm.hpp"
+#include "board_config.hpp"
+#include "coroutine.hpp"
+#include "mem_pools.hpp"
 #include <algorithm>
-#include <cctype>
-#include <cerrno>
 #include <cmath>
-#include <cstdio>
-#include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <limits>
 
 namespace fx::prog {
+
+Limits defaultLimits(bool psram) noexcept {
+    Limits l;
+    if (!psram) {
+        l.heapBytes = 96u * 1024u;
+        l.stackValues = 4096;
+        l.callDepth = 200;
+        l.sourceBytes = 64u * 1024u;
+        l.projectBytes = 128u * 1024u;
+    }
+    return l;
+}
+Limits limitsForCells(std::size_t cells) noexcept {
+    Limits l;
+    l.heapBytes = std::max<std::size_t>(cells * 4u, 16u * 1024u);
+    return l;
+}
+
 namespace {
+constexpr std::size_t CoroStackDevice = 48u * 1024u;
+constexpr std::size_t CoroStackHost = 1024u * 1024u;
 
-struct ArrayObj;
-struct Value {
-    enum K : std::uint8_t { Void, Int, Char, Dbl, Bool, Str, Arr } k{Void};
-    std::int64_t i{0};
-    double d{0};
-    std::string s;
-    std::shared_ptr<ArrayObj> a;
-    static Value ofInt(std::int64_t v) { Value x; x.k = Int; x.i = v; return x; }
-    static Value ofChar(std::int64_t v) { Value x; x.k = Char; x.i = v & 0xFF; return x; }
-    static Value ofDbl(double v) { Value x; x.k = Dbl; x.d = v; return x; }
-    static Value ofBool(bool v) { Value x; x.k = Bool; x.i = v ? 1 : 0; return x; }
-    static Value ofStr(std::string v) { Value x; x.k = Str; x.s = std::move(v); return x; }
-    bool integral() const noexcept { return k == Int || k == Char || k == Bool; }
-    bool numeric() const noexcept { return integral() || k == Dbl; }
-    double num() const noexcept { return k == Dbl ? d : static_cast<double>(i); }
-};
-struct ArrayObj {
-    Type elem{Type::Int};
-    std::size_t rows{0}, cols{1};
-    std::vector<Value> data;
-    std::size_t* counter{nullptr};
-    ~ArrayObj() { if (counter) *counter -= std::min(*counter, data.size()); }
-};
-constexpr std::size_t MaxStringBytes = 65535;
-
-Value zeroOf(Type t) {
-    switch (t) {
-    case Type::Double: return Value::ofDbl(0);
-    case Type::Bool: return Value::ofBool(false);
-    case Type::Char: return Value::ofChar(0);
-    case Type::String: return Value::ofStr("");
-    default: return Value::ofInt(0);
+std::int64_t wrap(VK k, std::int64_t v) noexcept {
+    switch (k) {
+    case VK::Bool: return v != 0;
+    case VK::C8: case VK::I8: return static_cast<std::int8_t>(v);
+    case VK::U8: return static_cast<std::uint8_t>(v);
+    case VK::I16: return static_cast<std::int16_t>(v);
+    case VK::U16: case VK::C16: return static_cast<std::uint16_t>(v);
+    case VK::I32: return static_cast<std::int32_t>(v);
+    case VK::U32: return static_cast<std::uint32_t>(v);
+    default: return v;
     }
 }
-std::string shortestDouble(double v) {
-    if (std::isnan(v)) return "NaN";
-    if (std::isinf(v)) return v > 0 ? "\xE2\x88\x9E" : "-\xE2\x88\x9E";
-    char buf[40];
-    for (int p = 1; p <= 17; ++p) {
-        std::snprintf(buf, sizeof buf, "%.*g", p, v);
-        if (std::strtod(buf, nullptr) == v) break;
-    }
-    // C#: esponente come E+15 (senza zeri iniziali), mai notazione per numeri piccoli interi
-    std::string s = buf;
-    const std::size_t e = s.find('e');
-    if (e != std::string::npos) {
-        std::string mant = s.substr(0, e), ex = s.substr(e + 1);
-        const char sign = ex[0] == '-' ? '-' : '+';
-        std::size_t k = (ex[0] == '-' || ex[0] == '+') ? 1 : 0;
-        while (k + 1 < ex.size() && ex[k] == '0') ++k;
-        s = mant + "E" + sign + ex.substr(k);
-    }
-    return s;
+bool unsignedKind(VK k) noexcept { return k == VK::U8 || k == VK::U16 || k == VK::U32 || k == VK::U64 || k == VK::C16 || k == VK::Bool; }
+VK commonKind(VK a, VK b) noexcept {
+    if (a == b) return a;
+    if (isFloat(a) || isFloat(b)) return VK::F64;
+    if (a == VK::U64 || b == VK::U64) return VK::U64;
+    if (a == VK::I64 || b == VK::I64 || a == VK::U32 || b == VK::U32) return VK::I64;
+    return VK::I32;
 }
-std::string cppDouble(double v) {
-    if (std::isnan(v)) return "nan";
-    if (std::isinf(v)) return v > 0 ? "inf" : "-inf";
-    char buf[40];
-    std::snprintf(buf, sizeof buf, "%g", v);
-    return buf;
-}
-
 } // namespace
 
-struct Machine::Impl {
-    std::size_t cells{0};                                   // prima degli altri membri: distrutto per ultimo
-    std::size_t maxCells;
-    std::shared_ptr<const Program> prog;
-    Host& host;
-    std::vector<Value> stack, globals, locals;
-    struct Frame { std::int32_t fn{-1}; std::int32_t ret{0}; std::size_t base{0}; std::size_t stackBase{0}; };
-    std::vector<Frame> frames;
-    std::int32_t pc{0};
-    std::string inputBuffer;
-    bool inputEof{false};
-    std::uint32_t seed{1};
-    Impl(std::shared_ptr<const Program> p, Host& h, std::size_t max) : maxCells(max), prog(std::move(p)), host(h) {
-        globals.resize(prog->globalNames.size());
-        for (std::size_t i = 0; i < globals.size(); ++i) globals[i] = zeroOf(prog->globalTypes[i]);
-        pc = prog->init;
-        stack.reserve(256);
+// ================================================================ Vm
+Vm::Vm(std::shared_ptr<const Program> program, Host& host, Limits limits)
+    : prog_(std::move(program)), host_(host), limits_(limits), heap_(*this, limits.heapBytes) {
+    if (!heap_.ready()) throw Error("Memory ERROR: memoria insufficiente per il programma", 0, 0);
+    stack.resize(std::max<std::size_t>(limits.stackValues, 256));
+    frames.reserve(64);
+    temps_.reserve(64);
+}
+Vm::~Vm() {
+    closeAllFiles(false);
+}
+
+Dialect Vm::lang() const noexcept { return frames.empty() ? prog_->dialect : frames.back().fn->lang; }
+std::int32_t Vm::library() const noexcept { return frames.empty() ? -1 : frames.back().fn->library; }
+
+std::string Vm::where() const {
+    if (frames.empty()) return "";
+    const Frame& f = frames.back();
+    const SrcPos p = posOf(*f.fn, f.pc > 0 ? f.pc - 1 : 0);
+    std::string file = p.file < prog_->files.size() ? prog_->files[p.file] : std::string();
+    return file + ":" + std::to_string(p.line);
+}
+std::string Vm::stackTrace() const {
+    std::string out;
+    for (std::size_t i = frames.size(); i-- > 0;) {
+        const Frame& f = frames[i];
+        if (f.fn->name == "<init>") continue;
+        const SrcPos p = posOf(*f.fn, f.pc > 0 ? f.pc - 1 : 0);
+        const std::string file = p.file < prog_->files.size() ? prog_->files[p.file] : std::string();
+        out += "  " + f.fn->name + " (" + file + ":" + std::to_string(p.line) + ")\n";
+        if (out.size() > 2000) { out += "  ...\n"; break; }
     }
-    ~Impl() {
-        // gli array si liberano prima del contatore (vedi l'ordine dei membri)
-        stack.clear(); globals.clear(); locals.clear();
+    return out;
+}
+
+ClassInfo* Vm::classNamed(const std::string& n, Dialect d) const {
+    for (const auto& c : prog_->classes) if (c->isNative && c->lang == d && c->name == n) return c.get();
+    return nullptr;
+}
+
+// Errore fatale della fx-CG50 (C/C++: niente eccezioni per i guasti).
+[[noreturn]] void Vm::fatal(const std::string& msg) {
+    int line = 0, col = 0;
+    std::string file;
+    if (!frames.empty()) {
+        const Frame& f = frames.back();
+        const SrcPos p = posOf(*f.fn, f.pc > 0 ? f.pc - 1 : 0);
+        line = static_cast<int>(p.line);
+        col = p.column;
+        file = p.file < prog_->files.size() ? prog_->files[p.file] : std::string();
     }
-    [[noreturn]] void fail(const std::string& m) const {
-        const std::size_t at = static_cast<std::size_t>(std::max<std::int32_t>(0, std::min<std::int32_t>(pc, static_cast<std::int32_t>(prog->where.size()) - 1)));
-        const Where w = prog->where.empty() ? Where{} : prog->where[at];
-        throw Error(m, w.line, w.column);
+    Error e(msg, line, col, file);
+    for (std::size_t i = frames.size(); i-- > 0;) {
+        const Frame& f = frames[i];
+        if (f.fn->name == "<init>") continue;
+        const SrcPos p = posOf(*f.fn, f.pc > 0 ? f.pc - 1 : 0);
+        e.trace.push_back(f.fn->name + " (" + (p.file < prog_->files.size() ? prog_->files[p.file] : std::string()) + ":" + std::to_string(p.line) + ")");
+        if (e.trace.size() > 32) break;
     }
-    Value pop() {
-        if (stack.empty()) fail("Stack ERROR: pila vuota (errore interno)");
-        Value v = std::move(stack.back());
-        stack.pop_back();
-        return v;
+    throw e;
+}
+Value Vm::makeException(ClassInfo* c, const std::string& msg) {
+    InstObj* o = newInstance(c, c->lang == Dialect::Cpp);
+    o->fields[0] = newString(c->lang, msg);
+    o->fields[2] = newString(c->lang, stackTrace());
+    return Value::ref(o);
+}
+[[noreturn]] void Vm::fault(FaultKind k, const std::string& msg) {
+    const Dialect d = lang();
+    ClassInfo* c = prog_->faultClass[static_cast<int>(d)][static_cast<int>(k)];
+    if (d == Dialect::CSharp || d == Dialect::Java) {
+        if (k == FaultKind::Stack) fatal(d == Dialect::Java ? "StackOverflowError: " + msg : "StackOverflowException: " + msg);
+        if (!c) c = prog_->faultClass[static_cast<int>(d)][static_cast<int>(FaultKind::Generic)];
+        if (c) throwValue(makeException(c, msg));
     }
-    void push(Value v) {
-        if (stack.size() >= MaxStack) fail("Stack ERROR: troppi valori sulla pila");
-        stack.push_back(std::move(v));
+    if (d == Dialect::Cpp && k == FaultKind::Memory && c) throwValue(makeException(c, "std::bad_alloc"));
+    // nomi della fx-CG50
+    const char* tag = "Math ERROR: ";
+    switch (k) {
+    case FaultKind::Index: tag = "Dimension ERROR: "; break;
+    case FaultKind::NullPointer: case FaultKind::DeadPointer: tag = "Pointer ERROR: "; break;
+    case FaultKind::Memory: tag = "Memory ERROR: "; break;
+    case FaultKind::Stack: tag = "Nesting ERROR: "; break;
+    case FaultKind::Argument: case FaultKind::Format: tag = "Argument ERROR: "; break;
+    case FaultKind::ReadOnly: tag = "Pointer ERROR: "; break;
+    case FaultKind::Time: tag = "Time ERROR: "; break;
+    case FaultKind::Io: case FaultKind::NotFound: case FaultKind::Unauthorized: tag = "Storage ERROR: "; break;
+    case FaultKind::Cast: tag = "Type ERROR: "; break;
+    default: break;
     }
-    void reserveCells(std::size_t n) {
-        if (n > maxCells || cells > maxCells - n) fail("Memory ERROR: memoria del programma esaurita");
-        cells += n;
+    fatal(tag + msg);
+}
+[[noreturn]] void Vm::raise(const char* cls, const std::string& msg) {
+    const Dialect d = lang();
+    ClassInfo* c = classNamed(cls, d);
+    if (!c && d == Dialect::Cpp) c = classNamed("exception", d);
+    if (!c && (d == Dialect::CSharp || d == Dialect::Java)) c = prog_->exceptionRoot[static_cast<int>(d)];
+    if (!c) fatal(std::string("Math ERROR: ") + msg);
+    throwValue(makeException(c, msg));
+}
+[[noreturn]] void Vm::throwValue(const Value& v, bool rethrow) {
+    if (v.isNull() && (lang() == Dialect::CSharp || lang() == Dialect::Java)) fault(FaultKind::NullPointer, "throw di null");
+    if (!rethrow && !frames.empty()) {
+        const Frame& f = frames.back();
+        const SrcPos p = posOf(*f.fn, f.pc > 0 ? f.pc - 1 : 0);
+        lastThrowLine = static_cast<int>(p.line);
+        lastThrowColumn = p.column;
+        lastThrowFile = p.file < prog_->files.size() ? prog_->files[p.file] : std::string();
+        lastThrowTrace.clear();
+        for (std::size_t i = frames.size(); i-- > 0 && lastThrowTrace.size() < 32;) {
+            const Frame& g = frames[i];
+            if (g.fn->name == "<init>") continue;
+            const SrcPos q = posOf(*g.fn, g.pc > 0 ? g.pc - 1 : 0);
+            lastThrowTrace.push_back(g.fn->name + " (" + (q.file < prog_->files.size() ? prog_->files[q.file] : std::string()) + ":" + std::to_string(q.line) + ")");
+        }
+        // pila nel campo dell'eccezione (StackTrace)
+        if (v.holdsObj() && v.o->kind == OK::Inst) {
+            InstObj* o = static_cast<InstObj*>(v.o);
+            if (o->cls && o->cls->isException && o->nfields > 2) o->fields[2] = newString(o->cls->lang, stackTrace());
+        }
     }
-    std::shared_ptr<ArrayObj> newArray(Type elem, std::int64_t rows, std::int64_t cols) {
-        if (rows < 0 || cols < 0) fail("Dimension ERROR: dimensione dell'array negativa");
-        const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-        if (rows > 1000000 || cols > 1000000) fail("Memory ERROR: array troppo grande");
-        reserveCells(n);
-        auto a = std::make_shared<ArrayObj>();
-        a->counter = &cells;
-        a->elem = elem; a->rows = static_cast<std::size_t>(rows); a->cols = static_cast<std::size_t>(cols);
+    throw ProgramThrow{v};
+}
+ProgramThrow Vm::memoryThrow() {
+    heap_.collect();
+    const Dialect d = lang();
+    ClassInfo* c = prog_->faultClass[static_cast<int>(d)][static_cast<int>(FaultKind::Memory)];
+    if (d == Dialect::Java) c = classNamed("OutOfMemoryError", d);
+    if (!c) fatal(d == Dialect::CSharp ? "OutOfMemoryException: memoria del programma esaurita" : "Memory ERROR: memoria del programma esaurita (" + std::to_string(heap_.budget() / 1024) + " KB)");
+    try {
+        return ProgramThrow{makeException(c, d == Dialect::Cpp ? "std::bad_alloc" : "memoria del programma esaurita")};
+    } catch (std::bad_alloc&) {
+        fatal("Memory ERROR: memoria del programma esaurita");
+    }
+}
+
+// ---------------------------------------------------------------- fette di tempo
+std::size_t Vm::refill() {
+    if (abortRequested) throw ProgramAbort{};
+    if (limits_.timeLimitMs) {
+        const std::uint32_t now = host_.millis();
+        runElapsed += now - runStart;
+        runStart = now;
+        if (runElapsed > limits_.timeLimitMs) fault(FaultKind::Time, "programma oltre il limite di tempo (SET UP)");
+    }
+    for (;;) {
+        if (budget) {
+            std::size_t r = budget->remaining();
+            if (r == std::numeric_limits<std::size_t>::max()) r = 256;
+            if (r > 0 && !budget->exhausted()) {
+                const std::size_t n = std::min<std::size_t>(r, 256);
+                budget->consume(n);
+                return n;
+            }
+        }
+        yieldNow();
+        if (abortRequested) throw ProgramAbort{};
+        runStart = host_.millis();
+    }
+}
+void Vm::yieldNow() {
+    if (coroutine && coroutine->inside()) coroutine->yield();
+    else if (!coroutine) throw ProgramAbort{};
+}
+void Vm::poll() {
+    if (abortRequested) throw ProgramAbort{};
+    if (quota > 64) { quota -= 64; return; }
+    quota = refill();
+}
+bool Vm::readLine(std::string& out) {
+    for (;;) {
+        if (abortRequested) throw ProgramAbort{};
+        if (host_.readLine(out)) { waitingInput = false; return true; }
+        waitingInput = true;
+        if (!coroutine || !coroutine->inside()) { waitingInput = false; return false; }
+        coroutine->yield();
+        runStart = host_.millis();
+    }
+}
+
+// ---------------------------------------------------------------- debug
+void Vm::debugCheck(const Function* f, std::int32_t pc) {
+    const SrcPos p = f->pos[static_cast<std::size_t>(pc)];
+    bool stop = false;
+    if (firstStop) { firstStop = false; stop = f->name != "<init>"; }
+    if (!stop) {
+        for (const auto& b : breakpoints) if (b.first == p.file && b.second == static_cast<std::int32_t>(p.line)) stop = true;
+    }
+    if (!stop) {
+        switch (stepMode) {
+        case StepMode::Into: stop = static_cast<std::int32_t>(p.line) != stepLine || p.file != stepFile || frames.size() != stepDepth; break;
+        case StepMode::Over: stop = frames.size() <= stepDepth && (static_cast<std::int32_t>(p.line) != stepLine || p.file != stepFile || frames.size() < stepDepth); break;
+        case StepMode::Out: stop = frames.size() < stepDepth; break;
+        case StepMode::Run: break;
+        }
+    }
+    if (!stop || f->name == "<init>") return;
+    paused = true;
+    stepLine = static_cast<std::int32_t>(p.line);
+    stepFile = p.file;
+    stepDepth = frames.size();
+    while (paused) {
+        if (!coroutine || !coroutine->inside()) { paused = false; break; }
+        coroutine->yield();
+        if (abortRequested) throw ProgramAbort{};
+    }
+    runStart = host_.millis();
+}
+
+// ---------------------------------------------------------------- avvio
+void Vm::initObjects() {
+    // globali: un array di valori (gli indirizzi &g sono celle di questo oggetto)
+    const std::size_t n = prog_->globalTypes.size();
+    globals = heap_.make<ArrayObj>();
+    globals->flags |= FRoot;
+    globals->ek = VK::Ref;
+    globals->esize = sizeof(Value);
+    globals->count = static_cast<std::uint32_t>(n);
+    if (n) {
+        globals->data = static_cast<std::uint8_t*>(heap_.raw(n * sizeof(Value), alignof(Value)));
+        for (std::size_t i = 0; i < n; ++i) new (globals->data + i * sizeof(Value)) Value();
+        for (std::size_t i = 0; i < n; ++i) globals->set(static_cast<std::uint32_t>(i), defaultValue(prog_->globalTypes[i]));
+    }
+    literals.assign(prog_->strings.size(), nullptr);
+    cppLiterals.assign(prog_->strings.size(), nullptr);
+}
+void Vm::runProgram() {
+    initObjects();
+    runStart = host_.millis();
+    if (prog_->init >= 0) invokeFunction(prog_->functions[static_cast<std::size_t>(prog_->init)].get(), nullptr, 0, false);
+    const Function* main = prog_->functions[static_cast<std::size_t>(prog_->entry)].get();
+    Value args[2];
+    int argc = 0;
+    if (main->params.size() >= 1) {
+        const TypeP pt = main->params[0].type;
+        if (pt->k == TK::Array && pt->rank >= 1 && main->lang != Dialect::C && main->lang != Dialect::Cpp) {
+            ArrayObj* a = newArray(pt->elem, 0);
+            args[0] = Value::ref(a);
+            argc = 1;
+        } else {
+            args[0] = Value::i32(1);
+            argc = 1;
+            if (main->params.size() >= 2) {
+                // argv: { "programma", NULL }
+                TypeP strT = main->params[1].type->elem;
+                ArrayObj* argv = newArray(strT ? strT : prog_->typeAt(0), 2);
+                ArrayObj* name = newCString("programma", false);
+                argv->set(0, Value::ptr(name, 0));
+                argv->set(1, Value::null());
+                args[1] = Value::ptr(argv, 0);
+                argc = 2;
+            }
+        }
+    }
+    Value r = invokeFunction(main, args, argc, prog_->entryReturnsInt);
+    if (prog_->entryReturnsInt) throw ProgramExit{static_cast<int>(r.integer())};
+    throw ProgramExit{0};
+}
+
+void Vm::pushFrame(const Function* f, int argc) {
+    if (frames.size() >= limits_.callDepth) {
+        const Dialect d = f->lang;
+        if (d == Dialect::CSharp) fatal("StackOverflowException: ricorsione oltre " + std::to_string(limits_.callDepth) + " chiamate");
+        if (d == Dialect::Java) {
+            ClassInfo* so = classNamed("StackOverflowError", Dialect::Java);
+            if (so) throwValue(makeException(so, "ricorsione oltre " + std::to_string(limits_.callDepth) + " chiamate"));
+        }
+        fatal("Nesting ERROR: ricorsione oltre " + std::to_string(limits_.callDepth) + " chiamate");
+    }
+    if (!f->defined && f->code.empty()) {
+        if (f->isAbstract) fault(FaultKind::NotImplemented, "metodo astratto " + f->name + " senza implementazione");
+        fatal("Syntax ERROR: funzione '" + f->name + "' dichiarata ma non definita");
+    }
+    Frame fr;
+    fr.fn = f;
+    fr.pc = 0;
+    fr.base = static_cast<std::uint32_t>(sp - static_cast<std::size_t>(argc));
+    fr.serial = ++serials;
+    const std::size_t need = fr.base + static_cast<std::size_t>(f->nlocals) + 64;
+    if (need > stack.size()) fault(FaultKind::Stack, "pila dei valori piena (" + std::to_string(stack.size()) + " valori)");
+    for (std::size_t i = sp; i < fr.base + static_cast<std::size_t>(f->nlocals); ++i) stack[i] = Value();
+    sp = std::max<std::size_t>(sp, fr.base + static_cast<std::size_t>(f->nlocals));
+    frames.push_back(fr);
+}
+
+Value Vm::invokeFunction(const Function* f, const Value* args, int argc, bool hasResult) {
+    if (++nativeDepth > 48) { --nativeDepth; fatal("Nesting ERROR: troppe chiamate annidate dalle funzioni della libreria"); }
+    struct Guard { int& d; ~Guard() { --d; } } g{nativeDepth};
+    const std::size_t depth = frames.size();
+    if (sp + static_cast<std::size_t>(argc) + 2 >= stack.size()) fault(FaultKind::Stack, "pila dei valori piena");
+    const std::size_t base = sp;
+    for (int i = 0; i < argc; ++i) stack[sp++] = args[i];
+    pushFrame(f, argc);
+    execute(depth);
+    Value r;
+    if (hasResult && sp > base) r = stack[--sp];
+    sp = base;
+    return r;
+}
+Value Vm::invoke(const Value& fn, const Value* args, int argc) {
+    if (fn.k != VK::Fn) fault(FaultKind::NullPointer, "chiamata di una funzione nulla");
+    std::vector<Value> full;
+    const Function* f = nullptr;
+    if (fn.f == 1) {
+        ClosureObj* c = static_cast<ClosureObj*>(fn.o);
+        f = prog_->functions[static_cast<std::size_t>(c->fn)].get();
+        full.push_back(c->bound ? c->caps[0] : Value::ref(c));
+    } else if (fn.f == 0) {
+        f = prog_->functions[static_cast<std::size_t>(fn.i)].get();
+    } else fault(FaultKind::Generic, "valore non chiamabile");
+    for (int i = 0; i < argc; ++i) full.push_back(args[i]);
+    return invokeFunction(f, full.data(), static_cast<int>(full.size()), f->ret && f->ret->k != TK::Void);
+}
+
+// ---------------------------------------------------------------- eccezioni
+namespace {
+bool catches(const Vm& vm, const Handler& h, const Value& v) {
+    (void)vm;
+    if (!h.catches && !h.catchType) return true;
+    if (h.catches) {
+        if (v.k != VK::Ref && v.k != VK::Ptr) return false;
+        if (!v.o || v.o->kind != OK::Inst) return false;
+        const InstObj* o = static_cast<const InstObj*>(v.o);
+        return o->cls && o->cls->derivesFrom(h.catches);
+    }
+    // C++: catch di un tipo semplice (int, const char*, Classe*)
+    const TypeP t = h.catchType;
+    if (t->k == TK::Ptr) {
+        if (v.k != VK::Ptr && v.k != VK::Null) return false;
+        if (t->elem && t->elem->k == TK::Class && v.o && v.o->kind == OK::Inst) return static_cast<const InstObj*>(v.o)->cls->derivesFrom(t->elem->cls);
+        if (t->elem && (t->elem->k == TK::C8) && v.o && v.o->kind == OK::Array) return static_cast<const ArrayObj*>(v.o)->ek == VK::C8;
+        return v.k == VK::Null;
+    }
+    if (t->k == TK::Str) return v.o && v.o->kind == OK::StrB;
+    return vkOf(t) == v.k;
+}
+} // namespace
+
+void Vm::unwind(ProgramThrow& t, std::size_t stopDepth) {
+    while (frames.size() > stopDepth) {
+        Frame& fr = frames.back();
+        const std::int32_t pc = fr.pc - 1;
+        for (const Handler& h : fr.fn->handlers) {
+            if (pc < h.start || pc >= h.end) continue;
+            if (!catches(*this, h, t.value)) continue;
+            sp = fr.base + static_cast<std::size_t>(fr.fn->nlocals) + h.depth;
+            if (h.slot >= 0) stack[fr.base + static_cast<std::size_t>(h.slot)] = t.value;
+            else stack[sp++] = t.value;
+            fr.pc = h.target;
+            return;
+        }
+        sp = fr.base;
+        frames.pop_back();
+    }
+    throw t;                                     // a chi ha chiamato questo ciclo (nativo o programma)
+}
+
+// ================================================================ ciclo delle istruzioni
+#define FX_PUSH(v) do { if (sp >= stackCap) fault(FaultKind::Stack, "pila dei valori piena"); stack[sp++] = (v); } while (0)
+
+void Vm::execute(std::size_t stopDepth) {
+    const std::size_t tempMark = temps_.size();
+    const std::size_t stackCap = stack.size();
+    for (;;) {
         try {
-            a->data.assign(n, zeroOf(elem));
-        } catch (const std::bad_alloc&) {
-            a->counter = nullptr;
-            cells -= n;
-            fail("Memory ERROR: memoria del programma esaurita");
-        }
-        return a;
-    }
-    Value& varRef(bool global, std::int32_t slot) {
-        if (global) return globals.at(static_cast<std::size_t>(slot));
-        return locals.at(frames.back().base + static_cast<std::size_t>(slot));
-    }
-    Type varType(bool global, std::int32_t slot) const {
-        if (global) return prog->globalTypes.at(static_cast<std::size_t>(slot));
-        return prog->functions[static_cast<std::size_t>(frames.back().fn)].localTypes.at(static_cast<std::size_t>(slot));
-    }
-
-    // ---- conversioni e testo
-    std::int64_t parseInt(const std::string& s, bool strict) const {
-        const char* b = s.c_str();
-        while (*b == ' ' || *b == '\t') ++b;
-        char* e = nullptr;
-        errno = 0;
-        const long long v = std::strtoll(b, &e, 10);
-        if (strict && (e == b || *e != '\0' || errno == ERANGE)) fail("Argument ERROR: '" + s + "' non e' un intero");
-        return e == b ? 0 : v;
-    }
-    double parseDouble(const std::string& s, bool strict) const {
-        const char* b = s.c_str();
-        while (*b == ' ' || *b == '\t') ++b;
-        char* e = nullptr;
-        const double v = std::strtod(b, &e);
-        if (strict && (e == b || *e != '\0')) fail("Argument ERROR: '" + s + "' non e' un numero");
-        return e == b ? 0 : v;
-    }
-    Value convert(Value v, Type t) const {
-        switch (t) {
-        case Type::Int:
-            if (v.k == Value::Dbl) {
-                if (!std::isfinite(v.d) || std::abs(v.d) >= 9.2e18) fail("Math ERROR: valore fuori dall'intervallo degli interi");
-                return Value::ofInt(static_cast<std::int64_t>(std::trunc(v.d)));
-            }
-            if (v.k == Value::Str) return Value::ofInt(parseInt(v.s, true));
-            if (v.k == Value::Arr || v.k == Value::Void) fail("Argument ERROR: valore non numerico");
-            return Value::ofInt(v.i);
-        case Type::Char:
-            if (v.k == Value::Str) return Value::ofChar(v.s.empty() ? 0 : static_cast<unsigned char>(v.s[0]));
-            if (v.k == Value::Dbl) return Value::ofChar(static_cast<std::int64_t>(v.d));
-            if (v.k == Value::Arr || v.k == Value::Void) fail("Argument ERROR: valore non numerico");
-            return Value::ofChar(v.i);
-        case Type::Double:
-            if (v.k == Value::Str) return Value::ofDbl(parseDouble(v.s, true));
-            if (v.k == Value::Arr || v.k == Value::Void) fail("Argument ERROR: valore non numerico");
-            return Value::ofDbl(v.num());
-        case Type::Bool:
-            if (v.k == Value::Str) return Value::ofBool(!v.s.empty());
-            if (v.k == Value::Arr) return Value::ofBool(true);
-            if (v.k == Value::Void) fail("Argument ERROR: valore mancante");
-            return Value::ofBool(v.k == Value::Dbl ? v.d != 0 : v.i != 0);
-        case Type::String:
-            if (v.k == Value::Str) return v;
-            return Value::ofStr(text(v));
-        default: return v;
-        }
-    }
-    // Il valore come lo stampano cout (C++), Console (C#) o printf("%g") (C).
-    std::string text(const Value& v) const {
-        switch (v.k) {
-        case Value::Int: return std::to_string(v.i);
-        case Value::Char: return std::string(1, static_cast<char>(v.i));
-        case Value::Bool: return prog->dialect == Dialect::CSharp ? (v.i ? "True" : "False") : (v.i ? "1" : "0");
-        case Value::Dbl: return prog->dialect == Dialect::CSharp ? shortestDouble(v.d) : cppDouble(v.d);
-        case Value::Str: return v.s;
-        case Value::Arr: return prog->dialect == Dialect::CSharp ? "System.Array" : "[array]";
-        default: return "";
-        }
-    }
-    std::string checkedString(std::string s) const {
-        if (s.size() > MaxStringBytes) fail("Memory ERROR: stringa troppo lunga");
-        return s;
-    }
-
-    // ---- printf di C
-    std::string printf(const std::vector<Value>& args) const {
-        if (args.empty() || args[0].k != Value::Str) fail("Argument ERROR: printf vuole una stringa di formato");
-        const std::string& f = args[0].s;
-        std::string out;
-        std::size_t next = 1;
-        for (std::size_t i = 0; i < f.size(); ++i) {
-            if (f[i] != '%') { out += f[i]; continue; }
-            if (i + 1 < f.size() && f[i + 1] == '%') { out += '%'; ++i; continue; }
-            std::string spec = "%";
-            ++i;
-            while (i < f.size() && std::strchr("-+ #0", f[i])) spec += f[i++];
-            auto number = [&](void) {
-                if (i < f.size() && f[i] == '*') {
-                    if (next >= args.size()) fail("Argument ERROR: printf ha meno argomenti del formato");
-                    spec += std::to_string(static_cast<int>(std::clamp<std::int64_t>(static_cast<std::int64_t>(args[next++].num()), -500, 500)));
-                    ++i;
-                    return;
+            while (frames.size() > stopDepth) {
+                Frame* fr = &frames.back();
+                const Function* f = fr->fn;
+                if (quota == 0) quota = refill();
+                --quota;
+                ++executed;
+                if (static_cast<std::size_t>(fr->pc) >= f->code.size()) fatal("Syntax ERROR: fine della funzione " + f->name + " senza return");
+                if (debug && f->stmt[static_cast<std::size_t>(fr->pc)]) { debugCheck(f, fr->pc); fr = &frames.back(); }
+                const Instr& in = f->code[static_cast<std::size_t>(fr->pc++)];
+                Value* const S = stack.data();
+                const std::size_t base = fr->base;
+                switch (in.op) {
+                case Op::Nop: break;
+                case Op::PushI: { Value v; v.k = static_cast<VK>(in.b); if (isFloat(v.k)) v.d = in.a; else v.i = wrap(v.k, in.a); FX_PUSH(v); break; }
+                case Op::PushL: { Value v; v.k = static_cast<VK>(in.b); v.i = prog_->ints[static_cast<std::size_t>(in.a)]; if (isFloat(v.k)) v.d = static_cast<double>(v.i); FX_PUSH(v); break; }
+                case Op::PushD: { const double d = prog_->doubles[static_cast<std::size_t>(in.a)]; FX_PUSH(in.b == static_cast<std::uint8_t>(VK::F32) ? Value::f32(d) : Value::f64(d)); break; }
+                case Op::PushS: {
+                    const std::size_t idx = static_cast<std::size_t>(in.a);
+                    if (in.b == 0) {
+                        // letterale del C: array di char in sola lettura, sempre lo stesso
+                        if (!literals[idx]) { ArrayObj* a = newCString(prog_->strings[idx].bytes, true); a->flags |= FRoot; literals[idx] = a; }
+                        FX_PUSH(Value::ref(literals[idx]));
+                    } else if (in.b == 1) {
+                        FX_PUSH(Value::ref(newStrB(prog_->strings[idx].bytes)));
+                    } else {
+                        if (!literals[idx]) { StrWObj* s = newStrW(prog_->strings[idx].wide); s->flags |= FRoot; literals[idx] = s; }
+                        FX_PUSH(Value::ref(literals[idx]));
+                    }
+                    break;
                 }
-                std::size_t digits = 0;
-                while (i < f.size() && std::isdigit(static_cast<unsigned char>(f[i]))) { if (++digits > 3) fail("Argument ERROR: larghezza di printf troppo grande"); spec += f[i++]; }
-            };
-            number();
-            if (i < f.size() && f[i] == '.') { spec += f[i++]; number(); }
-            while (i < f.size() && std::strchr("hlLqjzt", f[i])) ++i;
-            if (i >= f.size()) fail("Argument ERROR: formato di printf incompleto");
-            const char conv = f[i];
-            if (next >= args.size()) fail("Argument ERROR: printf ha meno argomenti del formato");
-            const Value& a = args[next++];
-            char buf[600];
-            switch (conv) {
-            case 'd': case 'i':
-                spec += "lld";
-                std::snprintf(buf, sizeof buf, spec.c_str(), static_cast<long long>(a.k == Value::Dbl ? static_cast<long long>(a.d) : a.i));
-                break;
-            case 'u': case 'x': case 'X': case 'o':
-                spec += "ll"; spec += conv;
-                std::snprintf(buf, sizeof buf, spec.c_str(), static_cast<unsigned long long>(a.k == Value::Dbl ? static_cast<long long>(a.d) : a.i));
-                break;
-            case 'f': case 'F': case 'e': case 'E': case 'g': case 'G': case 'a': case 'A':
-                spec += conv;
-                std::snprintf(buf, sizeof buf, spec.c_str(), a.num());
-                break;
-            case 'c':
-                spec += 'c';
-                std::snprintf(buf, sizeof buf, spec.c_str(), static_cast<int>(static_cast<unsigned char>(a.k == Value::Str ? (a.s.empty() ? 0 : a.s[0]) : a.i)));
-                break;
-            case 's': {
-                spec += 's';
-                const std::string s = text(a);
-                std::snprintf(buf, sizeof buf, spec.c_str(), s.c_str());
-                break;
+                case Op::PushNull: FX_PUSH(Value::null()); break;
+                case Op::PushVoid: FX_PUSH(Value()); break;
+                case Op::PushFn: FX_PUSH(Value::fn(in.a)); break;
+                case Op::LoadL: FX_PUSH(S[base + static_cast<std::size_t>(in.a)]); break;
+                case Op::StoreL: S[base + static_cast<std::size_t>(in.a)] = in.b ? S[sp - 1] : S[--sp]; break;
+                case Op::LoadG: FX_PUSH(globals->get(static_cast<std::uint32_t>(in.a))); break;
+                case Op::StoreG: globals->set(static_cast<std::uint32_t>(in.a), in.b ? S[sp - 1] : S[--sp]); break;
+                case Op::NewBox: { BoxObj* b = heap_.make<BoxObj>(); b->v = S[base + static_cast<std::size_t>(in.a)]; S[base + static_cast<std::size_t>(in.a)] = Value::ref(b); break; }
+                case Op::LoadBox: { Obj* o = S[base + static_cast<std::size_t>(in.a)].o; FX_PUSH(static_cast<BoxObj*>(o)->v); break; }
+                case Op::StoreBox: { Obj* o = S[base + static_cast<std::size_t>(in.a)].o; static_cast<BoxObj*>(o)->v = in.b ? S[sp - 1] : S[--sp]; break; }
+                case Op::AddrL: {
+                    if (in.b == 1) { FX_PUSH(Value::ptr(S[base + static_cast<std::size_t>(in.a)].o, 0)); break; }
+                    Value p;
+                    p.k = VK::Ptr;
+                    p.f = 2;                              // puntatore a una variabile della pila
+                    p.idx = static_cast<std::uint32_t>(base + static_cast<std::size_t>(in.a));
+                    p.aux = static_cast<std::uint16_t>(std::min<std::size_t>(frames.size() - 1, 65535));
+                    p.u = fr->serial;
+                    FX_PUSH(p);
+                    break;
+                }
+                case Op::AddrG: FX_PUSH(Value::ptr(globals, static_cast<std::uint32_t>(in.a))); break;
+                case Op::KillL: {
+                    Value& v = S[base + static_cast<std::size_t>(in.a)];
+                    if (f->lang == Dialect::C || f->lang == Dialect::Cpp) killValue(v);
+                    v = Value();
+                    break;
+                }
+                case Op::Pop: --sp; break;
+                case Op::Dup: {
+                    const std::size_t n = in.b ? in.b : 1;
+                    if (sp + n > stackCap) fault(FaultKind::Stack, "pila dei valori piena");
+                    for (std::size_t i = 0; i < n; ++i) S[sp + i] = S[sp - n + i];
+                    sp += n;
+                    break;
+                }
+                case Op::DupX: {
+                    const std::size_t n = in.b;
+                    if (sp + 1 > stackCap) fault(FaultKind::Stack, "pila dei valori piena");
+                    const Value top = S[sp - 1];
+                    for (std::size_t i = 0; i <= n; ++i) S[sp - i] = S[sp - 1 - i];
+                    S[sp - 1 - n] = top;
+                    ++sp;
+                    break;
+                }
+                case Op::Swap: std::swap(S[sp - 1], S[sp - 2]); break;
+                case Op::GetF: {
+                    InstObj* o = static_cast<InstObj*>(objOf(S[sp - 1]));
+                    if (o->kind != OK::Inst || static_cast<std::uint32_t>(in.a) >= o->nfields) fault(FaultKind::Generic, "campo non valido");
+                    S[sp - 1] = o->fields[in.a];
+                    break;
+                }
+                case Op::SetF: {
+                    InstObj* o = static_cast<InstObj*>(objOf(S[sp - 2]));
+                    if (o->kind != OK::Inst || static_cast<std::uint32_t>(in.a) >= o->nfields) fault(FaultKind::Generic, "campo non valido");
+                    o->fields[in.a] = S[sp - 1];
+                    if (in.b) { S[sp - 2] = S[sp - 1]; --sp; } else sp -= 2;
+                    break;
+                }
+                case Op::AddrF: {
+                    Obj* o = objOf(S[sp - 1]);
+                    S[sp - 1] = Value::ptr(o, static_cast<std::uint32_t>(in.a));
+                    break;
+                }
+                case Op::GetE: case Op::SetE: case Op::AddrE: {
+                    const std::size_t args = in.op == Op::SetE ? 3 : 2;
+                    Obj* o = objOf(S[sp - args]);
+                    if (o->kind != OK::Array) fault(FaultKind::Generic, "indice su un valore che non e' un array");
+                    ArrayObj* a = static_cast<ArrayObj*>(o);
+                    const std::int64_t i = S[sp - args + 1].integer();
+                    if (a->ek == VK::Void) fault(FaultKind::Generic, "memoria di malloc usata prima di avere un tipo (manca il cast?)");
+                    if (i < 0 || static_cast<std::uint64_t>(i) >= a->count) {
+                        const Dialect d = f->lang;
+                        fault(FaultKind::Index, d == Dialect::CSharp ? "l'indice era fuori dai limiti della matrice" :
+                              "indice " + std::to_string(i) + " fuori da [0, " + std::to_string(a->count == 0 ? -1 : static_cast<std::int64_t>(a->count) - 1) + "]");
+                    }
+                    if (in.op == Op::GetE) { S[sp - 2] = a->get(static_cast<std::uint32_t>(i)); --sp; }
+                    else if (in.op == Op::AddrE) { S[sp - 2] = Value::ptr(a, static_cast<std::uint32_t>(i)); --sp; }
+                    else {
+                        if (a->flags & FReadOnly) fault(FaultKind::ReadOnly, "scrittura su una stringa letterale");
+                        a->set(static_cast<std::uint32_t>(i), S[sp - 1]);
+                        if (in.b) { S[sp - 3] = S[sp - 1]; sp -= 2; } else sp -= 3;
+                    }
+                    break;
+                }
+                case Op::GetE2: case Op::SetE2: case Op::AddrE2: {
+                    const std::size_t args = in.op == Op::SetE2 ? 4 : 3;
+                    ArrayObj* a = static_cast<ArrayObj*>(objOf(S[sp - args]));
+                    if (a->kind != OK::Array || a->rank != 2) fault(FaultKind::Generic, "array [,] atteso");
+                    const std::int64_t r = S[sp - args + 1].integer(), c = S[sp - args + 2].integer();
+                    if (r < 0 || c < 0 || static_cast<std::uint64_t>(r) >= a->rows || static_cast<std::uint64_t>(c) >= a->cols)
+                        fault(FaultKind::Index, "l'indice era fuori dai limiti della matrice");
+                    const std::uint32_t i = static_cast<std::uint32_t>(r) * a->cols + static_cast<std::uint32_t>(c);
+                    if (in.op == Op::GetE2) { S[sp - 3] = a->get(i); sp -= 2; }
+                    else if (in.op == Op::AddrE2) { S[sp - 3] = Value::ptr(a, i); sp -= 2; }
+                    else { a->set(i, S[sp - 1]); if (in.b) { S[sp - 4] = S[sp - 1]; sp -= 3; } else sp -= 4; }
+                    break;
+                }
+                case Op::ArrLen: {
+                    Obj* o = objOf(S[sp - 1]);
+                    if (o->kind != OK::Array) fault(FaultKind::Generic, "Length di un valore che non e' un array");
+                    const ArrayObj* a = static_cast<const ArrayObj*>(o);
+                    S[sp - 1] = in.b == 1 ? Value::i64(a->count) : Value::i32(a->count);
+                    break;
+                }
+                case Op::LoadP: S[sp - 1] = loadPtr(S[sp - 1]); break;
+                case Op::StoreP: {
+                    storePtr(S[sp - 2], S[sp - 1]);
+                    if (in.b) { S[sp - 2] = S[sp - 1]; --sp; } else sp -= 2;
+                    break;
+                }
+                case Op::IncL: case Op::IncG: case Op::IncP: {
+                    Value cur;
+                    Value ptr;
+                    if (in.op == Op::IncL) cur = S[base + static_cast<std::size_t>(in.a)];
+                    else if (in.op == Op::IncG) cur = globals->get(static_cast<std::uint32_t>(in.a));
+                    else { ptr = S[--sp]; cur = loadPtr(ptr); }
+                    const bool dec = (in.b & 2) != 0;
+                    Value nv = cur;
+                    if (isFloat(cur.k)) nv.d = cur.d + (dec ? -1.0 : 1.0), nv = cur.k == VK::F32 ? Value::f32(nv.d) : nv;
+                    else if (cur.k == VK::Ptr) {
+                        if (cur.f == 2) fault(FaultKind::Generic, "aritmetica su un puntatore a una variabile semplice");
+                        if (!cur.o) fault(FaultKind::NullPointer, "++ su un puntatore NULL");
+                        nv.idx = cur.idx + (dec ? 0xFFFFFFFFu : 1u);
+                    } else if (isInt(cur.k) || cur.k == VK::Bool) nv.i = wrap(cur.k, static_cast<std::int64_t>(static_cast<std::uint64_t>(cur.i) + (dec ? ~0ull : 1ull)));
+                    else if (cur.k == VK::Void) fault(FaultKind::Generic, "++ su una variabile senza valore");
+                    if (in.op == Op::IncL) S[base + static_cast<std::size_t>(in.a)] = nv;
+                    else if (in.op == Op::IncG) globals->set(static_cast<std::uint32_t>(in.a), nv);
+                    else storePtr(ptr, nv);
+                    FX_PUSH((in.b & 1) ? cur : nv);
+                    break;
+                }
+                case Op::Conv: S[sp - 1] = convertTo(S[sp - 1], static_cast<VK>(in.b)); break;
+                case Op::ConvT: {
+                    TypeP t = prog_->typeAt(in.a);
+                    S[sp - 1] = castTo(S[sp - 1], t);
+                    if (in.b == 1 && S[sp - 1].o) S[sp - 1].o->flags |= FExplicit;
+                    break;
+                }
+                case Op::ToStr: {
+                    if (in.a > 0) {
+                        // enum: il nome del valore
+                        TypeP t = prog_->typeAt(in.a);
+                        if (t->k == TK::Enum && t->cls) {
+                            const std::int64_t v = S[sp - 1].integer();
+                            for (const auto& ev : t->cls->enumValues) if (ev.second == v) { S[sp - 1] = newString(static_cast<Dialect>(in.b), ev.first); goto toStrDone; }
+                        }
+                    }
+                    S[sp - 1] = toLangString(S[sp - 1], static_cast<Dialect>(in.b));
+                toStrDone:
+                    break;
+                }
+                case Op::ToBool: S[sp - 1] = Value::boolean(truthy(S[sp - 1])); break;
+                case Op::Add: case Op::Sub: case Op::Mul: case Op::Div: case Op::Rem:
+                case Op::And: case Op::Or: case Op::Xor: case Op::Shl: case Op::Shr: case Op::UShr: {
+                    Value& a = S[sp - 2];
+                    const Value b = S[sp - 1];
+                    --sp;
+                    if (a.k == VK::Ptr || b.k == VK::Ptr) {
+                        // aritmetica dei puntatori
+                        if (in.op == Op::Sub && a.k == VK::Ptr && b.k == VK::Ptr) {
+                            if (a.o != b.o || a.f == 2 || b.f == 2) fault(FaultKind::Generic, "differenza tra puntatori di oggetti diversi");
+                            a = Value::i64(static_cast<std::int64_t>(a.idx) - static_cast<std::int64_t>(b.idx));
+                            break;
+                        }
+                        Value p = a.k == VK::Ptr ? a : b;
+                        const std::int64_t n = (a.k == VK::Ptr ? b : a).integer();
+                        if (p.f == 2) fault(FaultKind::Generic, "aritmetica su un puntatore a una variabile semplice");
+                        if (!p.o) fault(FaultKind::NullPointer, "aritmetica su un puntatore NULL");
+                        if (p.idx == Whole) p.idx = 0;
+                        const std::int64_t ni = static_cast<std::int64_t>(p.idx) + (in.op == Op::Sub ? -n : n);
+                        if (ni < -1 || ni > 0x7FFFFFFF) fault(FaultKind::Index, "puntatore fuori dall'oggetto");
+                        p.idx = static_cast<std::uint32_t>(ni);
+                        a = p;
+                        break;
+                    }
+                    VK k = a.k == b.k ? a.k : commonKind(a.k, b.k);
+                    if (a.k != k) a = convertTo(a, k);
+                    const Value bb = b.k != k && in.op != Op::Shl && in.op != Op::Shr && in.op != Op::UShr ? convertTo(b, k) : b;
+                    if (isFloat(k)) {
+                        double r = 0;
+                        switch (in.op) {
+                        case Op::Add: r = a.d + bb.d; break;
+                        case Op::Sub: r = a.d - bb.d; break;
+                        case Op::Mul: r = a.d * bb.d; break;
+                        case Op::Div: r = a.d / bb.d; break;
+                        case Op::Rem: r = std::fmod(a.d, bb.d); break;
+                        default: fault(FaultKind::Generic, "operazione su bit con numeri reali");
+                        }
+                        a = k == VK::F32 ? Value::f32(r) : Value::f64(r);
+                        break;
+                    }
+                    if (k == VK::Void || k == VK::Null || k == VK::Ref || k == VK::Fn) fault(FaultKind::Generic, "operazione aritmetica su un valore non numerico");
+                    const std::uint64_t x = static_cast<std::uint64_t>(a.i), y = static_cast<std::uint64_t>(bb.i);
+                    const bool uns = unsignedKind(k);
+                    std::int64_t r = 0;
+                    switch (in.op) {
+                    case Op::Add: r = static_cast<std::int64_t>(x + y); break;
+                    case Op::Sub: r = static_cast<std::int64_t>(x - y); break;
+                    case Op::Mul: r = static_cast<std::int64_t>(x * y); break;
+                    case Op::Div: case Op::Rem: {
+                        if (y == 0) fault(FaultKind::DivZero, f->lang == Dialect::CSharp ? "tentativo di dividere per zero" : f->lang == Dialect::Java ? "/ by zero" : "divisione per zero");
+                        if (uns) {
+                            const std::uint64_t ux = k == VK::U64 ? x : static_cast<std::uint64_t>(a.i), uy = k == VK::U64 ? y : static_cast<std::uint64_t>(bb.i);
+                            r = static_cast<std::int64_t>(in.op == Op::Div ? ux / uy : ux % uy);
+                        } else {
+                            const std::int64_t sx = a.i, sy = bb.i;
+                            const std::int64_t minK = k == VK::I32 ? INT32_MIN : k == VK::I64 ? INT64_MIN : INT64_MIN;
+                            if (sy == -1 && sx == minK) {
+                                if (f->lang == Dialect::CSharp && in.op == Op::Div) fault(FaultKind::Overflow, "l'operazione aritmetica ha causato un overflow");
+                                r = in.op == Op::Div ? sx : 0;
+                            } else r = in.op == Op::Div ? sx / sy : sx % sy;
+                        }
+                        break;
+                    }
+                    case Op::And: r = static_cast<std::int64_t>(x & y); break;
+                    case Op::Or: r = static_cast<std::int64_t>(x | y); break;
+                    case Op::Xor: r = static_cast<std::int64_t>(x ^ y); break;
+                    case Op::Shl: case Op::Shr: case Op::UShr: {
+                        const int bits = bitsOf(k) < 32 ? 32 : bitsOf(k);
+                        const unsigned s = static_cast<unsigned>(bb.i) & static_cast<unsigned>(bits - 1);
+                        if (in.op == Op::Shl) r = static_cast<std::int64_t>(x << s);
+                        else if (in.op == Op::UShr) r = static_cast<std::int64_t>((bits == 32 ? (x & 0xFFFFFFFFull) : x) >> s);
+                        else r = uns ? static_cast<std::int64_t>((k == VK::U64 ? x : (x & (bits == 32 ? 0xFFFFFFFFull : ~0ull))) >> s) : (a.i >> s);
+                        break;
+                    }
+                    default: break;
+                    }
+                    a.k = k;
+                    a.i = wrap(k, r);
+                    break;
+                }
+                case Op::Neg: {
+                    Value& a = S[sp - 1];
+                    if (isFloat(a.k)) a.d = -a.d;
+                    else if (isInt(a.k)) a.i = wrap(a.k, static_cast<std::int64_t>(0u - static_cast<std::uint64_t>(a.i)));
+                    else fault(FaultKind::Generic, "- su un valore non numerico");
+                    break;
+                }
+                case Op::Not: S[sp - 1] = Value::boolean(!truthy(S[sp - 1])); break;
+                case Op::BitNot: { Value& a = S[sp - 1]; if (!isInt(a.k)) fault(FaultKind::Generic, "~ su un valore non intero"); a.i = wrap(a.k, ~a.i); break; }
+                case Op::Eq: case Op::Ne: case Op::Lt: case Op::Le: case Op::Gt: case Op::Ge: {
+                    const Value a = S[sp - 2], b = S[sp - 1];
+                    --sp;
+                    int c = 0;
+                    bool unordered = false;
+                    if ((isNum(a.k)) && (isNum(b.k))) {
+                        const VK k = a.k == b.k ? a.k : commonKind(a.k, b.k);
+                        if (isFloat(k)) {
+                            const double x = a.num(), y = b.num();
+                            if (std::isnan(x) || std::isnan(y)) unordered = true;
+                            c = x < y ? -1 : x > y ? 1 : 0;
+                        } else if (k == VK::U64) {
+                            const std::uint64_t x = a.k == VK::U64 ? a.u : static_cast<std::uint64_t>(a.i), y = b.k == VK::U64 ? b.u : static_cast<std::uint64_t>(b.i);
+                            c = x < y ? -1 : x > y ? 1 : 0;
+                        } else c = a.i < b.i ? -1 : a.i > b.i ? 1 : 0;
+                    } else if (a.k == VK::Ptr || b.k == VK::Ptr || a.isNull() || b.isNull()) {
+                        if (a.isNull() || b.isNull()) c = (a.isNull() && b.isNull()) ? 0 : 1;
+                        else if (a.f == 2 || b.f == 2) c = (a.f == b.f && a.idx == b.idx && a.u == b.u) ? 0 : (a.idx < b.idx ? -1 : 1);
+                        else if (a.k == VK::Ptr && b.k == VK::Ptr) {
+                            const std::uint32_t ia = a.idx == Whole ? 0 : a.idx, ib = b.idx == Whole ? 0 : b.idx;
+                            if (a.o != b.o) { if (in.op != Op::Eq && in.op != Op::Ne) fault(FaultKind::Generic, "confronto < > tra puntatori di oggetti diversi"); c = 1; }
+                            else c = ia < ib ? -1 : ia > ib ? 1 : 0;
+                        } else c = (a.holdsObj() && b.holdsObj() && a.o == b.o) ? 0 : 1;
+                    } else if (a.k == VK::Ref && b.k == VK::Ref) c = a.o == b.o ? 0 : 1;
+                    else if (a.k == VK::Fn && b.k == VK::Fn) c = (a.f == b.f && (a.f == 0 ? a.i == b.i : a.o == b.o)) ? 0 : 1;
+                    else c = 1;
+                    bool r = false;
+                    switch (in.op) {
+                    case Op::Eq: r = !unordered && c == 0; break;
+                    case Op::Ne: r = unordered || c != 0; break;
+                    case Op::Lt: r = !unordered && c < 0; break;
+                    case Op::Le: r = !unordered && c <= 0; break;
+                    case Op::Gt: r = !unordered && c > 0; break;
+                    default: r = !unordered && c >= 0; break;
+                    }
+                    S[sp - 1] = Value::boolean(r);
+                    if (f->lang == Dialect::C) S[sp - 1] = Value::i32(r ? 1 : 0);
+                    break;
+                }
+                case Op::Concat: {
+                    const std::u16string a = S[sp - 2].isNull() ? std::u16string() : utf16(S[sp - 2]);
+                    const std::u16string b = S[sp - 1].isNull() ? std::u16string() : utf16(S[sp - 1]);
+                    if (a.size() + b.size() > 4u * 1024u * 1024u) fault(FaultKind::Memory, "stringa troppo lunga");
+                    StrWObj* s = newStrW(a + b);
+                    --sp;
+                    S[sp - 1] = Value::ref(s);
+                    break;
+                }
+                case Op::StrEq: {
+                    const Value a = S[sp - 2], b = S[sp - 1];
+                    --sp;
+                    bool r = false;
+                    if (a.isNull() || b.isNull()) r = a.isNull() && b.isNull();
+                    else r = utf16(a) == utf16(b);
+                    S[sp - 1] = Value::boolean(r);
+                    break;
+                }
+                case Op::StrCmp: {
+                    const int c = compareValues(S[sp - 2], S[sp - 1]);
+                    --sp;
+                    S[sp - 1] = Value::i32(c);
+                    break;
+                }
+                case Op::Jmp: fr->pc = in.a; break;
+                case Op::Jz: if (!truthy(S[--sp])) fr->pc = in.a; break;
+                case Op::Jnz: if (truthy(S[--sp])) fr->pc = in.a; break;
+                case Op::JzKeep: if (!truthy(S[sp - 1])) fr->pc = in.a; break;
+                case Op::JnzKeep: if (truthy(S[sp - 1])) fr->pc = in.a; break;
+                case Op::Switch: {
+                    const SwitchTable& t = prog_->switches[static_cast<std::size_t>(in.a)];
+                    const Value v = S[--sp];
+                    std::int32_t target = t.fallback;
+                    if (t.strings) {
+                        if (!v.isNull()) {
+                            const std::u16string s = utf16(v);
+                            for (const auto& c : t.strCases) if (c.first == s) { target = c.second; break; }
+                        }
+                    } else {
+                        const std::int64_t x = v.integer();
+                        auto it = std::lower_bound(t.cases.begin(), t.cases.end(), std::make_pair(x, INT32_MIN));
+                        if (it != t.cases.end() && it->first == x) target = it->second;
+                    }
+                    fr->pc = target;
+                    break;
+                }
+                case Op::Call: {
+                    const Function* g = prog_->functions[static_cast<std::size_t>(in.a)].get();
+                    pushFrame(g, in.b);
+                    break;
+                }
+                case Op::CallV: case Op::CallI: {
+                    const Value& recv = S[sp - in.b];
+                    Obj* o = objOf(recv);
+                    if (o->kind != OK::Inst) fault(FaultKind::Generic, "metodo su un valore che non e' un oggetto");
+                    ClassInfo* c = static_cast<InstObj*>(o)->cls;
+                    const Function* g = nullptr;
+                    if (in.op == Op::CallV) {
+                        if (static_cast<std::size_t>(in.a) >= c->vtable.size()) fault(FaultKind::Generic, "metodo virtuale non trovato");
+                        g = c->vtable[static_cast<std::size_t>(in.a)];
+                    } else {
+                        const std::string& sel = prog_->selectors[static_cast<std::size_t>(in.a)];
+                        auto it = c->selectors.find(sel);
+                        if (it == c->selectors.end()) fault(FaultKind::Cast, "l'oggetto non implementa " + sel.substr(0, sel.find('/')));
+                        g = it->second;
+                    }
+                    if (g->isAbstract && !g->defined) fault(FaultKind::NotImplemented, "metodo astratto " + g->name);
+                    pushFrame(g, in.b);
+                    break;
+                }
+                case Op::CallN: {
+                    NativeCall call;
+                    call.argc = in.b;
+                    call.args = S + (sp - in.b);
+                    call.lang = f->lang;
+                    const std::uint32_t tix = in.c >> 1;
+                    call.type = tix && tix < prog_->types.size() ? prog_->typeAt(static_cast<std::int32_t>(tix)) : nullptr;
+                    const std::size_t mark = temps_.size();
+                    ++nativeDepth;
+                    try {
+                        nativeAt(in.a)(*this, call);
+                    } catch (...) {
+                        --nativeDepth;
+                        throw;
+                    }
+                    --nativeDepth;
+                    sp -= in.b;
+                    if (in.c & 1) FX_PUSH(call.ret);
+                    unroot(mark);
+                    break;
+                }
+                case Op::CallFn: {
+                    const std::size_t fnPos = sp - in.b - 1;
+                    const Value fv = S[fnPos];
+                    if (fv.k != VK::Fn) fault(FaultKind::NullPointer, f->lang == Dialect::C || f->lang == Dialect::Cpp ? "chiamata di un puntatore a funzione NULL" : "delegato null");
+                    if (fv.f == 0) {
+                        for (std::size_t i = fnPos; i + 1 < sp; ++i) S[i] = S[i + 1];
+                        --sp;
+                        pushFrame(prog_->functions[static_cast<std::size_t>(fv.i)].get(), in.b);
+                    } else if (fv.f == 1) {
+                        ClosureObj* c = static_cast<ClosureObj*>(fv.o);
+                        S[fnPos] = c->bound ? c->caps[0] : Value::ref(c);
+                        pushFrame(prog_->functions[static_cast<std::size_t>(c->fn)].get(), in.b + 1);
+                    } else fault(FaultKind::Generic, "valore non chiamabile");
+                    break;
+                }
+                case Op::Ret: {
+                    Value r;
+                    if (in.b) r = S[sp - 1];
+                    sp = fr->base;
+                    frames.pop_back();
+                    if (in.b) FX_PUSH(r);
+                    break;
+                }
+                case Op::New: {
+                    ClassInfo* c = prog_->classes[static_cast<std::size_t>(in.a)].get();
+                    InstObj* o = newInstance(c, in.c == 1);
+                    FX_PUSH(Value::ref(o));
+                    break;
+                }
+                case Op::NewArr: {
+                    TypeP et = prog_->typeAt(in.a);
+                    const std::size_t dims = in.b ? in.b : 1;
+                    const bool explicitAlloc = (in.c & 1) != 0;
+                    if (in.c == 2) {
+                        const std::int64_t r = S[sp - 2].integer(), c = S[sp - 1].integer();
+                        if (r < 0 || c < 0) fault(FaultKind::Overflow, "dimensione negativa");
+                        if (static_cast<std::uint64_t>(r) * static_cast<std::uint64_t>(c) > 50000000ull) fault(FaultKind::Memory, "array troppo grande");
+                        ArrayObj* a = newArray(et, static_cast<std::uint32_t>(r * c));
+                        a->rank = 2;
+                        a->rows = static_cast<std::uint32_t>(r);
+                        a->cols = static_cast<std::uint32_t>(c);
+                        sp -= 2;
+                        FX_PUSH(Value::ref(a));
+                        break;
+                    }
+                    // dimensioni annidate (C: int m[3][4]): array di array
+                    std::int64_t n[8];
+                    for (std::size_t i = 0; i < dims && i < 8; ++i) {
+                        n[i] = S[sp - dims + i].integer();
+                        if (n[i] < 0) fault(f->lang == Dialect::CSharp ? FaultKind::Overflow : FaultKind::Argument, "dimensione negativa dell'array");
+                        if (n[i] > 50000000) fault(FaultKind::Memory, "array troppo grande");
+                    }
+                    sp -= dims;
+                    std::function<ArrayObj*(std::size_t, TypeP)> build = [&](std::size_t d, TypeP inner) -> ArrayObj* {
+                        if (d + 1 == dims) return newArray(inner, static_cast<std::uint32_t>(n[d]), explicitAlloc && d == 0);
+                        ArrayObj* outer = newArray(nullptr, static_cast<std::uint32_t>(n[d]), explicitAlloc && d == 0);
+                        for (std::int64_t k = 0; k < n[d]; ++k) {
+                            ArrayObj* sub = build(d + 1, inner);
+                            outer->set(static_cast<std::uint32_t>(k), Value::ref(sub));
+                        }
+                        return outer;
+                    };
+                    ArrayObj* a = build(0, et);
+                    if (explicitAlloc) a->flags |= FArrayNew;
+                    FX_PUSH(Value::ref(a));
+                    break;
+                }
+                case Op::ArrLit: {
+                    TypeP et = prog_->typeAt(in.a);
+                    const std::size_t n = in.c;
+                    ArrayObj* a = newArray(et, static_cast<std::uint32_t>(n));
+                    for (std::size_t i = 0; i < n; ++i) a->set(static_cast<std::uint32_t>(i), S[sp - n + i]);
+                    sp -= n;
+                    FX_PUSH(Value::ref(a));
+                    break;
+                }
+                case Op::NewNative: FX_PUSH(newNative(prog_->typeAt(in.a))); break;
+                case Op::Copy: S[sp - 1] = copyValue(S[sp - 1], in.a); break;
+                case Op::CopyInto: {
+                    const Value dst = S[sp - 2], src = S[sp - 1];
+                    sp -= 2;
+                    copyInto(dst, src);
+                    break;
+                }
+                case Op::Destroy: {
+                    const Value v = S[--sp];
+                    destroyValue(v, in.a >= 0 ? prog_->classes[static_cast<std::size_t>(in.a)].get() : nullptr);
+                    break;
+                }
+                case Op::Delete: {
+                    const Value v = S[--sp];
+                    if (v.isNull()) break;
+                    if (v.k == VK::Ptr && v.f == 2) fault(FaultKind::Generic, "delete di una variabile locale (non e' stata creata con new)");
+                    Obj* o = v.o;
+                    if (!o) break;
+                    if (o->dead()) fault(FaultKind::DeadPointer, "delete di memoria gia' liberata");
+                    if (!(o->flags & FExplicit)) fault(FaultKind::Generic, "delete di memoria non creata con new");
+                    if (v.k == VK::Ptr && v.idx != 0 && v.idx != Whole) fault(FaultKind::Generic, "delete di un puntatore che non punta all'inizio");
+                    const bool isArr = (o->flags & FArrayNew) != 0;
+                    if (in.b && !isArr) fault(FaultKind::Generic, "delete[] di memoria creata con new (senza [])");
+                    if (!in.b && isArr) fault(FaultKind::Generic, "delete di un array creato con new[]: usa delete[]");
+                    ClassInfo* sc = in.a >= 0 ? prog_->classes[static_cast<std::size_t>(in.a)].get() : nullptr;
+                    if (o->kind == OK::Array) {
+                        ArrayObj* a = static_cast<ArrayObj*>(o);
+                        if (a->refs()) for (std::uint32_t i = a->count; i-- > 0;) { const Value e = a->get(i); if (e.k == VK::Ref) destroyValue(e, sc); }
+                        if (a->count == 1 && !a->refs()) {}
+                    } else {
+                        destroyValue(Value::ref(o), sc);
+                    }
+                    killValue(Value::ref(o));
+                    break;
+                }
+                case Op::Free: {
+                    const Value v = S[--sp];
+                    if (v.isNull()) break;
+                    if (v.k == VK::Ptr && v.f == 2) fault(FaultKind::Generic, "free di una variabile locale (non e' memoria di malloc)");
+                    Obj* o = v.o;
+                    if (!o) break;
+                    if (o->dead()) fault(FaultKind::DeadPointer, "free di memoria gia' liberata (doppio free)");
+                    if (!(o->flags & FExplicit)) fault(FaultKind::Generic, "free di memoria non allocata con malloc");
+                    if (v.k == VK::Ptr && v.idx != 0 && v.idx != Whole) fault(FaultKind::Generic, "free di un puntatore che non punta all'inizio del blocco");
+                    killValue(Value::ref(o));
+                    break;
+                }
+                case Op::InstOf: {
+                    const Value v = S[sp - 1];
+                    ClassInfo* c = prog_->classes[static_cast<std::size_t>(in.a)].get();
+                    bool r = false;
+                    if (v.holdsObj() && v.o->kind == OK::Inst) r = static_cast<InstObj*>(v.o)->cls->derivesFrom(c);
+                    S[sp - 1] = Value::boolean(r);
+                    break;
+                }
+                case Op::CastCk: case Op::DynCast: {
+                    const Value v = S[sp - 1];
+                    ClassInfo* c = prog_->classes[static_cast<std::size_t>(in.a)].get();
+                    if (v.isNull()) break;
+                    Obj* o = v.k == VK::Ptr && v.f != 2 && v.idx != Whole ? objOf(loadPtr(v), true) : v.o;
+                    const bool ok = o && o->kind == OK::Inst && static_cast<InstObj*>(o)->cls->derivesFrom(c);
+                    if (!ok) {
+                        if (in.op == Op::DynCast) { S[sp - 1] = v.k == VK::Ptr ? Value::null() : Value::null(); break; }
+                        if (in.b == 1) raise("bad_cast", "std::bad_cast");
+                        fault(FaultKind::Cast, "impossibile convertire un oggetto di tipo " + std::string(o && o->kind == OK::Inst ? static_cast<InstObj*>(o)->cls->name : "?") + " in " + c->name);
+                    }
+                    break;
+                }
+                case Op::MkClosure: {
+                    ClosureObj* c = heap_.make<ClosureObj>(heap_.resource());
+                    root(c);
+                    c->fn = in.a;
+                    c->bound = in.c == 1;
+                    const std::size_t n = in.b;
+                    for (std::size_t i = 0; i < n; ++i) c->caps.push_back(S[sp - n + i]);
+                    sp -= n;
+                    FX_PUSH(Value::closure(c));
+                    break;
+                }
+                case Op::LoadCap: {
+                    const Value cv = S[base];
+                    if (!cv.o || cv.o->kind != OK::Closure) fault(FaultKind::Generic, "cattura senza chiusura");
+                    ClosureObj* c = static_cast<ClosureObj*>(cv.o);
+                    if (static_cast<std::size_t>(in.a) >= c->caps.size()) fault(FaultKind::Generic, "cattura non valida");
+                    FX_PUSH(c->caps[static_cast<std::size_t>(in.a)]);
+                    break;
+                }
+                case Op::Throw: throwValue(S[--sp]);
+                case Op::Rethrow: throwValue(S[base + static_cast<std::size_t>(in.a)], true);
+                case Op::Fault: fault(static_cast<FaultKind>(in.a), prog_->strings[in.c].bytes);
+                case Op::Halt: frames.resize(stopDepth); break;
+                default: fatal("Syntax ERROR: istruzione non valida");
+                }
+                if (temps_.size() > tempMark && nativeDepth == 0) unroot(tempMark);
             }
-            default: fail(std::string("Argument ERROR: formato %") + conv + " non supportato");
-            }
-            out += buf;
+            return;
+        } catch (ProgramThrow& t) {
+            unwind(t, stopDepth);
+        } catch (std::bad_alloc&) {
+            ProgramThrow t = memoryThrow();
+            unwind(t, stopDepth);
         }
-        return checkedString(out);
     }
-    // C#: {x:F2} {x:N0} {x:E3} {x:D4} {x:X}
-    std::string format(const Value& v, const std::string& fmt) const {
-        if (fmt.empty()) return text(v);
-        const char kind = static_cast<char>(std::toupper(static_cast<unsigned char>(fmt[0])));
-        int digits = -1;
-        if (fmt.size() > 1) digits = static_cast<int>(parseInt(fmt.substr(1), true));
-        if (digits > 30) fail("Argument ERROR: formato troppo lungo");
-        char buf[96];
-        switch (kind) {
-        case 'F': std::snprintf(buf, sizeof buf, "%.*f", digits < 0 ? 2 : digits, v.num()); return buf;
-        case 'E': std::snprintf(buf, sizeof buf, "%.*E", digits < 0 ? 6 : digits, v.num()); return buf;
-        case 'G': return digits < 0 ? text(v) : (std::snprintf(buf, sizeof buf, "%.*G", digits, v.num()), std::string(buf));
-        case 'D': std::snprintf(buf, sizeof buf, "%0*lld", digits < 0 ? 1 : digits, static_cast<long long>(v.num())); return buf;
-        case 'X': std::snprintf(buf, sizeof buf, "%0*llX", digits < 0 ? 1 : digits, static_cast<unsigned long long>(static_cast<long long>(v.num()))); return buf;
-        case 'N': {
-            std::snprintf(buf, sizeof buf, "%.*f", digits < 0 ? 2 : digits, v.num());
-            std::string s = buf, out;
-            const std::size_t dot = s.find('.');
-            const std::size_t intEnd = dot == std::string::npos ? s.size() : dot;
-            std::size_t start = s[0] == '-' ? 1 : 0;
-            out = s.substr(0, start);
-            for (std::size_t k = start; k < intEnd; ++k) {
-                out += s[k];
-                const std::size_t left = intEnd - k - 1;
-                if (left > 0 && left % 3 == 0) out += ',';
-            }
-            return out + s.substr(intEnd);
-        }
-        default: fail("Argument ERROR: formato '" + fmt + "' non supportato");
-        }
-    }
+}
 
-    // ---- aritmetica
-    Value arith(Op op, const Value& a, const Value& b) const {
-        if (op == Op::Add && (a.k == Value::Str || b.k == Value::Str)) {
-            if (a.k == Value::Str && b.k == Value::Char) return Value::ofStr(checkedString(a.s + static_cast<char>(b.i)));
-            return Value::ofStr(checkedString(text(a) + text(b)));
-        }
-        if (!a.numeric() || !b.numeric()) fail("Argument ERROR: operazione su valori non numerici");
-        const bool ints = a.integral() && b.integral();
-        switch (op) {
-        case Op::Add: return ints ? Value::ofInt(static_cast<std::int64_t>(static_cast<std::uint64_t>(a.i) + static_cast<std::uint64_t>(b.i))) : Value::ofDbl(a.num() + b.num());
-        case Op::Sub: return ints ? Value::ofInt(static_cast<std::int64_t>(static_cast<std::uint64_t>(a.i) - static_cast<std::uint64_t>(b.i))) : Value::ofDbl(a.num() - b.num());
-        case Op::Mul: return ints ? Value::ofInt(static_cast<std::int64_t>(static_cast<std::uint64_t>(a.i) * static_cast<std::uint64_t>(b.i))) : Value::ofDbl(a.num() * b.num());
-        case Op::Div:
-            if (ints) {
-                if (b.i == 0) fail("Math ERROR: divisione intera per zero");
-                if (a.i == std::numeric_limits<std::int64_t>::min() && b.i == -1) fail("Math ERROR: risultato fuori dall'intervallo degli interi");
-                return Value::ofInt(a.i / b.i);
-            }
-            return Value::ofDbl(a.num() / b.num());
-        case Op::Mod:
-            if (ints) {
-                if (b.i == 0) fail("Math ERROR: resto della divisione per zero");
-                if (b.i == -1) return Value::ofInt(0);
-                return Value::ofInt(a.i % b.i);
-            }
-            return Value::ofDbl(std::fmod(a.num(), b.num()));
-        case Op::BitAnd: case Op::BitOr: case Op::BitXor: case Op::Shl: case Op::Shr: {
-            if (!ints) fail("Argument ERROR: operatore sui bit con un valore reale");
-            switch (op) {
-            case Op::BitAnd: return Value::ofInt(a.i & b.i);
-            case Op::BitOr: return Value::ofInt(a.i | b.i);
-            case Op::BitXor: return Value::ofInt(a.i ^ b.i);
-            case Op::Shl: if (b.i < 0 || b.i > 63) fail("Math ERROR: spostamento fuori intervallo"); return Value::ofInt(static_cast<std::int64_t>(static_cast<std::uint64_t>(a.i) << b.i));
-            default: if (b.i < 0 || b.i > 63) fail("Math ERROR: spostamento fuori intervallo"); return Value::ofInt(a.i >> b.i);
-            }
-        }
-        default: fail("Syntax ERROR: operatore non valido (errore interno)");
-        }
-    }
-    bool compare(Op op, const Value& a, const Value& b) const {
-        int c = 0;
-        if (a.k == Value::Str && b.k == Value::Str) c = a.s < b.s ? -1 : a.s > b.s ? 1 : 0;
-        else if (a.k == Value::Str || b.k == Value::Str) {
-            if (op == Op::Eq) return false;
-            if (op == Op::Ne) return true;
-            fail("Argument ERROR: confronto tra una stringa e un numero");
-        } else if (!a.numeric() || !b.numeric()) fail("Argument ERROR: confronto non valido");
-        else if (a.integral() && b.integral()) c = a.i < b.i ? -1 : a.i > b.i ? 1 : 0;
-        else { const double x = a.num(), y = b.num(); if (std::isnan(x) || std::isnan(y)) return op == Op::Ne; c = x < y ? -1 : x > y ? 1 : 0; }
-        switch (op) {
-        case Op::Eq: return c == 0;
-        case Op::Ne: return c != 0;
-        case Op::Lt: return c < 0;
-        case Op::Le: return c <= 0;
-        case Op::Gt: return c > 0;
-        default: return c >= 0;
-        }
-    }
-    Value& element(const Value& arr, const Value& idx) {
-        if (arr.k != Value::Arr || !arr.a) fail("Argument ERROR: [] su un valore che non e' un array");
-        if (!idx.integral()) fail("Argument ERROR: indice non intero");
-        if (idx.i < 0 || static_cast<std::size_t>(idx.i) >= arr.a->data.size() || arr.a->cols != 1)
-            fail("Dimension ERROR: indice " + std::to_string(idx.i) + " fuori dall'array di " + std::to_string(arr.a->data.size()) + " elementi");
-        return arr.a->data[static_cast<std::size_t>(idx.i)];
-    }
-    Value& element2(const Value& arr, const Value& r, const Value& c) {
-        if (arr.k != Value::Arr || !arr.a) fail("Argument ERROR: [][] su un valore che non e' un array");
-        if (!r.integral() || !c.integral()) fail("Argument ERROR: indice non intero");
-        if (r.i < 0 || c.i < 0 || static_cast<std::size_t>(r.i) >= arr.a->rows || static_cast<std::size_t>(c.i) >= arr.a->cols)
-            fail("Dimension ERROR: indice [" + std::to_string(r.i) + "][" + std::to_string(c.i) + "] fuori dall'array");
-        return arr.a->data[static_cast<std::size_t>(r.i) * arr.a->cols + static_cast<std::size_t>(c.i)];
-    }
-    // Indice in una stringa (s[i] di C, C++ e C#): carattere, sola lettura qui.
-    Value stringChar(const Value& s, const Value& idx) const {
-        if (!idx.integral()) fail("Argument ERROR: indice non intero");
-        if (idx.i < 0 || static_cast<std::size_t>(idx.i) > s.s.size()) fail("Dimension ERROR: indice fuori dalla stringa");
-        if (static_cast<std::size_t>(idx.i) == s.s.size()) return Value::ofChar(0);   // il terminatore di C
-        return Value::ofChar(static_cast<unsigned char>(s.s[static_cast<std::size_t>(idx.i)]));
-    }
-    Value incremented(const Value& v, bool dec) const {
-        const Value one = Value::ofInt(dec ? -1 : 1);
-        if (v.k == Value::Char) return Value::ofChar(v.i + one.i);
-        if (!v.numeric()) fail("Argument ERROR: ++/-- su un valore non numerico");
-        return arith(Op::Add, v, one);
-    }
-
-    // ---- input
-    bool fillInput() {
-        if (!inputBuffer.empty()) return true;
-        std::string line;
-        if (!host.readLine(line)) return false;
-        inputBuffer = line + "\n";
-        return true;
-    }
-    // Restituisce false se l'input non c'e' ancora (la macchina aspetta).
-    bool readToken(std::string& out) {
-        while (true) {
-            std::size_t k = 0;
-            while (k < inputBuffer.size() && std::isspace(static_cast<unsigned char>(inputBuffer[k]))) ++k;
-            inputBuffer.erase(0, k);
-            if (!inputBuffer.empty()) break;
-            if (!fillInput()) return false;
-        }
-        std::size_t e = 0;
-        while (e < inputBuffer.size() && !std::isspace(static_cast<unsigned char>(inputBuffer[e]))) ++e;
-        out = inputBuffer.substr(0, e);
-        inputBuffer.erase(0, e);
-        return true;
-    }
-    bool readLine(std::string& out) {
-        if (inputBuffer.empty() && !fillInput()) return false;
-        const std::size_t nl = inputBuffer.find('\n');
-        out = inputBuffer.substr(0, nl);
-        inputBuffer.erase(0, nl == std::string::npos ? inputBuffer.size() : nl + 1);
-        return true;
-    }
-    bool readChar(std::int64_t& out) {
-        if (inputBuffer.empty() && !fillInput()) return false;
-        out = static_cast<unsigned char>(inputBuffer[0]);
-        inputBuffer.erase(0, 1);
-        return true;
-    }
-
-    // ---- variabili per fx::calc (numeriche della funzione corrente e globali)
-    std::vector<std::pair<std::string, double>> visibleNumbers() const {
-        std::vector<std::pair<std::string, double>> out;
-        auto add = [&](const std::string& n, const Value& v) {
-            if (!v.numeric() || n.empty()) return;
-            for (const auto& e : out) if (e.first == n) return;
-            out.emplace_back(n, v.num());
-        };
-        if (!frames.empty()) {
-            const Function& f = prog->functions[static_cast<std::size_t>(frames.back().fn)];
-            for (std::size_t i = f.localNames.size(); i-- > 0;)
-                if (frames.back().base + i < locals.size()) add(f.localNames[i], locals[frames.back().base + i]);
-        }
-        for (std::size_t i = 0; i < globals.size(); ++i) add(prog->globalNames[i], globals[i]);
-        return out;
-    }
-    static std::string num(double v) {
-        char buf[32];
-        std::snprintf(buf, sizeof buf, "%.15g", v);
-        return buf;
-    }
-    char letterOf(const Value& v) const {
-        char c = 0;
-        if (v.k == Value::Str && v.s.size() == 1) c = v.s[0];
-        else if (v.k == Value::Char) c = static_cast<char>(v.i);
-        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-        if (c < 'A' || c > 'Z') fail("Argument ERROR: attesa una lettera da A a Z");
-        return c;
-    }
-    std::string commandText(const Value& v) const { if (v.k != Value::Str) fail("Argument ERROR: attesa una stringa"); return v.s; }
-
-    // ---- funzioni predefinite
-    Value builtin(Fn fn, std::vector<Value>& a, bool& stop, int& exitCode) {
-        auto d = [&](std::size_t k) { if (!a[k].numeric()) fail("Argument ERROR: argomento non numerico"); return a[k].num(); };
-        auto real = [&](double v) { return Value::ofDbl(v); };
-        switch (fn) {
-        case Fn::Print: if (!a.empty()) host.print(text(a[0])); return Value{};
-        case Fn::PrintLine: host.print((a.empty() ? std::string() : text(a[0])) + "\n"); return Value{};
-        case Fn::Printf: { const std::string s = printf(a); host.print(s); return Value::ofInt(static_cast<std::int64_t>(s.size())); }
-        case Fn::Puts: host.print(text(a[0]) + "\n"); return Value::ofInt(0);
-        case Fn::Putchar: host.print(std::string(1, static_cast<char>(a[0].integral() ? a[0].i : static_cast<std::int64_t>(d(0))))); return a[0];
-        case Fn::Format: return Value::ofStr(format(a[0], commandText(a[1])));
-        case Fn::Sin: return real(std::sin(d(0)));
-        case Fn::Cos: return real(std::cos(d(0)));
-        case Fn::Tan: return real(std::tan(d(0)));
-        case Fn::Asin: return real(std::asin(d(0)));
-        case Fn::Acos: return real(std::acos(d(0)));
-        case Fn::Atan: return real(std::atan(d(0)));
-        case Fn::Atan2: return real(std::atan2(d(0), d(1)));
-        case Fn::Sqrt: return real(std::sqrt(d(0)));
-        case Fn::Pow: return real(std::pow(d(0), d(1)));
-        case Fn::Exp: return real(std::exp(d(0)));
-        case Fn::Log: return real(std::log(d(0)));
-        case Fn::Log10: return real(std::log10(d(0)));
-        case Fn::Fabs: return real(std::fabs(d(0)));
-        case Fn::Abs:
-            if (a[0].integral()) return Value::ofInt(a[0].i < 0 ? -a[0].i : a[0].i);
-            return real(std::fabs(d(0)));
-        case Fn::Floor: return real(std::floor(d(0)));
-        case Fn::Ceil: return real(std::ceil(d(0)));
-        case Fn::Round: return real(prog->dialect == Dialect::CSharp ? std::nearbyint(d(0)) : std::round(d(0)));   // C#: al pari
-        case Fn::Trunc: return real(std::trunc(d(0)));
-        case Fn::Fmod: return real(std::fmod(d(0), d(1)));
-        case Fn::Sinh: return real(std::sinh(d(0)));
-        case Fn::Cosh: return real(std::cosh(d(0)));
-        case Fn::Tanh: return real(std::tanh(d(0)));
-        case Fn::Min: case Fn::Max: {
-            if (a[0].integral() && a[1].integral()) return Value::ofInt(fn == Fn::Min ? std::min(a[0].i, a[1].i) : std::max(a[0].i, a[1].i));
-            return real(fn == Fn::Min ? std::fmin(d(0), d(1)) : std::fmax(d(0), d(1)));
-        }
-        case Fn::Strlen:
-            if (a[0].k == Value::Arr && a[0].a) return Value::ofInt(static_cast<std::int64_t>(a[0].a->data.size()));
-            if (a[0].k != Value::Str) fail("Argument ERROR: attesa una stringa");
-            return Value::ofInt(static_cast<std::int64_t>(a[0].s.size()));
-        case Fn::Strcmp: {
-            const int c = commandText(a[0]).compare(commandText(a[1]));
-            return Value::ofInt(c < 0 ? -1 : c > 0 ? 1 : 0);
-        }
-        case Fn::Strcat: return Value::ofStr(checkedString(commandText(a[0]) + commandText(a[1])));
-        case Fn::Substr: {
-            const std::string& s = commandText(a[0]);
-            const std::int64_t start = a.size() > 1 ? static_cast<std::int64_t>(d(1)) : 0;
-            if (start < 0 || static_cast<std::size_t>(start) > s.size()) fail("Argument ERROR: inizio fuori dalla stringa");
-            std::int64_t len = a.size() > 2 ? static_cast<std::int64_t>(d(2)) : static_cast<std::int64_t>(s.size());
-            if (len < 0) fail("Argument ERROR: lunghezza negativa");
-            if (prog->dialect == Dialect::CSharp && a.size() > 2 && static_cast<std::size_t>(start + len) > s.size()) fail("Argument ERROR: oltre la fine della stringa");
-            return Value::ofStr(s.substr(static_cast<std::size_t>(start), static_cast<std::size_t>(len)));
-        }
-        case Fn::IndexOf: {
-            const std::string& s = commandText(a[0]);
-            const std::string n = a[1].k == Value::Char ? std::string(1, static_cast<char>(a[1].i)) : commandText(a[1]);
-            const std::size_t at = s.find(n);
-            return Value::ofInt(at == std::string::npos ? -1 : static_cast<std::int64_t>(at));
-        }
-        case Fn::ToUpper: case Fn::ToLower: {
-            if (a[0].k == Value::Str) {
-                std::string s = a[0].s;
-                for (char& c : s) c = static_cast<char>(fn == Fn::ToUpper ? std::toupper(static_cast<unsigned char>(c)) : std::tolower(static_cast<unsigned char>(c)));
-                return Value::ofStr(s);
-            }
-            const auto c = static_cast<unsigned char>(a[0].integral() ? a[0].i : 0);
-            const Value r = Value::ofInt(fn == Fn::ToUpper ? std::toupper(c) : std::tolower(c));
-            return a[0].k == Value::Char ? Value::ofChar(r.i) : r;
-        }
-        case Fn::ToInt: return convert(a[0].k == Value::Dbl ? Value::ofDbl(std::nearbyint(a[0].d)) : a[0], Type::Int);   // Convert.ToInt32 arrotonda
-        case Fn::ToDouble: return convert(a[0], Type::Double);
-        case Fn::ToStr:
-            if (prog->dialect == Dialect::Cpp && a[0].k == Value::Dbl) { char buf[64]; std::snprintf(buf, sizeof buf, "%f", a[0].d); return Value::ofStr(buf); }
-            return Value::ofStr(text(a[0]));
-        case Fn::ParseInt:
-            if (a[0].k != Value::Str) fail("Argument ERROR: attesa una stringa");
-            return Value::ofInt(parseInt(a[0].s, prog->dialect != Dialect::C));
-        case Fn::ParseDouble:
-            if (a[0].k != Value::Str) fail("Argument ERROR: attesa una stringa");
-            return Value::ofDbl(parseDouble(a[0].s, prog->dialect != Dialect::C));
-        case Fn::Rand: seed = seed * 1103515245u + 12345u; return Value::ofInt(static_cast<std::int64_t>((seed >> 16) & 0x7FFF));
-        case Fn::Srand: seed = static_cast<std::uint32_t>(static_cast<std::int64_t>(d(0))); return Value{};
-        case Fn::Exit: exitCode = static_cast<int>(static_cast<std::int64_t>(d(0))); stop = true; return Value{};
-        case Fn::FxCalc: return real(host.calc(commandText(a[0]), visibleNumbers()));
-        case Fn::FxGetVar: return real(host.getVariable(letterOf(a[0])));
-        case Fn::FxSetVar: host.setVariable(letterOf(a[0]), d(1)); return Value{};
-        case Fn::FxCls: host.graphics("Cls"); return Value{};
-        case Fn::FxViewWindow: host.graphics("ViewWindow " + num(d(0)) + "," + num(d(1)) + "," + num(d(2)) + "," + num(d(3)) + "," + num(d(4)) + "," + num(d(5))); return Value{};
-        case Fn::FxPlot: host.graphics("Plot " + num(d(0)) + "," + num(d(1))); return Value{};
-        case Fn::FxLine: host.graphics("F-Line " + num(d(0)) + "," + num(d(1)) + "," + num(d(2)) + "," + num(d(3))); return Value{};
-        case Fn::FxCircle: host.graphics("Circle " + num(d(0)) + "," + num(d(1)) + "," + num(d(2))); return Value{};
-        case Fn::FxText: {
-            std::string s = text(a[2]);
-            if (s.find('"') != std::string::npos) fail("Argument ERROR: il testo non puo' contenere virgolette");
-            host.graphics("Text " + num(d(0)) + "," + num(d(1)) + ",\"" + s + "\"");
-            return Value{};
-        }
-        case Fn::FxGraphY: host.graphics("Graph Y=" + commandText(a[0])); return Value{};
-        case Fn::FxVertical: host.graphics("Vertical " + num(d(0))); return Value{};
-        case Fn::FxHorizontal: host.graphics("Horizontal " + num(d(0))); return Value{};
-        case Fn::FxCommand: host.graphics(commandText(a[0])); return Value{};
-        case Fn::FxGetList: return real(host.getListItem(static_cast<int>(d(0)), static_cast<int>(d(1))));
-        case Fn::FxSetList: host.setListItem(static_cast<int>(d(0)), static_cast<int>(d(1)), d(2)); return Value{};
-        case Fn::FxListSize: return Value::ofInt(host.listSize(static_cast<int>(d(0))));
-        case Fn::FxLocate: host.locate(static_cast<int>(d(0)), static_cast<int>(d(1)), text(a[2])); return Value{};
-        case Fn::FxClrText: host.clearText(); return Value{};
-        case Fn::FxGetKey: return Value::ofInt(host.getKey());
-        default: fail("Syntax ERROR: funzione non disponibile (errore interno)");
-        }
-    }
+// ================================================================ Machine
+struct Machine::Impl {
+    std::unique_ptr<Vm> vm;
+    std::unique_ptr<coro::Coroutine> coro;
+    bool finished{false};
+    bool aborted{false};
+    std::unique_ptr<Error> error;
+    int exitCode{0};
+    static void body(void* arg);
+    static Error uncaught(Vm& vm, const Value& v);
 };
 
+Error Machine::Impl::uncaught(Vm& vm, const Value& v) {
+    std::string msg;
+    const Dialect d = vm.prog_->dialect;
+    if (v.holdsObj() && v.o->kind == OK::Inst && static_cast<InstObj*>(v.o)->cls->isException) {
+        InstObj* o = static_cast<InstObj*>(v.o);
+        const std::string m = o->nfields > 0 && !o->fields[0].isNull() ? vm.utf8(o->fields[0]) : std::string();
+        if (d == Dialect::Cpp) msg = "Uncaught exception " + std::string(o->cls->isNative ? "std::" : "") + o->cls->name + (m.empty() ? "" : ": " + m);
+        else msg = o->cls->name + (m.empty() ? "" : ": " + m);
+    } else if (v.holdsObj() && v.o->kind == OK::Inst) {
+        msg = "Uncaught exception: oggetto " + static_cast<InstObj*>(v.o)->cls->name;
+    } else {
+        msg = "Uncaught exception: " + vm.format(v, d == Dialect::C ? Dialect::Cpp : d);
+    }
+    return Error(msg, 0, 0);
+}
+
+void Machine::Impl::body(void* arg) {
+    Impl* im = static_cast<Impl*>(arg);
+    Vm& vm = *im->vm;
+    try {
+        try {
+            vm.runProgram();
+        } catch (ProgramThrow& t) {
+            // eccezione non catturata: posizione del lancio
+            Error e = uncaught(vm, t.value);
+            if (vm.lastThrowLine > 0) { e.line = vm.lastThrowLine; e.column = vm.lastThrowColumn; e.file = vm.lastThrowFile; }
+            e.trace = vm.lastThrowTrace;
+            throw e;
+        }
+    } catch (ProgramExit& e) {
+        im->exitCode = e.code;
+        vm.closeAllFiles(true);
+    } catch (ProgramAbort&) {
+        im->aborted = true;
+        vm.closeAllFiles(false);
+    } catch (Error& e) {
+        im->error = std::make_unique<Error>(e);
+        vm.closeAllFiles(false);
+    } catch (std::bad_alloc&) {
+        im->error = std::make_unique<Error>("Memory ERROR: memoria del programma esaurita", 0, 0);
+        vm.closeAllFiles(false);
+    } catch (std::exception& e) {
+        im->error = std::make_unique<Error>(std::string("Math ERROR: ") + e.what(), 0, 0);
+        vm.closeAllFiles(false);
+    } catch (...) {
+        im->error = std::make_unique<Error>("Math ERROR: errore interno dell'interprete", 0, 0);
+        vm.closeAllFiles(false);
+    }
+    im->finished = true;
+}
+
+Machine::Machine(std::shared_ptr<const Program> program, Host& host, Limits limits) : impl_(std::make_unique<Impl>()) {
+    if (!program) throw Error("Syntax ERROR: programma vuoto", 0, 0);
+    impl_->vm = std::make_unique<Vm>(std::move(program), host, limits);
+    impl_->coro = std::make_unique<coro::Coroutine>(FXAI_ON_DEVICE ? CoroStackDevice : CoroStackHost, &Impl::body, impl_.get());
+    impl_->vm->coroutine = impl_->coro.get();
+}
 Machine::Machine(std::shared_ptr<const Program> program, Host& host, std::size_t memoryCells)
-    : impl_(std::make_unique<Impl>(std::move(program), host, memoryCells)) {}
-Machine::~Machine() = default;
-
-void Machine::cancelled() {
-    if (state_ == State::Running || state_ == State::WaitingInput || state_ == State::Ready) state_ = State::Failed;
-}
-int Machine::currentLine() const noexcept {
-    const auto& w = impl_->prog->where;
-    if (impl_->pc < 0 || static_cast<std::size_t>(impl_->pc) >= w.size()) return 0;
-    return w[static_cast<std::size_t>(impl_->pc)].line;
-}
-
-void Machine::runToEnd(std::size_t maxSteps) {
-    // Riprende anche una macchina in attesa di input (l'input potrebbe essere arrivato).
-    step::Budget budget(maxSteps, 0, nullptr);
-    while (state_ != State::Done && state_ != State::Failed) {
-        if (budget.exhausted()) throw Error("Time Out: il programma non termina", currentLine(), 0);
-        (void)step(budget);
-        if (state_ == State::WaitingInput) break;
+    : Machine(std::move(program), host, limitsForCells(memoryCells)) {}
+Machine::~Machine() {
+    if (impl_ && impl_->coro && impl_->coro->started() && !impl_->coro->finished()) {
+        impl_->vm->abortRequested = true;
+        impl_->vm->paused = false;
+        for (int k = 0; k < 8 && !impl_->coro->finished(); ++k) impl_->coro->resume();
     }
 }
-
 bool Machine::step(step::Budget& budget) {
     if (state_ == State::Done || state_ == State::Failed) return true;
-    Impl& m = *impl_;
-    const Program& p = *m.prog;
+    if (state_ == State::Paused && impl_->vm->paused) return false;
+    Vm& vm = *impl_->vm;
+    vm.budget = &budget;
+    vm.quota = 0;
     state_ = State::Running;
-    try {
-        while (true) {
-            if (m.pc < 0 || static_cast<std::size_t>(m.pc) >= p.code.size()) m.fail("Syntax ERROR: salto fuori dal programma (errore interno)");
-            const Instr& in = p.code[static_cast<std::size_t>(m.pc)];
-            std::int32_t next = m.pc + 1;
-            switch (in.op) {
-            case Op::PushI: m.push(Value::ofInt(p.ints[static_cast<std::size_t>(in.a)])); break;
-            case Op::PushD: m.push(Value::ofDbl(p.doubles[static_cast<std::size_t>(in.a)])); break;
-            case Op::PushS: m.push(Value::ofStr(p.strings[static_cast<std::size_t>(in.a)])); break;
-            case Op::PushB: m.push(Value::ofBool(in.b != 0)); break;
-            case Op::PushVoid: m.push(Value{}); break;
-            case Op::LoadG: case Op::LoadL: m.push(m.varRef(in.op == Op::LoadG, in.a)); break;
-            case Op::StoreG: case Op::StoreL: {
-                Value v = m.pop();
-                Value& dst = m.varRef(in.op == Op::StoreG, in.a);
-                if (v.k == Value::Str) m.reserveCells(0);
-                dst = std::move(v);
-                break;
-            }
-            case Op::LoadIdx: {
-                const Value idx = m.pop(), arr = m.pop();
-                if (arr.k == Value::Str) m.push(m.stringChar(arr, idx));
-                else m.push(m.element(arr, idx));
-                break;
-            }
-            case Op::StoreIdx: {
-                Value v = m.pop();
-                const Value idx = m.pop(), arr = m.pop();
-                if (arr.k == Value::Str) m.fail("Argument ERROR: stringa in sola lettura qui (usa una variabile)");
-                Value& e = m.element(arr, idx);
-                e = m.convert(std::move(v), arr.a->elem);
-                break;
-            }
-            case Op::LoadIdx2: {
-                const Value c = m.pop(), r = m.pop(), arr = m.pop();
-                m.push(m.element2(arr, r, c));
-                break;
-            }
-            case Op::StoreIdx2: {
-                Value v = m.pop();
-                const Value c = m.pop(), r = m.pop(), arr = m.pop();
-                Value& e = m.element2(arr, r, c);
-                e = m.convert(std::move(v), arr.a->elem);
-                break;
-            }
-            case Op::IncL: case Op::IncG: {
-                const bool global = in.op == Op::IncG, post = (in.b & 1) != 0, dec = (in.b & 2) != 0;
-                Value& v = m.varRef(global, in.a);
-                const Value old = v;
-                const Type t = m.varType(global, in.a);
-                v = m.convert(m.incremented(old, dec), t == Type::Auto ? (old.k == Value::Dbl ? Type::Double : old.k == Value::Char ? Type::Char : Type::Int) : t);
-                m.push(post ? old : v);
-                break;
-            }
-            case Op::IncIdx: case Op::IncIdx2: {
-                const bool post = (in.b & 1) != 0, dec = (in.b & 2) != 0;
-                Value* e;
-                Value arr;
-                if (in.op == Op::IncIdx) { const Value idx = m.pop(); arr = m.pop(); e = &m.element(arr, idx); }
-                else { const Value c = m.pop(), r = m.pop(); arr = m.pop(); e = &m.element2(arr, r, c); }
-                const Value old = *e;
-                *e = m.convert(m.incremented(old, dec), arr.a->elem);
-                m.push(post ? old : *e);
-                break;
-            }
-            case Op::CompIdx: case Op::CompIdx2: {
-                Value rhs = m.pop();
-                Value* e;
-                Value arr;
-                if (in.op == Op::CompIdx) { const Value idx = m.pop(); arr = m.pop(); if (arr.k == Value::Str) m.fail("Argument ERROR: stringa in sola lettura qui (usa una variabile)"); e = &m.element(arr, idx); }
-                else { const Value c = m.pop(), r = m.pop(); arr = m.pop(); e = &m.element2(arr, r, c); }
-                Value result = in.b == 0 ? std::move(rhs) : m.arith(static_cast<Op>(in.b), *e, rhs);
-                *e = m.convert(std::move(result), arr.a->elem);
-                m.push(*e);
-                break;
-            }
-            case Op::Conv: m.push(m.convert(m.pop(), static_cast<Type>(in.b))); break;
-            case Op::Add: case Op::Sub: case Op::Mul: case Op::Div: case Op::Mod:
-            case Op::BitAnd: case Op::BitOr: case Op::BitXor: case Op::Shl: case Op::Shr: {
-                const Value b = m.pop(), a = m.pop();
-                m.push(m.arith(in.op, a, b));
-                break;
-            }
-            case Op::Neg: {
-                const Value a = m.pop();
-                if (!a.numeric()) m.fail("Argument ERROR: segno meno su un valore non numerico");
-                m.push(a.k == Value::Dbl ? Value::ofDbl(-a.d) : Value::ofInt(-a.i));
-                break;
-            }
-            case Op::Not: m.push(Value::ofBool(!m.convert(m.pop(), Type::Bool).i)); break;
-            case Op::BitNot: {
-                const Value a = m.pop();
-                if (!a.integral()) m.fail("Argument ERROR: ~ su un valore non intero");
-                m.push(Value::ofInt(~a.i));
-                break;
-            }
-            case Op::Eq: case Op::Ne: case Op::Lt: case Op::Le: case Op::Gt: case Op::Ge: {
-                const Value b = m.pop(), a = m.pop();
-                m.push(Value::ofBool(m.compare(in.op, a, b)));
-                break;
-            }
-            case Op::Jmp: next = in.a; break;
-            case Op::Jz: if (!m.convert(m.pop(), Type::Bool).i) next = in.a; break;
-            case Op::Jnz: if (m.convert(m.pop(), Type::Bool).i) next = in.a; break;
-            case Op::JzKeep: if (!m.convert(m.stack.empty() ? Value::ofBool(false) : m.stack.back(), Type::Bool).i) next = in.a; break;
-            case Op::JnzKeep: if (m.convert(m.stack.empty() ? Value::ofBool(false) : m.stack.back(), Type::Bool).i) next = in.a; break;
-            case Op::Pop: (void)m.pop(); break;
-            case Op::Dup: if (m.stack.empty()) m.fail("Stack ERROR: pila vuota (errore interno)"); m.push(m.stack.back()); break;
-            case Op::Call: {
-                if (m.frames.size() >= MaxCallDepth) m.fail("Nesting ERROR: piu' di " + std::to_string(MaxCallDepth) + " chiamate annidate");
-                const Function& f = p.functions[static_cast<std::size_t>(in.a)];
-                const std::size_t argc = in.b;
-                if (m.stack.size() < argc) m.fail("Stack ERROR: argomenti mancanti (errore interno)");
-                Impl::Frame fr;
-                fr.fn = in.a; fr.ret = next; fr.base = m.locals.size();
-                const std::size_t first = m.stack.size() - argc;
-                fr.stackBase = first;
-                m.locals.resize(fr.base + f.localNames.size());
-                for (std::size_t k = f.localNames.size(); k-- > 0;) m.locals[fr.base + k] = zeroOf(f.localTypes[k]);
-                for (std::size_t k = 0; k < argc; ++k) {
-                    const Type t = k < f.params.size() ? f.params[k] : Type::Auto;
-                    Value v = std::move(m.stack[first + k]);
-                    m.locals[fr.base + k] = (t == Type::Auto || t == Type::Array) ? std::move(v) : m.convert(std::move(v), t);
-                }
-                m.stack.resize(first);
-                m.frames.push_back(fr);
-                next = f.entry;
-                break;
-            }
-            case Op::Ret: {
-                Value r = in.b ? m.pop() : Value{};
-                if (m.frames.empty()) m.fail("Stack ERROR: return fuori da una funzione (errore interno)");
-                const Impl::Frame fr = m.frames.back();
-                m.frames.pop_back();
-                m.locals.resize(fr.base);
-                m.stack.resize(std::min(m.stack.size(), fr.stackBase));
-                if (m.frames.empty() && fr.fn == p.mainFunction) exitCode_ = r.integral() ? static_cast<int>(r.i) : 0;
-                m.push(std::move(r));
-                next = fr.ret;
-                break;
-            }
-            case Op::Builtin: {
-                const std::size_t argc = in.b;
-                if (m.stack.size() < argc) m.fail("Stack ERROR: argomenti mancanti (errore interno)");
-                std::vector<Value> args(std::make_move_iterator(m.stack.end() - static_cast<std::ptrdiff_t>(argc)), std::make_move_iterator(m.stack.end()));
-                m.stack.resize(m.stack.size() - argc);
-                bool stop = false;
-                int code = 0;
-                Value r = m.builtin(static_cast<Fn>(in.a), args, stop, code);
-                if (stop) { exitCode_ = code; state_ = State::Done; ++executed_; return true; }
-                m.push(std::move(r));
-                break;
-            }
-            case Op::NewArr: {
-                const Type elem = static_cast<Type>(in.a);
-                std::int64_t rows = 0, cols = 1;
-                if (in.b == 2) { cols = m.convert(m.pop(), Type::Int).i; rows = m.convert(m.pop(), Type::Int).i; }
-                else rows = m.convert(m.pop(), Type::Int).i;
-                Value v; v.k = Value::Arr; v.a = m.newArray(elem, rows, cols);
-                if (in.b == 2) { v.a->rows = static_cast<std::size_t>(rows); v.a->cols = static_cast<std::size_t>(cols); }
-                m.push(std::move(v));
-                break;
-            }
-            case Op::ArrLit: {
-                const Type elem = static_cast<Type>(in.a & 0xFF);
-                const std::size_t count = static_cast<std::size_t>(in.a) >> 8;
-                std::int64_t rows = static_cast<std::int64_t>(count), cols = 1;
-                std::vector<Value> values;
-                if (in.b == 2) {
-                    cols = m.convert(m.pop(), Type::Int).i;
-                    rows = m.convert(m.pop(), Type::Int).i;
-                }
-                if (m.stack.size() < count) m.fail("Stack ERROR: valori mancanti (errore interno)");
-                values.assign(std::make_move_iterator(m.stack.end() - static_cast<std::ptrdiff_t>(count)), std::make_move_iterator(m.stack.end()));
-                m.stack.resize(m.stack.size() - count);
-                if (in.b == 3) {
-                    rows = m.convert(m.pop(), Type::Int).i;
-                    if (rows < static_cast<std::int64_t>(count)) m.fail("Dimension ERROR: piu' valori della dimensione dell'array");
-                }
-                Value v; v.k = Value::Arr; v.a = m.newArray(elem, rows, cols);
-                for (std::size_t k = 0; k < count; ++k) v.a->data[k] = elem == Type::Auto ? std::move(values[k]) : m.convert(std::move(values[k]), elem);
-                m.push(std::move(v));
-                break;
-            }
-            case Op::ReadTok: case Op::ReadLine: case Op::ReadChar: {
-                if (in.op == Op::ReadChar) {
-                    std::int64_t c = 0;
-                    if (!m.readChar(c)) { state_ = State::WaitingInput; return false; }
-                    m.push(Value::ofChar(c));
-                } else {
-                    std::string s;
-                    if (!(in.op == Op::ReadTok ? m.readToken(s) : m.readLine(s))) { state_ = State::WaitingInput; return false; }
-                    m.push(Value::ofStr(s));
-                }
-                break;
-            }
-            case Op::Switch: {
-                const Value v = m.pop();
-                const SwitchTable& t = p.switches[static_cast<std::size_t>(in.a)];
-                next = t.fallback;
-                for (const auto& c : t.cases) if (c.first == v.i) { next = c.second; break; }
-                break;
-            }
-            case Op::Halt: state_ = State::Done; ++executed_; return true;
-            }
-            m.pc = next;
-            ++executed_;
-            if (!budget.consume()) return false;
+    impl_->coro->resume();
+    vm.budget = nullptr;
+    executed_ = vm.executed;
+    if (impl_->finished) {
+        if (impl_->error) { state_ = State::Failed; throw Error(*impl_->error); }
+        if (impl_->aborted) { state_ = State::Failed; return true; }
+        state_ = State::Done;
+        exitCode_ = impl_->exitCode;
+        return true;
+    }
+    if (vm.waitingInput) { state_ = State::WaitingInput; return false; }
+    if (vm.paused) { state_ = State::Paused; return false; }
+    return false;
+}
+void Machine::cancelled() {
+    if (!impl_->coro->started() || impl_->coro->finished()) { state_ = State::Failed; return; }
+    impl_->vm->abortRequested = true;
+    impl_->vm->paused = false;
+    for (int k = 0; k < 8 && !impl_->coro->finished(); ++k) impl_->coro->resume();
+    state_ = State::Failed;
+}
+void Machine::runToEnd(std::size_t maxSteps) {
+    const std::size_t start = executed_;
+    while (state_ != State::Done && state_ != State::Failed) {
+        const std::size_t used = executed_ - start;
+        if (used >= maxSteps) {
+            const int line = currentLine();
+            std::string file = currentFile();
+            cancelled();
+            throw Error("Time Out: programma oltre " + std::to_string(maxSteps) + " istruzioni", line, 0, file);
         }
-    } catch (...) {
-        state_ = State::Failed;
-        throw;
+        step::Budget b(maxSteps - used, 0, nullptr);
+        step(b);
+        if (state_ == State::WaitingInput || state_ == State::Paused) return;
     }
 }
-
-// ---------------------------------------------------------------- WorkspaceHost
-bool WorkspaceHost::readLine(std::string& out) {
-    if (input.empty()) return false;
-    out = input.front();
-    input.erase(input.begin());
-    return true;
+int Machine::currentLine() const noexcept {
+    const Vm& vm = *impl_->vm;
+    if (vm.frames.empty()) return 0;
+    const Frame& f = vm.frames.back();
+    return static_cast<int>(posOf(*f.fn, f.pc > 0 ? f.pc - 1 : 0).line);
 }
-void WorkspaceHost::graphics(const std::string& command) {
-    commands.push_back(command);
-    graphcmd::execute(ws_, command);                            // lo stesso interprete dei comandi grafici di Run-Matrix
+std::string Machine::currentFile() const {
+    const Vm& vm = *impl_->vm;
+    if (vm.frames.empty()) return {};
+    const Frame& f = vm.frames.back();
+    const SrcPos p = posOf(*f.fn, f.pc > 0 ? f.pc - 1 : 0);
+    return p.file < vm.prog_->files.size() ? vm.prog_->files[p.file] : std::string();
 }
-double WorkspaceHost::calc(const std::string& expression, const std::vector<std::pair<std::string, double>>& locals) {
-    std::vector<std::string> names;
-    bind::BindingResolver resolver(&ws_, &ws_);
-    for (const auto& l : locals) {
-        names.push_back(l.first);
-        std::string lower = l.first;
-        for (char& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        resolver.bind("var_" + lower, l.second);
+void Machine::setDebug(bool on) { impl_->vm->debug = on; impl_->vm->firstStop = on; impl_->vm->stepMode = StepMode::Into; }
+void Machine::setBreakpoints(const std::vector<std::pair<std::string, int>>& fileLines) {
+    Vm& vm = *impl_->vm;
+    vm.breakpoints.clear();
+    for (const auto& fl : fileLines) {
+        for (std::size_t i = 0; i < vm.prog_->files.size(); ++i)
+            if (vm.prog_->files[i] == fl.first) vm.breakpoints.push_back({static_cast<std::uint16_t>(i), fl.second});
     }
-    ParseOptions opt;
-    opt.boundNames = &names;
-    const auto tree = parseExpression(expression, opt);
-    return evaluateReal(*tree, resolver.context(ws_.evalContext()));
 }
-double WorkspaceHost::getVariable(char letter) { return ws_.memory.recall(letter); }
-void WorkspaceHost::setVariable(char letter, double value) { ws_.memory.store(letter, value); }
-// v1.17.0: List 1-26 con i controlli del workspace (setList: lunghezza e budget della scheda).
-namespace {
-std::size_t listIndex(int list) {
-    if (list < 1 || list > 26) throw MathError("Argument ERROR: List 1...26");
-    return static_cast<std::size_t>(list - 1);
+void Machine::resume(StepMode mode) {
+    Vm& vm = *impl_->vm;
+    vm.stepMode = mode;
+    vm.paused = false;
+    if (state_ == State::Paused) state_ = State::Running;
 }
-} // namespace
-double WorkspaceHost::getListItem(int list, int index) {
-    const auto& l = ws_.lists[listIndex(list)];
-    if (index < 1 || static_cast<std::size_t>(index) > l.size()) throw DimensionError("Dimension ERROR: elemento della lista");
-    return l[static_cast<std::size_t>(index - 1)];
+std::vector<FrameInfo> Machine::callStack() const {
+    std::vector<FrameInfo> out;
+    const Vm& vm = *impl_->vm;
+    for (std::size_t i = vm.frames.size(); i-- > 0;) {
+        const Frame& f = vm.frames[i];
+        if (f.fn->name == "<init>") continue;
+        const SrcPos p = posOf(*f.fn, f.pc > 0 ? f.pc - 1 : 0);
+        FrameInfo fi;
+        fi.function = f.fn->name;
+        fi.file = p.file < vm.prog_->files.size() ? vm.prog_->files[p.file] : std::string();
+        fi.line = static_cast<int>(p.line);
+        fi.column = p.column;
+        out.push_back(fi);
+    }
+    return out;
 }
-void WorkspaceHost::setListItem(int list, int index, double value) {
-    const std::size_t li = listIndex(list);
-    std::vector<double> l = ws_.lists[li];
-    if (index < 1 || static_cast<std::size_t>(index) > l.size() + 1) throw DimensionError("Dimension ERROR: elemento della lista");
-    if (static_cast<std::size_t>(index) == l.size() + 1) l.push_back(value); else l[static_cast<std::size_t>(index - 1)] = value;
-    ws_.setList(li, std::move(l));
+std::size_t Machine::heapUsed() const noexcept { return impl_->vm->heap_.used(); }
+std::size_t Machine::gcCycles() const noexcept { return impl_->vm->heap_.cycles(); }
+std::size_t Machine::openFiles() const noexcept {
+    std::size_t n = 0;
+    for (FileObj* f : impl_->vm->openFiles) if (f && f->open && !f->console && !f->memory) ++n;
+    return n;
 }
-int WorkspaceHost::listSize(int list) { return static_cast<int>(ws_.lists[listIndex(list)].size()); }
 
 } // namespace fx::prog

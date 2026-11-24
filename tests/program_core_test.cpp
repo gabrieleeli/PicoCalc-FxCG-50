@@ -128,8 +128,9 @@ int main() {
         CHECK(e5.error.find("non dichiarata") != std::string::npos && e5.column == 21);
         Run e6 = run("int f(int a) { return a; }\nint main() { return f(1, 2); }", Dialect::C);
         CHECK(e6.error.find("argomenti") != std::string::npos && e6.line == 2);
+        // v1.20.0: i puntatori sono supportati (controllati): una dichiarazione non e' piu' un errore
         Run e7 = run("int main() { int *p; return 0; }", Dialect::C);
-        CHECK(e7.error.find("puntatori") != std::string::npos);
+        CHECK(e7.error.empty() && e7.state == Machine::State::Done);
         Run e8 = run("void f() {}\n", Dialect::Cpp);
         CHECK(e8.error.find("main") != std::string::npos);
         Run e9 = run("class P { static void Main() { Console.WriteLine(\"x\" } }", Dialect::CSharp);

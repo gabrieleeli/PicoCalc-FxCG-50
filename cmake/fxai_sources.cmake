@@ -147,7 +147,14 @@ fxai_feature(SERVICE TEXTEDIT   BOARDS PICO_PLUS_2W PICO2W SOURCES src/text_edit
 fxai_feature(SERVICE STEPTASK   BOARDS PICO_PLUS_2W PICO2W SOURCES src/step_task.cpp)
 fxai_feature(SERVICE GRAPH2D    BOARDS PICO_PLUS_2W SYMBOLS 6graph2d SOURCES src/graph2d.cpp)
 fxai_feature(SERVICE BINDING    BOARDS PICO_PLUS_2W SYMBOLS BindingResolver DependencyGraph SOURCES src/binding.cpp)
-fxai_feature(SERVICE INTERP     BOARDS PICO_PLUS_2W SYMBOLS 4prog SOURCES src/program_lang.cpp src/program_vm.cpp)
+# v1.20.0: nucleo nuovo e condiviso (lexer e preprocessore, parser C/C++ e C#,
+# analisi, macchina, heap con GC, librerie native, caricatore dei progetti).
+fxai_feature(SERVICE INTERP     BOARDS PICO_PLUS_2W SYMBOLS 4prog
+  SOURCES src/coroutine.cpp src/program_lex.cpp src/program_parse.cpp src/program_parse_cs.cpp src/program_parse_java.cpp
+          src/program_compile.cpp src/program_compile_decl.cpp src/program_compile_stmt.cpp src/program_compile_expr.cpp
+          src/program_compile_call.cpp src/program_natives.cpp src/program_vm.cpp src/program_heap.cpp src/program_format.cpp
+          src/program_lib.cpp src/program_lib_c.cpp src/program_lib_cpp.cpp src/program_lib_cs.cpp src/program_fx.cpp
+          src/program_project.cpp)
 # Modalita' non ancora realizzate (nessun sorgente fino alla loro milestone):
 # l'opzione esiste gia' perche' il registro dichiara su quali schede possono esistere.
 fxai_feature(MODE EACTIVITY    BOARDS PICO_PLUS_2W PICO2W SYMBOLS EActivityApp SOURCES src/eactivity.cpp src/apps/eactivity_app.cpp)
