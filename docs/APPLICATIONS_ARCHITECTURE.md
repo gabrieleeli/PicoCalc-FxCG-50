@@ -12,7 +12,7 @@ Lo stato funzionale di ogni voce è in [FEATURE_MATRIX.md](FEATURE_MATRIX.md).
 ## 1. Il registro: una sola fonte di verità
 
 `include/app_registry.hpp` + `src/app_registry.cpp` contengono una tabella con
-le 23 modalità del menu principale. Per ognuna dichiarano:
+le 23 modalità del menu principale (24 sulla Pimoroni Pico Plus 2 W dalla v1.18.0, con Distribution in coda all'enum). Per ognuna dichiarano:
 
 | Campo | Significato |
 |---|---|
@@ -113,7 +113,7 @@ display) → `tick()` per lavoro periodico (rete) → `leave()`.
 | Format | `number_format.hpp` | tutte (Norm/Fix/Sci/Eng, complessi) |
 | Solvers | `solvers.hpp` | Equation (disequazioni, estensione), Conic Graphs (v1.17.0) |
 | EquationCore (v1.12.0) | `equation.hpp` | solo Equation: coefficienti esatti, SIML, POLY, SOLVER, visualizzazione delle soluzioni |
-| Stats | `statistics.hpp` | Statistics, Spreadsheet, Picture Plot (v1.17.0: regressioni sopra lo sfondo) |
+| Stats | `statistics.hpp`; sulla Plus dalla v1.18.0 anche `stat_engine.hpp` (nucleo alla parità del cap. 6) e `dist_core.hpp` (24 distribuzioni, una sola tabella sul motore di `calc_library`) | Statistics, Spreadsheet, Picture Plot (v1.17.0: regressioni sopra lo sfondo), Distribution (v1.18.0) |
 | MathCore | `math_engine.hpp` | Run-Matrix (Base-N, DMS, Pol/Rec), angolo |
 | Widgets | `ui_kit.hpp`, `app_widgets.hpp` | tutte |
 | Network | `net.hpp`, `ai_protocol.hpp` | AI Chat, System |
@@ -253,8 +253,9 @@ risultati (nessun riferimento a grafici, liste, tabelle o conversioni).
 
 Dalla v1.17.0 tutte le modalità del registro si aprono, tranne **E-CON4**
 (External). Le modalità Base (§5) arrivano alla parità completa una per
-versione, a partire da **Statistics** (v1.18.0, insieme a **Distribution** come
-nuova modalità Base); il piano è in [ROADMAP.md](ROADMAP.md) e in `CONTINUE.md`.
+versione: **Statistics** è alla parità dalla v1.18.0 (sulla Plus), quando
+**Distribution** è entrata come nuova modalità Base; la prossima è Geometry
+(v1.19.0). Il piano è in [ROADMAP.md](ROADMAP.md) e in `CONTINUE.md`.
 Sul Raspberry Pi Pico 2 W (congelato alla v1.16.0) le modalità della Plus
 restano `Planned` con il testo «Non disponibile sul Raspberry Pi Pico 2 W…».
 
