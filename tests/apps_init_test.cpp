@@ -107,7 +107,8 @@ std::vector<Mode> modes() {
                  [](Workspace& w) { return str(w.link.sent); }, -1});
 #endif
 #if FXAI_MODE_GEOMETRY
-    m.push_back({AppId::Geometry, [](Rig& r) { r.key(pk::F1); r.key(pk::F1); r.key(pk::Enter); r.key(pk::Right); r.key(pk::Enter); r.key(pk::Esc); },
+    // v1.19.0: F3 Draw > 2 Line Segment, due punti, EXIT (tre oggetti: due punti e il segmento)
+    m.push_back({AppId::Geometry, [](Rig& r) { r.key(pk::F3); r.type("2"); r.key(pk::Enter); for (int i = 0; i < 4; ++i) r.key(pk::Right); r.key(pk::Enter); r.key(pk::Esc); },
                  [](Workspace& w) { return str(w.geometry.objects.size()); }, static_cast<int>(eact::StripKind::Geometry)});
 #endif
 #if FXAI_MODE_PICTUREPLOT

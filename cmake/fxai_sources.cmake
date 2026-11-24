@@ -159,7 +159,10 @@ fxai_feature(MODE CONICGRAPHS  BOARDS PICO_PLUS_2W SYMBOLS ConicGraphsApp SOURCE
 fxai_feature(MODE PROGRAM      BOARDS PICO_PLUS_2W SYMBOLS ProgramApp SOURCES src/program_mode.cpp src/apps/program_app.cpp)
 fxai_feature(MODE FINANCIAL    BOARDS PICO_PLUS_2W SYMBOLS FinancialApp SOURCES src/financial.cpp src/apps/financial_app.cpp)
 fxai_feature(MODE LINK         BOARDS PICO_PLUS_2W SYMBOLS LinkApp SOURCES src/link_protocol.cpp src/apps/link_app.cpp)
-fxai_feature(MODE GEOMETRY     BOARDS PICO_PLUS_2W SYMBOLS GeometryApp SOURCES src/geometry.cpp src/apps/geometry_app.cpp)
+# v1.19.0: Geometry alla parita' del capitolo 14 (nucleo puro in cinque file, controller e disegno).
+fxai_feature(MODE GEOMETRY     BOARDS PICO_PLUS_2W SYMBOLS GeometryApp 2fx3geo
+  SOURCES src/geometry.cpp src/geometry_build.cpp src/geometry_measure.cpp src/geometry_anim.cpp src/geometry_file.cpp
+          src/apps/geometry_app.cpp src/apps/geometry_view.cpp)
 fxai_feature(MODE PICTUREPLOT  BOARDS PICO_PLUS_2W SYMBOLS PicturePlotApp SOURCES src/picture_plot.cpp src/apps/picture_plot_app.cpp)
 # v1.18.0: Statistics alla parita' del capitolo 6 (nucleo, distribuzioni condivise,
 # controller) e Distribution come modalita' Base, solo sulla Pimoroni Pico Plus 2 W;

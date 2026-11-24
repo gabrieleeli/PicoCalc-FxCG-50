@@ -59,7 +59,7 @@ void fillAll(Workspace& ws) {
     ws.financial.begin = true; ws.financial.cash = {-100, 60, 60};
     ws.program.lastFile = "HELLO.pcprog"; ws.program.cursorLine = 3;
     ws.link.sent = 4; ws.link.lastName = "WORKSPACE";
-    ws.geometry.objects.push_back(geo::Object{geo::Kind::Segment, {0, 0, 3, 4}});
+    geo::addLine(ws.geometry, geo::Kind::Segment, geo::addPoint(ws.geometry, 0, 0), geo::addPoint(ws.geometry, 3, 4));
     ws.pictplot.points.push_back(pplot::Point{1, 2}); ws.pictplot.background = "PICT01.pcpict";
     ws.python.lastScript = "DEMO.py"; ws.python.history = {"1+2"};
 }

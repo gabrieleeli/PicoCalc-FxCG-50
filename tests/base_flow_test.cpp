@@ -290,37 +290,7 @@ void linkMode(std::unique_ptr<testrig::Rig>& r) {
     CHECK(r->ws().link.sent == 1 && r->ws().link.received == 1);
 }
 
-void geometry(std::unique_ptr<testrig::Rig>& r) {
-    r->type("h");
-    CHECK(r->fw.apps().activeId() == AppId::Geometry && screen<GeometryApp>(*r) == "main");
-    r->key(pk::F1); r->key(pk::F2);                                         // DRAW > SEGMENT
-    CHECK(screen<GeometryApp>(*r) == "draw");
-    r->key(pk::Enter);                                                      // (0, 0)
-    for (int i = 0; i < 12; ++i) r->key(pk::Right);                         // passo 0.25 alla scala iniziale
-    for (int i = 0; i < 16; ++i) r->key(pk::Up);
-    r->key(pk::Enter);                                                      // (3, 4)
-    CHECK(r->ws().geometry.objects.size() == 1 && geo::measure(r->ws().geometry.objects[0])[0] == "Lunghezza=5");
-    r->key(pk::Esc);
-    r->key(pk::F2);                                                         // SELECT vicino a (3, 4)
-    r->key(pk::F4);                                                         // MEASURE
-    CHECK(screen<GeometryApp>(*r) == "measure");
-    r->key(pk::Esc);
-    r->key(pk::F3);                                                         // MOVE
-    r->key(pk::Right);
-    r->key(pk::Enter);
-    CHECK(r->ws().geometry.objects[0].xy[0] == 0.25);
-    r->key(pk::F5); r->key(pk::F1);                                         // ZOOM+
-    CHECK(r->ws().geometry.view.scale == 36);
-    r->key(pk::F6); r->key(pk::F3); r->enter("SEGM");
-    CHECK(fileExists("PICOCALC/GEOM/SEGM.pcgeo"));
-    r->key(pk::F2); r->key(pk::Del);                                        // cancella l'oggetto selezionato
-    CHECK(r->ws().geometry.objects.empty());
-    r->key(pk::F6); r->key(pk::F2); r->key(pk::Enter);                       // OPEN
-    CHECK(r->ws().geometry.objects.size() == 1);
-    r->home();
-    reboot(r);
-    CHECK(r->ws().geometry.objects.size() == 1 && r->ws().geometry.file == "SEGM.pcgeo");
-}
+// v1.19.0: il flusso di Geometry (Available) e' in geometry_flow_test.
 
 void picturePlot(std::unique_ptr<testrig::Rig>& r) {
     // un'immagine di sfondo in PICOCALC/PICT
@@ -459,7 +429,6 @@ int main() {
     financial(r);
     program(r);
     linkMode(r);
-    geometry(r);
     picturePlot(r);
     python(r);
 #if FXAI_MODE_DISTRIBUTION

@@ -1231,7 +1231,33 @@ FXAI_BASE_APP(FinancialApp, Financial)
 FXAI_BASE_APP(LinkApp, Link)
 #endif
 #if FXAI_MODE_GEOMETRY
-FXAI_BASE_APP(GeometryApp, Geometry)
+// v1.19.0: Geometry alla parita' del capitolo 14 (Available). Stessa forma delle
+// modalita' Base, con gli accessori che usano geometry_flow_test e il simulatore.
+class GeometryApp final : public App {
+public:
+    GeometryApp();
+    ~GeometryApp() override;
+    AppId id() const override { return AppId::Geometry; }
+    void enter(Context& ctx) override;
+    void leave(Context& ctx) override;
+    void key(Context& ctx, const KeyEvent& ev) override;
+    void draw(Context& ctx, gfx::Canvas& c) override;
+    bool tick(Context& ctx) override;
+    bool ownsSetup() const override { return true; }
+    std::string screenName() const;                 // schermata o strumento attivo
+    bool open() const noexcept { return v_ != nullptr; }
+    std::vector<std::uint16_t> selection() const;    // id selezionati, nell'ordine della selezione
+    double pointerX() const noexcept;
+    double pointerY() const noexcept;
+    std::string headerText() const;                  // riga in alto (coordinate, richiesta, stato)
+    std::string menuTitle() const;                   // menu a tendina aperto ("" se nessuno)
+    std::vector<std::string> menuItems() const;
+    std::string boxText() const;                     // casella di misura ("" se chiusa)
+    bool boxFocused() const noexcept;
+    struct View;
+private:
+    std::unique_ptr<View> v_;
+};
 #endif
 #if FXAI_MODE_PICTUREPLOT
 FXAI_BASE_APP(PicturePlotApp, PicturePlot)

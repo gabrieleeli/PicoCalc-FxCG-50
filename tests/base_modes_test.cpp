@@ -524,55 +524,8 @@ void linkProtocol() {
     CHECK(decode(sb, bb.data(), bb.size()) && sb == st);
 }
 
-void geometry() {
-    geo::State s;
-    geo::Object seg{geo::Kind::Segment, {0, 0, 3, 4}};
-    geo::add(s, seg);
-    geo::add(s, geo::Object{geo::Kind::Polygon, {0, 0, 2, 0, 2, 2, 0, 2}});
-    geo::add(s, geo::Object{geo::Kind::Circle, {5, 5, 5, 7}});
-    geo::add(s, geo::Object{geo::Kind::Point, {-3, 1}});
-    geo::add(s, geo::Object{geo::Kind::Line, {0, -5, 1, -4}});
-    CHECK(s.objects.size() == 5);
-    CHECK_THROWS(geo::add(s, geo::Object{geo::Kind::Segment, {1, 1, 1, 1}}));
-    CHECK_THROWS(geo::add(s, geo::Object{geo::Kind::Polygon, {0, 0, 1, 1}}));
-    CHECK_THROWS(geo::add(s, geo::Object{geo::Kind::Point, {NAN, 0}}));
-    CHECK(geo::measure(s.objects[0])[0] == "Lunghezza=5");
-    const auto poly = geo::measure(s.objects[1]);
-    CHECK(poly[0] == "Area=4" && poly[1] == "Perimetro=8" && poly[2] == "Angoli: 90 90 90 90");
-    const auto circ = geo::measure(s.objects[2]);
-    CHECK(circ[1] == "Raggio=2" && circ[3].rfind("Area=12.566370", 0) == 0);
-    CHECK(geo::measure(s.objects[3])[0] == "(-3, 1)");
-    CHECK(geo::measure(s.objects[4])[0] == "Y=1X-5");
-    CHECK_NEAR(geo::angleDegrees(1, 0, 0, 0, 0, 1), 90, 1e-12);
-    CHECK_NEAR(geo::polygonArea(geo::Object{geo::Kind::Polygon, {0, 0, 4, 0, 0, 3}}), 6, 1e-12);
-    CHECK(geo::hitTest(s, 1.5, 2.05, 0.2) == 0);
-    CHECK(geo::hitTest(s, 5, 7.1, 0.2) == 2);
-    CHECK(geo::hitTest(s, 10, 5.05, 0.2) == 4);                 // la retta oltre i suoi due punti (y = x - 5)
-    CHECK(geo::hitTest(s, 50, 50, 0.2) == -1);
-    geo::move(s.objects[3], 1, -1);
-    CHECK(s.objects[3].xy == std::vector<double>({-2, 0}));
-    double sx, sy, x, y;
-    geo::View v;
-    v.cx = 1; v.cy = 2; v.scale = 10;
-    geo::toScreen(v, 320, 200, 3, 1, sx, sy);
-    geo::toPlane(v, 320, 200, sx, sy, x, y);
-    CHECK(std::abs(x - 3) < 1e-12 && std::abs(y - 1) < 1e-12 && sx == 180 && sy == 110);
-    geo::zoom(v, 2);
-    CHECK(v.scale == 20);
-    s.file = "TRI.pcgeo";
-    std::vector<std::uint8_t> b;
-    geo::encode(s, b);
-    geo::State back;
-    CHECK(geo::decode(back, b.data(), b.size()) && back == s);
-    const auto file = geo::encodeFile(s);
-    geo::State fromFile;
-    fromFile.file = "TRI.pcgeo";
-    CHECK(geo::decodeFile(file.data(), file.size(), fromFile) && fromFile == s);
-    for (std::size_t cut = 0; cut < file.size(); cut += 7) { geo::State t; CHECK(!geo::decodeFile(file.data(), cut, t)); }
-    geo::State full;
-    for (std::size_t i = 0; i < geo::MaxObjects; ++i) geo::add(full, geo::Object{geo::Kind::Point, {double(i), 0}});
-    CHECK_THROWS(geo::add(full, geo::Object{geo::Kind::Point, {0, 0}}));
-}
+// v1.19.0: Geometry e' alla parita' del capitolo 14 (Available): il nucleo e' provato
+// da geometry_test (un caso per voce, proprieta', migrazione della v1.17.0).
 
 void picturePlot() {
     pplot::State s;
@@ -771,7 +724,6 @@ int main() {
     financial();
     program();
     linkProtocol();
-    geometry();
     picturePlot();
     python();
 #if FXAI_MODE_DISTRIBUTION

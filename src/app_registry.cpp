@@ -45,7 +45,9 @@ const char* const kSrcConic[] = {"src/apps/conic_app.cpp", "src/conic.cpp", null
 const char* const kSrcProgram[] = {"src/apps/program_app.cpp", "src/program_mode.cpp", nullptr};
 const char* const kSrcFinancial[] = {"src/apps/financial_app.cpp", "src/financial.cpp", nullptr};
 const char* const kSrcLink[] = {"src/apps/link_app.cpp", "src/link_protocol.cpp", nullptr};
-const char* const kSrcGeometry[] = {"src/apps/geometry_app.cpp", "src/geometry.cpp", nullptr};
+// v1.19.0: Geometry alla parita' (nucleo puro in cinque file, controller e disegno).
+const char* const kSrcGeometry[] = {"src/apps/geometry_app.cpp", "src/apps/geometry_view.cpp", "src/geometry.cpp", "src/geometry_build.cpp",
+                                    "src/geometry_measure.cpp", "src/geometry_anim.cpp", "src/geometry_file.cpp", nullptr};
 const char* const kSrcPicturePlot[] = {"src/apps/picture_plot_app.cpp", "src/picture_plot.cpp", nullptr};
 const char* const kSrcPython[] = {"src/apps/python_app.cpp", "src/python_port.cpp", nullptr};
 const char* const kSrcDistribution[] = {"src/apps/distribution_app.cpp", "src/distribution.cpp", nullptr};
@@ -189,10 +191,14 @@ constexpr AppInfo kApps[AppCount] = {
      "Impostazioni (SET UP), retroilluminazione, Wi-Fi, relay AI, informazioni su memoria e PSRAM, diagnostica e reset",
      nullptr, Ui | s::Network | s::Storage | s::Diag | s::Hardware, AllData /* RESET clears the whole workspace */, 0, kSystemSrc},
 #if FXAI_BOARD_PICO_PLUS_2W
-    {AppId::Geometry, "Geometry", "H", rgb888To565(50, 110, 210), BaseStatus,
-     "Punti, segmenti, rette, circonferenze e poligoni messi con il cursore; selezione, spostamento, cancellazione; lunghezze, angoli, aree e coordinate; zoom e pan; file .pcgeo",
-     "Base v1.17.0: mancano per la parita' (cap. 14) vincoli e costruzioni (Construct), trasformazioni, animazioni, testo ed etichette.",
-     s::Expression | Ui | s::Storage | Shell | s::Graph2D | Core, d::Settings | d::Memory | d::Geometry, 0, FXAI_SRC(Geometry), Plus},
+    // v1.19.0: parita' completa con il capitolo 14 (docs/reports/ANALISI_FONTI_v1.19.0.md).
+    {AppId::Geometry, "Geometry", "H", rgb888To565(50, 110, 210), AppStatus::Available,
+     "Draw e Draw Spec (punti anche legati alle curve, segmenti, rette, semirette, vettori, circonferenze, archi, triangoli, isosceli, rettangoli, quadrati, poligoni, n-goni, f(x)), Construct e Transform legati ai genitori (grafo delle dipendenze), casella di misura con blocchi, misure incollate, testo, etichette, colori e linee, Undo/Redo, View, animazioni con traccia e tabella verso List/Statistics, file .pcgeo",
+     nullptr,
+     // Files: Pict 1-20 (Store/Recall Picture); MathCore: f(x) sempre in radianti;
+     // Lists: STORE > LIST e STAT della tabella; StepTask: animazioni e risolutore.
+     s::Expression | Ui | s::Storage | Shell | s::Files | s::MathCore | s::StepTask | Core, d::Settings | d::Memory | d::Lists | d::Geometry,
+     linkTo(AppId::Statistics), FXAI_SRC(Geometry), Plus},
 #else   // Pico 2 W congelato: la voce della v1.16.0, identica
     {AppId::Geometry, "Geometry", "H", rgb888To565(50, 110, 210), AppStatus::Planned,
      "Costruzioni geometriche (punti, rette, circonferenze, poligoni) e misure",
@@ -404,7 +410,7 @@ const char* const* modeCoreHeaders(AppId id) noexcept {
     static const char* const prog[] = {"program_mode.hpp", "mode_codec.hpp", "limits.hpp", nullptr};
     static const char* const fin[] = {"financial.hpp", "mode_codec.hpp", "limits.hpp", nullptr};
     static const char* const link[] = {"link_protocol.hpp", "mode_codec.hpp", "limits.hpp", nullptr};
-    static const char* const geo[] = {"geometry.hpp", "mode_codec.hpp", "limits.hpp", nullptr};
+    static const char* const geo[] = {"geometry.hpp", "geometry_internal.hpp", "geometry_ui.hpp", "mode_codec.hpp", "limits.hpp", nullptr};
     static const char* const pp[] = {"picture_plot.hpp", "mode_codec.hpp", "limits.hpp", nullptr};
     static const char* const py[] = {"python_port.hpp", "mode_codec.hpp", "limits.hpp", nullptr};
     static const char* const dm[] = {"distribution.hpp", "mode_codec.hpp", "limits.hpp", nullptr};

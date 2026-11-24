@@ -1,5 +1,5 @@
 // v1.17.0 — Fuzzing dei decoder delle modalita' Base (sezioni del record v12,
-// file .pcdyna/.pcrecur/.pcconic/.pcfin/.pcgeo/.pcplot, .pcprog; v1.18.0: Distribution): ogni dato
+// file .pcdyna/.pcrecur/.pcconic/.pcfin/.pcgeo/.pcplot, .pcprog; v1.18.0: Distribution; v1.19.0: .pcgeo v2): ogni dato
 // accettato si ricodifica e si rilegge identico, e i calcoli sullo stato letto
 // (coniche, TVM, misure, evidenziazione) non vanno in crash.
 #include "conic.hpp"
@@ -85,7 +85,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* d, size_t n) {
         case 4: { progmode::State s; roundtrip(p, m, progmode::decode, progmode::encode, s, ok); break; }
         case 5: {
             geo::State s; roundtrip(p, m, geo::decode, geo::encode, s, ok);
-            if (ok) for (const auto& o : s.objects) { (void)geo::measure(o); (void)geo::hitTest(s, 0, 0, 1); }
+            // v1.19.0: formato 2 (e 1 migrato); misure disponibili per ogni oggetto
+            if (ok) { for (const auto& o : s.objects) for (const auto& sp : geo::available(s, {o.id})) (void)geo::measure(s, sp); (void)geo::hitTest(s, 0, 0, 1); }
             geo::State f;
             if (geo::decodeFile(p, m, f)) { const auto b = geo::encodeFile(f); geo::State g; if (!geo::decodeFile(b.data(), b.size(), g) || !(g == f)) std::abort(); }
             break;

@@ -226,10 +226,12 @@ int main() {
             // Sulla Plus le modalita' della v1.16.0 restano Available (Statistics compresa:
             // la sua parita' completa e' la v1.18.0) e le modalita' nuove sono Base.
             for (AppId id : v116) CHECK(appInfo(id).status == AppStatus::Available);
+            // v1.19.0: Geometry esce dalle Base (parita' completa con il capitolo 14).
             const std::set<AppId> v117Base = {AppId::Spreadsheet, AppId::DynaGraph, AppId::Recursion, AppId::ConicGraphs, AppId::Program,
-                                              AppId::Financial, AppId::Link, AppId::Geometry, AppId::PicturePlot, AppId::Python};
+                                              AppId::Financial, AppId::Link, AppId::PicturePlot, AppId::Python};
             for (AppId id : v117Base)
                 ::testutil::report(appInfo(id).status == AppStatus::Base || !modeCompiled(id), "v1.17.0 modes are Base on the Plus", appInfo(id).name, 0, "Plus");
+            ::testutil::report(appInfo(AppId::Geometry).status == AppStatus::Available || !modeCompiled(AppId::Geometry), "v1.19.0 Geometry e' Available", "Geometry", 0, "Plus");
         }
 #if FXAI_BOARD_PICO_PLUS_2W
         // v1.18.0: Statistics alla parita' (Available, guscio comune e lavori a passi),
@@ -250,6 +252,22 @@ int main() {
             // statistics_app.cpp: sulla Plus il codice della v1.16.0 e' tutto nell'#else.
             const std::string old = readFile("src/apps/statistics_app.cpp");
             CHECK(old.find("#if FXAI_BOARD_PICO_PLUS_2W") != std::string::npos && old.find("#else") != std::string::npos);
+        }
+        // v1.19.0: Geometry alla parita' (Available, nessun `missing`), con i lavori a passi, le
+        // immagini Pict e il collegamento verso Statistics (STORE > STAT della tabella); un nucleo
+        // puro (geo::) separato dal controller: il nucleo non conosce l'interfaccia e il
+        // controller non tocca le forme calcolate se non attraverso geometry.hpp.
+        if (modeCompiled(AppId::Geometry)) {
+            const AppInfo& g = appInfo(AppId::Geometry);
+            CHECK(g.status == AppStatus::Available && g.missing == nullptr && (g.services & service::StepTask) && (g.services & service::ModeCore));
+            CHECK((g.data & data::Geometry) && (g.data & data::Lists) && (g.links & linkTo(AppId::Statistics)));
+            for (const char* src : {"src/geometry.cpp", "src/geometry_build.cpp", "src/geometry_measure.cpp", "src/geometry_anim.cpp", "src/geometry_file.cpp"}) {
+                const std::string code = codeOnly(readFile(src));
+                for (const char* f : {"apps.hpp", "gfx::", "app::", "Context& ", "ui::", "Workspace"})
+                    ::testutil::report(code.find(f) == std::string::npos, "nucleo di Geometry senza interfaccia", src, 0, f);
+            }
+            for (const char* src : {"src/apps/geometry_app.cpp", "src/apps/geometry_view.cpp"})
+                ::testutil::report(codeOnly(readFile(src)).find("geometry_internal.hpp") == std::string::npos, "il controller usa solo geometry.hpp", src, 0, "internal");
         }
 #else
         // v1.18.0: sul Pico 2 W congelato nessuna modalita' nuova (23 modalita', come la v1.16.0).

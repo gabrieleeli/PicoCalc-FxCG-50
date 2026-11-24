@@ -1,4 +1,4 @@
-# Architettura delle applicazioni — v1.17.0
+# Architettura delle applicazioni — v1.19.0
 
 Questo documento descrive **come sono costruite tutte le modalità** (quelle
 disponibili e quelle future), quali servizi condivisi usano, quali dati si
@@ -233,7 +233,7 @@ record v12, il suo tipo di file in MEMORY › FILES e le operazioni lunghe in un
 | [Financial](FINANCIAL.md) | `financial.cpp` + `calc_library::cmpdSolve`/`amortizationAt` | SMPL, CMPD (BGN/END), CASH, AMT, CNVT, DAYS, →Ans | Expression, Widgets, Editor, Format, Storage, ModeShell, TypedFiles, StepTask, ModeCore | Settings, Memory, Strings, Financial | — |
 | [Program](PROGRAM.md) | `program_mode.cpp` + Interp | elenco, NEW per dialetto, editor con sintassi colorata, RUN con input e AC, errori con riga e colonna; grafici in Graph | Expression, Widgets, Editor, Format, Storage, ModeShell, TypedFiles, TextEdit, StepTask, Binding, Interp, GraphCmd, ModeCore | Settings, Memory, Lists, Program | Graph |
 | [Link](LINK.md) | `link_protocol.cpp` | trame con CRC, Sender/Receiver a passi, pacchetti del workspace e dei file, APPLY | Widgets, Storage, Files, ModeShell, TypedFiles, StepTask, ModeCore | tutte (pacchetto del workspace) | — |
-| [Geometry](GEOMETRY.md) | `geometry.cpp` | punti, segmenti, rette, circonferenze, poligoni; MOVE, MEASURE, ZOOM, PAN | Expression, Widgets, Editor, Format, Storage, ModeShell, TypedFiles, Graph2D, ModeCore | Settings, Memory, Geometry | — |
+| [Geometry](GEOMETRY.md) — **Available dalla v1.19.0** | `geometry.cpp` (oggetti, grafo delle dipendenze, ricalcolo incrementale, intersezioni), `geometry_build.cpp` (Draw, Construct, Transform, Edit), `geometry_measure.cpp` (misure, blocchi, risolutore `SolveTask`), `geometry_anim.cpp` (`AnimationTask`, tabella), `geometry_file.cpp` (sezione e `.pcgeo` v1/v2) | parità del capitolo 14: Draw/Draw Spec, Construct e Transform legati ai genitori, casella di misura con blocchi, testo, etichette, FORMAT, Undo/Redo, View, animazioni con traccia e tabella | Expression, Widgets, Editor, Format, Storage, ModeShell, TypedFiles, Files (Pict), MathCore (f(x) in radianti), StepTask, ModeCore (`geometry.hpp`, `geometry_internal.hpp`, `geometry_ui.hpp`) | Settings, Memory, Lists (STORE › LIST e STAT), Geometry | Statistics (STORE › STAT) |
 | [Picture Plot](PICTURE_PLOT.md) | `picture_plot.cpp` | sfondo `.pcpict`, punti numerati, List 1/2, regressione | Expression, Widgets, Editor, Format, Stats, Storage, Files, ModeShell, TypedFiles, Graph2D, ModeCore | Settings, Memory, Lists, PicturePlot | — |
 | [Python](PYTHON.md) | `python_port.cpp` + MicroPython v1.24.1 (`third_party/micropython`) | SHELL, script, `input()`, KeyboardInterrupt, coroutine con pila propria, heap separato, `casioplot` | Widgets, Editor, Storage, ModeShell, TypedFiles, TextEdit, StepTask, Hardware, ModeCore | Settings, Python | — |
 
@@ -254,8 +254,11 @@ risultati (nessun riferimento a grafici, liste, tabelle o conversioni).
 Dalla v1.17.0 tutte le modalità del registro si aprono, tranne **E-CON4**
 (External). Le modalità Base (§5) arrivano alla parità completa una per
 versione: **Statistics** è alla parità dalla v1.18.0 (sulla Plus), quando
-**Distribution** è entrata come nuova modalità Base; la prossima è Geometry
-(v1.19.0). Il piano è in [ROADMAP.md](ROADMAP.md) e in `CONTINUE.md`.
+**Distribution** è entrata come nuova modalità Base; **Geometry** è alla
+parità dalla v1.19.0 (nucleo puro in cinque file, controller in
+`src/apps/geometry_app.cpp` e `geometry_view.cpp`: `architecture_test` verifica
+che il nucleo non includa l'interfaccia e che il controller non usi le parti
+interne del nucleo); la prossima è Program (v1.20.0). Il piano è in [ROADMAP.md](ROADMAP.md) e in `CONTINUE.md`.
 Sul Raspberry Pi Pico 2 W (congelato alla v1.16.0) le modalità della Plus
 restano `Planned` con il testo «Non disponibile sul Raspberry Pi Pico 2 W…».
 

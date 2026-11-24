@@ -1,9 +1,43 @@
-# Build status — v1.18.0 (Statistics alla parità sulla Plus, Distribution Base; Raspberry Pi Pico 2 W congelato)
+# Build status — v1.19.0 (Geometry alla parità sulla Plus; Raspberry Pi Pico 2 W congelato)
 
 Stato delle build per versione; le novità sono in [CHANGELOG.md](CHANGELOG.md).
-Le sezioni dopo "v1.18.0" descrivono le build delle versioni precedenti.
+Le sezioni dopo "v1.19.0" descrivono le build delle versioni precedenti.
 
-## v1.18.0 — `main`
+## v1.19.0 — `main`
+
+Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`;
+sul Pico 2 W `-Os` per i sorgenti di `FXAI_PICO2W_SIZE_SOURCES`), nello stesso
+ambiente della v1.18.0 (Pico SDK 2.2.0, `gcc-arm-none-eabi` 13.2.1). Novità:
+Geometry alla parità con il capitolo 14 sulla Plus
+([reports/SVILUPPO_v1.19.0.md](reports/SVILUPPO_v1.19.0.md)). **Nessuna prova su hardware.**
+
+> **Raspberry Pi Pico 2 W congelato alla v1.16.0**: 1 944 228 byte, confrontato
+> byte per byte con la v1.18.0 compilata nello stesso ambiente: 4 byte diversi,
+> tutti la cifra della stringa della versione; stesse modalità, stessa RAM statica.
+
+| Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (5 967 872 byte) | `build/pico2w/picocalc_fxai_pico2w.uf2` (3 889 152 byte) |
+| Immagine flash | 2 983 560 byte (`__flash_binary_end` = `0x102D8688`) = 71 % della partizione da 4 MB (budget < 90 %: 3 774 873 B); +176 344 byte rispetto alla v1.18.0: i sette moduli di Geometry 206 919 B, meno la Geometry della v1.17.0 (29 228 B) | **1 944 228 byte** (`0x101DAAA4`) = 92 % della partizione da 2 MB; invariato |
+| Codice nuovo nell'immagine | `geometry` (cinque file del nucleo), `geometry_app`, `geometry_view`; registro | nessuno (mappa: **185** oggetti/simboli esclusi, nessuno nell'immagine) |
+| RAM statica | 312 736 byte fino a `__end__` = `0x2004C5A0` (+128) | 305 236 byte (`0x2004A854`, invariata) |
+| Heap SRAM | 178 784 byte (`__end__` → `0x20078000`) | 186 284 byte (invariato) |
+| Frame di stack (`-fstack-usage`) | massimo invariato `SystemApp::enter` 2 016 B; codice nuovo: `geo::transform` 784 B, `openSetup` 784 B, `geo::addSpec` 704 B, `GeometryApp::key` 584 B | invariati |
+| Warning | **nessuno** del compilatore | nessuno |
+| SHA-256 dell'UF2 locale | `7531c083d9a48b3e20c82570b9b7c066507c0f9fa84da4d82ec8c70cb7113ced` | `0548b1f031c4d2dada1e967d06ffbabe7fa7a75fdc5ba30deb0122e925eab53a` |
+
+### Test
+
+| Suite | Pico Plus 2 W | Pico 2 W |
+|---|---|---|
+| CTest (`tests/run_host_tests.sh`) | 64/64: 61 suite C++ con **20 594** controlli, `mem_pools_smoke`, `sd_interop_test`, `link_tool_test` | 54/54: 52 suite con **16 378** controlli, `mem_pools_smoke`, `sd_interop_test` |
+| AddressSanitizer + UBSan bloccante (`--sanitize`) | 64/64 | 54/54 |
+| ThreadSanitizer (`--tsan`) | superato | superato |
+| Relay AI (Python, `unittest`) | 15/15 | — |
+| Fuzzing (≥ 300 s per harness nuovo o toccato) | nuovo: `fuzz_geometry` 82 133 esecuzioni; toccati: `fuzz_modes` 4 449 143, `fuzz_workspace` 1 670 584, `fuzz_ui` 10 634, `fuzz_eactivity` 1 108 con il controller e 6 249 384 sui soli documenti: nessun crash sul codice finale (due errori trovati da `fuzz_geometry` durante lo sviluppo e corretti) | — |
+| Simulatore (`tools/sim_compare.py`) | 192 identici: 162 precedenti invariati, 2 rigenerati per cambiamenti voluti (144, 172), 28 nuovi (175–202) | — |
+
+## v1.18.0
 
 Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`;
 sul Pico 2 W `-Os` per i sorgenti di `FXAI_PICO2W_SIZE_SOURCES`), nello stesso
