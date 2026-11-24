@@ -568,7 +568,7 @@ void menuAction(Context& ctx, View& v, int menu, int tab, int item) {
             ctx.ws.setList(c, std::move(col));
         }
         ctx.markDirty();
-        ctx.open(AppId::Statistics);
+        v.openStatistics = true;           // aperta alla fine di key(): open() libera questa schermata
         return;
     }
     case MenuDelete: {
@@ -937,7 +937,7 @@ void toolExe(Context& ctx, View& v) {
         before(ctx, v);
         geo::Id c = geo::hitTest(s, v.px, v.py, pixelTolerance(ctx), true);
         if (c == geo::NoId) { c = geo::addPoint(s, v.px, v.py); v.created.push_back(c); changed(ctx, v); }
-        v.picks = {c};
+        v.picks.assign(1, c);
         if (v.ttype == geo::TType::Symmetry) {
             try { geo::transform(s, v.ttype, v.sel, c); } catch (...) { endTool(ctx, v, true); throw; }
             v.created.clear();
@@ -1073,6 +1073,12 @@ void GeometryApp::key(Context& ctx, const KeyEvent& ev) {
         (void)v.shell.modalKey(ev, [&](int tag, bool yes) { confirmed(ctx, v, tag, yes); }, [&](int tag) { answer(ctx, v, tag); },
                                [&](int tag, int choice) { const int tab = v.tab; v.menu = MenuNone; menuAction(ctx, v, tag, tab, choice); });
         if (!v.shell.menu.open) v.menu = MenuNone;
+        if (v.openStatistics) {
+            // STORE > STAT (A10): Statistics si apre per ultima cosa (leave() libera v)
+            v.openStatistics = false;
+            ctx.open(AppId::Statistics);
+            return;
+        }
         if (!v.shell.ask.active() && (v.tool == Tool::Center) && !v.picks.empty() && v.ttype != geo::TType::Symmetry && ev.is(Key::Exit)) endTool(ctx, v, true);
         return;
     }

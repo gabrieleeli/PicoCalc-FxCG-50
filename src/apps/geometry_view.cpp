@@ -532,7 +532,7 @@ void drawTable(Context& ctx, View& v, gfx::Canvas& c) {
     for (int r = 0; r < VisibleRows && firstRow + r < rows; ++r) {
         const int row = firstRow + r;
         const int y = top + RowH * (r + 1);
-        char idx[8];
+        char idx[16];
         std::snprintf(idx, sizeof idx, "%d", row + 1);
         ui::text(c, 4, y + 2, idx, Muted, font::Face::Small);
         for (int k = 0; k < Visible && v.tableFirst + k < cols; ++k) {

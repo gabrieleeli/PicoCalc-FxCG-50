@@ -1,5 +1,67 @@
 # Changelog
 
+## v1.19.0 — Geometry alla parità
+
+Base: `main` = `a7c861b` (v1.18.0). Sulla **Pimoroni Pico Plus 2 W**
+**Geometry** arriva alla **parità completa** con il capitolo 14 del manuale
+fx-CG50 e passa da Base ad **Available**. Il **Raspberry Pi Pico 2 W resta
+congelato** alla v1.16.0 (immagine identica salvo la stringa della versione).
+Analisi e tabella di parità: [reports/ANALISI_FONTI_v1.19.0.md](reports/ANALISI_FONTI_v1.19.0.md);
+rapporto: [reports/SVILUPPO_v1.19.0.md](reports/SVILUPPO_v1.19.0.md); guida:
+[GEOMETRY.md](GEOMETRY.md). **Nessuna prova su hardware fisico**: procedura
+[HARDWARE_TEST_v1.19.0.md](HARDWARE_TEST_v1.19.0.md) (HW-272…HW-295).
+
+### Nuovo (solo Pimoroni Pico Plus 2 W)
+- **Menu a tendina** F1 File/View, F2 Edit/Option/Properties, F3 Draw/Draw Spec,
+  F4 Construct, F5 Transform, F6 Animate con le schede (◀ ▶) e le cifre;
+  puntatore con passo rotondo, salti 1–9 e i tasti diretti (+ − . x * v, DEL,
+  AC, OPTN, SHIFT F3, SHIFT MENU, SHIFT 5); Key Help in tre schermate.
+- **Draw** (Point anche legato a una curva, Line Segment, Infinite Line, Ray,
+  Vector, Circle, Arc, SemiCirc, 3-Point Arc) e **Draw Spec** (Triangle, Isosc
+  Triangle, Rectangle, Square, Polygon, Regular n-gon, Function f(x)) con le
+  figure che restano isoscele, rettangoli, quadrati e regolari.
+- **Construct** (Perp Bisector, Perpendicular, Midpoint, Intersection, Angle
+  Bisector, Parallel, Tangent, Attached Angle) e **Transform** (Reflection,
+  Translation con i valori o con un vettore, Rotation, Dilation, Symmetry):
+  costruzioni e immagini **restano legate** ai genitori (grafo delle
+  dipendenze con ricalcolo incrementale); casi degeneri con tolleranze
+  dichiarate (oggetti indefiniti che tornano).
+- **Casella di misura** (OPTN): coordinate, lunghezza, pendenza, direzione,
+  angolo e supplementare, incidenza, tangenza, congruenza, area, perimetro,
+  equazione, componenti, raggio, circonferenza, angolo di rotazione, fattore;
+  un valore scritto cambia la figura e la **blocca** (risolutore a passi con
+  AC; vincoli incompatibili rifiutati); PASTE delle misure che si aggiornano,
+  Expression con @n, Label, Number Format.
+- **Option e Properties**: Text, Clr Constraint, Show All/Hide, Area Calc,
+  ordine di disegno, Fade I/O, Store/Recall/Clear Picture (Pict 1–20); **FORMAT**
+  con cinque tratti, sette colori, aree Normal/Lighter, colore del testo.
+- **Edit**: Undo/Redo, Select All/Deselect All/Select Figure, Delete con i
+  dipendenti, Clear All; spostamento della selezione. **View**: Zoom Box, Pan,
+  Scroll, Zoom In/Out, Zoom to Fit, assi e griglia, V-Window; File › Option e
+  SET UP (Number Format, angolo, unità di lunghezza, griglia, assi).
+- **Animate**: Add/Replace Animation su segmenti, rette, semirette, vettori,
+  circonferenze, archi e funzioni; Trace; Edit Animation (Steps, t0, t1,
+  Times); Go (once/repeat) con AC; tabella delle misure con STORE › LIST e
+  STORE › STAT (Statistics).
+- File **`.pcgeo` versione 2** e sezione `0x0110` versione 2; i file e la
+  sezione della v1.17.0 si leggono (migrati in punti e figure legate).
+
+### Corretto
+- Trovati dal fuzzing (`fuzz_geometry`) nel codice nuovo e corretti prima della
+  pubblicazione: punti non rimessi a posto dopo un'animazione con dei blocchi;
+  blocchi non risolti dopo il cambio dell'angolo di una rotazione.
+- Trovato da AddressSanitizer: STORE › STAT della tabella usava la schermata
+  di Geometry dopo averla chiusa aprendo Statistics.
+- `tools/fuzz/run_fuzz.sh` si fermava con più di 3 000 stringhe nei test.
+
+### Test
+- **`geometry_test`** (nucleo, un caso per voce, proprietà su costruzioni
+  casuali, migrazione della v1.17.0) e **`geometry_flow_test`** (tasti della
+  PicoCalc sul firmware completo, un caso per voce) nuovi; `architecture_test`
+  (Geometry Available, nucleo senza interfaccia), `apps_init_test`; fuzzer
+  **`fuzz_geometry`** (formato e sequenze di comandi con le invarianti);
+  screenshot 175–202 (144 e 172 rigenerati).
+
 ## v1.18.0 — Statistics alla parità, Distribution Base
 
 Base: `main` = `aa2923c` (v1.17.0). Sulla **Pimoroni Pico Plus 2 W**

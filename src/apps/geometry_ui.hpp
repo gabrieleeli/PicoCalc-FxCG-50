@@ -85,6 +85,7 @@ struct View {
     int pendingStore{0};                          // Pict n da catturare al prossimo disegno
     pict::Image capture;
     bool captureReady{false};
+    bool openStatistics{false};                   // STORE > STAT: aprire Statistics alla fine del tasto
     // testi dell'ultimo disegno (test e simulatore)
     std::string header, boxLine;
 };
