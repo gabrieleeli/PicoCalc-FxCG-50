@@ -1,9 +1,13 @@
 # Documentazione
 
-## Documenti attuali (v1.18.0)
+## Documenti attuali (v1.19.0)
 
 | Documento | Contenuto |
 |---|---|
+| [reports/ANALISI_FONTI_v1.19.0.md](reports/ANALISI_FONTI_v1.19.0.md) | v1.19.0: tabella di parità del capitolo 14 voce per voce (K, F, V, E, O, D, C, T, M, A, S, P, R), progetto del nucleo (grafo delle dipendenze, risolutore dei blocchi, tolleranze dichiarate, animazioni), formato `.pcgeo` v2, differenze e domande con le risposte scelte prima del codice |
+| [reports/SVILUPPO_v1.19.0.md](reports/SVILUPPO_v1.19.0.md) | v1.19.0: tabella di parità finale, nucleo e controller, errori trovati, test, fuzzing, simulatore, firmware, cancello |
+| [GEOMETRY.md](GEOMETRY.md) | guida completa di Geometry (parità con il capitolo 14, Plus): tasti, menu, Draw, Construct, Transform, casella di misura e blocchi, animazioni, esempi da scuola |
+| [HARDWARE_TEST_v1.19.0.md](HARDWARE_TEST_v1.19.0.md) | collaudo della v1.19.0: Geometry sul dispositivo (risolutore, animazioni, 1 000 oggetti, file v1/v2, ritorno alla v1.18.0), Pico 2 W invariato (HW-272…HW-295) |
 | [reports/ANALISI_FONTI_v1.18.0.md](reports/ANALISI_FONTI_v1.18.0.md) | v1.18.0: tabella di parità del capitolo 6 voce per voce (stato, cosa manca, test previsto), progetto di Distribution Base, verifica numerica indipendente con le tolleranze, domande e risposte prima del codice |
 | [reports/SVILUPPO_v1.18.0.md](reports/SVILUPPO_v1.18.0.md) | v1.18.0: tabella di parità finale, nucleo e controller, Distribution, errori trovati (fuzzing), test, simulatore, firmware, cancello |
 | [STATISTICS.md](STATISTICS.md) · [DISTRIBUTION.md](DISTRIBUTION.md) | guide di Statistics (parità con il capitolo 6, Plus) e di Distribution (Base, Plus) |
@@ -12,7 +16,7 @@
 | [reports/SVILUPPO_v1.17.0.md](reports/SVILUPPO_v1.17.0.md) | v1.17.0: fase 1 (inizializzazione di tutte le modalità, errori trovati), fase 2 (dieci modalità Base, cosa manca alla parità), differenze, test, fuzzing, simulatore, firmware e flash per modalità, cancello |
 | [HARDWARE_TEST_v1.17.0.md](HARDWARE_TEST_v1.17.0.md) | collaudo della v1.17.0: segni Base, ogni modalità sul dispositivo, Python (coroutine, MSPLIM, AC), Link sulla USB con il PC, record v11 → v12 e ritorno, solo SRAM, Pico 2 W invariato (HW-220…HW-245) |
 | [SPREADSHEET.md](SPREADSHEET.md) · [DYNA_GRAPH.md](DYNA_GRAPH.md) · [RECURSION.md](RECURSION.md) · [CONIC_GRAPHS.md](CONIC_GRAPHS.md) · [FINANCIAL.md](FINANCIAL.md) | guide delle modalità Base della v1.17.0 (Pimoroni Pico Plus 2 W): tasti, barre F1–F6, file, limiti, cosa manca alla parità |
-| [PROGRAM.md](PROGRAM.md) · [LINK.md](LINK.md) · [GEOMETRY.md](GEOMETRY.md) · [PICTURE_PLOT.md](PICTURE_PLOT.md) · [PYTHON.md](PYTHON.md) | guide delle altre modalità Base (Program in C/C++/C#, Link con `tools/picocalc_link.py`, Geometry, Picture Plot, Python con MicroPython) |
+| [PROGRAM.md](PROGRAM.md) · [LINK.md](LINK.md) · [PICTURE_PLOT.md](PICTURE_PLOT.md) · [PYTHON.md](PYTHON.md) | guide delle altre modalità Base (Program in C/C++/C#, Link con `tools/picocalc_link.py`, Picture Plot, Python con MicroPython) |
 | [EACTIVITY.md](EACTIVITY.md) | guida di eActivity (v1.16.0): tasti della PicoCalc, elenco dei file, righe, barre, strisce, memorie e limiti per scheda |
 | [reports/ANALISI_FONTI_v1.16.0.md](reports/ANALISI_FONTI_v1.16.0.md) | M2: capitolo 10 del manuale, progetto (documento, strisce, espressioni nel testo, memorie per file), tabella di parità E01–E56 scritta prima del codice, differenze previste |
 | [reports/SVILUPPO_v1.16.0.md](reports/SVILUPPO_v1.16.0.md) | v1.16.0: eActivity, tabella di parità finale con le prove, differenze inevitabili, test, firmware e memoria, congelamento del Pico 2 W |

@@ -301,7 +301,7 @@ come nei file, [FILE_FORMATS.md](FILE_FORMATS.md)):
 | `0x010A` | Program | ultimo file, riga e colonna del cursore, dialetto dei programmi nuovi |
 | `0x010B` | Financial | BGN/END, SMPL, flussi di cassa, PM1/PM2, CNVT, date (le variabili TVM restano in VARS › TVM) |
 | `0x010D` | Link | ultimo pacchetto ricevuto e statistiche |
-| `0x0110` | Geometry | oggetti, vista, nome del file |
+| `0x0110` | Geometry | **v1.19.0: versione 2** (il primo byte; la 1 della v1.17.0 si migra): oggetti con definizioni e genitori, blocchi, animazioni, tracce, tabella, opzioni, vista, sfondo, contatori ([FILE_FORMATS.md](FILE_FORMATS.md#costruzioni-di-geometry-pcgeo-versione-2-v1190)) e il nome del file |
 | `0x0111` | Picture Plot | sfondo, finestra, punti, regressione, nome del file |
 | `0x0114` | Python | ultimo script, ultime 20 righe della SHELL |
 | `0x0101` | Statistics (v1.18.0) | StatGraph1–3 (tipo, liste, frequenza, marcatore, colore, Color Link, outlier, Pie, Bar, Start/Width), SET di CALC (1Var XList/Freq, 2Var Freq; 2Var XList/YList restano in `Settings`), SET UP (Stat Wind, Resid List, Q1Q3 Type), colori e formule delle 26 liste, risultati dell'ultimo calcolo (VARS › STAT); solo numeri finiti |
@@ -333,6 +333,13 @@ v1.16.0 sulla Plus conviene salvare il workspace con Link
 (`tools/picocalc_link.py receive`); se si torna alla v1.17.0 prima che il
 firmware vecchio abbia salvato, il record v12 è ancora lì e si legge. Il
 Raspberry Pi Pico 2 W non è interessato (scrive sempre la versione 11).
+
+**v1.19.0, ritorno alla v1.18.0 sulla Plus.** La v1.18.0 non conosce la
+versione 2 della sezione `0x0110` (Geometry): la **isola** («Data ERROR: dati
+danneggiati di Geometry»), Geometry riparte vuota e il resto del record si
+legge; al primo salvataggio la sezione sparisce. Prima di tornare indietro
+conviene salvare la costruzione con File › Save as (il `.pcgeo` versione 2 si
+riapre tornando alla v1.19.0).
 
 ## File delle modalità (v1.15.0)
 

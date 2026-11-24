@@ -153,6 +153,16 @@ void keysAndMenus(Rig& r) {
     // K03 tasti diretti (gli altri nelle voci): MENU esce
     r.key(pk::Tab);
     T("K03 MENU esce", r.fw.apps().activeId() == AppId::MainMenu);
+    // dalla striscia di eActivity: EXIT a riposo torna al documento, OPTN apre la casella
+    r.fw.apps().context().beginStrip(AppId::EActivity, AppId::Geometry, 0);
+    T("K03 Geometry dalla striscia", r.fw.apps().activeId() == AppId::Geometry);
+    r.key(pk::F8);
+    T("K03 striscia: OPTN apre la casella", r.active<GeometryApp>() && r.active<GeometryApp>()->boxFocused());
+    r.key(pk::F8);
+    r.key(pk::Esc);
+    T("K03 striscia: EXIT torna a eActivity", r.fw.apps().activeId() == AppId::EActivity);
+    r.fw.apps().context().endStrip();
+    r.home();
 }
 
 // ---------------------------------------------------------------- File

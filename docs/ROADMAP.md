@@ -1,4 +1,4 @@
-# Roadmap — dopo la v1.18.0
+# Roadmap — dopo la v1.19.0
 
 **Piano dalla v1.17.0** ([reports/ANALISI_FONTI_v1.17.0.md](reports/ANALISI_FONTI_v1.17.0.md)):
 la v1.17.0 è la **base di tutte le modalità** (ogni modalità del registro si
@@ -16,8 +16,8 @@ budget, relay, documentazione) e un solo commit su `main`.
 | v1.16.0 | **eActivity** (cap. 10, fatta); il **Pico 2 W è congelato** | | entrambe |
 | v1.17.0 | **base di tutte le modalità** (fatta) | stato Base, `apps_init_test`, record v12, dieci modalità Base | Plus (inizializzazione: entrambe) |
 | v1.18.0 | **Statistics** (cap. 6, fatta) | parità completa sulla Plus: editor a tre pagine con formule e colori, StatGraph1–3 con 20 tipi, 12 regressioni con residui, TEST (Z, t, χ², F, ANOVA), INTR, DIST con le 24 funzioni, VARS › STAT; **Distribution** (cap. 18) nel registro come modalità Base | Plus |
-| **v1.19.0** | **Geometry** (cap. 14) | Construct, trasformazioni, animazioni, testo ed etichette | Plus |
-| v1.20.0 | Program (cap. 8 come modalità) | DEBUG, SEARCH, RENAME, password, libreria `fx` completa | Plus |
+| v1.19.0 | **Geometry** (cap. 14, fatta) | parità completa sulla Plus: Draw/Draw Spec, Construct e Transform legati ai genitori (grafo delle dipendenze, ricalcolo incrementale), casella di misura con blocchi e risolutore a passi, testo, etichette, FORMAT, Undo/Redo, View, animazioni con traccia e tabella, `.pcgeo` v2; Geometry **Available** | Plus |
+| **v1.20.0** | **Program** (cap. 8 come modalità) | DEBUG, SEARCH, RENAME, password, libreria `fx` completa | Plus |
 | v1.21.0 | Python (cap. 17) | menu delle funzioni, CATALOG, moduli `random`, `turtle`, `matplotl` | Plus |
 | v1.22.0 | Graph e Table | Dual Screen G+G/GtoT/T+G, Graph to Table, FORMAT nello SKETCH | Plus |
 | v1.23.0 | Recursion (5-45) | bn, cn, an = f(n), grafico di fase, convergenza | Plus |
@@ -30,8 +30,10 @@ budget, relay, documentazione) e un solo commit su `main`.
 | v1.30.0 | Distribution (cap. 18) | dalla Base della v1.18.0: schermo diviso dal vivo, limiti sul grafico, tabella, strisce | Plus |
 | v1.31.0 | chiusura: revisione completa e recap | | entrambe |
 
-La v1.18.0 (Statistics) è fatta ([reports/SVILUPPO_v1.18.0.md](reports/SVILUPPO_v1.18.0.md));
-la v1.19.0 è **Geometry**, seguita da Program (v1.20.0) e Python (v1.21.0);
+La v1.18.0 (Statistics) e la v1.19.0 (Geometry) sono fatte
+([reports/SVILUPPO_v1.18.0.md](reports/SVILUPPO_v1.18.0.md),
+[reports/SVILUPPO_v1.19.0.md](reports/SVILUPPO_v1.19.0.md)); la prossima è
+**Program** (v1.20.0), seguita da Python (v1.21.0);
 l'ordine delle versioni successive è una proposta da confermare all'inizio di ognuna (cosa manca a ogni modalità Base è
 nel campo `missing` del registro e in [FEATURE_MATRIX.md](FEATURE_MATRIX.md)).
 E-CON4 resta External.
@@ -40,7 +42,7 @@ Il **Raspberry Pi Pico 2 W è congelato alla v1.16.0**: le versioni successive
 aggiungono funzioni solo alla Pimoroni Pico Plus 2 W; sul Pico 2 W entrano
 soltanto correzioni di errori condivise (controllo in `architecture_test`, che
 fallisce se cambia l'insieme delle modalità aperte del Pico 2 W). Le prove su
-hardware continuano la numerazione: la v1.18.0 arriva a HW-271.
+hardware continuano la numerazione: la v1.19.0 arriva a HW-295.
 
 La v1.14.0 completa il **3D Graph** (capitolo 16 del manuale fx-CG50: modelli
 Line, Plane, Sphere, Cylinder, Cone, grafici Z=, Param, Rot X/Y, V-Window con
@@ -57,11 +59,12 @@ Il progetto **non** ha la parità con la Casio fx-CG50 e non va presentato come
 tale: le tabelle sotto elencano ciò che manca. Fanno eccezione **Run-Matrix**
 (dalla v1.13.0, [reports/SVILUPPO_v1.13.0.md](reports/SVILUPPO_v1.13.0.md)),
 **Statistics** (dalla v1.18.0 sulla Plus, [STATISTICS.md](STATISTICS.md), [reports/SVILUPPO_v1.18.0.md](reports/SVILUPPO_v1.18.0.md)),
+**Geometry** (dalla v1.19.0 sulla Plus, [GEOMETRY.md](GEOMETRY.md), [reports/SVILUPPO_v1.19.0.md](reports/SVILUPPO_v1.19.0.md)),
 **EQUATION** (dalla v1.12.0, [reports/SVILUPPO_v1.12.0.md](reports/SVILUPPO_v1.12.0.md))
 **3D Graph** (dalla v1.14.0, [reports/SVILUPPO_v1.14.0.md](reports/SVILUPPO_v1.14.0.md))
 ed **eActivity** (dalla v1.16.0, [reports/SVILUPPO_v1.16.0.md](reports/SVILUPPO_v1.16.0.md)),
 con ogni voce della tabella di parità presente o documentata come differenza
-inevitabile. Le dieci modalità della v1.17.0 e Distribution (v1.18.0) sono **Base**: si usano, ma la
+inevitabile. Nove delle dieci modalità della v1.17.0 (tutte tranne Geometry) e Distribution (v1.18.0) sono **Base**: si usano, ma la
 parità non c'è ancora ([reports/SVILUPPO_v1.17.0.md](reports/SVILUPPO_v1.17.0.md)). Il documento storico
 `archive/CG50_PARITY_ROADMAP.md` descrive gli obiettivi delle versioni precedenti.
 La v1.9.0 ha unito la v1.8.0 al supporto del Pimoroni Pico Plus 2 W
@@ -179,7 +182,8 @@ Stato e progetto di ogni modalità in [APPLICATIONS_ARCHITECTURE.md](APPLICATION
 | Recursion, Conic Graphs, Dyna Graph | **Base dalla v1.17.0** (solo Plus): mancano bn/cn, an = f(n), fase (Recursion); BUILT-IN, Locus, memoria (Dyna); forme polari/parametriche, direttrice, asse, latus rectum, ZOOM (Conic) |
 | Financial | **Base dalla v1.17.0** (SMPL, CMPD, CASH, AMT, CNVT, DAYS): mancano Cost/Sell/Margin, Depreciation, Bond, grafici, 360 giorni |
 | Spreadsheet, Program | **Base dalla v1.17.0**: mancano SEQ, SORT, CellIf/CellProd, formattazione condizionale, GRAPH/CALC dalle celle (Spreadsheet); DEBUG, SEARCH, RENAME, password, libreria `fx` completa (Program). eActivity: parità dalla v1.16.0 |
-| Geometry, Picture Plot | **Base dalla v1.17.0**: mancano Construct, trasformazioni, animazioni, testo (Geometry); fotogrammi, AXTRANS, Plot List, Fade I/O (Picture Plot) |
+| Geometry | **parità completata nella v1.19.0** sulla Plus ([GEOMETRY.md](GEOMETRY.md)); differenze inevitabili D1–D9 di [reports/ANALISI_FONTI_v1.19.0.md](reports/ANALISI_FONTI_v1.19.0.md) (grafica propria, tasti, casella anche con OPTN, Clr Constraint non tocca le costruzioni, sfondi `.pcpict`, STORE › STAT al posto di S-SHT) |
+| Picture Plot | **Base dalla v1.17.0**: mancano fotogrammi, AXTRANS, Plot List, Fade I/O |
 | 3D Graph | **parità completata nella v1.14.0** ([GRAPH3D.md](GRAPH3D.md)); differenze inevitabili: griglia ≤ 25 e pittore senza PSRAM, tasti della PicoCalc; collaudo su hardware (HW-170…HW-189) |
 | Link | **Base dalla v1.17.0** (workspace e file in pacchetti `.pclink` su USB seriale, `tools/picocalc_link.py`): mancano la selezione di più file e le immagini dello schermo; il protocollo Casio tra calcolatrici non è supportato |
 | Python | **Base dalla v1.17.0** (MicroPython v1.24.1, heap separato, casioplot): mancano il menu delle funzioni, il CATALOG, il debug e i moduli `random`, `turtle`, `matplotl` |

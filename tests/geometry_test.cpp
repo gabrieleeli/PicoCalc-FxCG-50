@@ -466,6 +466,31 @@ void locks() {
         lock(s, MSpec{MType::Congruence, {s1, s2}});
         TN("M10 congruenza bloccata", val(s, MType::Distance, {s1}), val(s, MType::Distance, {s2}), 1e-9);
     }
+    {   // fuzz_geometry (fuzz_geometry_rotation_locks.bin): cambiare l'angolo di una rotazione
+        // risolve di nuovo i blocchi sulle immagini; se non si puo', nulla cambia
+        State s;
+        const Id o = addPoint(s, 0, 0), a = addPoint(s, 2, 0);
+        const auto img = transform(s, TType::Rotation, {a}, o, 90);
+        const Id q = addPoint(s, 0, 5);
+        const Id seg = addLine(s, Kind::Segment, img[0], q);
+        setValue(s, MSpec{MType::Distance, {seg}}, 3);
+        setValue(s, MSpec{MType::RotationAngle, {a, img[0]}}, 180);
+        TN("M17 nuovo angolo con un blocco: il blocco resta vero", val(s, MType::Distance, {seg}), 3, 1e-9);
+        TN("M17 l'angolo e' 180", val(s, MType::RotationAngle, {a, img[0]}), 180, 1e-12);
+        // tutti i punti liberi fissati: un angolo diverso non puo' tenere la lunghezza
+        State f;
+        const Id o2 = addPoint(f, 0, 0), a2 = addPoint(f, 2, 0);
+        const auto im2 = transform(f, TType::Rotation, {a2}, o2, 90);
+        const Id q2 = addPoint(f, 0, 5);
+        const Id s2 = addLine(f, Kind::Segment, im2[0], q2);
+        setValue(f, MSpec{MType::Coordinates, {o2}}, 0, 0);
+        setValue(f, MSpec{MType::Coordinates, {a2}}, 2, 0);
+        setValue(f, MSpec{MType::Coordinates, {q2}}, 0, 5);
+        setValue(f, MSpec{MType::Distance, {s2}}, 3);
+        const State before = f;
+        T("M21 nuovo angolo impossibile con i blocchi: errore", throws([&] { setValue(f, MSpec{MType::RotationAngle, {a2, im2[0]}}, 30); }, "incompatibili"));
+        T("M21 nessun cambiamento", f == before);
+    }
     {   // M21 incompatibili
         State s;
         const Id a = addPoint(s, 0, 0), b = addPoint(s, 3, 0);
@@ -690,6 +715,25 @@ void animations() {
         bool ok = true;
         for (std::size_t r = 0; r < t.tableRows; ++r) ok = ok && std::abs(t.table[r] - 5) < 1e-9;
         T("A12 blocco rispettato durante l'animazione", ok && t.tableRows == 20);
+    }
+    {   // fuzz_geometry (tests/fixtures/fuzz/fuzz_geometry_anim_locks.bin): con un blocco sul punto
+        // animato il risolutore muove anche l'altro punto; alla fine tutto torna com'era
+        State t;
+        const Id p = addPoint(t, 0, 0), q = addPoint(t, 3, 4);
+        const Id pq = addLine(t, Kind::Segment, p, q);
+        setValue(t, MSpec{MType::Distance, {pq}}, 5);
+        const Id path = addLine(t, Kind::Segment, addPoint(t, -2, -2), addPoint(t, 2, -2));
+        addAnimation(t, p, path, false);
+        const State before = t;
+        AnimationTask task(t, false, false);
+        step::Budget all;
+        task.step(all);
+        T("A12 con i blocchi: tutti i punti tornano dov'erano", t == before && pt(t, q).x == 3 && pt(t, q).y == 4);
+        AnimationTask t2(t, true, false);
+        step::Budget few(3, 0, nullptr);
+        (void)t2.step(few);
+        t2.cancelled();
+        T("A12 con i blocchi: AC rimette tutto", t == before);
     }
 }
 

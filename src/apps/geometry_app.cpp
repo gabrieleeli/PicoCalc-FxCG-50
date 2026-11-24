@@ -1204,6 +1204,8 @@ void GeometryApp::key(Context& ctx, const KeyEvent& ev) {
         if (v.tool == Tool::Move) { v.moveStart.clear(); endTool(ctx, v, false); return; }
         if (v.tool != Tool::None) { endTool(ctx, v, true); return; }
         if (v.box == BoxState::Shown) { v.box = BoxState::Hidden; return; }
+        // dalla striscia di eActivity EXIT torna al documento (la casella resta su OPTN)
+        if (ctx.inStrip(AppId::Geometry) && v.sel.empty()) { ctx.home(); return; }
         v.box = BoxState::Focused;                       // EXIT a riposo: casella di misura (fx-CG50)
         v.shell.fkeys.set(&kBoxBar);
         return;

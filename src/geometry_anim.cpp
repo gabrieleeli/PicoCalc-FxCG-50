@@ -62,10 +62,12 @@ AnimationTask::AnimationTask(State& s, bool repeat, bool recordTable) : s_(s), r
     if (s.animations.empty()) fail("Argument ERROR: nessuna animazione (Add Animation)");
     for (const auto& a : s.animations) {
         frames_ = std::max<std::size_t>(frames_, a.steps);
-        const int i = indexOf(s, a.point);
-        if (i < 0) fail("Argument ERROR: animazione senza punto");
-        saved_.emplace_back(static_cast<std::size_t>(i), s.objects[static_cast<std::size_t>(i)].vars);
+        if (indexOf(s, a.point) < 0) fail("Argument ERROR: animazione senza punto");
     }
+    // Tutti gli scalari: con dei blocchi il risolutore muove anche altri punti a ogni
+    // fotogramma, e alla fine tutto deve tornare com'era (trovato da fuzz_geometry).
+    saved_.reserve(s.objects.size());
+    for (std::size_t i = 0; i < s.objects.size(); ++i) saved_.emplace_back(i, s.objects[i].vars);
     cycles_ = 1;
     if (repeat_) {
         std::size_t times = 0;

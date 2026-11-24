@@ -541,9 +541,15 @@ void setValue(State& s, const MSpec& m, double v0, double v1, const std::string&
         if (!std::isfinite(v0)) fail("Math ERROR: valore");
         const double val = d == Def::Rotate ? toRadians(s.options, v0) : v0;
         if (d == Def::Dilate && !(std::abs(val) >= MinDilation && std::abs(val) <= MaxDilation)) fail("Argument ERROR: fattore con 0.1 <= |k| <= 10");
+        // il parametro cambia le immagini: i blocchi vanno risolti di nuovo (trovato da fuzz_geometry)
+        const auto vars = snapVars(s);
         Object& tm = s.objects[at(s, t->id)];
         tm.vars[0] = val;
         recompute(s, {tm.id});
+        if (!solve(s, {})) {
+            restoreVars(s, vars);
+            fail("Math ERROR: vincoli incompatibili");
+        }
         return;
     }
     default: break;

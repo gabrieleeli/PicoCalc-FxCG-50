@@ -10,9 +10,23 @@ Plus 2 W** (RP2350B, 8 MB di PSRAM, 16 MB di flash); profilo alternativo:
 > ogni modalità è reimplementata in modo indipendente. La documentazione Casio è
 > usata solo come riferimento di comportamento.
 
-![Menu principale](docs/screenshots/01_main_menu.png) ![Run-Matrix](docs/screenshots/12_run_matrix_exact.png) ![Matrici](docs/screenshots/46_run_matrix_matrices.png) ![Comandi grafici](docs/screenshots/61_graph_commands.png) ![CATALOG](docs/screenshots/79_catalog.png) ![Base-N](docs/screenshots/60_base_n.png) ![Equation](docs/screenshots/70_equation_poly_complex.png) ![Graph](docs/screenshots/22_graph_multi.png) ![3D Graph](docs/screenshots/90_graph3d_sphere.png) ![3D Graph: INTSECT](docs/screenshots/93_graph3d_intsect.png) ![3D Graph: CROSS](docs/screenshots/97_graph3d_cross.png) ![eActivity](docs/screenshots/112_eact_calc_lines.png) ![eActivity: striscia](docs/screenshots/118_eact_doc_strip.png) ![Modalità Base](docs/screenshots/128_main_menu_base.png) ![Spreadsheet](docs/screenshots/129_spreadsheet_formulas.png) ![Python](docs/screenshots/146_python_shell.png)
+![Menu principale](docs/screenshots/01_main_menu.png) ![Run-Matrix](docs/screenshots/12_run_matrix_exact.png) ![Matrici](docs/screenshots/46_run_matrix_matrices.png) ![Comandi grafici](docs/screenshots/61_graph_commands.png) ![CATALOG](docs/screenshots/79_catalog.png) ![Base-N](docs/screenshots/60_base_n.png) ![Equation](docs/screenshots/70_equation_poly_complex.png) ![Graph](docs/screenshots/22_graph_multi.png) ![3D Graph](docs/screenshots/90_graph3d_sphere.png) ![3D Graph: INTSECT](docs/screenshots/93_graph3d_intsect.png) ![3D Graph: CROSS](docs/screenshots/97_graph3d_cross.png) ![eActivity](docs/screenshots/112_eact_calc_lines.png) ![eActivity: striscia](docs/screenshots/118_eact_doc_strip.png) ![Modalità Base](docs/screenshots/128_main_menu_base.png) ![Spreadsheet](docs/screenshots/129_spreadsheet_formulas.png) ![Python](docs/screenshots/146_python_shell.png) ![Geometry: costruzioni](docs/screenshots/185_geometry_construct_result.png) ![Geometry: omotetia](docs/screenshots/196_geometry_dilation_2.png)
 
-## Stato (v1.18.0)
+## Stato (v1.19.0)
+
+La **v1.19.0** porta **Geometry alla parità completa** con il capitolo 14 del
+manuale fx-CG50 sulla **Pimoroni Pico Plus 2 W** ([docs/GEOMETRY.md](docs/GEOMETRY.md)):
+menu File/View, Edit/Option/Properties, Draw/Draw Spec, Construct, Transform e
+Animate; gli oggetti costruiti e le immagini delle trasformazioni restano
+**legati** ai genitori (grafo delle dipendenze con ricalcolo incrementale);
+casella di misura con **blocchi** (scrivere una lunghezza o un angolo vincola la
+figura), misure incollate che si aggiornano, espressioni, colori e tratti,
+Undo/Redo, animazioni con traccia e tabella verso le liste e Statistics; file
+`.pcgeo` versione 2 che legge anche quelli della v1.17.0. La modalità passa da
+Base ad **Available**. Il **Raspberry Pi Pico 2 W resta congelato** alla
+v1.16.0. Rapporti:
+[docs/reports/ANALISI_FONTI_v1.19.0.md](docs/reports/ANALISI_FONTI_v1.19.0.md),
+[docs/reports/SVILUPPO_v1.19.0.md](docs/reports/SVILUPPO_v1.19.0.md).
 
 La **v1.18.0** porta **Statistics alla parità completa** con il capitolo 6
 del manuale fx-CG50 sulla **Pimoroni Pico Plus 2 W** ([docs/STATISTICS.md](docs/STATISTICS.md)):
@@ -181,7 +195,7 @@ interna (MEMORY › FILES); le operazioni lunghe si interrompono con AC.
 | C | **Financial** | interesse semplice e composto (TVM), flussi di cassa, ammortamento, tassi, giorni — [docs/FINANCIAL.md](docs/FINANCIAL.md) |
 | E | **Link** | workspace e file da e verso il PC sulla USB seriale con `tools/picocalc_link.py` — [docs/LINK.md](docs/LINK.md) |
 | O | **Distribution** (v1.18.0) | le 24 funzioni di distribuzione (PD, CD, inverse) con Data Variable o List, Ans/ListAns, Save Res, grafico con l'area; stesso nucleo del DIST di Statistics — [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) |
-| H | **Geometry** | punti, segmenti, rette, circonferenze, poligoni con misure — [docs/GEOMETRY.md](docs/GEOMETRY.md) |
+| H | **Geometry** | **parità con il capitolo 14 (v1.19.0)**: Draw e Draw Spec, Construct e Transform legati ai genitori, casella di misura con blocchi, animazioni con traccia e tabella — [docs/GEOMETRY.md](docs/GEOMETRY.md) |
 | I | **Picture Plot** | punti su un'immagine di sfondo, liste e regressione — [docs/PICTURE_PLOT.md](docs/PICTURE_PLOT.md) |
 | L | **Python** | MicroPython v1.24.1: SHELL, script `.py`, `input()`, KeyboardInterrupt con AC, `casioplot` — [docs/PYTHON.md](docs/PYTHON.md) |
 

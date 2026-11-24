@@ -1,5 +1,16 @@
-# Feature matrix — v1.18.0
+# Feature matrix — v1.19.0
 
+La v1.19.0 porta **Geometry alla parità completa** con il capitolo 14 del
+manuale fx-CG50 sulla **Pimoroni Pico Plus 2 W** (stato **Available**): Draw e
+Draw Spec, Construct e Transform legati ai genitori (grafo delle dipendenze con
+ricalcolo incrementale), casella di misura con blocchi risolti a passi,
+misure incollate ed espressioni, FORMAT, Undo/Redo, View, animazioni con
+traccia e tabella verso le liste e Statistics, file `.pcgeo` versione 2 con la
+lettura della versione 1
+([reports/ANALISI_FONTI_v1.19.0.md](reports/ANALISI_FONTI_v1.19.0.md),
+[reports/SVILUPPO_v1.19.0.md](reports/SVILUPPO_v1.19.0.md), [GEOMETRY.md](GEOMETRY.md)).
+Il **Raspberry Pi Pico 2 W resta congelato alla v1.16.0**. Nessuna voce è
+provata su hardware ([HARDWARE_TEST_v1.19.0.md](HARDWARE_TEST_v1.19.0.md)).
 La v1.18.0 porta **Statistics alla parità completa** con il capitolo 6 del
 manuale fx-CG50 sulla **Pimoroni Pico Plus 2 W** (editor delle liste a tre
 pagine con formule e colori, StatGraph1–3 con 20 tipi di grafico, 12
@@ -132,7 +143,7 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 
 | Funzione | Stato |
 |---|---|
-| Menu principale a icone (23 modalità sul Pico 2 W, 24 sulla Plus con Distribution dalla v1.18.0; accesso diretto 1–9/A–N, O) | TESTED ON SIMULATOR (accesso diretto verificato da architecture_test; screenshot 172) |
+| Menu principale a icone (23 modalità sul Pico 2 W, 24 sulla Plus con Distribution dalla v1.18.0; accesso diretto 1–9/A–N, O; v1.19.0: Geometry senza il segno Base) | TESTED ON SIMULATOR (accesso diretto verificato da architecture_test; screenshot 172 rigenerato) |
 | Segno delle modalità Base (triangolo ambra sull'icona, «EXE: apri (base)»; solo Pimoroni Pico Plus 2 W) | TESTED ON SIMULATOR (v1.17.0, screenshot 128) |
 | Inizializzazione di ogni modalità aperta: avvio a freddo, dopo SYSTEM › RESET, record v11 valido/corrotto/troncato, solo SRAM, memoria quasi esaurita (Memory ERROR senza crash), microSD assente/presente; barra F1–F6, uscita con MENU e dalle strisce, nessuna perdita dell'allocatore, stato dopo uscita, rientro e riavvio | TESTED ON HOST (v1.17.0, `apps_init_test`, due profili) |
 | Registro delle modalità (stato, servizi, dati, collegamenti) e test di architettura | TESTED ON HOST |
@@ -288,7 +299,16 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Financial (v1.17.0, Base, solo Plus): interesse semplice e composto (TVM sulle variabili di VARS › TVM, BGN/END), flussi di cassa (NPV, IRR, PBP, NFV), ammortamento PM1…PM2, conversione dei tassi, giorni tra due date; →Ans | TESTED ON SIMULATOR | `fuzz_modes`; screenshot 139, 140; [FINANCIAL.md](FINANCIAL.md) |
 | Program (v1.17.0, Base, solo Plus): elenco dei programmi `.pcprog` (C, C++, C#) e `.c/.cpp/.cs`, NEW con modello per dialetto, editor con colori della sintassi, RUN sul nucleo della v1.15.0 con input, AC, errori con riga e colonna e cursore; comandi grafici in Graph; liste con `fx::` | TESTED ON SIMULATOR | screenshot 141, 142; [PROGRAM.md](PROGRAM.md) |
 | Link (v1.17.0, Base, solo Plus): invio e ricezione su USB seriale di workspace e file tipizzati in pacchetti `.pclink` (trame con CRC, conferme, ritrasmissione, AC, Time Out), APPLY con conferma; strumento `tools/picocalc_link.py` per il PC | TESTED ON SIMULATOR | `base_modes_test` (porta in memoria), `link_tool_test` (andata e ritorno con il PC), `fuzz_link`; screenshot 143; USB reale da collaudare (HW-235…HW-238); [LINK.md](LINK.md) |
-| Geometry (v1.17.0, Base, solo Plus): punti, segmenti, rette, circonferenze, poligoni; selezione, MOVE, MEASURE (lunghezze, angoli, equazioni, aree, perimetri), ZOOM, PAN, file `.pcgeo` | TESTED ON SIMULATOR | screenshot 144; [GEOMETRY.md](GEOMETRY.md) |
+| Geometry (v1.19.0, **Available**, solo Plus): menu F1 File/View, F2 Edit/Option/Properties, F3 Draw/Draw Spec, F4 Construct, F5 Transform, F6 Animate con le schede ◀ ▶; puntatore con passo rotondo, SHIFT ×4, salti 1–9; tasti diretti + − . x * v, DEL, AC, OPTN, SHIFT F3, SHIFT MENU, SHIFT 5 | TESTED ON SIMULATOR | v1.19.0, `geometry_flow_test` K01–K03; screenshot 175–184; [GEOMETRY.md](GEOMETRY.md) |
+| Geometry: File (New, Open con DELETE, Save as, Key Help, Option), `.pcgeo` versione 2 e lettura dei file della v1.17.0; View (Zoom Box, Pan, Scroll, Zoom In/Out, Zoom to Fit, Axes On/Scale/Off, Grid On/Line/Off, V-Window) | TESTED ON SIMULATOR | F01–F05, V01–V10, P01–P02; screenshot 190–192 |
+| Geometry: Draw (Point anche legato a una curva, Line Segment, Infinite Line, Ray, Vector, Circle, Arc, SemiCirc, 3-Point Arc) e Draw Spec (Triangle, Isosc Triangle, Rectangle, Square, Polygon chiuso o aperto, Regular n-gon, Function f(x)); figure vincolate che restano tali | TESTED ON SIMULATOR | D01–D17 (`geometry_test`, `geometry_flow_test`); screenshot 144, 200–202 |
+| Geometry: Construct (Perp Bisector, Perpendicular, Midpoint, Intersection, Angle Bisector, Parallel, Tangent, Attached Angle) **legati ai genitori**, ricalcolo incrementale, casi degeneri con tolleranze dichiarate (oggetti indefiniti che tornano) | TESTED ON SIMULATOR | C01–C11; proprietà G07–G12; screenshot 185 |
+| Geometry: Transform (Reflection, Translation, Trans(Sel Vec), Rotation, Dilation, Symmetry) con le immagini legate all'originale e alla trasformazione | TESTED ON SIMULATOR | T01–T09; proprietà G01–G06 (riflessione due volte = identità, rotazione isometrica, dilatazione k → area ×k²); screenshot 193–196 |
+| Geometry: casella di misura (coordinate, lunghezza, pendenza, direzione, angolo, supplementare, incidenza, tangenza, congruenza, area, perimetro, equazione, componenti, raggio, circonferenza, angolo di rotazione, fattore, etichetta, espressione); valore scritto con lo spostamento minimo e **blocco**; LOCK/UNLOCK; vincoli incompatibili rifiutati; risolutore in step::Task con AC | TESTED ON SIMULATOR | M01–M22, G14; screenshot 186 |
+| Geometry: PASTE (misure incollate aggiornate), Text, Label, Expression con @n, Number Format, Clr Constraint, Show All/Hide, Area Calc, to the front/back, All TEXT, Fade I/O, Store/Recall/Clear Picture (Pict 1–20), FORMAT (5 tratti, 7 colori, aree Normal/Lighter, colore del testo) | TESTED ON SIMULATOR | O01–O14; screenshot 187–189 |
+| Geometry: Edit (Undo/Redo a un livello, Select All, Deselect All, Select Figure, Delete con i dipendenti, Clear All non annullabile), selezione con EXE, spostamento della selezione | TESTED ON SIMULATOR | E01–E08 |
+| Geometry: Animate (Add/Replace Animation su segmento, retta, semiretta, vettore, circonferenza, arco, funzione; Trace; Edit Animation; Go once/repeat con AC; Add Table, Display Table, STORE › LIST, STORE › STAT, DELETE, DEL-ALL); animazioni e tabella in step::Task, punti rimessi a posto | TESTED ON SIMULATOR | A01–A12; screenshot 197–199 |
+| Geometry: SET UP (Grid, Grid Space, Axes, Angle, Length Unit, Number Format), sezione `0x0110` versione 2 (versione 1 migrata, danneggiata isolata), limiti con Memory ERROR (1 000 oggetti con la PSRAM, 250 senza) | TESTED ON HOST | S01, P03, P04; `fuzz_geometry` (formato e sequenze di comandi) |
 | Picture Plot (v1.17.0, Base, solo Plus): sfondo `.pcpict`, punti numerati con il cursore (fino a 999), coordinate in List 1/List 2, regressione di Statistics sopra lo sfondo, file `.pcplot` | TESTED ON SIMULATOR | screenshot 145; [PICTURE_PLOT.md](PICTURE_PLOT.md) |
 | Python (v1.17.0, Base, solo Plus): MicroPython v1.24.1 vero (interi grandi, `math`, eccezioni), SHELL con blocchi e cronologia, script `.py` con l'editor di testo, `input()`, AC → KeyboardInterrupt, esecuzione a passi su una pila propria (coroutine), heap separato 512 KB PSRAM / 48 KB SRAM, `casioplot` | TESTED ON SIMULATOR | `base_modes_test`, `fuzz_python`; screenshot 146, 147; pila e MSPLIM sul dispositivo da collaudare (HW-241…HW-243); [PYTHON.md](PYTHON.md) |
 | Distribution (v1.18.0, Base, solo Plus): elenco delle 24 funzioni, Data Variable/List, CALC con Ans o ListAns e Save Res, DRAW delle continue, AC sulle liste e sulle inverse; sezione `0x0117`; nessun tipo di file | TESTED ON SIMULATOR | `base_modes_test`, `base_flow_test`, `apps_init_test`, `fuzz_stats`, `fuzz_modes`; screenshot 172–174; [DISTRIBUTION.md](DISTRIBUTION.md); manca alla parità: schermo diviso dal vivo, limiti sul grafico, tabella, strisce |

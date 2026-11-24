@@ -60,8 +60,11 @@ struct Bytes {
     std::vector<Id> sel(const State& s) { std::vector<Id> v; const int k = 1 + u8() % 3; for (int j = 0; j < k; ++j) { const Id id = pick(s); if (id) v.push_back(id); } return v; }
 };
 const char* const kFunctions[] = {"x^2", "sin(x)", "1/x", "sqrt(x)", "x^3-2x", "ln(x)", "abs(x)-1", "2"};
+// FXAI_GEO_TRACE=1: stampa i comandi e il blocco che non torna (per capire un crash).
+const bool kTrace = std::getenv("FXAI_GEO_TRACE") != nullptr;
 void command(State& s, Bytes& b, std::vector<std::uint8_t>& undo) {
     const std::uint8_t op = b.u8() % 26;
+    if (kTrace) std::fprintf(stderr, "op %d (oggetti %zu, blocchi %zu)\n", op, s.objects.size(), s.locks.size());
     bool solved = false;
     switch (op) {
     case 0: addPoint(s, b.coord(), b.coord()); break;
@@ -83,6 +86,7 @@ void command(State& s, Bytes& b, std::vector<std::uint8_t>& undo) {
         const auto specs = available(s, sel);
         if (specs.empty()) break;
         const MSpec m = specs[b.u8() % specs.size()];
+        if (kTrace) std::fprintf(stderr, "  misura tipo %d su %zu operandi\n", static_cast<int>(m.type), m.ops.size());
         if (op == 14) setValue(s, m, std::abs(b.coord()) + 0.5, b.coord(), "L"); else lock(s, m);
         solved = true;
         break;
@@ -116,7 +120,10 @@ void command(State& s, Bytes& b, std::vector<std::uint8_t>& undo) {
         for (const auto& l : s.locks)
             for (std::size_t i = 0; i < residualCount(l); ++i) {
                 const double r = residual(s, l, i);
-                if (!(std::abs(r) <= 1e-8 * std::max({1.0, std::abs(l.v[0]), std::abs(l.v[1])}))) bad("residuo di un blocco dopo il risolutore");
+                if (!(std::abs(r) <= 1e-8 * std::max({1.0, std::abs(l.v[0]), std::abs(l.v[1])}))) {
+                    if (kTrace) std::fprintf(stderr, "blocco tipo %d su %zu operandi: residuo %g, valore %g\n", static_cast<int>(l.m.type), l.m.ops.size(), r, l.v[0]);
+                    bad("residuo di un blocco dopo il risolutore");
+                }
             }
 }
 } // namespace

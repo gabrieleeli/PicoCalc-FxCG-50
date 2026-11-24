@@ -107,9 +107,33 @@ modalità è la stessa codifica che il record v12 usa per `0x0100 + AppId`
 | `.pcrecur` (`PCRC`) | `blob` sezione di Recursion (`u8` versione 1, `u8` tipo an+1/an+2, `str` formula an+2, `u8` Σan), `str` formula an+1 (la variabile di modo della v1.13.0) e `f64` Start, End, a0, a1 |
 | `.pcconic` (`PCCN`) | la sezione di Conic Graphs: `u8` versione 1, `u8` modello (0–5), `f64` A, B, H, K, R |
 | `.pcfin` (`PCFN`) | `blob` sezione di Financial (`u8` versione 1, `u8` BGN/END, `f64` n, I%, PV di SMPL, I% di CASH, PM1, PM2, n e I% di CNVT, `f64` sei campi delle date, `u16` flussi di cassa ≤ 999 e `f64` per flusso) e `f64` n, I%, PV, PMT, FV, P/Y, C/Y (le variabili di VARS › TVM) |
-| `.pcgeo` (`PCGO`) | `u8` versione 1, `u16` oggetti (≤ 500), per ognuno `u8` tipo (0 punto, 1 segmento, 2 retta, 3 circonferenza, 4 poligono), `u8` punti, `f64` x, y per punto; poi `f64` centro x, centro y e scala della vista |
+| `.pcgeo` (`PCGO`) | **v1.19.0: `u8` versione 2** (sotto). La **versione 1** della v1.17.0 si legge ancora e si migra: `u16` oggetti (≤ 500), per ognuno `u8` tipo (0 punto, 1 segmento, 2 retta, 3 circonferenza, 4 poligono), `u8` punti, `f64` x, y per punto; poi `f64` centro x, centro y e scala della vista; ogni coordinata diventa un punto libero e le figure restano legate ai loro punti |
 | `.pcplot` (`PCPP`) | `u8` versione 1, `str` file dello sfondo (`.pcpict` di `PICOCALC/PICT`), `f64` Xmin, Xmax, Ymin, Ymax, `u8` regressione + 1 (0 = nessuna, 1–9), `u16` punti (≤ 999), `f64` x, y per punto |
 | `.pclink` (`PCLK`) | un **pacchetto** di Link (sotto) |
+
+### Costruzioni di Geometry (`.pcgeo` versione 2, v1.19.0)
+
+Stessa codifica della sezione `0x0110` del record, senza il nome del file
+aperto. Interi little endian, `f64` IEEE 754, `str` = `u16` lunghezza + byte.
+
+| Campo | Contenuto |
+|---|---|
+| `u8` | versione **2** |
+| `u16` oggetti (≤ 1 000 con la PSRAM, 250 senza) | per ognuno, **in ordine di id crescente**: `u16` id; `u8` tipo (0 punto, 1 segmento, 2 retta, 3 semiretta, 4 vettore, 5 circonferenza, 6 arco, 7 poligono, 8 funzione, 9 testo, 10 misura incollata, 11 espressione, 12 trasformazione); `u8` definizione (0 libero, 1 su un oggetto, 2 punto medio, 3 intersezione, 4 immagine, 5 vertice del rettangolo, 6 del quadrato, 7 apice dell'isoscele, 8 vertice dell'n-gono, 9 fine dell'arco, 10 per due punti, 11 asse, 12 perpendicolare, 13 parallela, 14 bisettrice, 15 tangente, 16 immagine di una curva, 17 circonferenza per centro e punto, 18 arco, 19 semicirconferenza, 20 arco per tre punti, 21 poligono, 22 f(x), 23 testo, 24 misura, 25 espressione, 26 riflessione, 27 traslazione, 28 traslazione col vettore, 29 rotazione, 30 dilatazione, 31 simmetria); `u8` flag e `u8` flag2 (ramo, verso, n e k, tipo di misura, segno d'angolo); `u8` genitori (≤ 50) e `u16` id di ognuno (**minori** dell'id dell'oggetto); `u8` scalari (≤ 4) e `f64` di ognuno; `str` etichetta (≤ 14); `str` testo (≤ 128: testo, f(x), espressione); stile `u8` colore della linea, tratto, area (255 = Clear), Paint Style, colore del testo; `u8` bit (1 nascosto, 2 etichetta visibile); `u16` figura; `u16` ordine di disegno (con segno); `u8` Number Format (255 = quello delle opzioni); `u16` numero `@n` |
+| `u8` blocchi (≤ 64) | `u8` tipo di misura, `u8` operandi (1–3) e `u16` id; `f64` valore 1, valore 2 (angoli in radianti), tipo di tangenza (0 esterna, 1 interna) |
+| `u8` animazioni (≤ 16) | `u16` punto, `u16` percorso, `u8` Steps (2–100), `f64` t0, t1, `u16` Times |
+| `u16` punti con la traccia | `u16` id crescenti |
+| `u8` colonne della tabella (≤ 26) | misura come nei blocchi, `u8` componente (0 x, 1 y), `str` nome (≤ 14) |
+| `u16` righe (≤ 100) | `f64` per cella, riga per riga (`1e300` = cella indefinita) |
+| opzioni | `u8` Number Format (0–9 Fix, 10–19 Sci1–10, 20 Norm), `u8` angolo (0 Deg, 1 Rad), `u8` unità di lunghezza (0–8), `u8` griglia (0 Off, 1 On, 2 Line), `f64` passo (0,01–1000), `u8` assi (0 Off, 1 On, 2 Scale) |
+| vista | `f64` centro x, centro y, scala (pixel per unità) |
+| sfondo | `str` file `.pcpict` di `PICOCALC/PICT` (≤ 64), `u8` Fade (0–100) |
+| contatori | `u16` prossimo id, prossima figura, prossima etichetta, prossimo `@n` |
+
+La lettura ha la **garanzia forte**: valori finiti, id crescenti, genitori
+esistenti con id minore e del tipo giusto per la definizione, limiti rispettati;
+altrimenti il file è rifiutato («Data ERROR») e lo stato non cambia. La
+geometria si ricalcola dopo la lettura (non è salvata).
 
 ### Pacchetti di Link (`.pclink`)
 
