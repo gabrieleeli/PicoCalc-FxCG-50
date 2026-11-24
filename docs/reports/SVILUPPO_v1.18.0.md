@@ -89,12 +89,36 @@ differenza nuova emersa durante lo sviluppo.
 
 ## 7. Test, fuzzing, simulatore
 
-(numeri al §9)
+| Verifica | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| CTest (`tests/run_host_tests.sh`) | **62/62**: 59 suite C++ con **20 063** controlli (+1 440 sulla v1.17.0; `mem_pools_smoke` escluso dal conteggio come nelle versioni precedenti), `mem_pools_smoke`, `sd_interop_test`, `link_tool_test` | **54/54**: 52 suite con **16 343** controlli (+46, solo `architecture_test`), `mem_pools_smoke`, `sd_interop_test` |
+| Suite nuove | `statistics_flow_test` 174 | — |
+| Suite cambiate | `statistics_test` 957 (+894: nucleo della Plus contro 483 riferimenti), `apps_init_test` 3 033 (+112: Distribution, sequenza di Statistics della Plus), `base_modes_test` 496 (+112), `base_flow_test` 129 (+17), `architecture_test` 2 454 (+130), `apps_flow_test`, `lists_csv_test`, `run_matrix_v112_test`, `workspace_v115_test` (barre e VARS della Plus, sezioni nuove) | `architecture_test` 2 083 (+46: 23 modalità); le altre identiche |
+| ASan + UBSan (bloccante), TSan | 62/62, TSan superato | 54/54, TSan superato |
+| Riferimenti numerici | `tools/stat_reference.py --check`: 483 valori di scipy 1.18.1, numpy 2.5.3, statsmodels 0.15.0 identici alla fixture | — |
+| Fuzzing (≥ 300 s per harness nuovo o toccato) | nuovo: **`fuzz_stats`** 1 378 441 esecuzioni (309 s); toccati: `fuzz_modes` 1 479 362 (304 s, sezione di Distribution), `fuzz_ui` 16 122 (310 s, controller e tasto O), `fuzz_workspace` 2 262 380 (302 s, sezioni `0x0101`/`0x0117`), `fuzz_expr` 680 923 (315 s, x̂/ŷ e nomi di VARS), `fuzz_eactivity` 979 con il controller (315 s, strisce con Statistics) e 9 130 371 sui soli documenti (302 s): nessun crash né artefatto sul codice finale. Durante lo sviluppo `fuzz_stats` ha trovato i tre errori F1–F3 (§6) | — |
+| Simulatore (`tools/sim_compare.py`) | **164 identici**: 134 precedenti invariati, 3 rigenerati per cambiamenti voluti (sotto), 27 nuovi (148–174, `tests/sim/statistics_v118.txt`) | le stesse schermate (la Statistics della Plus non esiste) |
+| Relay AI | 15/15 | — |
+
+Screenshot rigenerati: **52** e **53** (`run_matrix_v111.txt`: l'editor delle
+liste della Plus ha quattro colonne e la barra GRAPH CALC TEST INTR DIST ▶),
+**84** (`run_matrix_v112.txt`: VARS › STAT con i sottomenu X, Y, GRAPH, PTS,
+INPUT, TEST, INTR, DIST). Tutti gli altri sono identici pixel per pixel.
 
 ## 8. Firmware e memoria
 
-(numeri al §9)
+FIRMWARE
 
 ## 9. Cancello
 
-(compilato alla fine della fase 2)
+| Controllo | Esito |
+|---|---|
+| `git fetch origin main` | `main` fermo a `aa2923c`: fast-forward |
+| `tests/run_host_tests.sh` (due profili) | 62/62 e 54/54 |
+| `--sanitize --tsan` | 62/62 e 54/54, TSan superato su entrambi |
+| Fuzzing ≥ 300 s per harness nuovo o toccato | 7 corse (1 nuovo, 5 toccati, `fuzz_eactivity` anche sui soli documenti), ognuna ≥ 300 s: nessun crash |
+| Simulatore | 134 identici, 3 rigenerati con il motivo, 27 nuovi |
+| Firmware | CANCELLO_FW |
+| Congelamento del Pico 2 W | `architecture_test` («Pico 2 W frozen at v1.16.0», 23 modalità, nessuna Base); immagine identica alla v1.17.0 salvo i 4 byte della stringa della versione |
+| Relay | 15/15 |
+| Documentazione | ANALISI_FONTI e SVILUPPO v1.18.0, STATISTICS, DISTRIBUTION, HARDWARE_TEST_v1.18.0, FEATURE_MATRIX, ROADMAP (Geometry alla v1.19.0, Program e Python alla v1.20.0/v1.21.0, le altre rinumerate), BUILD_STATUS, CHANGELOG, APPLICATIONS_ARCHITECTURE, STORAGE, FILE_FORMATS, TESTING, README, docs/README, releases/v1.18.0, CONTINUE, VERSION |
