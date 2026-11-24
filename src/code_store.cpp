@@ -61,6 +61,14 @@ std::string extOf(const std::string& f) {
 }
 std::string baseName(const std::string& p) { const std::size_t s = p.rfind('/'); return s == std::string::npos ? p : p.substr(s + 1); }
 std::string dirName(const std::string& p) { const std::size_t s = p.rfind('/'); return s == std::string::npos ? std::string() : p.substr(0, s); }
+// La password protegge la modifica come sulla fx-CG50 (non e' una cifratura): l'impronta
+// non dipende dal percorso, cosi' resta valida dopo RENAME, MOVE e COPY.
+std::string pwHash(const std::string& pw) { return crypto::sha256Hex("picocalc-code:" + pw); }
+// `p` e' `base` o sta dentro la cartella `base`? (senza maiuscole)
+bool underPath(const std::string& p, const std::string& base) {
+    const std::string lp = lower(p), lb = lower(base);
+    return lp == lb || lp.rfind(lb + "/", 0) == 0;
+}
 } // namespace
 bool langOfFile(const std::string& f, Lang& out) noexcept {
     const std::string e = extOf(f);
@@ -244,16 +252,26 @@ files::Status Store::rename(const std::string& path, const std::string& newName)
     const std::string to = dirName(path) + "/" + newName;
     if (lower(to) != lower(path) && exists(to)) return files::Status::Exists;
     const files::Status st = fs_->rename(path, to);
-    if (st == files::Status::Ok) {
-        // la password segue il file
-        std::vector<std::pair<std::string, std::string>> pw;
-        if (loadPasswords(pw) == files::Status::Ok) {
-            bool changed = false;
-            for (auto& p : pw) if (lower(p.first) == lower(path)) { p.first = to; changed = true; }
-            if (changed) (void)savePasswords(pw);
-        }
-    }
+    if (st == files::Status::Ok) movePasswords(path, to, false);    // la password segue il file
     return st;
+}
+// Le password di `from` (file, o cartella con i file dentro) passano a `to`;
+// con `keep` restano anche le vecchie (COPY).
+void Store::movePasswords(const std::string& from, const std::string& to, bool keep) {
+    std::vector<std::pair<std::string, std::string>> pw;
+    if (loadPasswords(pw) != files::Status::Ok) return;
+    std::vector<std::pair<std::string, std::string>> added;
+    bool changed = false;
+    for (auto& p : pw) {
+        if (!underPath(p.first, from)) continue;
+        const std::string moved = to + p.first.substr(from.size());
+        if (keep) added.emplace_back(moved, p.second);
+        else p.first = moved;
+        changed = true;
+    }
+    if (!changed) return;
+    for (auto& a : added) pw.push_back(std::move(a));
+    (void)savePasswords(pw);
 }
 files::Status Store::copyTree(const std::string& from, const std::string& to) {
     files::Entry e;
@@ -294,6 +312,7 @@ files::Status Store::copy(const std::string& from, const std::string& toDir, std
     if (isFolder(from) && (lower(to) + "/").rfind(lower(from) + "/", 0) == 0) return files::Status::InvalidName;   // dentro se stessa
     const files::Status st = copyTree(from, to);
     if (st != files::Status::Ok) { (void)libs::removeTree(*fs_, to); return st; }
+    movePasswords(from, to, true);
     if (newPath) *newPath = to;
     return st;
 }
@@ -310,12 +329,20 @@ files::Status Store::move(const std::string& from, const std::string& toDir) {
         if (st != files::Status::Ok) { (void)libs::removeTree(*fs_, to); return st; }
         st = libs::removeTree(*fs_, from);
     }
+    if (st == files::Status::Ok) movePasswords(from, to, false);
     return st;
 }
 files::Status Store::remove(const std::string& path) {
     if (!fs_) return files::Status::NoCard;
     const files::Status st = libs::removeTree(*fs_, path);
-    if (st == files::Status::Ok) (void)setPassword(path, "");
+    if (st == files::Status::Ok) {
+        std::vector<std::pair<std::string, std::string>> pw;
+        if (loadPasswords(pw) == files::Status::Ok) {
+            const std::size_t before = pw.size();
+            pw.erase(std::remove_if(pw.begin(), pw.end(), [&](const auto& p) { return underPath(p.first, path); }), pw.end());
+            if (pw.size() != before) (void)savePasswords(pw);
+        }
+    }
     return st;
 }
 files::Status Store::removeAll(const std::string& dir) {
@@ -351,7 +378,7 @@ std::vector<std::string> Store::search(const std::string& dir, const std::string
 // ---------------------------------------------------------------- password
 namespace {
 const char* passwordFile() { return "PICOCALC/CODE/.passwords"; }
-std::string pwHash(const std::string& path, const std::string& pw) { return crypto::sha256Hex("picocalc-code:" + lower(path) + ":" + pw); }
+
 } // namespace
 files::Status Store::loadPasswords(std::vector<std::pair<std::string, std::string>>& out) {
     out.clear();
@@ -392,7 +419,7 @@ bool Store::locked(const std::string& path) {
 bool Store::checkPassword(const std::string& path, const std::string& password) {
     std::vector<std::pair<std::string, std::string>> pw;
     if (loadPasswords(pw) != files::Status::Ok) return false;
-    for (const auto& p : pw) if (lower(p.first) == lower(path)) return crypto::sameDigest(p.second, pwHash(path, password));
+    for (const auto& p : pw) if (lower(p.first) == lower(path)) return crypto::sameDigest(p.second, pwHash(password));
     return true;                                         // nessuna password
 }
 files::Status Store::setPassword(const std::string& path, const std::string& password) {
@@ -404,7 +431,7 @@ files::Status Store::setPassword(const std::string& path, const std::string& pas
     pw.erase(std::remove_if(pw.begin(), pw.end(), [&](const auto& p) { return lower(p.first) == lower(path); }), pw.end());
     if (!password.empty()) {
         if (password.size() > 8) return files::Status::InvalidName;      // fx-CG50: al piu' 8 caratteri
-        pw.emplace_back(path, pwHash(path, password));
+        pw.emplace_back(path, pwHash(password));
     } else if (pw.size() == before) return files::Status::Ok;
     return savePasswords(pw);
 }

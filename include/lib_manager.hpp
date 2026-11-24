@@ -83,6 +83,7 @@ struct IndexEntry {
     std::string manifestSha256;
     std::uint32_t manifestSize{0};
     std::vector<Dependency> dependencies;
+    Version minFirmware;                                 // facoltativo: le versioni per firmware piu' nuovi si saltano
 };
 bool parseIndex(const std::string& json, std::vector<IndexEntry>& out, std::string& error);
 
@@ -165,7 +166,8 @@ public:
     enum class State : std::uint8_t { Idle, Fetching, Committing, Done, Failed, Cancelled };
     Installer(files::FileSystem& fs, Source& src);
     ~Installer();
-    void start(const std::vector<PlanStep>& plan);
+    // `firmware`: versione di questo firmware (minFirmware dei manifest).
+    void start(const std::vector<PlanStep>& plan, const Version& firmware);
     // Un passo (fino a ~budget byte scaricati): false quando ha finito.
     bool tick(std::size_t budgetBytes = 8192);
     void cancel();                                      // AC: niente resta in LIB, .tmp ripulita
@@ -179,6 +181,7 @@ private:
     bool commit();
     files::FileSystem& fs_;
     Source& src_;
+    Version firmware_;
     std::vector<PlanStep> plan_;
     std::vector<Manifest> manifests_;
     State state_{State::Idle};

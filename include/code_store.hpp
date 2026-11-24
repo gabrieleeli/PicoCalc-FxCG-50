@@ -99,6 +99,7 @@ private:
     files::Status copyTree(const std::string& from, const std::string& to);
     files::Status loadPasswords(std::vector<std::pair<std::string, std::string>>& out);
     files::Status savePasswords(const std::vector<std::pair<std::string, std::string>>& in);
+    void movePasswords(const std::string& from, const std::string& to, bool keep);
     files::FileSystem* fs_;
 };
 

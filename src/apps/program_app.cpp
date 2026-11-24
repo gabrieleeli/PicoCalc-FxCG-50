@@ -641,11 +641,6 @@ void proposePlan(Context& ctx, V& v, const std::string& key) {
         any = true;
         text += (text.empty() ? "" : ", ") + s.entry.name + " " + (s.fromVersion.empty() ? std::string() : s.fromVersion + "->") + s.entry.version.text();
         down = down || s.downgrade;
-        if (firmwareVersion() < s.entry.version && false) {}
-    }
-    for (const libs::PlanStep& s : v.plan) {
-        // il firmware minimo dal manifest si controlla dopo il download; qui l'indice
-        (void)s;
     }
     if (!any) { ctx.toast(name + " e' gia' aggiornata"); return; }
     v.shell.confirm.open(std::string(down ? "ATTENZIONE versione piu' vecchia! " : "") + "Installare " + text + "?", ConfirmPlan);
@@ -664,7 +659,7 @@ void startInstall(Context& ctx, V& v) {
         src = v.httpsSource.get();
     }
     v.installer = std::make_unique<libs::Installer>(*fs, *src);
-    v.installer->start(v.plan);
+    v.installer->start(v.plan, firmwareVersion());
     v.libStatus = "Installazione...";
 }
 void loadLocalIndex(Context& ctx, V& v) {
@@ -790,13 +785,33 @@ bool ProgramApp::tick(Context& ctx) {
         if (!f) { v.fetchingIndex = false; return true; }
         const net::Fetcher::State s = f->poll(v.indexText);
         if (v.indexText.size() > libs::MaxIndexBytes) { f->cancel(); v.fetchingIndex = false; v.libStatus = "indice troppo grande"; return true; }
-        if (s == net::Fetcher::State::Failed) { v.fetchingIndex = false; v.libStatus = "Indice: " + f->error(); return true; }
+        if (s == net::Fetcher::State::Failed) {
+            v.fetchingIndex = false;
+            v.libStatus = "Indice: " + f->error();
+            // senza rete: l'ultimo indice scaricato (solo per vedere le librerie e le versioni)
+            if (files::FileSystem* fs = sd(ctx)) {
+                std::vector<std::uint8_t> data;
+                std::string err;
+                if (files::readAll(*fs, std::string(libs::CacheRoot) + "/index.json", data, libs::MaxIndexBytes) == files::Status::Ok &&
+                    libs::parseIndex(std::string(data.begin(), data.end()), v.index, err)) {
+                    v.indexLoaded = true;
+                    v.indexSource = "copia";
+                    v.libStatus += " (mostro l'ultimo indice scaricato)";
+                }
+            }
+            return true;
+        }
         if (s == net::Fetcher::State::Done) {
             v.fetchingIndex = false;
             std::string err;
             if (!libs::parseIndex(v.indexText, v.index, err)) { v.libStatus = err; return true; }
             v.indexLoaded = true;
             v.indexSource = "rete";
+            // copia dell'indice in LIB/.cache: elenco e INFO anche senza rete
+            if (files::FileSystem* fs = sd(ctx)) {
+                if (fs->makeDirs(libs::CacheRoot) == files::Status::Ok)
+                    (void)files::writeAtomic(*fs, std::string(libs::CacheRoot) + "/index.json", reinterpret_cast<const std::uint8_t*>(v.indexText.data()), v.indexText.size());
+            }
             v.libStatus.clear();
             try {
                 if (!v.pendingLib.empty()) { const std::string k = v.pendingLib; v.pendingLib.clear(); proposePlan(ctx, v, k); }

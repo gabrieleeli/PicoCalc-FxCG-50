@@ -66,8 +66,10 @@ bool term(std::string_view t, const Version* v, bool& ok) {
         if (!Version::parse(t.substr(1), x)) return false;
         Version upper = x;
         if (t[0] == '^') {
+            // come npm: ^1.2.3 = <2.0.0, ^0.2.3 = <0.3.0, ^0.0.3 = <0.0.4
             if (x.major > 0) { upper.major++; upper.minor = 0; upper.patch = 0; }
-            else { upper.minor++; upper.patch = 0; }
+            else if (x.minor > 0) { upper.minor++; upper.patch = 0; }
+            else upper.patch++;
         } else { upper.minor++; upper.patch = 0; }
         ok = ge(x) && lt(upper);
         return true;
@@ -263,6 +265,9 @@ bool parseIndex(const std::string& text, std::vector<IndexEntry>& out, std::stri
         if (!validLibName(ie.name) || !validLanguage(ie.language) || !Version::parse(version, ie.version)) { error = "index.json: voce non valida: " + ie.name; return false; }
         if (!safeRelativePath(ie.path)) { error = "index.json: percorso non ammesso: " + ie.path; return false; }
         if (!crypto::validDigest(ie.manifestSha256)) { error = "index.json: impronta del manifest non valida per " + ie.name; return false; }
+        std::string minFw;
+        if (!str(e, "minFirmware", minFw, 20, false, error)) { error = "index.json: " + error; return false; }
+        if (!minFw.empty() && !Version::parse(minFw, ie.minFirmware)) { error = "index.json: minFirmware non valido per " + ie.name; return false; }
         const json::Value* ms = e.get("manifestSize");
         if (ms) {
             if (!ms->isNumber() || ms->n < 0 || ms->n > static_cast<double>(MaxManifestBytes)) { error = "index.json: manifestSize non valido per " + ie.name; return false; }
@@ -391,12 +396,16 @@ bool makePlan(const std::vector<IndexEntry>& index, const std::vector<Installed>
         return nullptr;
     };
     // la versione piu' alta dell'indice che soddisfa l'intervallo
+    std::string tooNew;                                  // versione scartata perche' vuole un firmware piu' nuovo
     auto pick = [&](const std::string& n, const std::string& l, const std::string& range) -> const IndexEntry* {
         const IndexEntry* best = nullptr;
         for (const IndexEntry& e : index) {
             if (e.name != n || e.language != l) continue;
             if (!range.empty() && !rangeMatches(range, e.version)) continue;
-            if (e.version.compare(firmware) > 0 && false) continue;
+            if (firmware < e.minFirmware) {
+                tooNew = e.name + " " + e.version.text() + " richiede il firmware " + e.minFirmware.text() + " o successivo (questo e' " + firmware.text() + ")";
+                continue;
+            }
             if (!best || best->version < e.version) best = &e;
         }
         return best;
@@ -427,6 +436,7 @@ bool makePlan(const std::vector<IndexEntry>& index, const std::vector<Installed>
             const IndexEntry* dep = pick(d.name, e->language, d.range);
             if (!dep && e->language == "cpp") dep = pick(d.name, "c", d.range);
             if (!dep) {
+                if (!tooNew.empty()) { error = tooNew; return false; }
                 const bool known = std::any_of(index.begin(), index.end(), [&](const IndexEntry& x) { return x.name == d.name; });
                 error = known ? "nessuna versione di " + d.name + " soddisfa " + d.range + " (richiesta da " + e->name + ")"
                               : "dipendenza mancante: " + d.name + " " + d.range + " (richiesta da " + e->name + ")";
@@ -448,8 +458,9 @@ bool makePlan(const std::vector<IndexEntry>& index, const std::vector<Installed>
         if (!Version::parse(wantVersion, v)) { error = "versione non valida: " + std::string(wantVersion); return false; }
         for (const IndexEntry& e : index) if (e.name == n && e.language == l && e.version == v) root = &e;
         if (!root) { error = "versione " + std::string(wantVersion) + " di " + n + " non presente nell'indice"; return false; }
+        if (firmware < root->minFirmware) { error = root->name + " " + root->version.text() + " richiede il firmware " + root->minFirmware.text() + " o successivo (questo e' " + firmware.text() + ")"; return false; }
     } else root = pick(n, l, "");
-    if (!root) { error = "libreria " + n + " (" + l + ") non presente nell'indice"; return false; }
+    if (!root) { error = !tooNew.empty() ? tooNew : "libreria " + n + " (" + l + ") non presente nell'indice"; return false; }
     if (!visit(root)) return false;
     for (const IndexEntry* e : order) {
         PlanStep s;
@@ -462,7 +473,6 @@ bool makePlan(const std::vector<IndexEntry>& index, const std::vector<Installed>
         }
         out.push_back(std::move(s));
     }
-    (void)firmware;
     return true;
 }
 
@@ -496,7 +506,8 @@ files::Status writeText(files::FileSystem& fs, const std::string& path, const st
 } // namespace
 Installer::Installer(files::FileSystem& fs, Source& src) : fs_(fs), src_(src), hash_(std::make_unique<Hash>()) {}
 Installer::~Installer() { if (state_ == State::Fetching || state_ == State::Committing) cancel(); }
-void Installer::start(const std::vector<PlanStep>& plan) {
+void Installer::start(const std::vector<PlanStep>& plan, const Version& firmware) {
+    firmware_ = firmware;
     plan_.clear();
     for (const PlanStep& s : plan) if (!s.upToDate) plan_.push_back(s);
     manifests_.assign(plan_.size(), Manifest());
@@ -594,6 +605,7 @@ bool Installer::tick(std::size_t budgetBytes) {
             std::string perr;
             if (!parseManifest(manifestText_, m, perr)) { fail(s.entry.name + ": " + perr); return false; }
             if (m.name != s.entry.name || m.language != s.entry.language || !(m.version == s.entry.version)) { fail("library.json di " + s.entry.name + " non coerente con l'indice"); return false; }
+            if (firmware_ < m.minFirmware) { fail(m.name + " " + m.version.text() + " richiede il firmware " + m.minFirmware.text() + " o successivo (questo e' " + firmware_.text() + ")"); return false; }
             if (m.dependencies.size() != s.entry.dependencies.size()) { fail("dipendenze di " + s.entry.name + " diverse da quelle dell'indice"); return false; }
             for (std::size_t k = 0; k < m.dependencies.size(); ++k)
                 if (m.dependencies[k].name != s.entry.dependencies[k].name || m.dependencies[k].range != s.entry.dependencies[k].range) { fail("dipendenze di " + s.entry.name + " diverse da quelle dell'indice"); return false; }
