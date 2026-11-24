@@ -402,6 +402,7 @@ void Compiler::declareProperty(ClassInfo* c, Node* n) {
         if (n->c) { d->op = 1; d->a = n->c; }
         fd->list.push_back(d);
         declareVariables(classNs_[c], fd, c);
+        p.backingName = backing;                         // { get; } si assegna nel costruttore
     } else if (n->c) {
         error("solo le proprieta' automatiche hanno un valore iniziale", n->pos);
     }

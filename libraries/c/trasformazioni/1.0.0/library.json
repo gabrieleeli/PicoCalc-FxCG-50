@@ -1,0 +1,24 @@
+{
+  "name": "trasformazioni",
+  "version": "1.0.0",
+  "language": "c",
+  "description": "Traslazioni, rotazioni, scale e simmetrie del piano con matrici omogenee",
+  "author": "PicoCalc FxCG-50",
+  "license": "MIT",
+  "minFirmware": "1.20.0",
+  "dependencies": {
+    "matrici": "^1.0.0"
+  },
+  "files": [
+    {
+      "path": "trasformazioni.c",
+      "sha256": "e57d18aa3ab99fe0d4adecb13af4b5a5c0afe5c4f5b1b0da13a449ae4413efee",
+      "size": 935
+    },
+    {
+      "path": "trasformazioni.h",
+      "sha256": "d722f0f8eb361b16b7ef824149018bd072b35d5dd1e0768a30144bd1ca567488",
+      "size": 573
+    }
+  ]
+}

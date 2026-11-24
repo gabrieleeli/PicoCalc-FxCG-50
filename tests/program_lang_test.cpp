@@ -299,6 +299,28 @@ void testCpp() {
     // LP-19 non supportati
     CHECK(err("struct A {}; struct B {};\nstruct C : A, B {};\nint main() { return 0; }", Dialect::Cpp).find("multipla") != std::string::npos);
     CHECK(err("#include <memory>\nint main() { return 0; }", Dialect::Cpp).find("non supportata") != std::string::npos);
+    // regressioni trovate con le librerie di libraries/ (v1.20.0)
+    // un operator<< dell'utente raggiungibile con un costruttore di conversione non batte cout << double
+    CHECK_EQ_STR(cpp(R"(#include <iostream>
+        struct F { long n; F(long a = 0) : n(a) {} F operator/(const F& o) const { return F(n * 10 + o.n); } };
+        std::ostream& operator<<(std::ostream& os, const F& f) { return os << "F" << f.n; }
+        int main() { double x = 1; std::cout << x / 2 << " " << F(3) / F(4) << " " << 7 / 2; return 0; })"), "0.5 F34 3");
+    // nomi dei parametri della definizione diversi da quelli del prototipo
+    CHECK_EQ_STR(cpp("#include <iostream>\nint somma(int primo, int secondo);\nint somma(int a, int b) { return a + b; }\nint main() { std::cout << somma(2, 3); return 0; }"), "5");
+    // costruttori e distruttori fuori dalla classe (anche in un namespace e nei template)
+    CHECK_EQ_STR(cpp(R"(#include <iostream>
+        #include <vector>
+        namespace geo { class P { public: P(int a); ~P(); int get() const; private: int a_; }; }
+        geo::P::P(int a) : a_(a) { std::cout << "+"; }
+        geo::P::~P() { std::cout << "-"; }
+        int geo::P::get() const { return a_; }
+        class Q { public: explicit Q(std::vector<double> c); Q doppio() const; double s() const; private: std::vector<double> c_; };
+        Q::Q(std::vector<double> c) : c_(c) {}
+        Q Q::doppio() const { std::vector<double> d; for (double x : c_) d.push_back(2 * x); return Q(d); }
+        double Q::s() const { double t = 0; for (double x : c_) t += x; return t; }
+        template <typename T> class W { public: W(T v); T v_; };
+        template <typename T> W<T>::W(T v) : v_(v) {}
+        int main() { { geo::P p(3); std::cout << p.get(); } Q q({1, 2, 3.5}); W<int> w(9); std::cout << q.doppio().s() << w.v_; return 0; })"), "+3-139");
 }
 
 // ================================================================ C#
@@ -390,6 +412,15 @@ void testCs() {
     // LS-22 non supportati: errori chiari
     CHECK(err("using System.Linq; using System.Collections.Generic; class P { static void Main() {\n  var l = new List<int>();\n  var s = l.Sum();\n} }", Dialect::CSharp).find("@3") != std::string::npos);
     CHECK(err("class P { static async void Main() { } }", Dialect::CSharp).find("async") != std::string::npos);
+    // regressioni trovate con le librerie di libraries/ (v1.20.0)
+    CHECK_EQ_STR(cs(R"(using System; using System.Collections.Generic;
+        class R { public double A { get; } public int N { get; } = 5; public static int K { get; } public R(double a) { A = a; N = N + 1; } static R() { K = 9; } }
+        class P { static double Somma(IList<double> x) { double s = 0; foreach (double v in x) s += v; return s; } static int Conta(IEnumerable<int> e) { int n = 0; foreach (int v in e) n++; return n; }
+        static void Main() { var r = new R(2.5); Console.Write($"{r.A} {r.N} {R.K} {Somma(new List<double> { 1, 2.5 })} {Conta(new List<int> { 4, 5, 6 })}");
+        try { throw new ArgumentOutOfRangeException("periodi", "servono periodi positivi"); } catch (ArgumentOutOfRangeException e) { Console.Write(" " + e.ParamName + "|" + e.Message); }
+        try { throw new ArgumentNullException("nome"); } catch (ArgumentException e) { Console.Write(" " + e.Message); }
+        try { throw new ArgumentException("valore errato", "x"); } catch (ArgumentException e) { Console.Write(" " + e.ParamName + "|" + e.Message); } } })"),
+                 "2.5 6 9 3.5 3 periodi|servono periodi positivi (Parameter 'periodi') Value cannot be null. (Parameter 'nome') x|valore errato (Parameter 'x')");
 }
 
 // ================================================================ nucleo comune

@@ -569,28 +569,65 @@ bool Compiler::operatorCall(P op, Node* a, Node* b, Pos at, EV& out) {
     if (b) rest.push_back(b);
     std::vector<Node*> both{a};
     if (b) both.push_back(b);
-    // scelta: si confrontano i costi con una prova per ciascun gruppo
-    auto viable = [&](const std::vector<Function*>& fs, const std::vector<Node*>& args) {
-        for (Function* f : fs) {
-            if (f->params.size() != args.size()) continue;
-            bool ok = true;
-            for (std::size_t i = 0; i < args.size() && ok; ++i) {
-                EV p = exprType(args[i]);
-                if (f->params[i].byRef) { ok = stripRef(p.type) == stripRef(f->params[i].type) || convCost(p.type, stripRef(f->params[i].type), &p) >= 0; }
-                else ok = convCost(p.type, f->params[i].type, &p) >= 0;
-            }
-            if (ok) return true;
+    // scelta come in C++: un solo insieme di candidati, vince la conversione piu' economica
+    // (una conversione dell'utente col costruttore costa piu' di una standard: cout << 0.5
+    // non passa da un operator<< dell'utente che accetta una classe costruibile da double)
+    std::vector<EV> argProbes;
+    for (Node* x : both) argProbes.push_back(exprType(x));
+    auto argCostOf = [&](std::size_t argIndex, TypeP pt, bool byRef) -> int {
+        const EV& p = argProbes[argIndex];
+        if (!p.type) return -1;
+        if (byRef) {
+            if (stripRef(p.type) == stripRef(pt)) return 0;
+            const int c = convCost(p.type, stripRef(pt), &p);
+            return c < 0 ? -1 : c;
         }
-        return false;
+        return convCost(p.type, pt, &p);
     };
-    if (!members.empty() && viable(members, rest)) {
+    // costo minimo di un gruppo; `first` = indice in `both` del primo argomento (1 se a e' il ricevente)
+    auto bestFns = [&](const std::vector<Function*>& fs, std::size_t first) -> int {
+        int best = -1;
+        for (Function* f : fs) {
+            if (f->params.size() != both.size() - first) continue;
+            int total = 0;
+            for (std::size_t i = 0; i < f->params.size() && total >= 0; ++i) {
+                const int c = argCostOf(first + i, f->params[i].type, f->params[i].byRef);
+                total = c < 0 ? -1 : total + c;
+            }
+            if (total >= 0 && (best < 0 || total < best)) best = total;
+        }
+        return best;
+    };
+    auto bestNatives = [&]() -> int {
+        int best = -1;
+        for (std::int32_t idx : nat) {
+            const NativeEntry& ne = nativeEntry(idx);
+            std::vector<TypeP> ps;
+            std::vector<bool> refs;
+            bool variadic = false;
+            (void)parseSig(ne.sig, ps, variadic, ta, lang_, &refs);
+            if (ps.size() != rest.size()) continue;
+            int total = 0;
+            for (std::size_t i = 0; i < ps.size() && total >= 0; ++i) {
+                const int c = argCostOf(1 + i, substMarkers(ps[i], argProbes), i < refs.size() && refs[i]);
+                total = c < 0 ? -1 : total + c;
+            }
+            if (total >= 0 && (best < 0 || total < best)) best = total;
+        }
+        return best;
+    };
+    const int cm = members.empty() ? -1 : bestFns(members, 1);
+    const int cf = frees.empty() ? -1 : bestFns(frees, 0);
+    const int cn = nat.empty() ? -1 : bestNatives();
+    auto beats = [](int x, int y) { return x >= 0 && (y < 0 || x <= y); };
+    if (cm >= 0 && beats(cm, cf)) {
         EV recv = expr(a);
         if (recv.lvalue && !isValueType(stripRef(recv.type))) {}
         load(recv, at);
         out = callOverloads(members, {}, {}, rest, {}, at, true, ta, false, opName);
         return true;
     }
-    if (!frees.empty() && viable(frees, both)) {
+    if (cf >= 0 && (cn < 0 || cf <= cn)) {
         out = callOverloads(frees, {}, {}, both, {}, at, false, nullptr, false, opName);
         return true;
     }
@@ -1299,6 +1336,25 @@ EV Compiler::newExpr(Node* n) {
     if (t->k == TK::Class && t->cls && !t->cls->isEnum) {
         ClassInfo* c = t->cls;
         completeClass(c);
+        const bool argFamily = lang_ == Dialect::CSharp && c->isNative &&
+                               (c->name == "ArgumentException" || c->name == "ArgumentNullException" || c->name == "ArgumentOutOfRangeException");
+        if (argFamily && !n->list.empty() && n->list.size() <= 2) {
+            // ArgumentException(messaggio, nomeParametro), ArgumentNullException(nomeParametro[, messaggio]),
+            // ArgumentOutOfRangeException(nomeParametro[, messaggio]): Message e ParamName come .NET
+            const bool second = n->list.size() == 2;
+            EV p2 = second ? exprType(n->list[1]) : EV();
+            const bool innerArg = second && c->name == "ArgumentException" && p2.type && stripRef(p2.type)->k == TK::Class;
+            if (!innerArg) {
+                emit(Op::New, c->id, 0, 0);
+                emit(Op::Dup);
+                pushInt(c->name == "ArgumentException" ? 0 : c->name == "ArgumentNullException" ? 1 : 2, VK::I32);
+                rvalue(n->list[0], tCsStr_);
+                if (second) rvalue(n->list[1], tCsStr_); else emit(Op::PushNull);
+                emit(Op::CallN, nativeIndex("", "Exception", "#argInit", "void(any,int,string,string)"), 4, 0);
+                r.type = t;
+                return r;
+            }
+        }
         if (c->isNative && c->isException) {
             // eccezioni standard: new Exception("messaggio")
             emit(Op::New, c->id, 0, static_cast<std::uint16_t>(cfam ? 1 : 0));

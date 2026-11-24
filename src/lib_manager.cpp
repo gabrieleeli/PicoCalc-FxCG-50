@@ -281,6 +281,53 @@ bool parseIndex(const std::string& text, std::vector<IndexEntry>& out, std::stri
     return true;
 }
 
+// ================================================================ repository sulla SD
+namespace {
+bool readSmall(files::FileSystem& fs, const std::string& path, std::string& out, std::size_t maxBytes, std::string& error);
+}
+bool localIndex(files::FileSystem& fs, const std::string& root, std::vector<IndexEntry>& out, std::string& error) {
+    out.clear();
+    files::Entry e;
+    if (fs.stat(root, e) != files::Status::Ok || !e.directory) { error = "cartella " + root + " assente"; return false; }
+    std::string text;
+    if (fs.stat(root + "/index.json", e) == files::Status::Ok) {
+        if (!readSmall(fs, root + "/index.json", text, MaxIndexBytes, error) || !parseIndex(text, out, error)) return false;
+    }
+    for (const char* lang : {"c", "cpp", "cs", "java", "py"}) {
+        std::vector<files::Entry> libs;
+        if (fs.list(root + "/" + lang, libs) != files::Status::Ok) continue;
+        for (const files::Entry& l : libs) {
+            if (!l.directory || !validLibName(l.name)) continue;
+            std::vector<files::Entry> versions;
+            if (fs.list(root + "/" + lang + "/" + l.name, versions) != files::Status::Ok) continue;
+            for (const files::Entry& v : versions) {
+                Version ver;
+                if (!v.directory || !Version::parse(v.name, ver)) continue;
+                bool listed = false;
+                for (const IndexEntry& x : out) if (x.name == l.name && x.language == lang && x.version == ver) listed = true;
+                if (listed || out.size() >= 512) continue;
+                const std::string rel = std::string(lang) + "/" + l.name + "/" + v.name;
+                std::string mt, err;
+                Manifest m;
+                if (!readSmall(fs, root + "/" + rel + "/" + ManifestName, mt, MaxManifestBytes, err) || !parseManifest(mt, m, err)) continue;
+                if (m.name != l.name || m.language != lang || !(m.version == ver)) continue;
+                IndexEntry ie;
+                ie.name = m.name;
+                ie.language = m.language;
+                ie.description = m.description;
+                ie.version = m.version;
+                ie.path = rel;
+                ie.manifestSha256 = crypto::sha256Hex(mt);
+                ie.manifestSize = static_cast<std::uint32_t>(mt.size());
+                ie.dependencies = m.dependencies;
+                ie.minFirmware = m.minFirmware;
+                out.push_back(std::move(ie));
+            }
+        }
+    }
+    return true;
+}
+
 // ================================================================ librerie installate
 namespace {
 bool readSmall(files::FileSystem& fs, const std::string& path, std::string& out, std::size_t maxBytes, std::string& error) {

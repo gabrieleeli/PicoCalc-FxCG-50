@@ -665,11 +665,10 @@ void startInstall(Context& ctx, V& v) {
 void loadLocalIndex(Context& ctx, V& v) {
     files::FileSystem* fs = sd(ctx);
     if (!fs || fs->status() != files::Status::Ok) storeError(files::Status::NoCard);
-    std::vector<std::uint8_t> data;
-    const files::Status st = files::readAll(*fs, std::string(ImportFolder) + "/index.json", data, libs::MaxIndexBytes);
-    if (st != files::Status::Ok) throw MathError(st == files::Status::NotFound ? "manca " + shortPath(ImportFolder) + "/index.json (copia la cartella libraries/ del repository)" : code::message(st));
     std::string err;
-    if (!libs::parseIndex(std::string(data.begin(), data.end()), v.index, err)) throw MathError(err);
+    if (!libs::localIndex(*fs, ImportFolder, v.index, err))
+        throw MathError(err.find("assente") != std::string::npos ? "manca " + shortPath(ImportFolder) + " (copia la cartella libraries/ del repository o usa picocalc_link.py send-library)" : err);
+    if (v.index.empty()) throw MathError("nessuna libreria in " + shortPath(ImportFolder));
     v.indexLoaded = true;
     v.indexSource = "SD";
 }

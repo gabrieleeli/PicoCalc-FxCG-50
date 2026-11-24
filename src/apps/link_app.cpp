@@ -129,7 +129,9 @@ void applyFiles(Context& ctx, LinkApp::View& v) {
         if (s != files::Status::Ok) throw MathError(std::string("ERROR: ") + e.path + ": " + files::statusMessage(s));
         ++n;
     }
-    ctx.toast(std::to_string(n) + " file scritti");
+    bool library = false;
+    for (const link::Entry& e : v.contents) if (e.kind == link::Entry::Kind::File && e.path.rfind("PICOCALC/LIB/IMPORT/", 0) == 0) library = true;
+    ctx.toast(std::to_string(n) + " file scritti" + (library ? ": libreria in LIB/IMPORT, installala da Program > LIB > LOCAL" : ""));
 }
 } // namespace
 

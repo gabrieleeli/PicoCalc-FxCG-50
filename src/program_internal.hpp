@@ -133,6 +133,7 @@ struct PropertyInfo {
     bool isStatic{false}, isIndexer{false};
     Access access{Access::Public}, setAccess{Access::Public};
     std::int32_t backing{-1};                            // proprieta' automatica: slot del campo nascosto
+    std::string backingName;                             // proprieta' automatica: nome del campo nascosto
     ClassInfo* owner{nullptr};
 };
 struct ClassInfo {

@@ -1,0 +1,18 @@
+{
+  "name": "finanza",
+  "version": "1.0.0",
+  "language": "cs",
+  "description": "Interesse composto, valore attuale, rata del prestito, VAN e TIR",
+  "author": "PicoCalc FxCG-50",
+  "license": "MIT",
+  "namespace": "PicoCalc.Finanza",
+  "minFirmware": "1.20.0",
+  "dependencies": {},
+  "files": [
+    {
+      "path": "Finanza.cs",
+      "sha256": "cb5fec3d40d5d7eeee8357a12af7f2d88ffe9f8eeef5868865d5400d962cfb6d",
+      "size": 1954
+    }
+  ]
+}

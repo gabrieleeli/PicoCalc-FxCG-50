@@ -566,6 +566,37 @@ void testVerifyAndRemove() {
     // toRef: cartella dei dati della libreria
     for (const Installed& l : listInstalled(sd, "c")) if (l.manifest.name == "matrici") CHECK(toRef(l).dataFolder == "PICOCALC/LIBDATA/C/matrici");
 }
+// ---------------------------------------------------------------- LB-13 LOCAL: repository sulla SD (copia dal PC, send-library)
+void testLocalIndex() {
+    RamFileSystem sd;
+    std::vector<IndexEntry> idx;
+    std::string err;
+    CHECK(!localIndex(sd, "PICOCALC/LIB/IMPORT", idx, err) && err.find("assente") != std::string::npos);
+    Repo r(sd, "PICOCALC/LIB/IMPORT");
+    build(r, {{"base", "1.0.0", "c", {{"base.h", "#pragma once\n"}}, {}, ""}});
+    // una libreria arrivata con send-library (senza voce nell'indice) e una cartella guasta
+    Manifest m;
+    m.name = "extra";
+    m.version = V("2.1.0");
+    m.language = "c";
+    m.dependencies = {{"base", "^1.0.0"}};
+    const std::string body = "#pragma once\n#define EXTRA 1\n";
+    m.files.push_back({"extra.h", crypto::sha256Hex(body), static_cast<std::uint32_t>(body.size())});
+    put(sd, "PICOCALC/LIB/IMPORT/c/extra/2.1.0/extra.h", body);
+    put(sd, "PICOCALC/LIB/IMPORT/c/extra/2.1.0/library.json", manifestJson(m));
+    put(sd, "PICOCALC/LIB/IMPORT/c/rotta/1.0.0/library.json", "{ guasto");
+    put(sd, "PICOCALC/LIB/IMPORT/c/altra/1.0.0/library.json", manifestJson(m));     // nome diverso dalla cartella: ignorata
+    CHECK(localIndex(sd, "PICOCALC/LIB/IMPORT", idx, err) && idx.size() == 2);
+    CHECK(idx.size() == 2 && idx[1].name == "extra" && idx[1].path == "c/extra/2.1.0" && idx[1].dependencies.size() == 1);
+    FolderSource src(sd, "PICOCALC/LIB/IMPORT");
+    CHECK(install(sd, src, idx, "extra", "c", err) && installedVersion(sd, "c", "extra", "2.1.0") && installedVersion(sd, "c", "base", "1.0.0"));
+    // senza index.json: solo le cartelle
+    (void)sd.remove("PICOCALC/LIB/IMPORT/index.json");
+    CHECK(localIndex(sd, "PICOCALC/LIB/IMPORT", idx, err) && idx.size() == 2);
+    // index.json guasto: errore chiaro
+    put(sd, "PICOCALC/LIB/IMPORT/index.json", "{\"version\": 7}");
+    CHECK(!localIndex(sd, "PICOCALC/LIB/IMPORT", idx, err) && err.find("index.json") != std::string::npos);
+}
 } // namespace
 
 int main() {
@@ -578,5 +609,6 @@ int main() {
     testInterruptions();
     testSafety();
     testVerifyAndRemove();
+    testLocalIndex();
     return testutil::finish("lib_manager_test");
 }

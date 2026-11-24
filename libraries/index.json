@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "libraries": [
+    {
+      "name": "matrici",
+      "version": "1.0.0",
+      "language": "c",
+      "path": "c/matrici/1.0.0",
+      "description": "Matrici fino a 6x6: prodotto, trasposta, determinante, inversa, stampa",
+      "manifestSha256": "d849d5e3f09b25465abc9fb75d1ab8273ef394a92e9a57fcda0a41760ce5c2a2",
+      "manifestSize": 559,
+      "minFirmware": "1.20.0",
+      "dependencies": {}
+    },
+    {
+      "name": "statistica",
+      "version": "1.0.0",
+      "language": "c",
+      "path": "c/statistica/1.0.0",
+      "description": "Media, deviazioni standard, mediana, minimo, massimo e retta di regressione",
+      "manifestSha256": "58d69d952838cde20182ef6b14337d55f10b453a294b5e0cd0845fd82bd9894c",
+      "manifestSize": 573,
+      "minFirmware": "1.20.0",
+      "dependencies": {}
+    },
+    {
+      "name": "trasformazioni",
+      "version": "1.0.0",
+      "language": "c",
+      "path": "c/trasformazioni/1.0.0",
+      "description": "Traslazioni, rotazioni, scale e simmetrie del piano con matrici omogenee",
+      "manifestSha256": "654626e482c16874aff83797574feb52798f8f86188bbb998e1af8ad6a393054",
+      "manifestSize": 608,
+      "minFirmware": "1.20.0",
+      "dependencies": {
+        "matrici": "^1.0.0"
+      }
+    },
+    {
+      "name": "frazioni",
+      "version": "1.0.0",
+      "language": "cpp",
+      "path": "cpp/frazioni/1.0.0",
+      "description": "Classe Frazione esatta con + - * / e confronti (solo intestazione)",
+      "manifestSha256": "e46b6b8bd42a21bb4ddb7701a5f9930a2f64b7bc8a6bbb84c4bb24334c702dca",
+      "manifestSize": 419,
+      "minFirmware": "1.20.0",
+      "dependencies": {}
+    },
+    {
+      "name": "geometria2d",
+      "version": "1.0.0",
+      "language": "cpp",
+      "path": "cpp/geometria2d/1.0.0",
+      "description": "Punti e poligoni: distanze, perimetro, area di Gauss, baricentro, rotazioni",
+      "manifestSha256": "6ceb3b98c954f8fce145721aa069985eed9c26922c3fd8ef6bed4ad35b8e1610",
+      "manifestSize": 582,
+      "minFirmware": "1.20.0",
+      "dependencies": {}
+    },
+    {
+      "name": "polinomi",
+      "version": "1.0.0",
+      "language": "cpp",
+      "path": "cpp/polinomi/1.0.0",
+      "description": "Classe Polinomio: valore (Horner), derivata, somma, prodotto, testo e radici reali",
+      "manifestSha256": "cc09d9c1c0d417804307d550b92d491c4bb22f285a58ac6aeb6b36e80b98b488",
+      "manifestSize": 580,
+      "minFirmware": "1.20.0",
+      "dependencies": {}
+    },
+    {
+      "name": "finanza",
+      "version": "1.0.0",
+      "language": "cs",
+      "path": "cs/finanza/1.0.0",
+      "description": "Interesse composto, valore attuale, rata del prestito, VAN e TIR",
+      "manifestSha256": "40e106bf2ab6ee269b5b6ed0d6022dd89c68d8da5eee6471732537750a28aa20",
+      "manifestSize": 448,
+      "minFirmware": "1.20.0",
+      "dependencies": {}
+    },
+    {
+      "name": "matrici",
+      "version": "1.0.0",
+      "language": "cs",
+      "path": "cs/matrici/1.0.0",
+      "description": "Classe Matrice con indicizzatore, prodotto, trasposta e determinante",
+      "manifestSha256": "d797d88dad56f7c34eeada938f0ece26d3e98e3a8af49b5cca906aa96fcab69d",
+      "manifestSize": 452,
+      "minFirmware": "1.20.0",
+      "dependencies": {}
+    },
+    {
+      "name": "statistica",
+      "version": "1.0.0",
+      "language": "cs",
+      "path": "cs/statistica/1.0.0",
+      "description": "Media, mediana, deviazioni standard e retta di regressione con r",
+      "manifestSha256": "46fa424323e1bd2f72ce1eb6f61f479936611a35fd6a8797e947488b59f7bb3a",
+      "manifestSize": 457,
+      "minFirmware": "1.20.0",
+      "dependencies": {}
+    }
+  ]
+}

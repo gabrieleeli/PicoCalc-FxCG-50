@@ -219,6 +219,9 @@ void Compiler::compileFunctionBody(Function* f, Node* body, Node* decl) {
     // nomi catturati dalle lambda di C# (le variabili vanno in una Box)
     csCaptured_.clear();
     if ((lang_ == Dialect::CSharp || lang_ == Dialect::Java) && body) collectCaptures(body);
+    // i nomi dei parametri sono quelli della definizione (il prototipo puo' usarne altri o nessuno)
+    if (decl && decl->k == K::Func && decl->list.size() == f->params.size())
+        for (std::size_t i = 0; i < f->params.size(); ++i) if (decl->list[i] && decl->list[i]->sym) f->params[i].name = syms_[decl->list[i]->sym];
     for (std::size_t i = 0; i < f->params.size(); ++i, ++slot) {
         LocalVar v;
         v.name = f->params[i].name;
@@ -252,7 +255,9 @@ void Compiler::compileFunctionBody(Function* f, Node* body, Node* decl) {
     emitScopeCleanup(scopes_.back());
     if (f->ret->k == TK::Void || f->isCtor || f->isDtor) emit(Op::Ret, 0, 0);
     else if (f->index == prog_.entry || f->simple == "main") { pushInt(0, vkOf(f->ret)); emit(Op::Ret, 0, 1); }
-    else if (lang_ == Dialect::CSharp || lang_ == Dialect::Java) {
+    else if (lang_ == Dialect::CSharp || lang_ == Dialect::Java || (body && jumpStatement(body)) || !defaultConstructible(stripRef(f->ret))) {
+        // C/C++: uscire senza return da una funzione con un valore e' un errore all'esecuzione
+        // (niente valore inventato per una classe senza costruttore predefinito)
         emit(Op::Fault, static_cast<std::int32_t>(FaultKind::InvalidOp), 0, static_cast<std::uint16_t>(constString("la funzione " + f->name + " finisce senza return", false)));
     } else {
         zeroValue(f->ret, pos_);
@@ -270,6 +275,7 @@ std::uint32_t Compiler::lastLine(Node* n) const {
 // C#: inizializzatori dei campi, poi : base(...) / : this(...).
 void Compiler::emitCtorPrologue(Function* f, Node* decl) {
     ClassInfo* c = f->owner;
+    if (f->isStatic || c->staticInit == f) return;          // costruttore static: niente this, campi d'istanza o base
     Node* baseInit = nullptr;
     Node* thisInit = nullptr;
     std::map<std::string, Node*> memberInits;
@@ -713,6 +719,17 @@ void Compiler::switchStmt(Node* n) {
     prog_.switches.push_back(std::move(tab));
     patch(sw, static_cast<std::int32_t>(prog_.switches.size() - 1));
     for (std::int32_t b : lc.breaks) patch(b, end);
+}
+bool Compiler::defaultConstructible(TypeP t) {
+    if (!t || t->k != TK::Class || !t->cls || t->cls->isNative) return true;
+    completeClass(t->cls);
+    if (t->cls->ctors.empty()) return true;
+    for (Function* c : t->cls->ctors) {
+        bool ok = true;
+        for (const Param& p : c->params) if (!p.hasDefault) ok = false;
+        if (ok) return true;
+    }
+    return false;
 }
 bool Compiler::jumpStatement(Node* s) const {
     if (!s) return false;

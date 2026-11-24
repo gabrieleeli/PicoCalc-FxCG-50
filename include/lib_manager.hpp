@@ -86,6 +86,11 @@ struct IndexEntry {
     Version minFirmware;                                 // facoltativo: le versioni per firmware piu' nuovi si saltano
 };
 bool parseIndex(const std::string& json, std::vector<IndexEntry>& out, std::string& error);
+// Repository in una cartella della SD (LIB > LOCAL): index.json se c'e', piu' le
+// librerie trovate in <ling>/<nome>/<versione>/library.json e non elencate (copia
+// manuale dal PC o picocalc_link.py send-library); per queste l'impronta del manifest
+// e' quella del file sulla SD. False solo se la cartella non si legge o index.json e' guasto.
+bool localIndex(files::FileSystem& fs, const std::string& root, std::vector<IndexEntry>& out, std::string& error);
 
 bool validLibName(std::string_view name) noexcept;      // [a-z0-9_-], 1..32, inizia con una lettera
 bool validLanguage(std::string_view lang) noexcept;

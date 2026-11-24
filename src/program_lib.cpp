@@ -982,6 +982,20 @@ void excMessage(Vm& vm, NativeCall& c) {
     }
     c.ret = m;
 }
+// ArgumentException e figlie: (0) messaggio[, parametro]; (1, 2) parametro[, messaggio]
+void excArgInit(Vm& vm, NativeCall& c) {
+    InstObj* e = instArg(vm, c.args[0]);
+    const std::int64_t kind = I(c, 1);
+    const bool hasB = !c.args[3].isNull();
+    const std::string a = c.args[2].isNull() ? std::string() : S(vm, c, 2);
+    const std::string b = hasB ? S(vm, c, 3) : std::string();
+    std::string param = kind == 0 ? b : a;
+    std::string msg = kind == 0 ? a : hasB ? b : kind == 1 ? "Value cannot be null." : "Specified argument was out of the range of valid values.";
+    if (!param.empty()) msg += " (Parameter '" + param + "')";
+    if (e->nfields > 0) e->fields[0] = str(vm, msg);
+    if (e->nfields > 3) e->fields[3] = param.empty() ? Value::null() : str(vm, param);
+}
+void excParam(Vm& vm, NativeCall& c) { InstObj* e = instArg(vm, c.args[0]); c.ret = e->nfields > 3 ? e->fields[3] : Value::null(); }
 void excStack(Vm& vm, NativeCall& c) { InstObj* e = instArg(vm, c.args[0]); c.ret = e->nfields > 2 ? e->fields[2] : Value::null(); }
 void excInner(Vm& vm, NativeCall& c) { InstObj* e = instArg(vm, c.args[0]); c.ret = e->nfields > 1 ? e->fields[1] : Value::null(); }
 void excToString(Vm& vm, NativeCall& c) {
@@ -1180,6 +1194,8 @@ const NativeEntry kCore[] = {
     {L::Cs, "System", "Exception", "Message", "string()", excMessage, P},
     {L::Cs, "System", "Exception", "StackTrace", "string()", excStack, P},
     {L::Cs, "System", "Exception", "InnerException", "class:Exception()", excInner, P},
+    {L::Cs, "System", "Exception", "ParamName", "string()", excParam, P},
+    {L::Cs, "System", "Exception", "#argInit", "void(any,int,string,string)", excArgInit, St},
     {L::Cs, "System", "Exception", "ToString", "string()", excToString, 0},
     {L::Java, "java.lang", "Exception", "getMessage", "string()", excMessage, 0},
     // array di C#/Java

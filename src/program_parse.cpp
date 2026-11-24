@@ -107,6 +107,32 @@ private:
         return false;
     }
     bool knownTemplate(const std::string& path) const { return lookup(templates_, path); }
+    // Definizione di un costruttore o distruttore fuori dalla classe: A::A( , A<T>::A( , A::~A(
+    bool ctorDefinitionAhead() const {
+        std::size_t q = p_;
+        if (isP(toks_[q], Scope)) ++q;
+        Sym last = 0;
+        while (toks_[q].t == T::Ident) {
+            const Sym s = toks_[q].sym;
+            ++q;
+            if (isP(toks_[q], Lt) && knownTemplate(syms_[s])) {
+                int depth = 0;
+                for (; q < toks_.size() && toks_[q].t != T::End; ++q) {
+                    if (isP(toks_[q], Lt)) ++depth;
+                    else if (isP(toks_[q], Gt)) { if (--depth == 0) { ++q; break; } }
+                    else if (isP(toks_[q], Shr)) { depth -= 2; if (depth <= 0) { ++q; break; } }
+                    else if (isP(toks_[q], Semi) || isP(toks_[q], LBrace)) return false;
+                }
+            }
+            if (!isP(toks_[q], Scope)) return false;
+            ++q;
+            if (isP(toks_[q], Tilde)) return toks_[q + 1].t == T::Ident && toks_[q + 1].sym == s && isP(toks_[q + 2], LParen);
+            if (toks_[q].t == T::Ident && toks_[q].sym == s && isP(toks_[q + 1], LParen)) return true;
+            last = s;
+        }
+        (void)last;
+        return false;
+    }
     bool isTParam(const std::string& path) const {
         for (const auto& tp : tparams_) for (Sym s : tp) if (syms_[s] == path) return true;
         return false;
@@ -276,6 +302,8 @@ private:
                 if (w == "decltype") error("decltype non supportato");
             }
             if (any || named) break;
+            // A::A(...) / A::~A() / ns::A::A(...) fuori dalla classe: niente tipo di ritorno
+            if (cpp_ && ctorDefinitionAhead()) { base = "void"; any = true; break; }
             // nome di tipo (typedef, classe, template, std::...)
             if (typeNameAt(p_)) { named = qualifiedType(); any = true; continue; }
             break;

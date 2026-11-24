@@ -394,9 +394,10 @@ void Compiler::setupNativeClasses() {
             FieldInfo m; m.name = "#message"; m.type = d == Dialect::Cpp ? tCppStr_ : tCsStr_; m.access = Access::Private; m.owner = c;
             FieldInfo in; in.name = "#inner"; in.type = tObject_; in.access = Access::Private; in.owner = c;
             FieldInfo st; st.name = "#stack"; st.type = d == Dialect::Cpp ? tCppStr_ : tCsStr_; st.access = Access::Private; st.owner = c;
-            c->fields = {m, in, st};
-            c->slotCount = 3;
-            for (std::int32_t i = 0; i < 3; ++i) c->fields[static_cast<std::size_t>(i)].slot = i;
+            FieldInfo pn; pn.name = "#param"; pn.type = d == Dialect::Cpp ? tCppStr_ : tCsStr_; pn.access = Access::Private; pn.owner = c;   // C#: ParamName
+            c->fields = {m, in, st, pn};
+            c->slotCount = 4;
+            for (std::int32_t i = 0; i < 4; ++i) c->fields[static_cast<std::size_t>(i)].slot = i;
         } else {
             c->slotCount = base->slotCount;
         }

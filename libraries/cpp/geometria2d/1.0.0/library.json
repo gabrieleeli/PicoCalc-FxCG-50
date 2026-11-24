@@ -1,0 +1,22 @@
+{
+  "name": "geometria2d",
+  "version": "1.0.0",
+  "language": "cpp",
+  "description": "Punti e poligoni: distanze, perimetro, area di Gauss, baricentro, rotazioni",
+  "author": "PicoCalc FxCG-50",
+  "license": "MIT",
+  "minFirmware": "1.20.0",
+  "dependencies": {},
+  "files": [
+    {
+      "path": "geometria2d.cpp",
+      "sha256": "c0cacd2ea65ee9da6fcfa9c6ccc5ea5dfea952862e9fb623a3a6ed5b5b30c24d",
+      "size": 1401
+    },
+    {
+      "path": "geometria2d.hpp",
+      "sha256": "a88929cb9f3724c36855ca60f3b7670e35bf3bfff871ed3a9bfa91ea212d4f6c",
+      "size": 586
+    }
+  ]
+}

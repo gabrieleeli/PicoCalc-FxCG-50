@@ -82,6 +82,16 @@ void Compiler::store(EV& e, bool keep, Pos at) {
             fn_->code.back().c = static_cast<std::uint16_t>((e.slot & 0x7FFF) << 1);
             return;
         }
+        if (!s && e.cat == EV::Prop && e.prop && !e.prop->backingName.empty() && fn_ && fn_->owner == e.prop->owner &&
+            ((!e.prop->isStatic && fn_->isCtor && fn_->hasThis) || (e.prop->isStatic && fn_->owner->staticInit == fn_))) {
+            // proprieta' automatica { get; }: si assegna nel costruttore (il campo nascosto)
+            ClassInfo* own = nullptr;
+            if (const FieldInfo* bf = findField(e.prop->owner, e.prop->backingName, &own)) {
+                if (e.prop->isStatic) emit(Op::StoreG, bf->slot, k);
+                else emit(Op::SetF, bf->slot, k);
+                return;
+            }
+        }
         if (!s) error("la proprieta' " + (e.prop ? e.prop->name : std::string("?")) + " e' di sola lettura", at);
         checkAccess(s->access, s->owner, "set di " + (e.prop ? e.prop->name : s->name), at);
         const std::int32_t comps = componentsOf(e);

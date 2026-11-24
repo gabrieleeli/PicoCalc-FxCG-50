@@ -377,6 +377,7 @@ public:
     void bindNames(ast::Node* n, TypeP t, std::int32_t slot, bool byRef);
     void staticLocal(ast::Node* d, TypeP t, const std::string& nm);
     bool jumpStatement(ast::Node* s) const;
+    bool defaultConstructible(TypeP t);                 // C++: un valore "zero" si puo' creare senza argomenti
     bool hasCleanups() const;
     void disposeValue(TypeP t, ast::Pos at);
     EV addressOfEV(EV& e, ast::Pos at);
