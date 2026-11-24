@@ -53,6 +53,7 @@ struct View {
     std::string pendingText;                     // Text / Expression da posare
     // menu
     int menu{MenuNone}, tab{0};
+    std::string menuLabel;                       // titolo del menu con le schede
     // casella di misura
     BoxState box{BoxState::Hidden};
     int boxType{0};
@@ -68,7 +69,9 @@ struct View {
     std::vector<std::uint8_t> moveStart;
     // lavori a passi (animazioni, tabella, risolutore)
     step::Runner runner;
-    std::unique_ptr<step::Task> task;
+    std::unique_ptr<geo::AnimationTask> anim;    // Go (once/repeat) e Display Table
+    std::unique_ptr<geo::SolveTask> solver;      // valore scritto o blocco nella casella
+    bool busy() const noexcept { return job != Job::None; }
     Job job{Job::None};
     std::vector<std::uint8_t> jobStart;
     std::vector<std::vector<double>> traces;     // tracce dell'ultima animazione

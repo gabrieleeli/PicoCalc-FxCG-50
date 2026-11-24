@@ -145,7 +145,11 @@ void showMenu(View& v, int menu, int tab) {
     v.tab = tab;
     const Tab& t = d.tabs[tab];
     std::vector<std::string> items(t.items, t.items + t.count);
-    v.shell.showMenu(t.name, std::move(items), menu);
+    // schede: il titolo le elenca, la corrente tra parentesi quadre (◀ ▶ per cambiarla)
+    v.menuLabel.clear();
+    for (int i = 0; i < d.count; ++i) v.menuLabel += (i ? "  " : "") + (i == tab ? "[" + std::string(d.tabs[i].name) + "]" : std::string(d.tabs[i].name));
+    if (d.count > 1) v.menuLabel += "  \xE2\x97\x80\xE2\x96\xB6";
+    v.shell.showMenu(v.menuLabel.c_str(), std::move(items), menu);
 }
 void openForm(View& v, FormKind kind, std::vector<FormField> fields) {
     v.form = Form{};
@@ -207,17 +211,23 @@ int fieldChoice(const Form& f, const char* label, int fallback) {
     return fallback;
 }
 // ---- lavori a passi
-void startJob(View& v, Job job, std::unique_ptr<step::Task> task, step::Runner::Config cfg) {
-    v.task = std::move(task);
+void clearJob(View& v) {
+    v.anim.reset();
+    v.solver.reset();
+    v.job = Job::None;
+    v.runner.reset();
+}
+void startJob(View& v, Job job, step::Task& task, step::Runner::Config cfg) {
     v.job = job;
     v.runner.reset();
-    v.runner.start(*v.task, cfg);
+    v.runner.start(task, cfg);
 }
 void startAnimation(Context& ctx, View& v, bool repeat) {
     geo::State& s = st(ctx);
     v.traces.clear();
     v.traceIds = s.traced;
-    startJob(v, Job::Animate, std::make_unique<geo::AnimationTask>(s, repeat, !s.columns.empty()), step::Runner::Config{1, 0});
+    v.anim = std::make_unique<geo::AnimationTask>(s, repeat, !s.columns.empty());
+    startJob(v, Job::Animate, *v.anim, step::Runner::Config{1, 0});
 }
 void startSolve(Context& ctx, View& v, const geo::Lock& l) {
     geo::State& s = st(ctx);
@@ -226,21 +236,21 @@ void startSolve(Context& ctx, View& v, const geo::Lock& l) {
     v.undo = v.jobStart;
     v.undoValid = true;
     geo::putLock(s, l);
-    startJob(v, Job::Solve, std::make_unique<geo::SolveTask>(s, std::vector<geo::Id>{}), step::Runner::Config{400, 20});
+    v.solver = std::make_unique<geo::SolveTask>(s, std::vector<geo::Id>{});
+    startJob(v, Job::Solve, *v.solver, step::Runner::Config{400, 20});
 }
 void finishJob(Context& ctx, View& v) {
     geo::State& s = st(ctx);
     const Job job = v.job;
     if (job == Job::Animate || job == Job::Table) {
-        if (auto* a = dynamic_cast<geo::AnimationTask*>(v.task.get())) v.traces = a->traces();
+        if (v.anim) v.traces = v.anim->traces();
         if (!s.columns.empty()) ctx.markDirty();
         if (job == Job::Table) { v.screen = Screen::Table; v.tableRow = v.tableCol = v.tableFirst = 0; }
     } else if (job == Job::Solve) {
-        auto* t = dynamic_cast<geo::SolveTask*>(v.task.get());
-        if (!t || !t->ok()) {
+        if (!v.solver || !v.solver->ok()) {
             geo::State back;
             if (geo::decode(back, v.jobStart.data(), v.jobStart.size())) s = std::move(back);
-            v.task.reset(); v.job = Job::None; v.runner.reset();
+            clearJob(v);
             throw MathError("Math ERROR: vincoli incompatibili");
         }
         changed(ctx, v);
@@ -251,9 +261,7 @@ void finishJob(Context& ctx, View& v) {
             if (o.g.ok && o.kind == geo::Kind::Point && (o.g.a[0] < b.x0 || o.g.a[0] > b.x1 || o.g.a[1] < b.y0 || o.g.a[1] > b.y1)) outside = true;
         if (outside) geo::fit(s, ui::ScreenW, areaH(v));
     }
-    v.task.reset();
-    v.job = Job::None;
-    v.runner.reset();
+    clearJob(v);
 }
 void stopJob(Context& ctx, View& v) {
     const Job job = v.job;
@@ -262,10 +270,8 @@ void stopJob(Context& ctx, View& v) {
         geo::State back;
         if (geo::decode(back, v.jobStart.data(), v.jobStart.size())) st(ctx) = std::move(back);
     }
-    if (auto* a = dynamic_cast<geo::AnimationTask*>(v.task.get())) v.traces = a->traces();
-    v.task.reset();
-    v.job = Job::None;
-    v.runner.reset();
+    if (v.anim) v.traces = v.anim->traces();
+    clearJob(v);
     if (job == Job::Solve || job == Job::Table) throw MathError("Break: calcolo interrotto (AC)");
 }
 
@@ -389,7 +395,8 @@ void animateChosen(Context& ctx, View& v, int item) {
         if (s.columns.empty()) throw MathError("Argument ERROR: nessuna colonna (Add Table)");
         if (s.tableRows == 0) {
             if (s.animations.empty()) throw MathError("Argument ERROR: nessuna animazione (Add Animation)");
-            startJob(v, Job::Table, std::make_unique<geo::AnimationTask>(s, false, true), step::Runner::Config{0, 20});
+            v.anim = std::make_unique<geo::AnimationTask>(s, false, true);
+            startJob(v, Job::Table, *v.anim, step::Runner::Config{0, 20});
             return;
         }
         v.screen = Screen::Table;
@@ -1011,12 +1018,12 @@ bool GeometryApp::tick(Context& ctx) {
     if (!v_) return false;
     View& v = *v_;
     if (v.captureReady) { writeCapture(ctx, v); return true; }
-    if (!v.task) return false;
+    if (!v.busy()) return false;
     if (v.runner.running()) {
         // animazione: un fotogramma per tick (la velocita' e' quella del disegno)
         try { v.runner.tick([&ctx] { return ctx.now(); }); }
-        catch (...) { v.task.reset(); v.job = Job::None; v.runner.reset(); throw; }
-        if (auto* a = dynamic_cast<geo::AnimationTask*>(v.task.get())) v.traces = a->traces();
+        catch (...) { clearJob(v); throw; }
+        if (v.anim) v.traces = v.anim->traces();
     }
     if (v.runner.state() == step::State::Done || v.runner.state() == step::State::Failed) finishJob(ctx, v);
     return true;
@@ -1027,7 +1034,7 @@ void GeometryApp::key(Context& ctx, const KeyEvent& ev) {
     View& v = *v_;
     geo::State& s = ctx.ws.geometry;
     // lavoro in corso: AC o EXIT lo fermano (A06, A12)
-    if (v.task) {
+    if (v.busy()) {
         if (ev.is(Key::AC) || ev.is(Key::Exit)) stopJob(ctx, v);
         return;
     }
@@ -1238,7 +1245,7 @@ void GeometryApp::draw(Context& ctx, gfx::Canvas& c) {
 std::string GeometryApp::screenName() const {
     if (!v_) return "closed";
     const View& v = *v_;
-    if (v.task) return v.job == Job::Animate ? "animate" : v.job == Job::Table ? "table-calc" : "solve";
+    if (v.busy()) return v.job == Job::Animate ? "animate" : v.job == Job::Table ? "table-calc" : "solve";
     if (v.files.active()) return "file";
     if (v.shell.menu.open) return "menu";
     if (v.shell.ask.active()) return "ask";
@@ -1277,7 +1284,12 @@ std::string GeometryApp::screenName() const {
 std::vector<std::uint16_t> GeometryApp::selection() const { return v_ ? v_->sel : std::vector<std::uint16_t>{}; }
 double GeometryApp::pointerX() const noexcept { return v_ ? v_->px : 0; }
 double GeometryApp::pointerY() const noexcept { return v_ ? v_->py : 0; }
-std::string GeometryApp::menuTitle() const { return v_ && v_->shell.menu.open && v_->shell.menu.title ? v_->shell.menu.title : ""; }
+std::string GeometryApp::menuTitle() const {
+    if (!v_ || !v_->shell.menu.open) return "";
+    const MenuDef& d = menuDef(v_->menu);
+    if (d.tabs && v_->tab >= 0 && v_->tab < d.count) return d.tabs[v_->tab].name;     // la scheda aperta
+    return v_->shell.menu.title ? v_->shell.menu.title : "";
+}
 std::vector<std::string> GeometryApp::menuItems() const { return v_ && v_->shell.menu.open ? v_->shell.menu.items : std::vector<std::string>{}; }
 bool GeometryApp::boxFocused() const noexcept { return v_ && v_->box == BoxState::Focused; }
 std::string GeometryApp::headerText() const { return v_ ? v_->header : std::string(); }

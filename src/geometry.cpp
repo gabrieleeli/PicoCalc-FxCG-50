@@ -576,6 +576,16 @@ std::string nextPointLabel(State& s) {
     return l;
 }
 
+std::string shortName(const State& s, Id id) {
+    const Object* o = find(s, id);
+    if (!o) return {};
+    if (!o->label.empty()) return o->label;
+    std::string n;
+    if (o->def == Def::TwoPoints || o->def == Def::CircleCP || o->def == Def::Semicircle || o->def == Def::Arc3 || o->def == Def::ArcCSE || o->def == Def::PolygonV)
+        for (Id p : o->parents) if (const Object* q = find(s, p)) n += q->label;
+    return n.size() > MaxLabel ? n.substr(0, MaxLabel) : n;
+}
+
 // ---- parametri delle curve -----------------------------------------------------------
 bool curvePoint(const State& s, Id curve, double t, double& x, double& y) {
     const Object* o = find(s, curve);

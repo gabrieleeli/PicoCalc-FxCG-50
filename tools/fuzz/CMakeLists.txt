@@ -32,6 +32,9 @@ endif()
 if("FXAI_SERVICE_STATFULL=1" IN_LIST FXAI_FEATURE_DEFINITIONS)
   list(APPEND FXAI_FUZZERS fuzz_stats)                  # v1.18.0, solo Pico Plus 2 W
 endif()
+if("FXAI_MODE_GEOMETRY=1" IN_LIST FXAI_FEATURE_DEFINITIONS)
+  list(APPEND FXAI_FUZZERS fuzz_geometry)               # v1.19.0, solo Pico Plus 2 W
+endif()
 if("FXAI_MODE_PYTHON=1" IN_LIST FXAI_FEATURE_DEFINITIONS)
   list(APPEND FXAI_FUZZERS fuzz_python)                 # v1.17.0, solo Pico Plus 2 W
 endif()

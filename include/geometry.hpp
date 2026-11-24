@@ -218,6 +218,7 @@ bool isAncestor(const State& s, Id ancestor, Id id);
 std::vector<Id> descendants(const State& s, const std::vector<Id>& ids);   // ids compresi
 std::string validate(const State& s, const Object& o);                      // "" se la definizione e' coerente
 std::string nextPointLabel(State& s);                // A..Z, A1..Z1...
+std::string shortName(const State& s, Id id);         // etichetta, o i vertici ("AB", "ABC") delle figure
 
 // ---- Draw / Draw Spec (14-11...14-18) --------------------------------------------------
 Id addPoint(State& s, double x, double y);                       // punto libero

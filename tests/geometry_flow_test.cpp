@@ -426,8 +426,12 @@ void draws(Rig& r) {
     r.key(pk::Esc);
     T("D14 EXIT: spezzata aperta", countKind(r, geo::Kind::Polygon) == 1 && countKind(r, geo::Kind::Segment) == 6);
     menu(r, pk::F3, 1, 7);
-    r.enter("x^2-1");
+    r.type("x^2"); r.key(pk::Right); r.enter("-1");
     T("D16 Function f(x)", countKind(r, geo::Kind::Function) == 1 && !r.error());
+    {
+        double y = 0;
+        T("D16 y = x^2-1", geo::evalFunction(S(r), S(r).objects.back(), 3, y) && near(y, 8));
+    }
     menu(r, pk::F3, 1, 7);
     r.enter("x+");
     T("D16 espressione non valida: errore", r.error());

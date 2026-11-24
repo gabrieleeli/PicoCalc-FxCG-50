@@ -43,7 +43,7 @@ void addTableColumn(State& s, const MSpec& m) {
     const std::size_t add = (m.type == MType::Coordinates || m.type == MType::Components) ? 2 : 1;
     if (s.columns.size() + add > MaxColumns) fail("Memory ERROR: al piu' 26 colonne");
     std::string base;
-    for (Id id : m.ops) if (const Object* o = find(s, id)) base += o->label;
+    for (Id id : m.ops) base += shortName(s, id);
     for (std::size_t c = 0; c < add; ++c) {
         TableColumn col;
         col.m = m;
