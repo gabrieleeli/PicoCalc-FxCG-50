@@ -21,6 +21,8 @@ void need(bool cond, const char* msg) { if (!cond) throw MathError(msg); }
 void needDim(bool cond, const char* msg) { if (!cond) throw DimensionError(msg); }
 double sq(double v) { return v * v; }
 void finiteAll(const std::vector<double>& v) { for (double d : v) need(std::isfinite(d), "Math ERROR: dato non finito"); }
+// Un risultato oltre il double (dati enormi) e' un Math ERROR come sulla calcolatrice (trovato dal fuzzing).
+double finiteResult(double v) { need(std::isfinite(v), "Math ERROR: risultato fuori intervallo"); return v; }
 
 // Coppie (valore, peso > 0) ordinate per valore; pesi interi.
 struct Weighted { std::vector<std::pair<double, double>> d; double n{0}; };
@@ -207,6 +209,7 @@ OneVar oneVarEx(const std::vector<double>& x, const std::vector<double>* freq, Q
     double best = 0; for (const auto& c : counts) best = std::max(best, c.second);
     for (const auto& c : counts) if (c.second == best) r.modes.push_back(c.first);
     r.modeCount = best;
+    for (double v : {r.sum, r.sumSq, r.mean, r.popSd, r.sampleSd, r.median, r.q1, r.q3}) (void)finiteResult(v);
     return r;
 }
 
@@ -233,6 +236,7 @@ TwoVar twoVarEx(const std::vector<double>& x, const std::vector<double>& y, cons
     r.popSdX = std::sqrt(sxx / r.n); r.popSdY = std::sqrt(syy / r.n);
     r.sampleSdX = r.n > 1 ? std::sqrt(sxx / (r.n - 1)) : 0;
     r.sampleSdY = r.n > 1 ? std::sqrt(syy / (r.n - 1)) : 0;
+    for (double v : {r.sumX, r.sumX2, r.sumY, r.sumY2, r.sumXY, r.meanX, r.meanY, r.popSdX, r.popSdY, r.sampleSdX, r.sampleSdY}) (void)finiteResult(v);
     return r;
 }
 
@@ -281,7 +285,7 @@ double pValue(double lower, double upper, int tail) {
 }
 double zCritical(double level) {
     need(level > 0 && level < 1, "Argument ERROR: 0<C-Level<1");
-    return calclib::invNormCD(1, (1 - level) / 2, 1, 0);
+    return -calclib::invNormCD(-1, (1 - level) / 2, 1, 0);    // per simmetria: niente 1 - area
 }
 double tCritical(double level, double df) {
     need(level > 0 && level < 1, "Argument ERROR: 0<C-Level<1");
@@ -545,6 +549,7 @@ void FitTask::finishClosed() {
     default: break;
     }
     for (std::size_t i = 0; i < f.ncoef; ++i) need(std::isfinite(c[i]), "Math ERROR: coefficienti non finiti");
+    for (double v : {f.r, f.r2, f.mse}) (void)finiteResult(v);
 }
 
 bool FitTask::step(step::Budget& budget) {
@@ -637,7 +642,7 @@ bool FitTask::step(step::Budget& budget) {
         p[2] = wrapAngle(p[2]);
     }
     for (std::size_t i = 0; i < np; ++i) { need(std::isfinite(p[i]), "Math ERROR: coefficienti non finiti"); fit_.coef[i] = p[i]; }
-    fit_.mse = fit_.n > 2 ? ss(p) / (fit_.n - 2) : 0;
+    fit_.mse = finiteResult(fit_.n > 2 ? ss(p) / (fit_.n - 2) : 0);
     done_ = total_;
     return true;
 }
@@ -671,6 +676,7 @@ Summary summarize(const Sample& s, bool needSd) {
     return r;
 }
 void addRow(Outcome& o, const char* label, double v, int var = -1) {
+    (void)finiteResult(v);
     o.rows.push_back({label, v});
     if (var >= 0) o.vars.emplace_back(static_cast<std::uint8_t>(var), v);
 }

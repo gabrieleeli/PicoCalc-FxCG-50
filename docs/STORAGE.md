@@ -304,6 +304,8 @@ come nei file, [FILE_FORMATS.md](FILE_FORMATS.md)):
 | `0x0110` | Geometry | oggetti, vista, nome del file |
 | `0x0111` | Picture Plot | sfondo, finestra, punti, regressione, nome del file |
 | `0x0114` | Python | ultimo script, ultime 20 righe della SHELL |
+| `0x0101` | Statistics (v1.18.0) | StatGraph1–3 (tipo, liste, frequenza, marcatore, colore, Color Link, outlier, Pie, Bar, Start/Width), SET di CALC (1Var XList/Freq, 2Var Freq; 2Var XList/YList restano in `Settings`), SET UP (Stat Wind, Resid List, Q1Q3 Type), colori e formule delle 26 liste, risultati dell'ultimo calcolo (VARS › STAT); solo numeri finiti |
+| `0x0117` | Distribution (v1.18.0) | funzione scelta, parametri di ogni funzione usata, Tail, Data, liste, Save Res, ultimo risultato |
 
 Una modalità scrive la sua sezione solo quando lo stato è diverso da quello
 iniziale. Regole di lettura in più rispetto alla versione 11:

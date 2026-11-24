@@ -80,7 +80,23 @@ std::vector<const char*> listLabels(Kind k) {
     return {k.func == Func::Inv ? "Area List" : "List"};
 }
 
+namespace {
+Result computeImpl(Kind k, const Input& in);
+} // namespace
+// Le eccezioni generiche del motore (std::invalid_argument...) diventano Math ERROR.
 Result compute(Kind k, const Input& in) {
+    try {
+        return computeImpl(k, in);
+    } catch (const MathError&) {
+        throw;
+    } catch (const std::bad_alloc&) {
+        throw;
+    } catch (const std::exception& e) {
+        throw MathError(std::string("Math ERROR: ") + e.what());
+    }
+}
+namespace {
+Result computeImpl(Kind k, const Input& in) {
     const std::vector<ParamSpec> spec = paramSpecs(k);
     need(in.values.size() == spec.size(), "Argument ERROR: parametri mancanti");
     std::vector<double> v = in.values;
@@ -115,7 +131,10 @@ Result compute(Kind k, const Input& in) {
             double lo = 0, hi = 0;
             calclib::invNormCentral(v[0], p[0], p[1], lo, hi);
             put("x1Inv", lo, stats::VX1Inv); put("x2Inv", hi, stats::VX2Inv);
-        } else put("xInv", calclib::invNormCD(in.tail == Tail::Right ? 1 : -1, v[0], p[0], p[1]), stats::VXInv);
+        } else if (in.tail == Tail::Right) {
+            // Coda destra per simmetria (con aree minuscole 1 - Area varrebbe 1: trovato dal fuzzing).
+            put("xInv", 2 * p[1] - calclib::invNormCD(-1, v[0], p[0], p[1]), stats::VXInv);
+        } else put("xInv", calclib::invNormCD(-1, v[0], p[0], p[1]), stats::VXInv);
         break;
     case Family::T:
         if (k.func == Func::PD) put("p", calclib::tPD(v[0], p[0]), stats::VDistP);
@@ -154,10 +173,14 @@ Result compute(Kind k, const Input& in) {
         break;
     default: throw MathError("Argument ERROR: distribuzione");
     }
-    for (const auto& row : r.rows) need(std::isfinite(row.second) || k.func == Func::CD, "Math ERROR: risultato non finito");
+    // Il risultato principale sempre finito (trovato dal fuzzing: F C.D con d:df = 1E300 dava NaN);
+    // z:Low, t:Up... possono essere ±infinito solo quando lo sono i limiti.
+    for (const auto& row : r.rows) need(!std::isnan(row.second) && (std::isfinite(row.second) || k.func == Func::CD), "Math ERROR: risultato non finito");
     r.main = r.rows.front().second;
+    need(std::isfinite(r.main), "Math ERROR: risultato non finito");
     return r;
 }
+} // namespace
 
 ListTask::ListTask(Kind k, Input base, std::vector<double> first, std::vector<double> second)
     : k_(k), base_(std::move(base)), first_(std::move(first)), second_(std::move(second)) {

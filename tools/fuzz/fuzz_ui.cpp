@@ -10,7 +10,8 @@ static const std::uint8_t kKeys[] = {
     pckey::F1, pckey::F2, pckey::F3, pckey::F4, pckey::F5, pckey::F6, pckey::F7, pckey::F8, pckey::F9, pckey::F10,
     pckey::Up, pckey::Down, pckey::Left, pckey::Right, pckey::Enter, pckey::Esc, pckey::Backspace, pckey::Del,
     pckey::Break, pckey::Insert, pckey::Home, pckey::End, pckey::PageUp, pckey::PageDown, pckey::Enter, pckey::Enter,
-    pckey::Up, pckey::Down, pckey::F1, pckey::Tab, ' ', '!'};
+    pckey::Up, pckey::Down, pckey::F1, pckey::Tab, ' ', '!',
+    'o', 'L'};   // v1.18.0: Distribution (o) e 'List' nelle formule delle liste
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* d, size_t n) {
     if (n > 400) return 0;
     { storage::RecordStore rs(board::storageFlash()); (void)rs.eraseAll(); }

@@ -242,6 +242,11 @@ void plusEngine() {
         near("anova3.ssa", t3.table().ssA, kAnova); near("anova3.fb", t3.table().fB, kAnova); near("anova3.pb", t3.table().pB, kAnova);
         near("anova3.sse", t3.table().ssE, kAnova); near("anova3.dfe", t3.table().dfE, 0, 0);
         CHECK_THROWS_AS(anova({1, 1, 2, 2, 2}, {1, 2, 1, 2, 2}, {1, 2, 3, 4, 5}), fx::DimensionError);   // Q6 non bilanciato
+        // Trovato dal fuzzing (fuzz_stats): dati enormi -> somme infinite: Math ERROR, non risultati infiniti.
+        CHECK_THROWS_AS(anova({1, 1, 2, 2}, {}, {1e300, -1e300, 1e300, 1}), fx::MathError);
+        CHECK_THROWS_AS(oneVarEx({1e300, 1e300}, nullptr, QuartileRule::Std), fx::MathError);
+        CHECK_THROWS_AS(fit(Reg::LinearAx, {1, 2, 3}, {1e300, -1e300, 1e300}), fx::MathError);
+        { Sample big; big.list = true; big.x = {1e300, -1e300, 1e300}; CHECK_THROWS_AS(tTest1S(big, 0, 0), fx::MathError); }
         // I01-I06 intervalli
         auto lr = [&](const char* k, const Outcome& x) { near(std::string(k) + ".left", x.rows[0].value, kCont); near(std::string(k) + ".right", x.rows[1].value, kCont); };
         lr("int.z1s", zInt1S(a, 0.95, 2.5)); lr("int.z2s", zInt2S(a, b, 0.95, 2.5, 1.2)); lr("int.z1p", zInt1P(0.95, 55, 100));
@@ -282,6 +287,9 @@ void plusEngine() {
         near("dist.hcd", run(Family::Hypergeometric, Func::CD, {1, 3, 6, 8, 25}).main, kDisc);
         near("dist.invh", run(Family::Hypergeometric, Func::Inv, {0.7, 6, 8, 25}).main, 0, 0);
         CHECK_THROWS(run(Family::Normal, Func::CD, {2, 1, 1, 0}));                       // Lower > Upper
+        // Trovato dal fuzzing (fuzz_stats): InvN Right con un'area minuscola calcolava 1 - Area = 1.
+        { const double x = run(Family::Normal, Func::Inv, {1e-300, 1, 0}, Tail::Right).main; CHECK(std::isfinite(x) && x > 37 && x < 37.1); }
+        CHECK_THROWS_AS(run(Family::F, Func::CD, {30, 31, 27, 1e300}), fx::MathError);      // fuzz_stats: NaN -> Math ERROR
         // D09: ingresso List (Npd; Bcd con U.List e Lower 0; InvT) come ListTask a passi
         Input in; in.values = {0, 1.7, 0.5};
         auto l = computeList({Family::Normal, Func::PD}, in, {-1.0, 0.0, 0.5, 2.0, 3.5});

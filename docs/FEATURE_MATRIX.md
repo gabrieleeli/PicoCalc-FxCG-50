@@ -1,5 +1,16 @@
-# Feature matrix — v1.17.0
+# Feature matrix — v1.18.0
 
+La v1.18.0 porta **Statistics alla parità completa** con il capitolo 6 del
+manuale fx-CG50 sulla **Pimoroni Pico Plus 2 W** (editor delle liste a tre
+pagine con formule e colori, StatGraph1–3 con 20 tipi di grafico, 12
+regressioni, TEST, INTR, DIST, VARS › STAT; valori verificati contro
+scipy/numpy/statsmodels) e aggiunge **Distribution** (capitolo 18) come
+modalità **Base** con il nucleo delle distribuzioni condiviso
+([reports/ANALISI_FONTI_v1.18.0.md](reports/ANALISI_FONTI_v1.18.0.md),
+[reports/SVILUPPO_v1.18.0.md](reports/SVILUPPO_v1.18.0.md)). Il **Raspberry Pi
+Pico 2 W resta congelato alla v1.16.0** (immagine identica salvo la stringa
+della versione). Nessuna voce è provata su hardware
+([HARDWARE_TEST_v1.18.0.md](HARDWARE_TEST_v1.18.0.md)).
 La v1.17.0 è la **base di tutte le modalità**: ogni modalità del registro si
 apre, fa il suo lavoro principale, salva e rimette a posto il suo stato ed
 esce senza perdite di memoria (`apps_init_test` su tutte le modalità aperte,
@@ -121,7 +132,7 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 
 | Funzione | Stato |
 |---|---|
-| Menu principale a icone (23 modalità, accesso diretto 1–9/A–N) | TESTED ON SIMULATOR (accesso diretto verificato da architecture_test) |
+| Menu principale a icone (23 modalità sul Pico 2 W, 24 sulla Plus con Distribution dalla v1.18.0; accesso diretto 1–9/A–N, O) | TESTED ON SIMULATOR (accesso diretto verificato da architecture_test; screenshot 172) |
 | Segno delle modalità Base (triangolo ambra sull'icona, «EXE: apri (base)»; solo Pimoroni Pico Plus 2 W) | TESTED ON SIMULATOR (v1.17.0, screenshot 128) |
 | Inizializzazione di ogni modalità aperta: avvio a freddo, dopo SYSTEM › RESET, record v11 valido/corrotto/troncato, solo SRAM, memoria quasi esaurita (Memory ERROR senza crash), microSD assente/presente; barra F1–F6, uscita con MENU e dalle strisce, nessuna perdita dell'allocatore, stato dopo uscita, rientro e riavvio | TESTED ON HOST (v1.17.0, `apps_init_test`, due profili) |
 | Registro delle modalità (stato, servizi, dati, collegamenti) e test di architettura | TESTED ON HOST |
@@ -222,12 +233,17 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Run-Matrix: List "nome", List File 1–6, Sub Name, n→Dim List, Fill sulle memorie, Swap/\*Row/\*Row+/Row+ | TESTED ON HOST | v1.13.0 |
 | Run-Matrix: OPTN nell'ordine della fx-CG50, VARS completo (FACTOR, STAT, GRAPH, DYNA, TABLE Result, RECURSION, EQUATION, TVM, Str), CATALOG (SHIFT 4), CAPTURE (SHIFT 7) | TESTED ON SIMULATOR | v1.12.0 |
 | Editor: round-trip testo ↔ albero esatto (corpus), parentesi implicite delle frazioni, testo Line minimo | TESTED ON HOST | v1.13.0 |
-| Statistics | TESTED ON SIMULATOR | List 1–26 con sottonomi (v1.11.0), SET XList/YList, CSV LOAD/SAVE·AS, 1/2-Var, 9 regressioni, grafici, DIST, test Z/t, intervalli |
+| Statistics | TESTED ON SIMULATOR | **v1.18.0: parità completa con il capitolo 6 sulla Pimoroni Pico Plus 2 W** (righe sotto, [STATISTICS.md](STATISTICS.md)); sul Pico 2 W congelato la v1.16.0: List 1–26 con sottonomi (v1.11.0), SET XList/YList, CSV LOAD/SAVE·AS, 1/2-Var, 9 regressioni, grafici, DIST, test Z/t, intervalli |
 | Liste: file CSV su microSD e flash interna (separatore e decimale configurabili, scrittura atomica) | TESTED ON HOST | v1.11.0, anche con interruzione di alimentazione sulla flash interna |
 | Liste: List File 1–6 e riferimento per sottonome (`List "QTY"`) | TESTED ON HOST | v1.13.0 (vedi le righe di Run-Matrix; voce corretta nel recap della v1.14.0) |
-| Regressioni sinusoidale e logistica | NOT STARTED | |
-| Test χ², F, 2-campioni, ANOVA nell'interfaccia | NOT STARTED | ANOVA e t a 2 campioni esistono come API C++ |
-| Grafico a torta / a barre | NOT STARTED | |
+| Statistics (Plus): editor a tre pagine (GRAPH CALC TEST INTR DIST / SRT-A SRT-D DEL DEL-ALL INS / ADD JUMP COLOR FILE CSV), SRT-A/SRT-D su più liste, colori delle liste, formule nella testa con ricalcolo e Circular ERROR, List File dall'editor | TESTED ON SIMULATOR | v1.18.0, `statistics_flow_test` E01–E13; screenshot 148–150 |
+| Statistics (Plus): StatGraph1–3 (SET con DefG, SELECT), Scatter, xyLine, NPPlot, Histogram e Broken con Start/Width, MedBox con outlier, N-Dist, Pie con % Sto List, Bar (3 liste, Length/Horiz), 11 regressioni come tipo; marcatori, Graph Color, Color Link; Stat Wind Auto/Manual, TRACE, V-Window, CALC dal grafico | TESTED ON SIMULATOR | v1.18.0, G01–G19; screenshot 151–159 |
+| Statistics (Plus): CALC 1-VAR e 2-VAR con frequenze e Q1Q3 Type Std/OnData; 12 regressioni (ax+b, a+bx, Med-Med, X²–X⁴, Log, ae^bx, ab^x, Power, **Sin**, **Logistic**) con r, r², MSe del manuale, residui (Resid List), COPY in Yn, DRAW; Sin e Logistic in step::Task con AC | TESTED ON SIMULATOR | v1.18.0, valori contro scipy/numpy (`statistics_test`, `tools/stat_reference.py`); C01–C05, R01–R18; screenshot 160–162 |
+| Statistics (Plus): TEST Z (1-S, 2-S, 1-P, 2-P), t (1-S, 2-S con Pooled, LinearReg), χ² GOF (CNTRB) e 2-way (Mat attesa), 2-Sample F, ANOVA a una e due vie (step::Task, grafico d'interazione); List/Var, Save Res, DRAW con l'area | TESTED ON SIMULATOR | v1.18.0, contro scipy/statsmodels; T01–T14; screenshot 163–167 |
+| Statistics (Plus): INTR Z (1-S, 2-S, 1-P, 2-P) e t (1-S, 2-S con Pooled) | TESTED ON SIMULATOR | v1.18.0, I01–I06; screenshot 168 |
+| Statistics (Plus): DIST con le 24 funzioni (PD, CD, inverse di Normale, t, χ², F, Binomiale, Poisson, Geometrica, Ipergeometrica), List/Var, Ans e ListAns, Save Res, DRAW; inverse e liste in step::Task con AC | TESTED ON SIMULATOR | v1.18.0, D01–D12; nucleo `dist_core` condiviso con Distribution; screenshot 169–170 |
+| Statistics (Plus): SET UP (Stat Wind, Resid List, Q1Q3 Type, List File, Sub Name, Angle, Display); sezione `0x0101` del record v12 (StatGraph, SET, colori, formule, risultati) isolata se danneggiata | TESTED ON HOST | v1.18.0, U01–U02; screenshot 171 |
+| VARS › STAT (Plus): X, Y, GRAPH, PTS, INPUT, TEST, INTR, DIST con i valori dell'ultimo calcolo; x̂( e ŷ( per i 12 tipi | TESTED ON SIMULATOR | v1.18.0, A01–A02, R17; screenshot 84 rigenerato |
 | Graph: 20 funzioni Y=, r=, Param, X=, 8 disequazioni, intervalli, sovrapposizioni, liste, funzioni composte | TESTED ON SIMULATOR | matrice completa in [GRAPH_PARITY.md](GRAPH_PARITY.md) |
 | Graph: TRACE, ZOOM (13 voci), V-Window e memorie, SKETCH (12 voci), G-SOLVE (ROOT…∫dx MIXED), Modify, memorie grafiche, PICT, sfondo | TESTED ON SIMULATOR / TESTED ON HOST | voce per voce in GRAPH_PARITY.md |
 | Graph: progetti `.pcgraph` su microSD (NEW/OPEN/SAVE/SAVE AS/RENAME/DELETE) | TESTED ON SIMULATOR | scheda simulata; formato in [PCGRAPH_FORMAT.md](PCGRAPH_FORMAT.md) |
@@ -275,6 +291,7 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Geometry (v1.17.0, Base, solo Plus): punti, segmenti, rette, circonferenze, poligoni; selezione, MOVE, MEASURE (lunghezze, angoli, equazioni, aree, perimetri), ZOOM, PAN, file `.pcgeo` | TESTED ON SIMULATOR | screenshot 144; [GEOMETRY.md](GEOMETRY.md) |
 | Picture Plot (v1.17.0, Base, solo Plus): sfondo `.pcpict`, punti numerati con il cursore (fino a 999), coordinate in List 1/List 2, regressione di Statistics sopra lo sfondo, file `.pcplot` | TESTED ON SIMULATOR | screenshot 145; [PICTURE_PLOT.md](PICTURE_PLOT.md) |
 | Python (v1.17.0, Base, solo Plus): MicroPython v1.24.1 vero (interi grandi, `math`, eccezioni), SHELL con blocchi e cronologia, script `.py` con l'editor di testo, `input()`, AC → KeyboardInterrupt, esecuzione a passi su una pila propria (coroutine), heap separato 512 KB PSRAM / 48 KB SRAM, `casioplot` | TESTED ON SIMULATOR | `base_modes_test`, `fuzz_python`; screenshot 146, 147; pila e MSPLIM sul dispositivo da collaudare (HW-241…HW-243); [PYTHON.md](PYTHON.md) |
+| Distribution (v1.18.0, Base, solo Plus): elenco delle 24 funzioni, Data Variable/List, CALC con Ans o ListAns e Save Res, DRAW delle continue, AC sulle liste e sulle inverse; sezione `0x0117`; nessun tipo di file | TESTED ON SIMULATOR | `base_modes_test`, `base_flow_test`, `apps_init_test`, `fuzz_stats`, `fuzz_modes`; screenshot 172–174; [DISTRIBUTION.md](DISTRIBUTION.md); manca alla parità: schermo diviso dal vivo, limiti sul grafico, tabella, strisce |
 | Statistics (fase 1 della v1.17.0) | TESTED ON SIMULATOR | solo inizializzazione (`apps_init_test`); parità completa nella v1.18.0 |
 | E-CON4 | NOT STARTED | richiede un data logger esterno: non realizzabile sulla PicoCalc (stato External) |
 
@@ -305,6 +322,7 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Programmi `.pcprog` e script `.py` (v1.17.0, solo Plus): testo UTF-8 nel file tipizzato, dialetto nella prima riga | TESTED ON HOST (`base_modes_test`, `base_flow_test`) |
 | File `.pcsheet`, `.pcdyna`, `.pcrecur`, `.pcconic`, `.pcfin`, `.pcgeo`, `.pcplot`, `.pclink` (v1.17.0, solo Plus) | TESTED ON HOST (`base_modes_test`, `fuzz_sheet`, `fuzz_modes`, `fuzz_link`) |
 | Record v12 (v1.17.0, solo Plus): firma della scheda e della versione, CRC per sezione, sezioni `0x0100 + AppId` delle dieci modalità (`0x0103`, `0x0105`, `0x0107`, `0x0108`, `0x010A`, `0x010B`, `0x010D`, `0x0110`, `0x0111`, `0x0114`), sezione danneggiata isolata con avviso all'avvio, migrazione dal record v11 della v1.16.0 (fixture); parti delle modalità nelle strisce dell'eActivity | TESTED ON HOST (`workspace_v117_test`, `apps_init_test`, `fuzz_workspace`) |
+| Record v12 (v1.18.0, solo Plus): sezione `0x0101` di Statistics (StatGraph1–3, SET di CALC, SET UP, colori e formule delle 26 liste, risultati dell'ultimo calcolo) e `0x0117` di Distribution, scritte solo se diverse dai valori iniziali, isolate se danneggiate; un record senza le sezioni (v1.17.0 e prima) si legge con i valori iniziali | TESTED ON HOST (`statistics_test`, `statistics_flow_test` U02, `base_modes_test`, `fuzz_stats`, `fuzz_workspace`) |
 | Matrici e vettori salvati nel workspace (record v6) | TESTED ON HOST (v1.10.0) |
 | Matrici e liste come file CSV (manuale 2-48, 3-18) | TESTED ON HOST (v1.11.0) |
 | Record v9 (v1.13.0): List File, Sub Name, r e θ, Str, function memory, variabili Dyna/Recursion/TVM, celle decimali, ENG/◢/stringhe della cronologia; lettura dei record v7 della v1.11.0 (fixture) | TESTED ON HOST |
