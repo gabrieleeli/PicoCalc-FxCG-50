@@ -381,6 +381,68 @@ Function* Compiler::newFunction(const std::string& nm, Dialect d, ClassInfo* own
     prog_.functions.push_back(std::move(f));
     return raw;
 }
+// C/C++: sqrt, sin, strlen... come valori (puntatori a funzione): una funzione
+// senza istruzioni del sorgente che passa i parametri al nativo e ne restituisce
+// il risultato, una per nativo. Fra piu' versioni (C++: float/double) si sceglie
+// quella con parametri e risultato dello stesso tipo, poi la prima.
+Function* Compiler::nativeWrapper(const std::vector<std::int32_t>& natives, ast::Pos at) {
+    std::int32_t pick = -1;
+    TypeP ret = nullptr;
+    std::vector<TypeP> params;
+    for (std::int32_t idx : natives) {
+        const NativeEntry& ne = nativeEntry(idx);
+        if (ne.owner[0] || (ne.flags & (NF::Property | NF::Indexer | NF::Ctor | NF::Operator))) continue;
+        std::vector<TypeP> ps;
+        bool variadic = false;
+        TypeP r = parseSig(ne.sig, ps, variadic, nullptr, lang_);
+        bool plain = !variadic && r;
+        for (TypeP t : ps) if (!t || t->k == TK::Dynamic || t->k == TK::Ref) plain = false;
+        if (!plain || (r->k == TK::Dynamic)) continue;
+        bool uniform = true;
+        for (TypeP t : ps) if (t != r) uniform = false;
+        if (pick < 0 || (uniform && r->k == TK::F64)) { pick = idx; ret = r; params = ps; if (uniform && r->k == TK::F64) break; }
+    }
+    if (pick < 0) error("questa funzione della libreria non si usa come valore (usa una funzione tua che la chiama)", at);
+    const auto it = nativeWrappers_.find(pick);
+    if (it != nativeWrappers_.end()) return it->second;
+    const NativeEntry& ne = nativeEntry(pick);
+    Function* f = newFunction(ne.name, lang_, nullptr);
+    f->isStatic = true;
+    f->hasThis = false;
+    f->defined = true;
+    f->library = -1;
+    f->file = at.file;
+    f->line = static_cast<int>(at.line);
+    f->column = at.col;
+    f->ret = ret;
+    for (std::size_t i = 0; i < params.size(); ++i) {
+        Param p;
+        p.name = "x" + std::to_string(i + 1);
+        p.type = params[i];
+        f->params.push_back(p);
+    }
+    f->nlocals = static_cast<std::int32_t>(params.size());
+    const bool value = ret->k != TK::Void;
+    auto put = [&](Op op, std::int32_t a, std::uint8_t b, std::uint16_t c) {
+        Instr ins;
+        ins.op = op;
+        ins.a = a;
+        ins.b = b;
+        ins.c = c;
+        f->code.push_back(ins);
+        SrcPos sp;
+        sp.file = at.file;
+        sp.line = at.line;
+        sp.column = at.col;
+        f->pos.push_back(sp);
+        f->stmt.push_back(0);                      // il debugger non si ferma qui
+    };
+    for (std::size_t i = 0; i < params.size(); ++i) put(Op::LoadL, static_cast<std::int32_t>(i), 0, 0);
+    put(Op::CallN, pick, static_cast<std::uint8_t>(params.size()), value ? 1 : 0);
+    put(Op::Ret, 0, value ? 1 : 0, 0);
+    nativeWrappers_[pick] = f;
+    return f;
+}
 // Classi del nucleo: eccezioni standard dei linguaggi. Campi: 0 messaggio,
 // 1 eccezione interna, 2 pila (testo).
 void Compiler::setupNativeClasses() {

@@ -53,6 +53,15 @@ void Compiler::load(EV& e, Pos at) {
             e.type = funcOf(f->ret, ps);
             break;
         }
+        if (!e.natives.empty() && e.fns.empty() && (lang_ == Dialect::C || lang_ == Dialect::Cpp)) {
+            // integra(sin, 0, pi): la funzione della libreria passa da una funzione che la chiama
+            Function* w = nativeWrapper(e.natives, at);
+            emit(Op::PushFn, w->index);
+            std::vector<TypeP> ps;
+            for (const Param& p : w->params) ps.push_back(p.type);
+            e.type = funcOf(w->ret, ps);
+            break;
+        }
         if (!e.natives.empty() && e.fns.empty()) error("una funzione della libreria non si usa come valore", at);
         error("nome di funzione con piu' versioni: non si sa quale usare", at);
     }
@@ -567,6 +576,15 @@ bool Compiler::constInt(Node* n, std::int64_t& out) {
         if (e && e->kind == NsEntry::Global && e->global->hasConstValue) { out = e->global->constValue.i; return true; }
         EV c;
         if (n->k == K::Name && nativeConstant(nm, c, n->pos) && c.hasConst && isIntegral(c.type)) { out = c.constValue.i; return true; }
+        // Colore::Rosso (enum class), Classe::COSTANTE: dal compilatore delle espressioni
+        if (fn_ && n->k != K::Name) {
+            try {
+                EV x = exprType(n);
+                const TypeP xt = x.type ? stripRef(x.type) : nullptr;
+                if (x.hasConst && xt && (isIntegral(xt) || (xt->k == TK::Class && xt->cls && xt->cls->isEnum))) { out = x.constValue.i; return true; }
+            } catch (const Error&) {
+            }
+        }
         return false;
     }
     default: return false;

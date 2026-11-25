@@ -135,10 +135,16 @@ void sAppendFill(Vm& vm, NativeCall& c) { pstr(vm, c.args[0]).append(U(c, 1), st
 void sPushBack(Vm& vm, NativeCall& c) { pstr(vm, c.args[0]).push_back(static_cast<char>(I(c, 1))); }
 void sPopBack(Vm& vm, NativeCall& c) { auto& s = pstr(vm, c.args[0]); if (s.empty()) vm.fault(FaultKind::Index, "pop_back() di una stringa vuota"); s.pop_back(); }
 void sClear(Vm& vm, NativeCall& c) { pstr(vm, c.args[0]).clear(); }
+// Come libstdc++ (g++): differenza dei primi byte diversi, altrimenti delle
+// lunghezze (la norma fissa solo il segno).
 void sCompare(Vm& vm, NativeCall& c) {
     const auto& s = pstr(vm, c.args[0]);
-    const int r = std::string_view(s.data(), s.size()).compare(text(vm, c, 1));
-    c.ret = Value::i32(r < 0 ? -1 : r > 0 ? 1 : 0);
+    const std::string o = text(vm, c, 1);
+    const std::size_t n = std::min(s.size(), o.size());
+    for (std::size_t i = 0; i < n; ++i)
+        if (s[i] != o[i]) { c.ret = Value::i32(static_cast<unsigned char>(s[i]) - static_cast<unsigned char>(o[i])); return; }
+    const long long d = static_cast<long long>(s.size()) - static_cast<long long>(o.size());
+    c.ret = Value::i32(static_cast<std::int32_t>(std::clamp<long long>(d, INT32_MIN, INT32_MAX)));
 }
 void sResize(Vm& vm, NativeCall& c) {
     const std::size_t n = U(c, 1);

@@ -420,10 +420,16 @@ void Compiler::ensureFieldInit(ClassInfo* c) {
     const Dialect saveLang = lang_;
     Namespace* saveNs = ns_;
     ClassInfo* saveCls = cls_;
+    const std::uint16_t saveUnit = unit_;
+    const std::int32_t saveLib = library_;
+    auto saveHeaders = headers_;
+    auto saveUsings = usings_;
+    auto saveTbind = tbind_;
+    const bool saveStmt = stmtStart_;
     const UnitCtx uc = classUnit_[c];
-    lang_ = uc.lang;
-    ns_ = uc.ns;
-    cls_ = c;
+    // contesto della classe, con i parametri dei generici legati (Box<T>: List<T> items = new List<T>())
+    enterUnitContext(uc.lang, uc.unit, uc.library, uc.ns, c);
+    if (classTbind_.count(c)) tbind_ = classTbind_[c];
     beginFunction(f);
     if (lang_ == Dialect::Cpp) {
         for (const FieldInfo& fi : c->fields) {
@@ -451,6 +457,12 @@ void Compiler::ensureFieldInit(ClassInfo* c) {
     lang_ = saveLang;
     ns_ = saveNs;
     cls_ = saveCls;
+    unit_ = saveUnit;
+    library_ = saveLib;
+    headers_ = std::move(saveHeaders);
+    usings_ = std::move(saveUsings);
+    tbind_ = std::move(saveTbind);
+    stmtStart_ = saveStmt;
 }
 void Compiler::nativeBaseCtor(ClassInfo* base, Node* mi) {
     // eccezioni standard: Exception(message[, inner]) / std::runtime_error(what)
@@ -1247,10 +1259,12 @@ void Compiler::constructObject(ClassInfo* c, const std::vector<Node*>& args, Pos
 void Compiler::constructNative(TypeP t, const std::vector<Node*>& args, Pos at) {
     if (t->k == TK::Str && t->cppValue) {
         if (args.empty()) { pushString("", Dialect::Cpp, true); return; }
-        EV recv;
+        // la stringa nuova resta sulla pila: il costruttore nativo la riempie e non restituisce nulla
         pushString("", Dialect::Cpp, true);
+        emit(Op::Dup);
         std::vector<std::int32_t> ctors = nativeCtors(t);
-        callOverloads({}, ctors, {}, args, {}, at, true, t, false, "std::string");
+        EV r = callOverloads({}, ctors, {}, args, {}, at, true, t, false, "std::string");
+        if (r.type && r.type->k != TK::Void) emit(Op::Pop);
         return;
     }
     if (t->k != TK::Native) {

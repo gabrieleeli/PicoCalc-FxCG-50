@@ -1342,16 +1342,38 @@ private:
     bool castAhead() const {
         const Token& n = peek();
         if (n.t != T::Ident && !isP(n, Scope)) return false;
-        if (builtinWord(n) || isWord(n, "const") || isWord(n, "struct") || isWord(n, "enum") || isWord(n, "unsigned") || isWord(n, "signed") || isWord(n, "volatile")) return true;
-        if (!typeNameAt(p_ + 1)) return false;
-        // ( T ) seguito da qualcosa che non e' un operatore binario: cast; (x) da solo: espressione
+        const bool word = builtinWord(n) || isWord(n, "const") || isWord(n, "struct") || isWord(n, "enum") || isWord(n, "unsigned") ||
+                          isWord(n, "signed") || isWord(n, "volatile");
+        if (!word && !typeNameAt(p_ + 1)) return false;
+        // il tipo deve chiudersi con ")": (std::string("a") < b) e (int(x) + 1)
+        // del C++ sono espressioni che iniziano con una conversione funzionale
         std::size_t q = p_ + 1;
-        int depth = 0;
+        int angle = 0;
         for (; q < toks_.size() && toks_[q].t != T::End; ++q) {
-            if (isP(toks_[q], LParen)) ++depth;
-            else if (isP(toks_[q], RParen)) { if (depth == 0) break; --depth; }
+            const Token& t = toks_[q];
+            if (angle > 0) {
+                if (isP(t, Lt)) ++angle;
+                else if (isP(t, Gt)) --angle;
+                else if (isP(t, Shr)) angle -= 2;
+                else if (isP(t, LParen) || isP(t, RParen) || isP(t, Semi) || isP(t, LBrace)) return false;
+                if (angle < 0) return false;
+                continue;
+            }
+            if (t.t == T::Ident || isP(t, Scope) || isP(t, Star) || isP(t, Amp) || isP(t, AndAnd)) continue;
+            if (isP(t, Lt)) { ++angle; continue; }
+            if (isP(t, LParen) && q + 2 < toks_.size() && isP(toks_[q + 1], Star) && isP(toks_[q + 2], RParen)) {
+                // puntatore a funzione: T (*)(parametri)
+                q += 3;
+                int depth = 0;
+                for (; q < toks_.size() && toks_[q].t != T::End; ++q) {
+                    if (isP(toks_[q], LParen)) ++depth;
+                    else if (isP(toks_[q], RParen) && --depth <= 0) break;
+                }
+                continue;
+            }
+            break;
         }
-        return true;
+        return q < toks_.size() && isP(toks_[q], RParen);
     }
     Node* newExpr() {
         const Pos at = cur().pos;

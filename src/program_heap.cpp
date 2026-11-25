@@ -2,6 +2,7 @@
 // mark-and-sweep con una pila esplicita, oggetti e valori: array tipizzati,
 // istanze, stringhe, contenitori, copie per valore, distruttori del C++,
 // puntatori controllati, conversioni, confronti e hash. Vedi program_vm.hpp.
+#include "program_lib.hpp"
 #include "program_vm.hpp"
 #include "file_store.hpp"
 #include "mem_pools.hpp"
@@ -641,6 +642,14 @@ void Vm::killValue(const Value& v) {
     case OK::Map: {
         MapObj* m = static_cast<MapObj*>(o);
         m->keys.clear(); m->vals.clear(); m->used.clear(); m->order.clear(); m->buckets.clear(); m->next.clear(); m->freeSlots.clear(); m->count = 0;
+        break;
+    }
+    case OK::File: {
+        // C++: ofstream/ifstream alla fine del blocco (distruttore): il file si scrive e si chiude
+        FileObj* f = static_cast<FileObj*>(o);
+        if (f->open && !f->console && !f->memory) {
+            try { (void)lib::fileClose(*this, f); } catch (const std::bad_alloc&) { throw; } catch (...) {}
+        }
         break;
     }
     default: break;

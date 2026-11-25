@@ -35,6 +35,11 @@ void Compiler::run() {
     finishClasses();
     setupEntry();
     compileBodies();
+    // sizeof delle struct e delle classi del C/C++ per i nativi (qsort, malloc, memcpy)
+    for (const auto& c : prog_.classes) {
+        if (c->isNative || !c->complete || !c->self || (c->lang != Dialect::C && c->lang != Dialect::Cpp)) continue;
+        try { c->sizeBytes = sizeOf(c->self, ast::Pos{}); } catch (const Error&) {}
+    }
 }
 
 // ---------------------------------------------------------------- seconda passata
@@ -486,6 +491,19 @@ void Compiler::completeClass(ClassInfo* c) {
     } else {
         // basi
         for (Node* b : n->list2) {
+            // C#/Java: IComparable<T>, IEquatable<T>, IDisposable (Comparable<T>...) dichiarano
+            // solo metodi che il nucleo trova per nome (CompareTo, Equals, Dispose): niente da collegare
+            if ((lang_ == Dialect::CSharp || lang_ == Dialect::Java) && b->type && b->type->name) {
+                const std::string bn = syms_[b->type->name];
+                static const char* const markers[] = {"IComparable", "IEquatable", "IDisposable", "Comparable", "Cloneable", "Serializable", "AutoCloseable"};
+                bool marker = false;
+                for (const char* m : markers) if (bn == m) marker = true;
+                if (marker) {
+                    bool known = true;
+                    try { (void)resolveType(b->type, false); } catch (const Error&) { known = false; }
+                    if (!known) continue;
+                }
+            }
             TypeP bt = resolveType(b->type, false);
             if (bt->k != TK::Class || !bt->cls) error("la base deve essere una classe", b->pos);
             ClassInfo* bc = bt->cls;

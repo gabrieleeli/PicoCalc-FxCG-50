@@ -279,6 +279,8 @@ public:
     std::int32_t constString(const std::string& bytes, bool wide);
     std::int32_t selector(const std::string& n, std::size_t arity);
     Function* newFunction(const std::string& nm, Dialect d, ClassInfo* owner);
+    // C/C++: una funzione della libreria (sqrt, sin...) usata come puntatore a funzione
+    Function* nativeWrapper(const std::vector<std::int32_t>& natives, ast::Pos at);
     ClassInfo* newClass(const std::string& nm, Dialect d);
 
     // ------------------------------------------------------------ stato
@@ -403,6 +405,7 @@ public:
     std::string staticClass_;
     TemplateDef* templateName_{nullptr};
     std::uint32_t lambdaCount_{0};
+    std::unordered_map<std::int32_t, Function*> nativeWrappers_;   // nativo -> funzione che lo chiama
     EV assignImpl(ast::Node* n, bool needValue);
     EV nullCond(ast::Node* n);
     EV conditional(ast::Node* n);

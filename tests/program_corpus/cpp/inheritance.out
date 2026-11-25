@@ -1,0 +1,6 @@
+rettangolo 6
+quadrato di lato 2 4
+forma 3
+totale 13
+Base() Derived() Base::hello Derived::hello ~Derived() ~Base() 
+Base() Derived() | ~Derived() ~Base() 

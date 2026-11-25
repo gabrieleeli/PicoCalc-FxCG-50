@@ -575,9 +575,17 @@ void cStrncat(Vm& vm, NativeCall& c) {
     putCStr(vm, c.args[0], cstr(vm, c, 0) + add, "strncat");
     c.ret = c.args[0];
 }
-int sgn(int x) { return x < 0 ? -1 : x > 0 ? 1 : 0; }
-void cStrcmp(Vm& vm, NativeCall& c) { c.ret = Value::i32(sgn(std::strcmp(cstr(vm, c, 0).c_str(), cstr(vm, c, 1).c_str()))); }
-void cStrncmp(Vm& vm, NativeCall& c) { c.ret = Value::i32(sgn(std::strncmp(cstr(vm, c, 0).c_str(), cstr(vm, c, 1).c_str(), static_cast<std::size_t>(std::max<std::int64_t>(0, I(c, 2)))))); }
+// Come glibc: differenza dei primi byte diversi (unsigned char), 0 se uguali
+// (la norma fissa solo il segno).
+int byteCompare(const std::string& a, const std::string& b, std::size_t n) {
+    for (std::size_t i = 0; i < n; ++i) {
+        const int x = i < a.size() ? static_cast<unsigned char>(a[i]) : 0, y = i < b.size() ? static_cast<unsigned char>(b[i]) : 0;
+        if (x != y || x == 0) return x - y;
+    }
+    return 0;
+}
+void cStrcmp(Vm& vm, NativeCall& c) { c.ret = Value::i32(byteCompare(cstr(vm, c, 0), cstr(vm, c, 1), SIZE_MAX)); }
+void cStrncmp(Vm& vm, NativeCall& c) { c.ret = Value::i32(byteCompare(cstr(vm, c, 0), cstr(vm, c, 1), static_cast<std::size_t>(std::max<std::int64_t>(0, I(c, 2))))); }
 void cStrchr(Vm& vm, NativeCall& c) {
     const std::string s = cstr(vm, c, 0);
     const char ch = static_cast<char>(I(c, 1));
@@ -709,7 +717,13 @@ void cMemcmp(Vm& vm, NativeCall& c) {
     const std::int64_t n = I(c, 2);
     if (a.inst || b.inst || a.a->refs() || b.a->refs()) vm.fault(FaultKind::NotSupported, "memcmp vuole array di numeri o di char");
     if (static_cast<std::size_t>(n) > a.bytes || static_cast<std::size_t>(n) > b.bytes) vm.fault(FaultKind::Index, "memcmp: oltre la fine dell'array");
-    c.ret = Value::i32(sgn(std::memcmp(a.a->data + static_cast<std::size_t>(a.idx) * a.a->esize, b.a->data + static_cast<std::size_t>(b.idx) * b.a->esize, static_cast<std::size_t>(n))));
+    // come glibc: differenza dei primi byte diversi
+    const std::uint8_t* pa = a.a->data + static_cast<std::size_t>(a.idx) * a.a->esize;
+    const std::uint8_t* pb = b.a->data + static_cast<std::size_t>(b.idx) * b.a->esize;
+    int r = 0;
+    for (std::size_t i = 0; i < static_cast<std::size_t>(n); ++i)
+        if (pa[i] != pb[i]) { r = static_cast<int>(pa[i]) - static_cast<int>(pb[i]); break; }
+    c.ret = Value::i32(r);
 }
 
 // ================================================================ ctype
