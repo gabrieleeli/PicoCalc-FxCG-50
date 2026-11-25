@@ -254,10 +254,15 @@ bool Vm::readLine(std::string& out) {
 // ---------------------------------------------------------------- debug
 void Vm::debugCheck(const Function* f, std::int32_t pc) {
     const SrcPos p = f->pos[static_cast<std::size_t>(pc)];
+    const std::int32_t line = static_cast<std::int32_t>(p.line);
+    Frame& cur = frames.back();
+    const bool entered = cur.dbgLine != line || cur.dbgFile != p.file;
+    cur.dbgLine = line;
+    cur.dbgFile = p.file;
     bool stop = false;
     if (firstStop) { firstStop = false; stop = f->name != "<init>"; }
-    if (!stop) {
-        for (const auto& b : breakpoints) if (b.first == p.file && b.second == static_cast<std::int32_t>(p.line)) stop = true;
+    if (!stop && entered) {
+        for (const auto& b : breakpoints) if (b.first == p.file && b.second == line) stop = true;
     }
     if (!stop) {
         switch (stepMode) {
@@ -443,7 +448,12 @@ void Vm::execute(std::size_t stopDepth) {
                 --quota;
                 ++executed;
                 if (static_cast<std::size_t>(fr->pc) >= f->code.size()) fatal("Syntax ERROR: fine della funzione " + f->name + " senza return");
-                if (debug && f->stmt[static_cast<std::size_t>(fr->pc)]) { debugCheck(f, fr->pc); fr = &frames.back(); }
+                // debug: all'inizio di ogni istruzione del sorgente e, dopo un return
+                // durante uno STEP, subito nel chiamante (sulla riga della chiamata)
+                if (debug && (f->stmt[static_cast<std::size_t>(fr->pc)] || (frames.size() < stepDepth && stepMode != StepMode::Run))) {
+                    debugCheck(f, fr->pc);
+                    fr = &frames.back();
+                }
                 const Instr& in = f->code[static_cast<std::size_t>(fr->pc++)];
                 Value* const S = stack.data();
                 const std::size_t base = fr->base;
@@ -1161,13 +1171,13 @@ int Machine::currentLine() const noexcept {
     const Vm& vm = *impl_->vm;
     if (vm.frames.empty()) return 0;
     const Frame& f = vm.frames.back();
-    return static_cast<int>(posOf(*f.fn, f.pc > 0 ? f.pc - 1 : 0).line);
+    return static_cast<int>(posOf(*f.fn, vm.shownPc(vm.frames.size() - 1)).line);
 }
 std::string Machine::currentFile() const {
     const Vm& vm = *impl_->vm;
     if (vm.frames.empty()) return {};
     const Frame& f = vm.frames.back();
-    const SrcPos p = posOf(*f.fn, f.pc > 0 ? f.pc - 1 : 0);
+    const SrcPos p = posOf(*f.fn, vm.shownPc(vm.frames.size() - 1));
     return p.file < vm.prog_->files.size() ? vm.prog_->files[p.file] : std::string();
 }
 void Machine::setDebug(bool on) { impl_->vm->debug = on; impl_->vm->firstStop = on; impl_->vm->stepMode = StepMode::Into; }
@@ -1192,7 +1202,7 @@ std::vector<FrameInfo> Machine::callStack() const {
     for (std::size_t i = vm.frames.size(); i-- > 0;) {
         const Frame& f = vm.frames[i];
         if (f.fn->name == "<init>") continue;
-        const SrcPos p = posOf(*f.fn, f.pc > 0 ? f.pc - 1 : 0);
+        const SrcPos p = posOf(*f.fn, vm.shownPc(i));
         FrameInfo fi;
         fi.function = f.fn->name;
         fi.file = p.file < vm.prog_->files.size() ? vm.prog_->files[p.file] : std::string();
@@ -1228,13 +1238,14 @@ std::vector<VarInfo> Machine::variables(std::size_t frame) const {
     // la cornice `frame` contando dalla piu' interna (come callStack)
     std::size_t k = 0;
     const Frame* fr = nullptr;
+    std::size_t at0 = 0;
     for (std::size_t i = vm.frames.size(); i-- > 0;) {
         if (vm.frames[i].fn->name == "<init>") continue;
-        if (k++ == frame) { fr = &vm.frames[i]; break; }
+        if (k++ == frame) { fr = &vm.frames[i]; at0 = i; break; }
     }
     if (fr) {
         const Dialect d = fr->fn->lang;
-        const std::int32_t pc = fr->pc > 0 ? fr->pc - 1 : 0;
+        const std::int32_t pc = vm.shownPc(at0);
         for (const LocalInfo& l : fr->fn->locals) {
             if (l.name.empty() || l.name[0] == '#' || pc < l.from || pc >= l.to) continue;
             const std::size_t at = fr->base + static_cast<std::size_t>(l.slot);

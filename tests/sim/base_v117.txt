@@ -120,8 +120,12 @@ shot 140_financial_cash_irr.png
 key EXIT
 key MENU
 # ---- PROGRAM: nuovo programma C++, editor, esecuzione con input
+# (v1.20.0: rigenerati 141 e 142, gestore dei file in PICOCALC/CODE: CODE/CPP, NEW > File)
 type b
+key DOWN
+key EXE
 key F3
+key EXE
 type CIAO
 key EXE
 shot 141_program_editor.png

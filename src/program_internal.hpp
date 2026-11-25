@@ -335,6 +335,8 @@ public:
     ClassInfo* faultClass[DialectCount][24] = {};
     ClassInfo* exceptionRoot[DialectCount] = {};
     ClassInfo* typeClass{nullptr};                       // System.Type di C# (GetType())
+    // Risultati della libreria fx per linguaggio: 0 Stat1, 1 Stat2, 2 Reg (FxStat1, fx::Stat1, Fx.Stat1...).
+    ClassInfo* fxResult[DialectCount][3] = {};
     std::size_t sourceBytes{0};
     // Tipi di base per le funzioni native (creati dal compilatore).
     const TypeRef* prim[16] = {};                        // per TK (Void ... F64)

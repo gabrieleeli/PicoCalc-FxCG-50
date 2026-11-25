@@ -24,7 +24,8 @@ const char* const kStdTemplates[] = {"vector", "map", "set", "unordered_map", "u
     "variant", "multimap", "multiset", "bitset", "make_pair", "numeric_limits", "make_unique", "make_shared", nullptr};
 // Nomi di tipo sempre noti (typedef delle intestazioni standard).
 const char* const kAlwaysTypes[] = {"size_t", "ptrdiff_t", "int8_t", "int16_t", "int32_t", "int64_t", "uint8_t", "uint16_t",
-    "uint32_t", "uint64_t", "intptr_t", "uintptr_t", "FILE", "time_t", "clock_t", "wchar_t", "char16_t", "char32_t", nullptr};
+    "uint32_t", "uint64_t", "intptr_t", "uintptr_t", "FILE", "time_t", "clock_t", "wchar_t", "char16_t", "char32_t",
+    "FxStat1", "FxStat2", "FxReg", nullptr};                // risultati della libreria fx (C)
 
 class CParser {
 public:
@@ -35,6 +36,7 @@ public:
             for (const char* const* t = kStdTypes; *t; ++t) known_.insert(std::string("std::") + *t);
             for (const char* const* t = kStdTemplates; *t; ++t) templates_.insert(std::string("std::") + *t);
             known_.insert("std::vector::iterator");
+            for (const char* t : {"fx::Stat1", "fx::Stat2", "fx::Reg"}) known_.insert(t);   // risultati della libreria fx (C++)
         }
     }
     void run() {

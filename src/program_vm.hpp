@@ -172,6 +172,10 @@ struct Frame {
     std::int32_t pc{0};
     std::uint32_t base{0};
     std::uint64_t serial{0};
+    // debug: riga (e file) dell'ultima istruzione iniziata in questa cornice;
+    // un punto d'interruzione scatta solo quando l'esecuzione ENTRA nella riga
+    std::int32_t dbgLine{-1};
+    std::uint16_t dbgFile{0};
 };
 
 class Vm {
@@ -292,6 +296,13 @@ public:
     std::vector<std::pair<std::uint16_t, std::int32_t>> breakpoints;
     bool firstStop{true};
     void debugCheck(const Function* f, std::int32_t pc);
+    // pc da mostrare per la cornice i: quella ferma al debug non ha ancora
+    // eseguito l'istruzione pc; le altre sono dentro la chiamata a pc - 1
+    std::int32_t shownPc(std::size_t i) const noexcept {
+        const Frame& f = frames[i];
+        if (paused && i + 1 == frames.size()) return f.pc;
+        return f.pc > 0 ? f.pc - 1 : 0;
+    }
     // cache delle classi per nome (eccezioni dei nativi)
     ClassInfo* classNamed(const std::string& n, Dialect d) const;
     void markRoots(std::vector<Obj*>& work);

@@ -25,6 +25,7 @@ set(FXAI_FUZZERS fuzz_expr fuzz_exactdiff fuzz_workspace fuzz_csv fuzz_pcgraph f
   fuzz_eactivity)                                       # v1.16.0
 if("FXAI_SERVICE_INTERP=1" IN_LIST FXAI_FEATURE_DEFINITIONS)
   list(APPEND FXAI_FUZZERS fuzz_program)                # v1.15.0, solo Pico Plus 2 W
+  list(APPEND FXAI_FUZZERS fuzz_libjson fuzz_http fuzz_codestore)   # v1.20.0: LIB, HTTPS, archivio CODE
 endif()
 if("FXAI_MODE_SPREADSHEET=1" IN_LIST FXAI_FEATURE_DEFINITIONS)
   list(APPEND FXAI_FUZZERS fuzz_sheet fuzz_link fuzz_modes)   # v1.17.0, solo Pico Plus 2 W
@@ -43,5 +44,17 @@ foreach(t ${FXAI_FUZZERS})
   target_link_libraries(${t} PRIVATE fxai_fuzz_core)
   target_link_options(${t} PRIVATE -fsanitize=fuzzer)
 endforeach()
+# v1.20.0: un fuzzer per linguaggio del nucleo condiviso (stesso sorgente, dialetto fisso)
+if("FXAI_SERVICE_INTERP=1" IN_LIST FXAI_FEATURE_DEFINITIONS)
+  foreach(lang c:0 cpp:1 cs:2)
+    string(REPLACE ":" ";" pair ${lang})
+    list(GET pair 0 lname)
+    list(GET pair 1 lnum)
+    add_executable(fuzz_${lname} ${CMAKE_CURRENT_LIST_DIR}/fuzz_lang.cpp)
+    target_compile_definitions(fuzz_${lname} PRIVATE FUZZ_DIALECT=${lnum})
+    target_link_libraries(fuzz_${lname} PRIVATE fxai_fuzz_core)
+    target_link_options(fuzz_${lname} PRIVATE -fsanitize=fuzzer)
+  endforeach()
+endif()
 add_executable(gen_seeds ${CMAKE_CURRENT_LIST_DIR}/gen_seeds.cpp)
 target_link_libraries(gen_seeds PRIVATE fxai_fuzz_core)

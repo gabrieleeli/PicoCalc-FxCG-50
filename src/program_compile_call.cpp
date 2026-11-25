@@ -690,6 +690,7 @@ EV Compiler::binary(Node* n) {
         EV pa = exprType(n->a);
         EV pb = exprType(n->b);
         TypeP ta = stripRef(pa.type), tb = stripRef(pb.type);
+        if (!ta || !tb) error("operando che non e' un valore", !ta ? n->a->pos : n->b->pos);
         TypeP res = ta->k == TK::Nullable ? (tb->k == TK::Nullable ? ta : ta->elem) : ta;
         if (ta->k == TK::Nullable && isNumeric(tb) && ta->elem != tb) res = arithmetic(ta->elem, tb, n->pos);
         rvalue(n->a, nullptr);
@@ -710,6 +711,9 @@ EV Compiler::binary(Node* n) {
     EV pb = exprType(n->b);
     TypeP ta = stripRef(pa.type), tb = stripRef(pb.type);
     if (pa.cat == EV::FuncGroup || pb.cat == EV::FuncGroup) error("funzione usata come valore in un'operazione", n->pos);
+    // `std << 1`, `Tipo + 1`: uno spazio dei nomi o un tipo non sono valori
+    if (!ta || !tb || pa.cat == EV::NsName || pb.cat == EV::NsName || pa.cat == EV::TypeName || pb.cat == EV::TypeName)
+        error("operando che non e' un valore", (!ta || pa.cat == EV::NsName || pa.cat == EV::TypeName) ? n->a->pos : n->b->pos);
     const bool cs = lang_ == Dialect::CSharp || lang_ == Dialect::Java;
     // concatenazione di stringhe (C#, Java)
     if (op == Plus && cs && (ta->k == TK::Str || tb->k == TK::Str)) {

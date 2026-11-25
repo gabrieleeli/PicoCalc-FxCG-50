@@ -8,6 +8,7 @@
 // manuale e uso dal compilatore (prima il progetto, poi LIB).
 #include "code_store.hpp"
 #include "file_store.hpp"
+#include "lib_fetch.hpp"
 #include "lib_manager.hpp"
 #include "program.hpp"
 #include "sha256.hpp"
@@ -597,6 +598,30 @@ void testLocalIndex() {
     put(sd, "PICOCALC/LIB/IMPORT/index.json", "{\"version\": 7}");
     CHECK(!localIndex(sd, "PICOCALC/LIB/IMPORT", idx, err) && err.find("index.json") != std::string::npos);
 }
+// ---------------------------------------------------------------- LB-14 risposte HTTP (casi trovati con fuzz_http)
+void testHttpParser() {
+    // il corpo non supera mai il limite, nemmeno di un pezzo, con Content-Length assente o chunked
+    for (int mode = 0; mode < 3; ++mode) {
+        net::HttpBodyParser p(64);
+        std::string body;
+        std::string head = mode == 0 ? "HTTP/1.1 200 OK\r\n\r\n" : mode == 1 ? "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n50\r\n" : "HTTP/1.1 200 OK\r\nContent-Length: 65\r\n\r\n";
+        bool ok = p.feed(head.data(), head.size(), body);
+        const std::string data(80, 'x');
+        for (std::size_t i = 0; ok && i < data.size(); i += 7) ok = p.feed(data.data() + i, std::min<std::size_t>(7, data.size() - i), body);
+        CHECK(!ok && p.failed() && p.error().find("troppo grande") != std::string::npos && body.size() <= 64);
+    }
+    // risposta completa: finish() vero; troncata: errore chiaro
+    net::HttpBodyParser full(1000);
+    std::string body;
+    const std::string r = "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello";
+    CHECK(full.feed(r.data(), r.size(), body) && full.complete() && full.finish() && body == "hello");
+    net::HttpBodyParser cut(1000);
+    body.clear();
+    CHECK(cut.feed(r.data(), r.size() - 2, body) && !cut.finish() && cut.error().find("interrotto") != std::string::npos);
+    net::HttpBodyParser nf(1000);
+    const std::string r404 = "HTTP/1.1 404 Not Found\r\n\r\n";
+    CHECK(!nf.feed(r404.data(), r404.size(), body) && nf.status() == 404 && nf.error().find("404") != std::string::npos);
+}
 } // namespace
 
 int main() {
@@ -610,5 +635,6 @@ int main() {
     testSafety();
     testVerifyAndRemove();
     testLocalIndex();
+    testHttpParser();
     return testutil::finish("lib_manager_test");
 }

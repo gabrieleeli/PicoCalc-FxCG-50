@@ -949,7 +949,7 @@ public:
             else if (isP(t, RParen)) break;
             else if (!(t.t == T::Ident || isP(t, Dot) || isP(t, Comma) || isP(t, LBracket) || isP(t, RBracket) || isP(t, Question) || isP(t, Shr))) return false;
         }
-        if (depth > 0) return false;
+        if (depth > 0 || q + 1 >= toks_.size() || !isP(toks_[q], RParen)) return false;   // "(" senza ")" fino alla fine
         const Token& after = toks_[q + 1];
         return (after.t == T::Ident && !isWord(after, "is") && !isWord(after, "as")) || after.t == T::Int || after.t == T::Float ||
                after.t == T::Str || after.t == T::Char || after.t == T::Interp || isP(after, LParen) || isP(after, Bang) || isP(after, Tilde);

@@ -7,8 +7,8 @@
 // (tests/fuzz/fuzz_libjson.cpp).
 #include <cstddef>
 #include <cstdint>
-#include <map>
 #include <memory>
+#include <utility>
 #include <string>
 #include <vector>
 
@@ -21,6 +21,7 @@ struct Limits {
     std::size_t maxString{8 * 1024};
 };
 
+struct Field;
 class Value {
 public:
     enum class Type : std::uint8_t { Null, Bool, Number, String, Array, Object };
@@ -29,7 +30,7 @@ public:
     double n{0};
     std::string s;
     std::vector<Value> items;                            // Array
-    std::vector<std::pair<std::string, Value>> fields;   // Object (ordine del testo, chiavi uniche)
+    std::vector<Field> fields;                           // Object (ordine del testo, chiavi uniche)
     bool isNull() const noexcept { return type == Type::Null; }
     bool isString() const noexcept { return type == Type::String; }
     bool isNumber() const noexcept { return type == Type::Number; }
@@ -37,6 +38,13 @@ public:
     bool isArray() const noexcept { return type == Type::Array; }
     bool isBool() const noexcept { return type == Type::Bool; }
     const Value* get(const std::string& key) const noexcept;   // Object: campo o nullptr
+};
+// Un campo di un oggetto (std::pair non vuole un tipo incompleto con clang).
+struct Field {
+    std::string first;
+    Value second;
+    Field() = default;
+    Field(std::string k, Value v) : first(std::move(k)), second(std::move(v)) {}
 };
 
 // false con `error` ("riga 3, colonna 7: ':' atteso").

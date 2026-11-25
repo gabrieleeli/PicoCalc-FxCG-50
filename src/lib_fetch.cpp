@@ -87,10 +87,10 @@ bool HttpBodyParser::feed(const char* data, std::size_t size, std::string& body)
         const char c = data[i];
         if (!chunked_) {
             const std::size_t n = contentLength_ >= 0 ? static_cast<std::size_t>(std::min<std::uint64_t>(size - i, static_cast<std::uint64_t>(contentLength_) - received_)) : size - i;
+            if (received_ + n > max_) return fail("file troppo grande");   // mai piu' byte del limite nel corpo
             body.append(data + i, n);
             received_ += n;
             i += n - 1;
-            if (received_ > max_) return fail("file troppo grande");
             if (contentLength_ >= 0 && received_ >= static_cast<std::uint64_t>(contentLength_)) complete_ = true;
             continue;
         }
@@ -112,11 +112,11 @@ bool HttpBodyParser::feed(const char* data, std::size_t size, std::string& body)
             break;
         case 1: {
             const std::size_t n = static_cast<std::size_t>(std::min<std::uint64_t>(size - i, chunkLeft_));
+            if (received_ + n > max_) return fail("file troppo grande");
             body.append(data + i, n);
             received_ += n;
             chunkLeft_ -= n;
             i += n - 1;
-            if (received_ > max_) return fail("file troppo grande");
             if (chunkLeft_ == 0) chunkState_ = 2;
             break;
         }

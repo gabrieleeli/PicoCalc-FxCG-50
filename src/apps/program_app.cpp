@@ -152,10 +152,71 @@ public:
         keys.erase(keys.begin());
         return k;
     }
+    // fx pause (◢): EXE prosegue
+    bool pauseDone() override {
+        for (std::size_t i = 0; i < keys.size(); ++i)
+            if (keys[i] == 13) { keys.erase(keys.begin(), keys.begin() + static_cast<std::ptrdiff_t>(i) + 1); return true; }
+        return false;
+    }
     std::vector<int> keys;
 private:
     app::Platform& platform_;
 };
+// Domanda di testo del Program (v1.20.0): titolo, etichetta e suggerimento
+// propri (Trova, Sostituisci, Vai alla riga, password) e risposta vuota quando
+// ha un senso ("Sostituisci con" vuoto cancella, nuova password vuota la toglie).
+// La FileDialog condivisa (congelata con la Pico 2 W) resta per i nomi e gli
+// elenchi: dice sempre "Nome:"/"EXE salva" e non accetta il testo vuoto.
+struct TextPrompt {
+    bool active{false};
+    bool allowEmpty{false};
+    std::string title, label, hint;
+    std::size_t maxLen{64};
+    bool (*allowed)(char){nullptr};
+    bool fresh{false};                                  // testo proposto ancora intatto (come selezionato)
+    LineEditor ed{240};
+    void open(std::string t, std::string l, std::string h, const std::string& initial, std::size_t max, bool empty, bool (*rule)(char)) {
+        active = true; title = std::move(t); label = std::move(l); hint = std::move(h);
+        maxLen = max; allowEmpty = empty; allowed = rule;
+        ed.set(initial.size() > max ? initial.substr(0, max) : initial);
+        fresh = !ed.empty();
+    }
+    const std::string& text() const noexcept { return ed.text(); }
+    // 1: confermato (text()), -1: annullato, 0: ancora aperto
+    int key(const KeyEvent& ev) {
+        if (ev.is(Key::Exit) || ev.is(Key::AC)) { active = false; return -1; }
+        if (ev.is(Key::Exe) || ev.is(Key::F1)) {
+            if (ed.empty() && !allowEmpty) return 0;
+            active = false;
+            return 1;
+        }
+        if (fresh) {
+            // il testo proposto (la ricerca precedente) si sostituisce scrivendo
+            // o si cancella con DEL; le frecce lo tengono per modificarlo
+            fresh = false;
+            if (ev.is(Key::Del) || ev.is(Key::DelForward)) { ed.clear(); return 0; }
+            if (ev.is(Key::Char) && !ev.ctrl) ed.clear();
+        }
+        if (ev.is(Key::Char) && !ev.ctrl && ((allowed && !allowed(ev.ch)) || ed.text().size() >= maxLen)) return 0;
+        (void)ed.key(ev);
+        return 0;
+    }
+    void draw(gfx::Canvas& c) const {
+        if (!active) return;
+        const gfx::Rect box{20, 70, ui::ScreenW - 40, 70};
+        ui::panel(c, box, Bg, Ink);
+        ui::text(c, box.x + 8, box.y + 5, title.c_str(), Accent, font::Face::Small);
+        ui::text(c, box.x + 8, box.y + 26, label.c_str(), Ink);
+        const int lx = box.x + 16 + static_cast<int>(label.size()) * 10;
+        const int fw = box.x + box.w - 8 - lx;
+        if (fresh) c.rect(lx - 1, box.y + 26, std::min(fw, static_cast<int>(ed.text().size()) * font::advance(font::Face::Medium) + 2), 16, Highlight, true);
+        ed.draw(c, lx, box.y + 26, fw, Ink, true);
+        ui::text(c, box.x + 8, box.y + 50, hint.c_str(), Muted, font::Face::Small);
+    }
+};
+bool printable(char c) { return c >= 32 && c < 127; }
+bool digit(char c) { return c >= '0' && c <= '9'; }
+bool passChar(char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-' || c == '.'; }
 } // namespace
 
 struct ProgramApp::View {
@@ -168,6 +229,7 @@ struct ProgramApp::View {
     SelectList list;
     std::string status;                                 // "Inserire la scheda SD"...
     FileDialog dialog;
+    TextPrompt prompt;                                  // Trova, Sostituisci, riga, password
     Ask ask{AskNone};
     std::string target;                                 // file o cartella dell'operazione
     std::vector<std::string> picks;                     // risultati di SEARCH, cartelle di COPY/MOVE
@@ -394,8 +456,7 @@ void editFile(Context& ctx, V& v, const std::string& path) {
     if (st.locked(path)) {
         v.target = path;
         v.ask = AskEditPass;
-        v.dialog.openName("Password di " + baseName(path), "");
-        nameRule(v.dialog, 8);
+        v.prompt.open("Password di " + baseName(path), "Password:", "EXE apre il file, EXIT annulla", "", 8, false, passChar);
         return;
     }
     openEditor(ctx, v, path);
@@ -875,15 +936,16 @@ void ProgramApp::key(Context& ctx, const KeyEvent& ev) {
     if (!v_) enter(ctx);
     View& v = *v_;
     // ---- nomi, elenchi e domande
-    if (v.dialog.active()) {
-        const int r = v.dialog.key(ev);
+    if (v.prompt.active || v.dialog.active()) {
+        const bool fromPrompt = v.prompt.active;
+        const int r = fromPrompt ? v.prompt.key(ev) : v.dialog.key(ev);
         if (r == 0) return;
         const Ask ask = v.ask;
         v.ask = AskNone;
         if (r < 0) return;
-        const std::string name = v.dialog.name();
-        const int pick = v.dialog.selectedIndex();
-        v.dialog.close();
+        const std::string name = fromPrompt ? v.prompt.text() : v.dialog.name();
+        const int pick = fromPrompt ? -1 : v.dialog.selectedIndex();
+        if (!fromPrompt) v.dialog.close();
         code::Store st = store(ctx);
         switch (ask) {
         case AskNewName: {
@@ -931,8 +993,7 @@ void ProgramApp::key(Context& ctx, const KeyEvent& ev) {
             if (!st.checkPassword(v.target, name)) throw MathError("password errata");
             v.passOld = name;
             v.ask = AskPassNew;
-            v.dialog.openName("Nuova password (vuota: nessuna)", "");
-            nameRule(v.dialog, 8);
+            v.prompt.open("Nuova password di " + baseName(v.target), "Password:", "EXE conferma (vuota: nessuna password)", "", 8, true, passChar);
             return;
         case AskPassNew: {
             const files::Status s = st.setPassword(v.target, name);
@@ -953,8 +1014,7 @@ void ProgramApp::key(Context& ctx, const KeyEvent& ev) {
         case AskReplaceWhat:
             v.findText = name;
             v.ask = AskReplaceWith;
-            v.dialog.openName("Sostituisci con", v.replaceText);
-            v.dialog.setNameRule([](char c) { return c >= 32 && c < 127; }, [](char c) { return c; }, 64);
+            v.prompt.open("Sostituisci \"" + name + "\" con", "Testo:", "EXE sostituisce tutto (vuoto: cancella), EXIT annulla", v.replaceText, 64, true, printable);
             return;
         case AskReplaceWith: {
             v.replaceText = name;
@@ -1136,9 +1196,8 @@ void ProgramApp::key(Context& ctx, const KeyEvent& ev) {
         case ActPass: {
             v.target = selectedPath(v);
             if (it && it->dir) throw MathError("la password vale per i file");
-            if (st.locked(v.target)) { v.ask = AskPassOld; v.dialog.openName("Password attuale", ""); }
-            else { v.ask = AskPassNew; v.dialog.openName("Password (al piu' 8 caratteri)", ""); }
-            nameRule(v.dialog, 8);
+            if (st.locked(v.target)) { v.ask = AskPassOld; v.prompt.open("Password attuale di " + baseName(v.target), "Password:", "EXE conferma, EXIT annulla", "", 8, false, passChar); }
+            else { v.ask = AskPassNew; v.prompt.open("Password di " + baseName(v.target), "Password:", "Al piu' 8 caratteri (chiesta per EDIT)", "", 8, false, passChar); }
             return;
         }
         case ActLib: toLib(ctx, v); return;
@@ -1189,18 +1248,15 @@ void ProgramApp::key(Context& ctx, const KeyEvent& ev) {
         case ActFind:
             if (!v.findText.empty() && ctx.shift()) { if (!v.editor.find(v.findText)) ctx.toast("non trovato"); ensureVisible(v); return; }
             v.ask = AskFind;
-            v.dialog.openName("Trova", v.findText);
-            v.dialog.setNameRule([](char c) { return c >= 32 && c < 127; }, [](char c) { return c; }, 64);
+            v.prompt.open("Trova", "Testo:", "EXE cerca dal cursore (SHIFT+FIND: ancora)", v.findText, 64, false, printable);
             return;
         case ActReplace:
             v.ask = AskReplaceWhat;
-            v.dialog.openName("Sostituisci", v.findText);
-            v.dialog.setNameRule([](char c) { return c >= 32 && c < 127; }, [](char c) { return c; }, 64);
+            v.prompt.open("Sostituisci", "Cerca:", "EXE poi il testo nuovo, EXIT annulla", v.findText, 64, false, printable);
             return;
         case ActGoto:
             v.ask = AskGoto;
-            v.dialog.openName("Vai alla riga", "");
-            v.dialog.setNameRule([](char c) { return c >= '0' && c <= '9'; }, [](char c) { return c; }, 7);
+            v.prompt.open("Vai alla riga", "Riga:", "EXE va alla riga, EXIT annulla", "", 7, false, digit);
             return;
         case ActUndo: if (!v.history.apply(v.editor, v.history.undo, v.history.redo)) ctx.toast("niente da annullare"); else v.modified = true; ensureVisible(v); return;
         case ActRedo: if (!v.history.apply(v.editor, v.history.redo, v.history.undo)) ctx.toast("niente da ripetere"); else v.modified = true; ensureVisible(v); return;
@@ -1244,7 +1300,7 @@ void ProgramApp::key(Context& ctx, const KeyEvent& ev) {
             if (c == 's') { saveFile(ctx, v); ctx.toast("Salvato"); return; }
             if (c == 'z') { if (v.history.apply(v.editor, v.history.undo, v.history.redo)) v.modified = true; ensureVisible(v); return; }
             if (c == 'y') { if (v.history.apply(v.editor, v.history.redo, v.history.undo)) v.modified = true; ensureVisible(v); return; }
-            if (c == 'f') { v.ask = AskFind; v.dialog.openName("Trova", v.findText); v.dialog.setNameRule([](char x) { return x >= 32 && x < 127; }, [](char x) { return x; }, 64); return; }
+            if (c == 'f') { v.ask = AskFind; v.prompt.open("Trova", "Testo:", "EXE cerca dal cursore (SHIFT+FIND: ancora)", v.findText, 64, false, printable); return; }
         }
         // file a blocchi: Pagina giu' alla fine / su all'inizio cambiano blocco
         if (v.block && ev.is(Key::PageDown) && v.editor.cursorLine() + 1 >= v.editor.lineCount()) { blockMove(ctx, v, true); return; }
@@ -1533,6 +1589,7 @@ void ProgramApp::draw(Context& ctx, gfx::Canvas& c) {
             const std::string file = stack.empty() ? std::string() : stack.front().file;
             const int line = stack.empty() ? 0 : stack.front().line;
             const auto it = v.runSources.find(file);
+            const auto bit = v.breakpoints.find(v.runFolder + "/" + file);
             const int y0 = top + 18;
             ui::textFit(c, 4, y0, (stack.empty() ? std::string("?") : stack.front().function) + "  " + file + ":" + std::to_string(line), ui::ScreenW - 8, Accent, font::Face::Small);
             for (int r = 0; r < 7; ++r) {
@@ -1540,6 +1597,7 @@ void ProgramApp::draw(Context& ctx, gfx::Canvas& c) {
                 const int y = y0 + 14 + r * 16;
                 if (it == v.runSources.end() || ln < 1 || static_cast<std::size_t>(ln) > it->second.size()) continue;
                 if (ln == line) c.rect(0, y, ui::ScreenW, 16, Highlight, true);
+                if (bit != v.breakpoints.end() && bit->second.count(ln)) c.rect(0, y, 27, 16, rgb888To565(255, 190, 190), true);
                 char num[12];
                 std::snprintf(num, sizeof num, "%d", ln);
                 ui::textRight(c, 26, y + 3, num, Muted, font::Face::Small);
@@ -1593,11 +1651,13 @@ void ProgramApp::draw(Context& ctx, gfx::Canvas& c) {
         drawFormScreen(c, "SET UP Program", v.setup, ui::ContentBottom, keys);
         v.shell.drawModals(c);
         v.dialog.draw(c);
+        v.prompt.draw(c);
         return;
     }
     }
     v.shell.fkeys.draw(c, ctx.shift());
     v.shell.drawModals(c);
     v.dialog.draw(c);
+    v.prompt.draw(c);
 }
 } // namespace fx::app

@@ -1,0 +1,144 @@
+# v1.20.0 (solo Pimoroni Pico Plus 2 W): Program con i programmi sulla microSD
+# (PICOCALC/CODE/<LING>): gestore dei file, NEW file e progetto, editor con
+# numeri di riga ed evidenziazione, FIND, RUN con input e Ctrl+D, errore con
+# riga e cursore, DEBUG con punto d'interruzione e VARS, SEARCH, PASS, LIB
+# (il repository libraries/ copiato in LIB/IMPORT: LOCAL, conferma, INFO,
+# VERIFY) e SET UP. Screenshot 203-223.
+sdcopy libraries PICOCALC/LIB/IMPORT
+type b
+shot 203_program_files_root.png
+key DOWN
+key EXE
+key F3
+shot 204_program_new_menu.png
+key DOWN
+key EXE
+type Geo
+key EXE
+shot 205_program_project.png
+key EXIT
+key F3
+key EXE
+type Media
+key EXE
+key F5
+type 4
+key EXE
+key END
+key EXE
+type double x, s = 0; int n = 0;
+key EXE
+type while (std::cin >> x) {
+key EXE
+type s += x;
+key EXE
+type n++;
+key EXE
+type }
+key EXE
+type std::cout << s / n;
+key HOME
+wait 1700
+shot 206_program_editor_cpp.png
+key F3
+type cin
+shot 207_program_find.png
+key EXE
+key F1
+type 4 8 15
+key EXE
+type 16 23 42
+shot 208_program_input.png
+key EXE
+ctrl d
+wait 200
+shot 209_program_output.png
+key EXIT
+key F5
+type 5
+key EXE
+key HOME
+type x
+key F1
+shot 210_program_error.png
+key EXIT
+wait 1700
+shot 211_program_error_cursor.png
+key F6
+key F1
+key F6
+key F6
+key F2
+key EXIT
+key EXIT
+key HOME
+key EXE
+key F3
+key EXE
+type Fatt
+key EXE
+key F5
+type 3
+key EXE
+key END
+key EXE
+type int f = 1;
+key EXE
+type for (int i = 1; i <= 5; i++) f *= i;
+key EXE
+type printf("%d\n", f);
+key F5
+type 6
+key EXE
+key F6
+key F4
+key F5
+wait 200
+shot 212_program_debug_start.png
+key F4
+wait 200
+shot 213_program_debug_breakpoint.png
+key F5
+shot 214_program_debug_vars.png
+key EXIT
+key F4
+wait 200
+key EXIT
+key EXIT
+key F6
+key F1
+type f
+key EXE
+shot 215_program_search.png
+key EXE
+key F6
+key F1
+type abc
+shot 216_program_password.png
+key EXE
+wait 1700
+key F2
+shot 217_program_lib_empty.png
+key F6
+key F1
+shot 218_program_lib_local.png
+key DOWN
+key DOWN
+key EXE
+shot 219_program_lib_confirm.png
+key F1
+wait 1700
+shot 220_program_lib_installed.png
+key F6
+key HOME
+key F1
+shot 221_program_lib_info.png
+key EXIT
+key F5
+shot 222_program_lib_verify.png
+key EXIT
+key F10
+shot 223_program_setup.png
+key EXIT
+key EXIT
+key MENU

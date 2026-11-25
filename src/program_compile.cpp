@@ -3,6 +3,7 @@
 // Vedi program_compile.hpp.
 #include "program_compile.hpp"
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstring>
 
@@ -492,6 +493,47 @@ void Compiler::setupNativeClasses() {
         ty->qualified = "System::Type";
         prog_.typeClass = ty;
     }
+    // Risultati delle statistiche della libreria fx (§4.5): campi double in sola lettura
+    // (C/C++: struct per valore). C: FxStat1, FxStat2, FxReg; C++: fx::Stat1...; C#/Java: Fx.Stat1...
+    static const char* const kStat1[] = {"n", "mean", "sum", "sumSq", "popSd", "sampleSd", "min", "q1", "median", "q3", "max", nullptr};
+    static const char* const kStat2[] = {"n", "meanX", "sumX", "sumX2", "popSdX", "sampleSdX", "meanY", "sumY", "sumY2", "popSdY", "sampleSdY",
+                                         "sumXY", "minX", "maxX", "minY", "maxY", nullptr};
+    static const char* const kReg[] = {"a", "b", "c", "d", "e", "r", "r2", "n", nullptr};
+    static const char* const* const kFields[3] = {kStat1, kStat2, kReg};
+    static const char* const kNames[3] = {"Stat1", "Stat2", "Reg"};
+    auto fxResults = [&](Dialect d) {
+        const bool cfam = d == Dialect::C || d == Dialect::Cpp;
+        for (int k = 0; k < 3; ++k) {
+            const std::string nm = d == Dialect::C ? std::string("Fx") + kNames[k] : std::string(kNames[k]);
+            ClassInfo* c = newClass(nm, d);
+            c->isNative = true;
+            c->complete = true;
+            c->isStruct = cfam;
+            c->valueType = cfam;
+            for (const char* const* f = kFields[k]; *f; ++f) {
+                FieldInfo fi;
+                fi.name = *f;
+                if (d == Dialect::CSharp) fi.name[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(fi.name[0])));   // Mean, SampleSd
+                fi.type = tF64_;
+                fi.access = Access::Public;
+                fi.isReadonly = !cfam;
+                fi.owner = c;
+                fi.slot = static_cast<std::int32_t>(c->fields.size());
+                c->fields.push_back(fi);
+            }
+            c->slotCount = static_cast<std::int32_t>(c->fields.size());
+            classType(c);
+            NsEntry e;
+            e.kind = NsEntry::Class;
+            e.cls = c;
+            if (d == Dialect::C) { root_->members[nm] = e; c->qualified = nm; }
+            else if (d == Dialect::Cpp) { namespaceFor(root_.get(), "fx", true)->members[nm] = e; c->qualified = "fx::" + nm; }
+            else c->qualified = "Fx::" + nm;                 // Fx.Stat1: si risolve in resolveType
+            prog_.fxResult[static_cast<int>(d)][k] = c;
+        }
+    };
+    if (prog_.dialect == Dialect::C || prog_.dialect == Dialect::Cpp) { fxResults(Dialect::C); if (prog_.dialect == Dialect::Cpp) fxResults(Dialect::Cpp); }
+    else fxResults(prog_.dialect);
 }
 ClassInfo* Compiler::exceptionClass(Dialect d, const std::string& nm) {
     const auto it = nativeClasses_.find((d == Dialect::Cpp ? "c++:" : d == Dialect::Java ? "java:" : "cs:") + nm);
@@ -681,6 +723,11 @@ TypeP Compiler::resolveType(TypeNode* t, bool allowVoid) {
                 return funcOf(tI32_, {as[0], as[0]});
             }
         }
+    }
+    // Fx.Stat1, Fx.Stat2, Fx.Reg (C#, Java): i risultati della libreria fx
+    if ((lang_ == Dialect::CSharp || lang_ == Dialect::Java) && path == "Fx::") {
+        static const char* const kFx[3] = {"Stat1", "Stat2", "Reg"};
+        for (int k = 0; k < 3; ++k) if (w == kFx[k] && prog_.fxResult[static_cast<int>(lang_)][k]) return classType(prog_.fxResult[static_cast<int>(lang_)][k]);
     }
     // classi, typedef e template dell'utente (e classi native)
     const std::string full = path + w;

@@ -423,6 +423,39 @@ void testCs() {
                  "2.5 6 9 3.5 3 periodi|servono periodi positivi (Parameter 'periodi') Value cannot be null. (Parameter 'nome') x|valore errato (Parameter 'x')");
 }
 
+// ================================================================ libreria fx: statistiche, distribuzioni, finanza (FX-07, FX-08)
+void testFx() {
+    // C: FxStat1 da un array, quartili della fx-CG50 (mediane delle meta')
+    CHECK_EQ_STR(c(R"(#include <stdio.h>
+        #include <fx.h>
+        int main(void) { double d[] = {2, 4, 4, 5, 7, 9}; FxStat1 s = fx_stat1var_data(d, 6);
+        printf("%g %.6g %g %g %.6f %.6f %g %g %g %g %g", s.n, s.mean, s.sum, s.sumSq, s.popSd, s.sampleSd, s.min, s.q1, s.median, s.q3, s.max);
+        double x[] = {1, 2, 3, 4, 5}, y[] = {2.1, 3.9, 6.2, 7.8, 10.1}; FxReg r = fx_regression_data(0, x, y, 5);
+        printf(" | %.4f %.4f %.5f", r.a, r.b, r.r); return 0; })"),
+                 "6 5.16667 31 191 2.266912 2.483277 2 4 4.5 7 9 | 1.9900 0.0500 0.99865");
+    // C++: dalle liste della calcolatrice (List 1, List 2) e dai vector; distribuzioni e TVM
+    CHECK_EQ_STR(cpp(R"(#include <iostream>
+        #include <iomanip>
+        #include <vector>
+        int main() { fx::setList(1, std::vector<double>{1, 2, 3, 4, 5}); fx::setList(2, std::vector<double>{2.1, 3.9, 6.2, 7.8, 10.1});
+        fx::Stat2 s = fx::stat2Var(1, 2); auto r = fx::regression(11, 1, 2); auto q = fx::stat1Var(std::vector<double>{3, 1, 2});
+        std::cout << std::fixed << std::setprecision(4) << s.meanY << " " << s.sumXY << " " << r.a << " " << r.b << " " << q.median << " "
+                  << fx::normCD(-1.96, 1.96) << " " << fx::invNorm(0.975) << " " << fx::binomPD(3, 10, 0.5) << " " << fx::poissonCD(2, 3) << " "
+                  << fx::tvmFV(10, 5, -1000, 0) << " " << fx::tvmPMT(12, 12, 10000, 0, 12, 12) << " " << fx::npv(5, std::vector<double>{-1000, 300, 400, 500})
+                  << " " << fx::irr(std::vector<double>{-1000, 300, 400, 500}); return 0; })"),
+                 "6.0200 110.2000 0.0500 1.9900 2.0000 0.9500 1.9600 0.1172 0.4232 1628.8946 -888.4879 80.4449 8.8963");
+    // C#: Fx.Stat1 e Fx.Reg con le proprieta' in PascalCase, errori come FxException
+    CHECK_EQ_STR(cs(R"(using System; class P { static void Main() { Fx.Stat1 s = Fx.Stat1Var(new double[] { 2, 4, 4, 5, 7, 9 }); var r = Fx.Regression(0, new double[] { 1, 2, 3 }, new double[] { 2, 4, 6 });
+        Console.Write($"{s.N} {s.Q1} {s.Median} {s.Q3} {r.A} {r.B} {Fx.NormPD(0):F6} {Fx.TvmN(5, -1000, 0, 1628.894627):F3} {Fx.Days(1, 1, 2026, 12, 31, 2026)}");
+        try { Fx.Stat1Var(new double[0]); } catch (FxException e) { Console.Write(" " + e.Message); }
+        try { Fx.SetColor("Viola"); } catch (FxException) { Console.Write(" colore"); } Fx.SetColor("Red"); } })"),
+                 "6 4 4.5 7 2 0 0.398942 10.000 364 Dimension ERROR: nessun dato colore");
+    // Ans e i comandi grafici nuovi (PxlChg, DrawGraph) passano dal motore dei comandi grafici
+    Run g = run("#include <fx.h>\nint main(void) { fx_pxlchg(10, 20); fx_drawgraph(); fx_setcolor(\"green\"); fx_pause(); return (int)fx_getans(); }", Dialect::C);
+    CHECK(g.error.empty() && g.host.commands.size() == 2 && g.host.commands[0] == "PxlChg 10,20" && g.host.commands[1] == "DrawGraph");
+    CHECK(g.host.workspace().graph.settings.plotColor == 2 && g.host.output == "- Disp -\n");
+}
+
 // ================================================================ nucleo comune
 void testCore() {
     // LK-05 divisione per zero, LK-06 errori con riga e colonna
@@ -462,9 +495,180 @@ void testCore() {
         Run e = run("using System;\nclass P {\n  static void Main() {\n    object o = null;\n    Console.Write(o.ToString());\n  }\n}", Dialect::CSharp);
         CHECK(e.error.find("NullReferenceException") != std::string::npos && e.line == 5);
     }
+    // v1.20.0, trovati dai fuzzer: "(" di C# senza ")" fino alla fine (lettura oltre
+    // i token), spazio dei nomi come operando, std::string lunga distrutta a fine blocco
+    CHECK(err("class P { static void Main() { var x = (a.b", Dialect::CSharp).find("Syntax ERROR") == 0);
+    CHECK(err("#include <iostream>\nint main() { std << 1; return 0; }", Dialect::Cpp).find("operando che non e' un valore@2") != std::string::npos);
+    CHECK_EQ_STR(cpp("#include <string>\n#include <iostream>\nint main() { for (int i = 0; i < 3; ++i) { std::string s(200, 'x'); s += \"y\"; } std::cout << \"ok\"; return 0; }"), "ok");
     // stringhe UTF-8 nei sorgenti e nell'output
     CHECK_EQ_STR(c("int main() { printf(\"perché %s\", \"π\"); return 0; }"), "perché π");
     CHECK_EQ_STR(cs("class P { static void Main() { string s = \"àè\"; System.Console.Write(s.Length + s.ToUpper()); } }"), "2ÀÈ");
+}
+
+// ================================================================ debugger
+#define CHECK_EQ(a, b) do { const long long va_ = (a), vb_ = (b); \
+    ::testutil::report(va_ == vb_, #a " == " #b, __FILE__, __LINE__, "(" + std::to_string(va_) + " vs " + std::to_string(vb_) + ")"); } while (0)
+// DB-01..DB-07: prima fermata, punti d'interruzione all'ingresso della riga,
+// STEP dentro/sopra/fuori, pila delle chiamate, variabili e figli, AC in pausa.
+struct Dbg {
+    std::unique_ptr<Workspace> ws = std::make_unique<Workspace>();
+    WorkspaceHost host{*ws};
+    std::unique_ptr<Machine> m;
+    Dbg(const std::string& name, const std::string& src, Dialect d, const std::vector<int>& bps = {}) {
+        host.fs = &card();
+        host.folder = "PICOCALC/CODE/TEST";
+        Project p;
+        p.dialect = d;
+        p.files.push_back({name, src, -1});
+        p.entry = name;
+        m = std::make_unique<Machine>(compile(p), host);
+        m->setDebug(true);
+        std::vector<std::pair<std::string, int>> b;
+        for (int l : bps) b.emplace_back(name, l);
+        m->setBreakpoints(b);
+    }
+    // esegue fino alla prossima pausa (o alla fine): la riga dove si e' fermato
+    int go() {
+        for (int k = 0; k < 1000; ++k) {
+            step::Budget b(100000, 0, nullptr);
+            if (m->step(b)) return -1;                       // finito
+            if (m->state() == Machine::State::Paused) return m->currentLine();
+        }
+        return -2;
+    }
+    int next(StepMode mode) { m->resume(mode); return go(); }
+    std::string var(const std::string& n) const {
+        for (const VarInfo& v : m->variables(0)) if (v.name == n) return v.value;
+        return "<assente>";
+    }
+};
+void testDebugger() {
+    const std::string fact =
+        "#include <stdio.h>\n"            // 1
+        "\n"                               // 2
+        "int main(void) {\n"               // 3
+        "    int f = 1;\n"                 // 4
+        "    for (int i = 1; i <= 5; i++) f *= i;\n"   // 5
+        "    printf(\"%d\\n\", f);\n"      // 6
+        "    printf(\"Ciao\\n\");\n"       // 7
+        "    return 0;\n"                  // 8
+        "}\n";                             // 9
+    // DB-01 la prima fermata e' la prima istruzione di main, prima di eseguirla
+    {
+        Dbg d("Fatt.c", fact, Dialect::C);
+        CHECK_EQ(d.go(), 4);
+        CHECK_EQ_STR(d.m->currentFile(), "Fatt.c");
+        CHECK(d.host.output.empty());
+        const auto st = d.m->callStack();
+        CHECK(st.size() == 1 && st[0].function == "main" && st[0].line == 4 && st[0].file == "Fatt.c");
+    }
+    // DB-02 punto d'interruzione: si ferma sulla riga 6 PRIMA di eseguirla, con
+    // f gia' calcolato; il ciclo su una sola riga non si ferma a ogni giro
+    {
+        Dbg d("Fatt.c", fact, Dialect::C, {5, 6});
+        CHECK_EQ(d.go(), 4);
+        CHECK_EQ(d.next(StepMode::Run), 5);                  // ingresso nella riga 5
+        CHECK_EQ_STR(d.var("f"), "1");
+        CHECK_EQ(d.next(StepMode::Run), 6);                  // non di nuovo la 5 (stessa riga)
+        CHECK_EQ_STR(d.var("f"), "120");
+        CHECK_EQ_STR(d.var("i"), "<assente>");               // fuori dal for
+        CHECK(d.host.output.empty());                        // printf non ancora eseguita
+        CHECK_EQ(d.next(StepMode::Run), -1);
+        CHECK_EQ_STR(d.host.output, "120\nCiao\n");
+    }
+    // DB-03 ciclo su piu' righe: il punto nel corpo scatta a ogni giro
+    {
+        const std::string loop = "int main() {\n  int s = 0;\n  for (int i = 0; i < 3; i++) {\n    s += i;\n  }\n  return s;\n}\n";
+        Dbg d("Ciclo.c", loop, Dialect::C, {4});
+        CHECK_EQ(d.go(), 2);
+        CHECK_EQ(d.next(StepMode::Run), 4);
+        CHECK_EQ_STR(d.var("i"), "0");
+        CHECK_EQ(d.next(StepMode::Run), 4);
+        CHECK_EQ_STR(d.var("i"), "1");
+        CHECK_EQ(d.next(StepMode::Run), 4);
+        CHECK_EQ_STR(d.var("i"), "2");
+        CHECK_EQ_STR(d.var("s"), "1");
+        CHECK_EQ(d.next(StepMode::Run), -1);
+        CHECK_EQ(d.m->exitCode(), 3);
+    }
+    // DB-04 STEP dentro, sopra e fuori con la pila delle chiamate
+    {
+        const std::string calls =
+            "int sq(int x) {\n"            // 1
+            "    int r = x * x;\n"         // 2
+            "    return r;\n"              // 3
+            "}\n"                          // 4
+            "int main() {\n"               // 5
+            "    int a = sq(3);\n"         // 6
+            "    int b = sq(4);\n"         // 7
+            "    return a + b;\n"          // 8
+            "}\n";
+        Dbg d("Sq.c", calls, Dialect::C);
+        CHECK_EQ(d.go(), 6);
+        CHECK_EQ(d.next(StepMode::Into), 2);                 // dentro sq
+        auto st = d.m->callStack();
+        CHECK(st.size() == 2 && st[0].function == "sq" && st[0].line == 2 && st[1].function == "main" && st[1].line == 6);
+        CHECK_EQ_STR(d.var("x"), "3");
+        CHECK_EQ(d.next(StepMode::Out), 6);                  // di nuovo in main, sulla riga della chiamata
+        CHECK(d.m->callStack().size() == 1);
+        CHECK_EQ(d.next(StepMode::Over), 7);                 // sopra la seconda chiamata
+        CHECK_EQ_STR(d.var("a"), "9");
+        CHECK_EQ(d.next(StepMode::Over), 8);
+        CHECK_EQ_STR(d.var("b"), "16");
+        CHECK_EQ(d.next(StepMode::Into), -1);
+        CHECK_EQ(d.m->exitCode(), 25);
+    }
+    // DB-05 ricorsione: il punto sulla stessa riga scatta in ogni cornice
+    {
+        const std::string rec = "int f(int n) {\n  if (n == 0) return 0;\n  return n + f(n - 1);\n}\nint main() { return f(3); }\n";
+        Dbg d("Rec.c", rec, Dialect::C, {3});
+        CHECK_EQ(d.go(), 5);
+        int hits = 0;
+        while (d.next(StepMode::Run) == 3) ++hits;
+        CHECK_EQ(hits, 3);
+        CHECK_EQ(d.m->exitCode(), 6);
+    }
+    // DB-06 variabili e figli: struct/oggetti espandibili, globali con ::
+    {
+        const std::string cpp = "#include <vector>\nint g = 5;\nstruct P { int x, y; };\nint main() {\n  P p{1, 2};\n  std::vector<int> v{7, 8, 9};\n  return p.x + v[2] + g;\n}\n";
+        Dbg d("V.cpp", cpp, Dialect::Cpp, {7});
+        CHECK_EQ(d.go(), 5);
+        CHECK_EQ(d.next(StepMode::Run), 7);
+        bool sawP = false, sawV = false, sawG = false;
+        for (const VarInfo& vi : d.m->variables(0)) {
+            if (vi.name == "p" && vi.expandable) {
+                const auto ch = d.m->children(vi.handle);
+                sawP = ch.size() == 2 && ch[0].name == "x" && ch[0].value == "1" && ch[1].name == "y" && ch[1].value == "2";
+            }
+            if (vi.name == "v" && vi.expandable) {
+                const auto ch = d.m->children(vi.handle);
+                sawV = ch.size() == 3 && ch[2].name == "[2]" && ch[2].value == "9";
+            }
+            if (vi.name == "::g") sawG = vi.value == "5";
+        }
+        CHECK(sawP && sawV && sawG);
+        const std::string cs = "using System;\nclass Q {\n  static void Main() {\n    var l = new System.Collections.Generic.List<string> { \"a\" };\n    Console.Write(l.Count);\n  }\n}\n";
+        Dbg e("Q.cs", cs, Dialect::CSharp, {5});
+        CHECK_EQ(e.go(), 4);
+        CHECK_EQ(e.next(StepMode::Run), 5);
+        CHECK(e.host.output.empty());
+        const auto st = e.m->callStack();
+        CHECK(st.size() == 1 && st[0].line == 5 && st[0].file == "Q.cs");
+        CHECK_EQ(e.next(StepMode::Run), -1);
+        CHECK_EQ_STR(e.host.output, "1");
+    }
+    // DB-07 AC in pausa: Break, nessun file aperto, niente altro output
+    {
+        const std::string f = "#include <stdio.h>\nint main() {\n  FILE* o = fopen(\"dbg.txt\", \"w\");\n  fprintf(o, \"x\");\n  printf(\"dopo\");\n  fclose(o);\n  return 0;\n}\n";
+        Dbg d("F.c", f, Dialect::C, {5});
+        CHECK_EQ(d.go(), 3);
+        CHECK_EQ(d.next(StepMode::Run), 5);
+        CHECK(d.m->openFiles() == 1);
+        d.m->cancelled();
+        CHECK(d.m->state() == Machine::State::Failed);
+        CHECK(d.m->openFiles() == 0);
+        CHECK(d.host.output.empty());
+    }
 }
 } // namespace
 
@@ -472,6 +676,8 @@ int main() {
     testC();
     testCpp();
     testCs();
+    testFx();
     testCore();
+    testDebugger();
     return testutil::finish("program_lang_test");
 }

@@ -85,6 +85,17 @@ int main() {
     page(*r, 1); r->key(pk::F2);                                            // REDO
     page(*r, 2); r->key(pk::F2);
     CHECK(get("PICOCALC/CODE/CPP/CONTI.cpp").find("Salve") != std::string::npos);
+    r->key(pk::F4); r->enter("Salve");                                      // REPL: "Ciao" proposto, sostituito scrivendo
+    r->key(pk::Backspace); r->enter("");                                    // ... con (vuoto): cancella
+    CHECK(toast(*r) == "1 sostituzioni");
+    r->key(pk::F2);                                                         // SAVE
+    CHECK(get("PICOCALC/CODE/CPP/CONTI.cpp").find("Salve") == std::string::npos);
+    page(*r, 1); r->key(pk::F1);                                            // UNDO
+    page(*r, 2); r->key(pk::F2);                                            // SAVE
+    CHECK(get("PICOCALC/CODE/CPP/CONTI.cpp").find("Salve") != std::string::npos);
+    r->key(pk::F5); r->enter("");                                           // JUMP: il numero vuoto non basta
+    CHECK(screen<ProgramApp>(*r) == "edit");
+    r->key(pk::Esc);                                                        // annulla la domanda
     r->key(pk::F3); r->enter("nessuno");                                    // FIND non trovato
     CHECK(toast(*r).find("non trovato") != std::string::npos);
     r->key(pk::F5); r->enter("99");                                         // JUMP oltre la fine
@@ -199,6 +210,14 @@ int main() {
     CHECK(screen<ProgramApp>(*r) == "done");
     r->key(pk::Esc);
     if (screen<ProgramApp>(*r) == "edit") r->key(pk::Esc);
+    // nuova password vuota: la password e' tolta e EDIT non la chiede piu'
+    r->type("C");
+    page(*r, 2); r->key(pk::F1);                                            // PASS
+    r->enter("abc"); r->enter("");
+    CHECK(toast(*r).find("Password tolta") != std::string::npos);
+    page(*r, 1); r->key(pk::F2);                                            // EDIT senza domanda
+    CHECK(screen<ProgramApp>(*r) == "edit");
+    r->key(pk::Esc);
 
     // ---- DEBUG: punto d'interruzione, pausa, VARS, CONT
     put(card(), "PICOCALC/CODE/C/DBG.c", "#include <stdio.h>\nint main(void) {\n    int a = 2;\n    int b = a * 21;\n    fx_setvar(\"D\", b);\n    return 0;\n}\n");

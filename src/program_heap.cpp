@@ -634,7 +634,9 @@ void Vm::killValue(const Value& v) {
         for (std::uint32_t i = 0; i < x->nfields; ++i) x->fields[i] = Value();
         break;
     }
-    case OK::StrB: { std::pmr::string().swap(static_cast<StrBObj*>(o)->s); break; }
+    // stessa risorsa dell'arena: con l'allocatore predefinito lo scambio e' indefinito
+    // (e una stringa lunga finirebbe a operator delete)
+    case OK::StrB: { std::pmr::string(heap_.resource()).swap(static_cast<StrBObj*>(o)->s); break; }
     case OK::Vec: { std::pmr::vector<Value>(heap_.resource()).swap(static_cast<VecObj*>(o)->items); break; }
     case OK::Map: {
         MapObj* m = static_cast<MapObj*>(o);

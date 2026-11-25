@@ -138,6 +138,8 @@ public:
         (void)expression; (void)locals; return {};
     }
     virtual double getVariable(char letter) { (void)letter; return 0; }   // A-Z, r (='r'), theta (='@'), Ans (='$')
+    virtual double getAnswer() { return 0; }                            // Ans
+    virtual void setPlotColor(int color) { (void)color; }               // colore dei comandi grafici (GraphColor)
     virtual void setVariable(char letter, double value) { (void)letter; (void)value; }
     // List 1-26 (indice da 1, come List 1[n]); errori come MathError.
     virtual double getListItem(int list, int index) { (void)list; (void)index; return 0; }
@@ -222,6 +224,8 @@ public:
     std::string calcExact(const std::string& expression, const std::vector<std::pair<std::string, double>>& locals) override;
     double getVariable(char letter) override;
     void setVariable(char letter, double value) override;
+    double getAnswer() override;
+    void setPlotColor(int color) override;
     double getListItem(int list, int index) override;
     void setListItem(int list, int index, double value) override;
     int listSize(int list) override;
