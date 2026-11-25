@@ -1,4 +1,4 @@
-# Memorizzazione: flash interna e microSD (v1.9.0, v1.11.0, v1.12.0, v1.13.0, v1.15.0, v1.17.0)
+# Memorizzazione: flash interna e microSD (v1.9.0, v1.11.0, v1.12.0, v1.13.0, v1.15.0, v1.17.0, v1.20.0)
 
 Il firmware usa tre memorie con ruoli diversi.
 
@@ -298,7 +298,7 @@ come nei file, [FILE_FORMATS.md](FILE_FORMATS.md)):
 | `0x0105` | Dyna Graph | funzione, coefficiente, tipo, velocità (Start/End/Pitch restano le variabili di modo della v1.13.0) |
 | `0x0107` | Recursion | tipo, formula an+2, Σan (an+1, Start, End, a0, a1 restano nelle variabili di modo) |
 | `0x0108` | Conic Graphs | modello e coefficienti |
-| `0x010A` | Program | ultimo file, riga e colonna del cursore, dialetto dei programmi nuovi |
+| `0x010A` | Program | **v1.20.0: versione 2** (il primo byte; la 1 della v1.17.0 si legge): ultimo file (percorso sulla SD), riga e colonna del cursore, dialetto dei programmi nuovi, fino a 8 file recenti, cartella aperta, URL dell'indice delle librerie, migrazione già proposta, ordinamento dell'elenco. I programmi non sono nel record: stanno sulla microSD ([§ Programmi e librerie](#programmi-e-librerie-sulla-microsd-v1200)) |
 | `0x010B` | Financial | BGN/END, SMPL, flussi di cassa, PM1/PM2, CNVT, date (le variabili TVM restano in VARS › TVM) |
 | `0x010D` | Link | ultimo pacchetto ricevuto e statistiche |
 | `0x0110` | Geometry | **v1.19.0: versione 2** (il primo byte; la 1 della v1.17.0 si migra): oggetti con definizioni e genitori, blocchi, animazioni, tracce, tabella, opzioni, vista, sfondo, contatori ([FILE_FORMATS.md](FILE_FORMATS.md#costruzioni-di-geometry-pcgeo-versione-2-v1190)) e il nome del file |
@@ -340,6 +340,49 @@ danneggiati di Geometry»), Geometry riparte vuota e il resto del record si
 legge; al primo salvataggio la sezione sparisce. Prima di tornare indietro
 conviene salvare la costruzione con File › Save as (il `.pcgeo` versione 2 si
 riapre tornando alla v1.19.0).
+
+**v1.20.0, ritorno alla v1.19.0 sulla Plus.** La v1.19.0 non conosce la
+versione 2 della sezione `0x010A` (Program): la isola («Data ERROR: dati
+danneggiati di Program») e Program riparte dai valori iniziali; i programmi
+convertiti restano sulla SD in `PICOCALC/CODE` (la v1.19.0 non li vede: usa
+ancora `PICOCALC/PROG`, che la migrazione «originali tenuti» lascia al suo
+posto).
+
+## Programmi e librerie sulla microSD (v1.20.0)
+
+Solo **Pimoroni Pico Plus 2 W**. I programmi di Program sono **file sorgente
+standard** sulla microSD, senza righe aggiunte; la flash tiene solo la sezione
+`0x010A` del record (impostazioni, file recenti, cursore). Uso:
+[PROGRAM.md](PROGRAM.md), [LIBRARIES.md](LIBRARIES.md).
+
+```
+PICOCALC/CODE/C | CPP | CS | JAVA | PY   programmi per linguaggio; una cartella = un progetto
+PICOCALC/CODE/.passwords                 password: percorso -> SHA-256 di "picocalc-code:" + password
+PICOCALC/LIB/<LING>/<nome>/              librerie installate (library.json + file)
+PICOCALC/LIB/IMPORT/                     repository copiato dal PC o ricevuto da Link
+PICOCALC/LIB/.cache/index.json           ultimo indice scaricato
+PICOCALC/LIB/.tmp/                       scaricamenti in corso e giornale dell'installazione
+PICOCALC/LIBDATA/<LING>/<nome>/          file scritti dalle librerie
+```
+
+- **Scritture atomiche** (`files::writeAtomic`): file temporaneo, verifica,
+  rinomina; vale per i salvataggi dell'editor (anche dei blocchi dei file
+  grandi, con `Store::spliceBlock` che ricopia il file a pezzi), le password,
+  il giornale delle librerie e i file scritti dai programmi (alla chiusura).
+  `code_store_test` interrompe ogni operazione dopo ogni byte scritto e
+  controlla che resti il file vecchio o quello nuovo, completo.
+- **Stati**: senza SD «Inserire la scheda SD», SD piena «SD piena», SD
+  protetta o tolta durante un'operazione «SD non scrivibile o errore di
+  lettura/scrittura»; nessuna operazione lascia file aperti.
+- **Nomi**: 1–40 caratteri `A-Z a-z 0-9 _ - .`, niente punto iniziale.
+- **Migrazione dalla v1.17.0**: i `.pcprog` di `PICOCALC/PROG` (flash
+  interna o SD; la prima riga `// pcprog: C|C++|C#` sceglie il linguaggio e
+  sparisce) e gli script di `PICOCALC/PY` diventano sorgenti in
+  `PICOCALC/CODE/<LING>`; un file già convertito uguale si salta, un nome già
+  usato da un altro file prende un suffisso (`HELLO_1.cpp`).
+- **Limiti**: editor 256 KB per intero, 4 MB a blocchi; interprete 256 KB
+  per file e 1 MB per progetto (librerie comprese), 64 file per progetto;
+  librerie 256 KB per file, 1 MB e 64 file per libreria.
 
 ## File delle modalità (v1.15.0)
 

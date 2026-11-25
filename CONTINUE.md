@@ -1,15 +1,16 @@
 # CONTINUE — punto di ripresa del progetto PicoCalc FX-CG50 AI
 
 Documento di checkpoint per riprendere lo sviluppo esattamente da qui.
-Ultimo aggiornamento: **v1.19.0 — Geometry alla parità completa (capitolo 14)
-sulla Pimoroni Pico Plus 2 W**, branch **`main`** (tag `v1.19.0` da creare con
-il workflow `.github/workflows/release.yml`, azione «publish»).
-Rapporti: `docs/reports/ANALISI_FONTI_v1.19.0.md` (tabella di parità del
-capitolo 14 voce per voce, progetto del nucleo con il grafo delle dipendenze,
-il risolutore dei blocchi e le tolleranze dichiarate, formato `.pcgeo` v2,
-domande Q1–Q18 e risposte prima del codice), `docs/reports/SVILUPPO_v1.19.0.md`
-(tabella finale, codice, errori trovati, test, firmware, cancello). Versioni
-precedenti: `ANALISI_FONTI_v1.15.0…v1.18.0.md`, `SVILUPPO_v1.15.0…v1.18.0.md`.
+Ultimo aggiornamento: **v1.20.0 — Program sulla microSD con C, C++ e C#,
+gestore dei file, editor, DEBUG e librerie** sulla Pimoroni Pico Plus 2 W,
+branch **`main`** (tag `v1.20.0` da creare con il workflow
+`.github/workflows/release.yml`, azione «publish»).
+Rapporti: `docs/reports/ANALISI_FONTI_v1.20.0.md` (tabelle del capitolo 8 e
+dei sottoinsiemi LK/LC/LP/LS, progetto del nucleo, del gestore delle librerie
+e dell'archivio, Q1–Q30), `docs/reports/SVILUPPO_v1.20.0.md` (decisioni
+S1–S14, scostamenti dall'analisi, voci rimandate alla v1.21.0, errori F1–F20,
+test, firmware, cancello). Versioni precedenti:
+`ANALISI_FONTI_v1.15.0…v1.19.0.md`, `SVILUPPO_v1.15.0…v1.19.0.md`.
 
 > **Pico 2 W congelato alla v1.16.0.** Nessuna funzione, schermata o crescita
 > dell'immagine sul Raspberry Pi Pico 2 W, salvo correzioni di errori
@@ -40,22 +41,30 @@ commit su `main`** in fast-forward («PicoCalc FxCG-50 v<ver>: <contenuto>»).
 | v1.17.0 | base di tutte le modalità: stato Base, `apps_init_test`, record v12, dieci modalità Base sulla Plus | **fatta** |
 | v1.18.0 | **Statistics alla parità completa (cap. 6)**, solo Plus; **Distribution** (cap. 18) come modalità Base | **fatta** |
 | v1.19.0 | **Geometry alla parità completa (cap. 14)**, solo Plus | **fatta** |
-| **v1.20.0** | **Program** (cap. 8 come modalità), solo Plus | **PROSSIMA** |
-| v1.21.0 | Python (cap. 17) | proposta |
-| v1.22.0… | Graph/Table (Dual Screen), Recursion, Dyna Graph, Conic Graphs, Financial, Spreadsheet, Picture Plot, Memory/System/Link, Distribution (v1.30.0), chiusura (v1.31.0) | proposta in `docs/ROADMAP.md`, da confermare a ogni versione |
+| v1.20.0 | **Program** sulla microSD: C, C++, C#, gestore dei file, editor, DEBUG, libreria `fx`, gestore delle librerie; Program resta Base | **fatta** |
+| **v1.21.0** | **Java in Program**; tabella del capitolo 8 completa per i quattro linguaggi → Program Available | **PROSSIMA** |
+| v1.22.0 | Python (cap. 17) con gli script sulla microSD | proposta |
+| v1.23.0… | Graph/Table (Dual Screen), Recursion, Dyna Graph, Conic Graphs, Financial, Spreadsheet, Picture Plot, Memory/System/Link, Distribution (v1.31.0), chiusura (v1.32.0) | proposta in `docs/ROADMAP.md`, da confermare a ogni versione |
 
 Regole fisse: manuale fx-CG50 v3.60 solo come descrizione del comportamento
 (niente codice, grafica o testi copiati da Casio); `ANALISI_FONTI_v<ver>.md`
 con la tabella di parità **prima** del codice; un test per voce; una modalità è
 Available solo con la tabella completa; nessun «TESTED ON HARDWARE» senza prova
-fisica; HARDWARE_TEST con numerazione continua (ultima usata: **HW-295**).
+fisica; HARDWARE_TEST con numerazione continua (ultima usata: **HW-313**).
 Plus: immagine < 90 % della partizione da 4 MB (controllo bloccante).
 
 ### Decisioni prese
 
-- **Program**: sottoinsiemi interpretati di C, C++ e C# (confermato
-  nella v1.17.0); file `.pcprog` con `// pcprog: <dialetto>` nella prima riga,
-  `.c/.cpp/.cs` apribili.
+- **Program (v1.20.0)**: sottoinsiemi interpretati di C11, C++17 e C# 10
+  (Java 17 nella v1.21.0) come **file sorgente standard** in
+  `PICOCALC/CODE/<LING>` sulla microSD (progetti = cartelle); i `.pcprog`
+  della v1.17.0 si migrano. Nucleo nuovo (`src/program_*.cpp`): AST →
+  istruzioni di una macchina a pila iterativa, heap con GC, coroutine da
+  48 KB, debug; riferimento dei risultati **gcc, g++ e .NET** (Mono per il
+  corpus, salvo dove diverge da .NET), C# con la cultura invariante.
+  `tests/program_corpus` (+ `tools/program_corpus_ref.py`) va esteso con ogni
+  linguaggio nuovo. Librerie in `PICOCALC/LIB/<LING>/<nome>` con
+  `library.json` e indice (`libraries/`, `tools/libraries.py`).
 - **Python**: MicroPython vero (porta `embed` v1.24.1, MIT) in
   `third_party/micropython`, solo Plus; coroutine con pila propria (ucontext
   sul PC, cambio di contesto Cortex-M33 con MSPLIM sul dispositivo), heap
@@ -93,36 +102,44 @@ Plus: immagine < 90 % della partizione da 4 MB (controllo bloccante).
 
 ## 1. Stato attuale
 
-**v1.19.0** (sopra la v1.18.0): sulla **Pimoroni Pico Plus 2 W** Geometry è
-alla **parità completa** con il capitolo 14 (Draw e Draw Spec, Construct e
-Transform legati ai genitori, casella di misura con blocchi, testo, etichette,
-espressioni, FORMAT, Undo/Redo, View, animazioni con traccia e tabella verso
-List e Statistics, `.pcgeo` v2; guida `docs/GEOMETRY.md`) ed è **Available**.
-Modalità con la parità: Run-Matrix, EQUATION, 3D Graph, eActivity, Statistics
-(Plus), Geometry (Plus). Modalità Base (solo Plus): Spreadsheet, Dyna Graph,
-Recursion, Conic Graphs, Program, Financial, Link, Picture Plot, Python,
-Distribution; cosa manca è nel campo `missing` del registro
-(`src/app_registry.cpp`) e in `docs/FEATURE_MATRIX.md`. Numeri in
-`docs/reports/SVILUPPO_v1.19.0.md` e `docs/BUILD_STATUS.md`. **Nessuna prova su
-hardware**: `docs/HARDWARE_TEST_v1.19.0.md` (HW-272…HW-295).
+**v1.20.0** (sopra la v1.19.0): sulla **Pimoroni Pico Plus 2 W** Program usa
+la microSD: programmi C, C++ e C# come sorgenti standard, gestore dei file
+(NEW file/progetto/cartella, RENAME, COPY, MOVE, DEL, DEL-ALL, SEARCH, SORT,
+password), editor con evidenziazione, rientro, parentesi, trova/sostituisci,
+undo/redo, file fino a 4 MB a blocchi, RUN con input e Ctrl+D, DEBUG con punti
+d'interruzione e variabili, libreria `fx` (calcolo, liste, matrici, grafica,
+statistiche, distribuzioni, finanza), gestore delle librerie (LIB: indice
+HTTPS, SHA-256, dipendenze semver, installazione atomica con giornale);
+guide `docs/PROGRAM.md`, `docs/LIBRARIES.md`, esempi `docs/examples/program`.
+Program resta **Base**. Modalità con la parità: Run-Matrix, EQUATION, 3D
+Graph, eActivity, Statistics (Plus), Geometry (Plus). Numeri in
+`docs/reports/SVILUPPO_v1.20.0.md` e `docs/BUILD_STATUS.md`. **Nessuna prova su
+hardware**: `docs/HARDWARE_TEST_v1.20.0.md` (HW-296…HW-313).
 
-## 2. Prossima sessione: v1.20.0 = Program alla parità completa (solo Plus)
+## 2. Prossima sessione: v1.21.0 = Java in Program, Program Available (solo Plus)
 
 1. `git fetch origin main`; branch di sessione da `main`.
-2. `docs/reports/ANALISI_FONTI_v1.20.0.md` con la tabella di parità del
-   capitolo 8 come modalità (elenco, EDIT, NEW, DEL, DEL-ALL, SEARCH, RENAME,
-   password, DEBUG, comandi di I/O e grafici, libreria `fx`) **prima del codice**,
-   nei dialetti C, C++ e C# già decisi; una voce = un test.
-3. Codice solo sulla Plus: nucleo `program_mode.hpp/.cpp` e interprete F9
-   (`program.hpp`, `src/program_*.cpp`), controller `src/apps/program_app.cpp`,
-   sezione `0x010A`, file `.pcprog`; esecuzione e debug in `step::Task` con AC.
-4. Alla fine Program passa da Base ad Available; `architecture_test` aggiornato.
-5. Poi v1.21.0 Python (ROADMAP).
+2. `docs/reports/ANALISI_FONTI_v1.21.0.md` **prima del codice**: tabella LJ
+   del sottoinsieme di Java 17 (classi, interfacce, generici, eccezioni,
+   `java.util`, `Scanner`, `String.format`, `Math`), tabella del capitolo 8
+   per i quattro linguaggi con le voci rimandate dalla v1.20.0
+   (SVILUPPO_v1.20.0 §3: RECENT, più modelli, password a NEW, file senza nome,
+   numeri di riga nascosti, JUMP › MATCH, sostituzione una per volta, MENU e
+   CHAR, CALLS, SD protetta); una voce = un test.
+3. Codice: front-end Java (`src/program_parse_java.cpp` esiste come scheletro)
+   sul nucleo della v1.20.0 (stesso AST, stesse istruzioni, stesso GC),
+   natives `java.util`, librerie `LIB/JAVA`, programmi in `CODE/JAVA` (cartelle
+   = package); corpus con le uscite di `javac`/`java`.
+4. Alla fine Program passa da Base ad **Available**; `architecture_test`
+   aggiornato.
+5. Poi v1.22.0 Python (ROADMAP).
 
 ## 3. Cosa è stato fatto nelle ultime sessioni (v1.15.0, v1.16.0, v1.17.0)
 
 | Area | Contenuto |
 |---|---|
+| Git (v1.20.0) | partenza da `main` = `bcd28af` (v1.19.0); commit intermedi su `claude/blissful-knuth-x1ei65`; un solo commit su `main` in fast-forward |
+| v1.20.0 | `ANALISI_FONTI_v1.20.0.md` (tabelle PM/PW/RN/ED/DB/SD/MG/FX, LK/LC/LP/LS, progetto del nucleo e delle librerie, Q1–Q30); nucleo dell'interprete nuovo; `code_store`, `lib_manager`, `lib_fetch` (HTTPS solo Plus), `program_app.cpp`; `libraries/` con 9 librerie; test `program_lang_test`, `program_corpus_test` (51 programmi = gcc/g++/Mono), `code_store_test`, `lib_manager_test`, `libraries_test` (anche gli esempi), `program_flow_test`, `https_lib_test`; fuzzer `fuzz_c`, `fuzz_cpp`, `fuzz_cs`, `fuzz_libjson`, `fuzz_http`, `fuzz_codestore`; screenshot 203–223; errori F1–F20 |
 | Git (v1.19.0) | partenza da `main` = `a7c861b` (v1.18.0); commit intermedi su `ccr-6804dfc4-cwp8zw`; un solo commit su `main` in fast-forward |
 | v1.19.0 | `ANALISI_FONTI_v1.19.0.md` (tabella del cap. 14, Q1–Q18, tolleranze); nucleo puro `src/geometry*.cpp` (grafo, ricalcolo incrementale, intersezioni, costruzioni, trasformazioni, misure, `SolveTask`, `AnimationTask`, `.pcgeo` v2 e migrazione v1 con la fixture `tests/fixtures/geometry_v1_17_0.inc`); controller `geometry_app.cpp`/`geometry_view.cpp`; test `geometry_test` (una voce un caso, proprietà G01–G14), `geometry_flow_test` (tasti veri); `fuzz_geometry` (formato e sequenze di comandi; un errore trovato e corretto); screenshot 175–202 (144 e 172 rigenerati) |
 | Git (v1.18.0) | partenza da `main` = `aa2923c` (v1.17.0); commit intermedi su `claude/eager-wozniak-bg3tqx`; un solo commit su `main` in fast-forward |
@@ -136,7 +153,7 @@ hardware**: `docs/HARDWARE_TEST_v1.19.0.md` (HW-272…HW-295).
 
 ## 4. Collaudo fisico
 
-Resta prioritario appena la PicoCalc è disponibile: HW-01…HW-295 (log USB
+Resta prioritario appena la PicoCalc è disponibile: HW-01…HW-313 (log USB
 dall'accensione, righe `[psram]`, `[flash]`, `[mem]`, `[DIAG]`, `[fault]`,
 foto). Per la v1.17.0 in particolare: la coroutine di Python sul Cortex-M33
 (cambio di contesto, MSPLIM, KeyboardInterrupt, RecursionError senza

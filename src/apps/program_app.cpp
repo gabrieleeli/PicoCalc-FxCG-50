@@ -71,10 +71,10 @@ const FKeyMenu kInfoMenu{&kInfoPage, 1, nullptr};
 enum Screen : int { Files, Edit, Run, Vars, Lib, Info, Setup };
 // domande e nomi (FileDialog) e menu
 enum Ask : int {
-    AskNone = 0, AskNewName, AskRename, AskSearch, AskPick, AskPassOld, AskPassNew, AskEditPass, AskFind, AskReplaceWhat, AskReplaceWith,
-    AskGoto, AskSaveAs, AskCopyTo, AskMoveTo, AskLibChoose, AskConfirmPlan,
+    AskNone = 0, AskNewName, AskRename, AskSearch, AskPick, AskPassOld, AskPassNew, AskEditPass, AskDebugPass, AskFind, AskReplaceWhat, AskReplaceWith,
+    AskGoto, AskSaveAs, AskCopyTo, AskMoveTo, AskLibChoose,
 };
-enum Confirm : int { ConfirmDel = 1, ConfirmDelAll, ConfirmLibDel, ConfirmPlan };
+enum Confirm : int { ConfirmDel = 1, ConfirmDelAll, ConfirmLibDel };
 // Domande con piu' risposte (il "No" della ConfirmBox chiude soltanto): menu.
 enum MenuTag : int { MenuNewKind = 1, MenuNewLang, MenuMigrate };
 constexpr int EditorRows = 15;
@@ -214,6 +214,29 @@ struct TextPrompt {
         ui::text(c, box.x + 8, box.y + 50, hint.c_str(), Muted, font::Face::Small);
     }
 };
+// Conferma del piano d'installazione su piu' righe (la ConfirmBox condivisa,
+// congelata con il Pico 2 W, ha una riga sola): una riga per libreria.
+struct PlanBox {
+    bool active{false};
+    bool warn{false};                                   // versione piu' vecchia
+    std::string title;
+    std::vector<std::string> lines;
+    // 1: si', 0: no, -1: ancora aperta
+    int key(const KeyEvent& ev) {
+        if (ev.is(Key::F1) || ev.is(Key::Exe)) { active = false; return 1; }
+        if (ev.is(Key::F6) || ev.is(Key::Exit) || ev.is(Key::AC)) { active = false; return 0; }
+        return -1;
+    }
+    void draw(gfx::Canvas& c) const {
+        if (!active) return;
+        const int rows = static_cast<int>(std::min<std::size_t>(lines.size(), 6));
+        const gfx::Rect box{16, 80, ui::ScreenW - 32, 50 + rows * 18};
+        ui::panel(c, box, Bg, warn ? Error : Warn);
+        ui::text(c, box.x + 8, box.y + 6, title.c_str(), warn ? Error : Accent, font::Face::Small);
+        for (int i = 0; i < rows; ++i) ui::textFit(c, box.x + 8, box.y + 24 + i * 18, lines[static_cast<std::size_t>(i)], box.w - 16, Ink);
+        ui::text(c, box.x + 8, box.y + box.h - 20, "F1/EXE: S\xC3\xAC   F6/EXIT: No", Muted, font::Face::Small);
+    }
+};
 bool printable(char c) { return c >= 32 && c < 127; }
 bool digit(char c) { return c >= '0' && c <= '9'; }
 bool passChar(char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-' || c == '.'; }
@@ -230,6 +253,7 @@ struct ProgramApp::View {
     std::string status;                                 // "Inserire la scheda SD"...
     FileDialog dialog;
     TextPrompt prompt;                                  // Trova, Sostituisci, riga, password
+    PlanBox planBox;                                    // conferma del piano d'installazione
     Ask ask{AskNone};
     std::string target;                                 // file o cartella dell'operazione
     std::vector<std::string> picks;                     // risultati di SEARCH, cartelle di COPY/MOVE
@@ -237,6 +261,7 @@ struct ProgramApp::View {
     int migrateChoices{0};                              // voci del menu della migrazione
     code::Lang newLang{code::Lang::Cpp};
     std::string passOld;
+    std::set<std::string> unlocked;                     // file protetti aperti con la password in questa sessione
     // ---- editor
     TextEditor editor{code::MaxEditBytes};
     std::string file;
@@ -420,6 +445,8 @@ void saveFile(Context& ctx, V& v) {
 }
 void openEditor(Context& ctx, V& v, const std::string& path, int line = 0, int column = 0) {
     code::Store st = store(ctx);
+    // fx-CG50 8-5: il salto all'errore non apre un file protetto (si apre con EDIT e la password)
+    if (!v.unlocked.count(path) && st.locked(path)) throw MathError("file protetto da password: aprirlo con EDIT");
     std::uint64_t size = 0;
     const files::Status ss = st.fileSize(path, size);
     if (ss != files::Status::Ok) storeError(ss, baseName(path));
@@ -705,16 +732,21 @@ void proposePlan(Context& ctx, V& v, const std::string& key) {
     files::FileSystem* fs = sd(ctx);
     if (!fs) storeError(files::Status::NoCard);
     if (!libs::makePlan(v.index, libs::listInstalled(*fs, ""), name, lang, firmwareVersion(), v.plan, err)) throw MathError(err);
-    std::string text;
-    bool any = false, down = false;
+    std::vector<std::string> lines;
+    bool down = false;
     for (const libs::PlanStep& s : v.plan) {
         if (s.upToDate) continue;
-        any = true;
-        text += (text.empty() ? "" : ", ") + s.entry.name + " " + (s.fromVersion.empty() ? std::string() : s.fromVersion + "->") + s.entry.version.text();
+        std::string l = s.entry.name + " " + (s.fromVersion.empty() ? std::string() : s.fromVersion + " -> ") + s.entry.version.text();
+        if (s.entry.name != name) l += "  (dipendenza)";
+        if (s.downgrade) l += "  VERSIONE PIU' VECCHIA";
+        lines.push_back(l);
         down = down || s.downgrade;
     }
-    if (!any) { ctx.toast(name + " e' gia' aggiornata"); return; }
-    v.shell.confirm.open(std::string(down ? "ATTENZIONE versione piu' vecchia! " : "") + "Installare " + text + "?", ConfirmPlan);
+    if (lines.empty()) { ctx.toast(name + " e' gia' aggiornata"); return; }
+    v.planBox.title = down ? "ATTENZIONE: versione piu' vecchia. Installare?" : "Installare " + std::to_string(lines.size()) + (lines.size() == 1 ? " libreria?" : " librerie?");
+    v.planBox.lines = std::move(lines);
+    v.planBox.warn = down;
+    v.planBox.active = true;
 }
 void startInstall(Context& ctx, V& v) {
     files::FileSystem* fs = sd(ctx);
@@ -756,7 +788,8 @@ void openSetup(Context& ctx, V& v) {
     sort.label = "Ordine";
     sort.type = FormField::Type::Choice;
     sort.choices = {"Nome", "Tipo", "Dimensione"};
-    sort.choice = ctx.ws.program.sort;
+    sort.choice = std::min<int>(ctx.ws.program.sort, 2);
+    sort.text = sort.choices[static_cast<std::size_t>(sort.choice)];       // il Form disegna text
     v.setup.fields.push_back(sort);
     v.setup.selected = 0;
     v.back = v.screen == Setup ? v.back : v.screen;
@@ -936,6 +969,11 @@ void ProgramApp::key(Context& ctx, const KeyEvent& ev) {
     if (!v_) enter(ctx);
     View& v = *v_;
     // ---- nomi, elenchi e domande
+    if (v.planBox.active) {
+        const int r = v.planBox.key(ev);
+        if (r == 1) startInstall(ctx, v);
+        return;
+    }
     if (v.prompt.active || v.dialog.active()) {
         const bool fromPrompt = v.prompt.active;
         const int r = fromPrompt ? v.prompt.key(ev) : v.dialog.key(ev);
@@ -996,6 +1034,7 @@ void ProgramApp::key(Context& ctx, const KeyEvent& ev) {
             v.prompt.open("Nuova password di " + baseName(v.target), "Password:", "EXE conferma (vuota: nessuna password)", "", 8, true, passChar);
             return;
         case AskPassNew: {
+            v.unlocked.erase(v.target);
             const files::Status s = st.setPassword(v.target, name);
             if (s != files::Status::Ok) storeError(s, "password");
             ctx.toast(name.empty() ? "Password tolta" : "Password impostata (chiesta per EDIT)");
@@ -1004,7 +1043,14 @@ void ProgramApp::key(Context& ctx, const KeyEvent& ev) {
         }
         case AskEditPass:
             if (!st.checkPassword(v.target, name)) throw MathError("password errata");
+            v.unlocked.insert(v.target);
             openEditor(ctx, v, v.target);
+            return;
+        case AskDebugPass:
+            // DEBUG mostra il sorgente: chiede la password come EDIT (RUN no)
+            if (!st.checkPassword(v.target, name)) throw MathError("password errata");
+            v.unlocked.insert(v.target);
+            startRun(ctx, v, v.target, true);
             return;
         case AskFind:
             v.findText = name;
@@ -1092,9 +1138,6 @@ void ProgramApp::key(Context& ctx, const KeyEvent& ev) {
                     refreshLibs(ctx, v);
                 }
                 return;
-            case ConfirmPlan:
-                if (yes) startInstall(ctx, v);
-                return;
             default: return;
             }
         },
@@ -1143,6 +1186,12 @@ void ProgramApp::key(Context& ctx, const KeyEvent& ev) {
         case ActRun: case ActDebug: {
             const std::string p = selectedPath(v);
             if (it && it->dir && isLangRoot(p)) { v.dir = p; refresh(ctx, v); return; }
+            if (a == ActDebug && it && !it->dir && it->locked && !v.unlocked.count(p)) {
+                v.target = p;
+                v.ask = AskDebugPass;
+                v.prompt.open("Password di " + baseName(p), "Password:", "DEBUG mostra il sorgente: EXE conferma", "", 8, false, passChar);
+                return;
+            }
             startRun(ctx, v, p, a == ActDebug);
             return;
         }
@@ -1659,5 +1708,6 @@ void ProgramApp::draw(Context& ctx, gfx::Canvas& c) {
     v.shell.drawModals(c);
     v.dialog.draw(c);
     v.prompt.draw(c);
+    v.planBox.draw(c);
 }
 } // namespace fx::app

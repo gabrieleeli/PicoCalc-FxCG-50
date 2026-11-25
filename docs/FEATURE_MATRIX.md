@@ -1,5 +1,22 @@
-# Feature matrix — v1.19.0
+# Feature matrix — v1.20.0
 
+La v1.20.0 porta **Program** sulla microSD della **Pimoroni Pico Plus 2 W**:
+programmi in **C, C++ e C#** come file sorgente standard in
+`PICOCALC/CODE/<LING>` (progetti = cartelle), gestore dei file con le funzioni
+del capitolo 8 (NEW, RUN, EDIT, RENAME, COPY, MOVE, DEL, DEL-ALL, SEARCH,
+ordinamento, password), editor con numeri di riga, evidenziazione, rientro,
+parentesi, trova/sostituisci, undo/redo e file fino a 4 MB a blocchi, DEBUG
+passo passo con punti d'interruzione e variabili, un **nucleo
+dell'interprete nuovo** (macchina a pila iterativa, GC, eccezioni, librerie
+standard) confrontato con gcc, g++ e Mono su 51 programmi, la libreria `fx`
+con statistiche, distribuzioni e finanza, e il **gestore delle librerie**
+(indice HTTPS, SHA-256, dipendenze semver, installazione atomica). Program
+resta **Base** fino a Java (v1.21.0)
+([reports/ANALISI_FONTI_v1.20.0.md](reports/ANALISI_FONTI_v1.20.0.md),
+[reports/SVILUPPO_v1.20.0.md](reports/SVILUPPO_v1.20.0.md),
+[PROGRAM.md](PROGRAM.md), [LIBRARIES.md](LIBRARIES.md)). Il **Raspberry Pi
+Pico 2 W resta congelato alla v1.16.0**. Nessuna voce è provata su hardware
+([HARDWARE_TEST_v1.20.0.md](HARDWARE_TEST_v1.20.0.md)).
 La v1.19.0 porta **Geometry alla parità completa** con il capitolo 14 del
 manuale fx-CG50 sulla **Pimoroni Pico Plus 2 W** (stato **Available**): Draw e
 Draw Spec, Construct e Transform legati ai genitori (grafo delle dipendenze con
@@ -297,7 +314,16 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | Recursion (v1.17.0, Base, solo Plus): an+1 e an+2 con a0/a1, Start/End, tabella a passi con Σan, grafico dei punti e ragnatela (WEB); formula della v1.13.0 conservata | TESTED ON SIMULATOR | screenshot 133–135; [RECURSION.md](RECURSION.md) |
 | Conic Graphs (v1.17.0, Base, solo Plus): parabole (due), circonferenza, ellisse, iperbole (due) con A, B, H, K, R; disegno, TRACE, G-SOLVE (vertice, fuoco, centro, raggio, asintoti, eccentricità) | TESTED ON SIMULATOR | screenshot 136–138; [CONIC_GRAPHS.md](CONIC_GRAPHS.md) |
 | Financial (v1.17.0, Base, solo Plus): interesse semplice e composto (TVM sulle variabili di VARS › TVM, BGN/END), flussi di cassa (NPV, IRR, PBP, NFV), ammortamento PM1…PM2, conversione dei tassi, giorni tra due date; →Ans | TESTED ON SIMULATOR | `fuzz_modes`; screenshot 139, 140; [FINANCIAL.md](FINANCIAL.md) |
-| Program (v1.17.0, Base, solo Plus): elenco dei programmi `.pcprog` (C, C++, C#) e `.c/.cpp/.cs`, NEW con modello per dialetto, editor con colori della sintassi, RUN sul nucleo della v1.15.0 con input, AC, errori con riga e colonna e cursore; comandi grafici in Graph; liste con `fx::` | TESTED ON SIMULATOR | screenshot 141, 142; [PROGRAM.md](PROGRAM.md) |
+| Program (v1.20.0, Base, solo Plus): gestore dei file di `PICOCALC/CODE` con cartelle e progetti, NEW file/progetto/cartella dai modelli, EXE, EDIT, RENAME, COPY, MOVE, DEL, DEL-ALL con conferma, SEARCH dall'inizio del nome, SORT, password chiesta per EDIT | TESTED ON SIMULATOR | `program_flow_test`, `code_store_test`; screenshot 141, 142, 203–205, 215, 216; [PROGRAM.md](PROGRAM.md) |
+| Program: editor con numeri di riga, evidenziazione, rientro automatico, parentesi corrispondente, FIND/REPLACE, UNDO/REDO, JUMP, ERR, copia/incolla, SAVE/SAVE·AS atomici, file fino a 4 MB a blocchi (256 KB per intero) | TESTED ON SIMULATOR | `program_flow_test` (file di 3 MB), `code_store_test`, `fuzz_ui`; screenshot 206, 207, 211 |
+| Program: RUN a passi con input, Ctrl+D (EOF), AC = Break, errori con file, riga e colonna, cursore sull'errore; GRAPH per i disegni | TESTED ON SIMULATOR | `program_flow_test`, `program_lang_test`; screenshot 208–210 |
+| Program: DEBUG con STEP/OVER/OUT/CONT, punti d'interruzione all'ingresso della riga, pila delle chiamate, variabili e figli, AC in pausa | TESTED ON SIMULATOR | `program_lang_test` DB-01…DB-07, `program_flow_test`; screenshot 212–214 |
+| Program: nucleo dell'interprete (C11, C++17, C# 10 in sottoinsieme; tabelle LK/LC/LP/LS dell'analisi), GC, eccezioni, librerie standard, file confinati nella cartella del programma | TESTED ON HOST | `program_lang_test`, `program_core_test`, `program_corpus_test` (51 programmi = gcc/g++/Mono), `fuzz_c`, `fuzz_cpp`, `fuzz_cs`, `fuzz_program` |
+| Program: libreria `fx` (calcolo, variabili, liste, matrici, testo e tasti, grafica, statistiche 1-Var/2-Var e 12 regressioni, distribuzioni, finanza) in C, C++ e C# | TESTED ON HOST | `program_lang_test`, `libraries_test` (esempi) |
+| Program: migrazione dei `.pcprog` e `.py` della v1.17.0 da flash e SD | TESTED ON HOST | `code_store_test`, `program_flow_test` |
+| Librerie (v1.20.0, solo Plus): LIB con INFO, INST, UPD (downgrade con conferma), DEL (avviso sulle dipendenti), VERIF, LOCAL, INDEX; manifest e indice con SHA-256, semver e firmware minimo; piano con dipendenze, conflitti e cicli; installazione atomica con giornale e recupero; AC | TESTED ON SIMULATOR | `lib_manager_test`, `libraries_test`, `program_flow_test`, `fuzz_libjson`; screenshot 217–222; [LIBRARIES.md](LIBRARIES.md) |
+| Librerie: scaricamento HTTPS (mbedTLS) con streaming verso la SD, impronta e dimensione controllate mentre arrivano | TESTED ON HOST (server HTTPS locale, `https_lib_test`, `fuzz_http`); NOT TESTED ON HARDWARE (Wi-Fi reale: HW-305) |
+| Librerie: invio dal PC (`picocalc_link.py send-library`) e cartella `LIB/IMPORT` | TESTED ON HOST (`link_tool_test`, `libraries_test`) |
 | Link (v1.17.0, Base, solo Plus): invio e ricezione su USB seriale di workspace e file tipizzati in pacchetti `.pclink` (trame con CRC, conferme, ritrasmissione, AC, Time Out), APPLY con conferma; strumento `tools/picocalc_link.py` per il PC | TESTED ON SIMULATOR | `base_modes_test` (porta in memoria), `link_tool_test` (andata e ritorno con il PC), `fuzz_link`; screenshot 143; USB reale da collaudare (HW-235…HW-238); [LINK.md](LINK.md) |
 | Geometry (v1.19.0, **Available**, solo Plus): menu F1 File/View, F2 Edit/Option/Properties, F3 Draw/Draw Spec, F4 Construct, F5 Transform, F6 Animate con le schede ◀ ▶; puntatore con passo rotondo, SHIFT ×4, salti 1–9; tasti diretti + − . x * v, DEL, AC, OPTN, SHIFT F3, SHIFT MENU, SHIFT 5 | TESTED ON SIMULATOR | v1.19.0, `geometry_flow_test` K01–K03; screenshot 175–184; [GEOMETRY.md](GEOMETRY.md) |
 | Geometry: File (New, Open con DELETE, Save as, Key Help, Option), `.pcgeo` versione 2 e lettura dei file della v1.17.0; View (Zoom Box, Pan, Scroll, Zoom In/Out, Zoom to Fit, Axes On/Scale/Off, Grid On/Line/Off, V-Window) | TESTED ON SIMULATOR | F01–F05, V01–V10, P01–P02; screenshot 190–192 |
@@ -339,7 +365,8 @@ Nessuna voce è COMPLETE e il progetto **non** ha la parità con la fx-CG50.
 | MEMORY › FILES (v1.15.0): file per tipo con numero e spazio, eliminazione con conferma | TESTED ON SIMULATOR (screenshot 105–107) |
 | Documenti eActivity `.pceact` (v1.16.0): righe, attributi, memo, risultati, strisce con le parti del workspace, memorie del file; tipi sconosciuti conservati; scrittura atomica | TESTED ON HOST (`eactivity_test`, `fuzz_eactivity`) |
 | Sezione `0x0102` del record (v1.16.0): cartella, ultimo file, dati del menu principale durante un documento o una striscia, rimessi a posto dopo un'interruzione | TESTED ON HOST (`eactivity_test`, `fuzz_workspace`) |
-| Programmi `.pcprog` e script `.py` (v1.17.0, solo Plus): testo UTF-8 nel file tipizzato, dialetto nella prima riga | TESTED ON HOST (`base_modes_test`, `base_flow_test`) |
+| Programmi `.pcprog` e script `.py` (v1.17.0, solo Plus): testo UTF-8 nel file tipizzato, dialetto nella prima riga (v1.20.0: si leggono solo per la migrazione) | TESTED ON HOST (`base_modes_test`, `base_flow_test`) |
+| Programmi sulla microSD (v1.20.0, solo Plus): sorgenti standard in `PICOCALC/CODE/<LING>`, scritture atomiche con interruzione dopo ogni byte, «Inserire la scheda SD», «SD piena», password in `CODE/.passwords`, sezione `0x010A` versione 2 | TESTED ON HOST (`code_store_test`, `fuzz_codestore`, `workspace_v117_test`) |
 | File `.pcsheet`, `.pcdyna`, `.pcrecur`, `.pcconic`, `.pcfin`, `.pcgeo`, `.pcplot`, `.pclink` (v1.17.0, solo Plus) | TESTED ON HOST (`base_modes_test`, `fuzz_sheet`, `fuzz_modes`, `fuzz_link`) |
 | Record v12 (v1.17.0, solo Plus): firma della scheda e della versione, CRC per sezione, sezioni `0x0100 + AppId` delle dieci modalità (`0x0103`, `0x0105`, `0x0107`, `0x0108`, `0x010A`, `0x010B`, `0x010D`, `0x0110`, `0x0111`, `0x0114`), sezione danneggiata isolata con avviso all'avvio, migrazione dal record v11 della v1.16.0 (fixture); parti delle modalità nelle strisce dell'eActivity | TESTED ON HOST (`workspace_v117_test`, `apps_init_test`, `fuzz_workspace`) |
 | Record v12 (v1.18.0, solo Plus): sezione `0x0101` di Statistics (StatGraph1–3, SET di CALC, SET UP, colori e formule delle 26 liste, risultati dell'ultimo calcolo) e `0x0117` di Distribution, scritte solo se diverse dai valori iniziali, isolate se danneggiate; un record senza le sezioni (v1.17.0 e prima) si legge con i valori iniziali | TESTED ON HOST (`statistics_test`, `statistics_flow_test` U02, `base_modes_test`, `fuzz_stats`, `fuzz_workspace`) |

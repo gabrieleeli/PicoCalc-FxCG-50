@@ -202,6 +202,11 @@ int main() {
     r->key(pk::F2); r->enter("zzz");                                        // EDIT con la password sbagliata
     CHECK(r->error() && r->errorDetail().find("password errata") != std::string::npos);
     r->closeError();
+    page(*r, 2); r->key(pk::F4); r->enter("zzz");                           // DEBUG mostra il sorgente: chiede la password
+    CHECK(r->error() && r->errorDetail().find("password errata") != std::string::npos);
+    r->closeError();
+    CHECK(screen<ProgramApp>(*r) == "list");
+    page(*r, 1);                                                            // pagina 1
     r->key(pk::F2); r->enter("abc");
     CHECK(screen<ProgramApp>(*r) == "edit");
     r->key(pk::Esc);

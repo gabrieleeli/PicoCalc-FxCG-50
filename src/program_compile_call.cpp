@@ -1642,10 +1642,12 @@ TypeP Compiler::lambdaType(Node* n) {
     if (n->type) ret = resolveType(n->type, true);
     else if (Node* re = firstReturn(n->b)) {
         if (!fn_) return nullptr;
-        auto saveScopes = scopes_;
+        // solo uno scope in piu', tolto alla fine: gli scope del chiamante non si
+        // riassegnano (un LocalVar& del chiamante, come in initVariable, resta valido)
+        const std::size_t depth = scopes_.size();
         const std::int32_t saveN = fn_->nlocals;
         const std::size_t saveLocals = fn_->locals.size();
-        auto saveFree = freeSlots_;
+        const auto saveFree = freeSlots_;
         pushScope();
         try {
             for (std::size_t i = 0; i < ps.size(); ++i)
@@ -1656,10 +1658,10 @@ TypeP Compiler::lambdaType(Node* n) {
         } catch (const Error&) {
             ret = nullptr;
         }
-        scopes_ = std::move(saveScopes);
+        scopes_.resize(depth);
         fn_->nlocals = saveN;
         fn_->locals.resize(saveLocals);
-        freeSlots_ = std::move(saveFree);
+        freeSlots_ = saveFree;
         if (!ret || ret->k == TK::Dynamic) return nullptr;
     } else ret = tVoid_;
     // tipo "oggetto lambda" (size 1): come parametro non diventa un puntatore a

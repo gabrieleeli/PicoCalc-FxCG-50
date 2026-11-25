@@ -10,6 +10,7 @@
 #include "program.hpp"
 #include "test_util.hpp"
 #include "workspace.hpp"
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -55,6 +56,63 @@ std::string run(code::Store& st, const std::string& path, const std::string& sou
         return host.output + "ERR[" + e.what() + " @" + e.file + ":" + std::to_string(e.line) + "]";
     }
     return host.output;
+}
+// Esempi di docs/examples/program: il sorgente va nella cartella del suo
+// linguaggio (PICOCALC/CODE/<LING>), con l'input <nome>.in; l'uscita deve
+// essere <nome>.out. Ritorna gli esempi eseguiti.
+int runExamples(code::Store& st, Workspace& ws) {
+    namespace fsys = std::filesystem;
+    const std::pair<const char*, const char*> langs[] = {{"c", "C"}, {"cpp", "CPP"}, {"cs", "CS"}};
+    int n = 0;
+    for (const auto& [dir, folder] : langs) {
+        std::vector<fsys::path> srcs;
+        for (const auto& e : fsys::directory_iterator(fsys::path(FXAI_EXAMPLES_DIR) / dir))
+            if (e.path().extension() == std::string(".") + dir) srcs.push_back(e.path());
+        std::sort(srcs.begin(), srcs.end());
+        for (const auto& src : srcs) {
+            auto slurp = [](const fsys::path& p) {
+                std::ifstream in(p, std::ios::binary);
+                return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            };
+            const std::string path = std::string("PICOCALC/CODE/") + folder + "/" + src.filename().string();
+            put(*static_cast<RamFileSystem*>(st.fileSystem()), path, slurp(src));
+            prog::Project p;
+            std::unique_ptr<code::ProjectSources> sources;
+            std::string programFolder, err;
+            std::string got;
+            prog::WorkspaceHost host(ws);
+            if (!code::loadProject(st, path, p, sources, programFolder, err)) got = "LOAD[" + err + "]";
+            else {
+                host.fs = st.fileSystem();
+                host.folder = programFolder;
+                fsys::path in = src;
+                in.replace_extension(".in");
+                if (fsys::exists(in)) {
+                    const std::string text = slurp(in);
+                    for (std::size_t a = 0; a < text.size();) {
+                        std::size_t b = text.find('\n', a);
+                        if (b == std::string::npos) b = text.size();
+                        host.input.push_back(text.substr(a, b - a));
+                        a = b + 1;
+                    }
+                }
+                host.endOfInput = true;
+                try {
+                    prog::Machine m(prog::compile(p), host);
+                    m.runToEnd(50000000);
+                    got = host.output;
+                } catch (const prog::Error& e) {
+                    got = host.output + "ERR[" + e.what() + " @" + e.file + ":" + std::to_string(e.line) + "]";
+                }
+            }
+            fsys::path outp = src;
+            outp.replace_extension(".out");
+            const std::string want = slurp(outp);
+            ::testutil::report(got == want, src.filename().string().c_str(), __FILE__, __LINE__, got == want ? std::string() : "uscita:\n" + got);
+            ++n;
+        }
+    }
+    return n;
 }
 } // namespace
 
@@ -211,5 +269,12 @@ class P {
     }
 }
 )~"), "1 3\n3 7\n-2 3 24 3\ndimensioni incompatibili per il prodotto\n");
+    // ---- esempi della documentazione (docs/examples/program), anche con le librerie installate
+    {
+        Workspace ws;
+        CHECK(runExamples(st, ws) >= 5);
+        CHECK(ws.memory.recall('X') == -3 && ws.memory.recall('Y') == 1);   // Equazioni.cpp: radici dell'ultima equazione reale
+        CHECK(ws.lists[1].size() == 8);                                      // StatisticheCSV.cs: List 2
+    }
     return testutil::finish("libraries_test");
 }
