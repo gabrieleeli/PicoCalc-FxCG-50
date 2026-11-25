@@ -121,15 +121,15 @@ D1–D12. In più: C# con la cultura invariante (S3).
 | Suite cambiate | `architecture_test` 2 927 (sorgenti e servizi nuovi solo Plus), `geometry_test` 264 (+2, F11), `base_modes_test` 444, `base_flow_test` 125 (Program della v1.17.0 sostituita), `program_core_test` 47 (regressione del nucleo della v1.15.0 sul nucleo nuovo) | `architecture_test` 2 462 |
 | ASan + UBSan (bloccante), TSan | 72/72, TSan superato (dopo i falsi positivi di `-Warray-bounds` di GCC 13 nella build con i sanitizer, corretti come nella v1.19.0) | 54/54, TSan superato |
 | Corpus differenziale | 51 programmi (C 12, C++ 25, C# 14) identici byte per byte a gcc 13, g++ 13 e Mono 6; i 5 esempi della documentazione identici a g++, gcc (`-std=gnu11`) e Mono togliendo le chiamate `fx` | — |
-| Fuzzing (≥ 300 s per harness nuovo o toccato, sul codice finale) | @@FUZZ@@ | — |
-| Simulatore (`tools/sim_compare.py`) | **211 identici** al confronto finale: 190 precedenti invariati, 2 rigenerati per cambiamenti voluti (141, 142: la Program della v1.17.0 con il gestore dei file e l'editor nuovi), 21 nuovi (203–223, `tests/sim/program_v120.txt`) | le stesse schermate (Program non esiste) |
+| Fuzzing (≥ 300 s per harness nuovo o toccato, sul codice finale) | nuovi: `fuzz_c` 346 445 esecuzioni (314 s), `fuzz_cpp` 275 720 (322 s), `fuzz_cs` 366 416 (318 s), `fuzz_libjson` 6 771 667 (303 s), `fuzz_http` 4 499 522 (303 s), `fuzz_codestore` 139 861 (311 s); toccati: `fuzz_program` 848 339 (313 s), `fuzz_modes` 1 089 642 (306 s), `fuzz_ui` 6 606 (315 s): nessun crash né artefatto sul codice finale. Durante lo sviluppo i fuzzer hanno trovato F4, F8–F11, F19 e F21 (§6) | — |
+| Simulatore (`tools/sim_compare.py`) | **213 identici** al confronto finale: 190 precedenti invariati, 2 rigenerati per cambiamenti voluti (141, 142: la Program della v1.17.0 con il gestore dei file e l'editor nuovi), 21 nuovi (203–223, `tests/sim/program_v120.txt`) | le stesse schermate (Program non esiste) |
 | Relay AI | 15/15 | — |
 
 ## 8. Firmware e memoria
 
 | Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
 |---|---|---|
-| Immagine | **3 639 616 B** = 87 % della partizione da 4 MB (+656 056 B sulla v1.19.0; budget 3 774 873 B: restano 135 257 B) | **1 944 228 B** = 92 % della partizione da 2 MB, **identica** alla v1.19.0 salvo la stringa della versione e la data (9 byte); restano 120 156 B sotto il budget di 2 064 384 B |
+| Immagine | **3 639 624 B** = 87 % della partizione da 4 MB (+656 064 B sulla v1.19.0; budget 3 774 873 B: restano 135 249 B) | **1 944 228 B** = 92 % della partizione da 2 MB, **identica** alla v1.19.0 salvo la stringa della versione e la data (9 byte); restano 120 156 B sotto il budget di 2 064 384 B |
 | RAM statica | 313 536 B fino a `__end__` = `0x2004C8C0` (+800 B); heap SRAM 177 984 B | 305 236 B (invariata); heap SRAM 186 284 B |
 | Oggetti esclusi nella mappa | 0 (tutto compilato) | **208** oggetti/simboli della Plus (+23: i file nuovi di Program e delle librerie), nessuno nell'immagine |
 | Warning del compilatore | nessuno | nessuno |
@@ -143,17 +143,17 @@ lo stesso meccanismo del Pico 2 W); `program_vm.cpp`, `program_heap.cpp` e
 `coroutine.cpp` restano a `-O2`. La stessa build ha trovato due chiamate
 `std::max(int32_t, int)` che compilavano solo sul PC (su ARM `int32_t` è
 `long`) e un avviso in `program_parse_cs.cpp`, corretti. Margine rimasto:
-135 257 B; la v1.21.0 (Java) dovrà portare a `-Os` altro codice freddo della
+135 249 B; la v1.21.0 (Java) dovrà portare a `-Os` altro codice freddo della
 Plus prima di aggiungere il suo front-end.
 
 Flash del codice di Program sulla Plus (mappa del linker, `tools/map_sizes.py`):
 
 | Parte | Flash (B) |
 |---|---:|
-| Interprete: lexer, parser C/C++/C#, compilatore, macchina, heap, formati, librerie native C/C++/C#, `fx`, progetto, coroutine | 699 130 |
+| Interprete: lexer, parser C/C++/C#, compilatore, macchina, heap, formati, librerie native C/C++/C#, `fx`, progetto, coroutine | 699 134 |
 | Archivio (`code_store`), librerie (`lib_manager`, `json_lite`, `sha256`), HTTPS (`lib_fetch`, `fetch_pico`) | 90 525 |
 | Controller (`program_app`, `program_mode`) | 54 973 |
-| **Totale** | **844 628** |
+| **Totale** | **844 632** |
 
 Stack (`-fstack-usage`, Plus): nuovo massimo del firmware
 `libs::FolderSource::poll` 2 080 B (copia a blocchi da `LIB/IMPORT`, nel
@@ -173,8 +173,8 @@ Dettagli e hash degli UF2: [BUILD_STATUS.md](../BUILD_STATUS.md).
 | `tests/run_host_tests.sh` (due profili) | 72/72 e 54/54 |
 | `--sanitize --tsan` | 72/72 e 54/54, TSan superato su entrambi |
 | Corpus differenziale | 51/51 programmi identici a gcc, g++ e Mono |
-| Fuzzing ≥ 300 s per harness nuovo o toccato | @@FUZZGATE@@ |
-| Simulatore | 190 identici, 2 rigenerati con il motivo (141, 142), 21 nuovi; confronto finale 211/211 |
+| Fuzzing ≥ 300 s per harness nuovo o toccato | 9 corse sul codice finale (6 harness nuovi, 3 toccati), ognuna ≥ 300 s: nessun crash; i quattro dell'interprete e `fuzz_ui` ripetuti dopo F21 |
+| Simulatore | 190 identici, 2 rigenerati con il motivo (141, 142), 21 nuovi; confronto finale 213/213 |
 | Firmware | due schede `--clean`, nessun warning; Plus 87 % (< 90 %, con `-Os` sul codice di Program); Pico 2 W 1 944 228 B, identico alla v1.19.0 salvo la stringa della versione e la data |
 | Congelamento del Pico 2 W | `architecture_test` («Pico 2 W frozen at v1.16.0», 23 modalità, nessuna Base); immagine confrontata byte per byte con la v1.19.0 compilata dallo stesso ambiente: **9 byte diversi**, le due cifre della versione in quattro punti e la data |
 | Relay | 15/15 |

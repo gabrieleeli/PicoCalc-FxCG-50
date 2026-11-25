@@ -21,13 +21,13 @@ C# e il gestore delle librerie sulla Plus
 | Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
 |---|---|---|
 | Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (7 280 128 byte) | `build/pico2w/picocalc_fxai_pico2w.uf2` (3 889 152 byte) |
-| Immagine flash | 3 639 616 byte (`__flash_binary_end` = `0x10378940`) = 87 % della partizione da 4 MB (budget < 90 %: 3 774 873 B, restano 135 257 B); +656 056 byte rispetto alla v1.19.0 (codice di Program 844 628 B: interprete con le librerie native e `fx` 699 130 B, archivio e librerie con `fetch_pico` per l'HTTPS 90 525 B, controller 54 973 B; al posto del nucleo e della modalità della v1.17.0). Senza `-Os` sul codice di Program l'immagine era di 3 965 572 B (94 %, oltre il budget) | **1 944 228 byte** (`0x101DAAA4`) = 92 % della partizione da 2 MB, identica alla v1.19.0 salvo versione e data; restano 120 156 B sotto il budget di 2 064 384 B |
+| Immagine flash | 3 639 624 byte (`__flash_binary_end` = `0x10378948`) = 87 % della partizione da 4 MB (budget < 90 %: 3 774 873 B, restano 135 249 B); +656 064 byte rispetto alla v1.19.0 (codice di Program 844 632 B: interprete con le librerie native e `fx` 699 134 B, archivio e librerie con `fetch_pico` per l'HTTPS 90 525 B, controller 54 973 B; al posto del nucleo e della modalità della v1.17.0). Senza `-Os` sul codice di Program l'immagine era di 3 965 572 B (94 %, oltre il budget) | **1 944 228 byte** (`0x101DAAA4`) = 92 % della partizione da 2 MB, identica alla v1.19.0 salvo versione e data; restano 120 156 B sotto il budget di 2 064 384 B |
 | Codice nuovo nell'immagine | `program_*` (lexer, parser, compilatore, macchina, heap, formati, librerie native C/C++/C#, `fx`), `code_store`, `lib_manager`, `lib_fetch`, `json_lite`, `sha256`, `coroutine` (estratta da Python), `fetch_pico`; `program_app` riscritto | nessuno (mappa: **208** oggetti/simboli esclusi, nessuno nell'immagine) |
 | RAM statica | 313 536 byte fino a `__end__` = `0x2004C8C0` (+800) | 305 236 byte (`0x2004A854`, invariata) |
 | Heap SRAM | 177 984 byte (`__end__` → `0x20078000`) | 186 284 byte (invariato) |
 | Frame di stack (`-fstack-usage`) | nuovo massimo `libs::FolderSource::poll` 2 080 B (copia a blocchi dalla cartella `LIB/IMPORT`, nel ciclo principale; pila di 32 KB); `prog::compile` 1 376 B, `Compiler::assignImpl` 856 B, `formatPrintf` 680 B; il codice dei programmi gira nella coroutine da 48 KB | invariati |
 | Warning | **nessuno** del compilatore | nessuno |
-| SHA-256 dell'UF2 locale | `7e96e5a7cd87179a4f0cdce74b4cde2166ec8684de3995b42440f7a4981cfcc9` | `8bff26623de208fb7c790c5ba64cc70d60df99f9b619cce99636397f9c92758d` |
+| SHA-256 dell'UF2 locale | `9f87858e3fdbed61b5e64c8d58cdaa3f41ad76fc5cb4096e2d884747c7ce8db5` | `8bff26623de208fb7c790c5ba64cc70d60df99f9b619cce99636397f9c92758d` |
 
 ### Test
 
@@ -37,8 +37,8 @@ C# e il gestore delle librerie sulla Plus
 | AddressSanitizer + UBSan bloccante (`--sanitize`) | 72/72 | 54/54 |
 | ThreadSanitizer (`--tsan`) | superato | superato |
 | Relay AI (Python, `unittest`) | 15/15 | — |
-| Fuzzing (≥ 300 s per harness nuovo o toccato) | @@FUZZ@@ | — |
-| Simulatore (`tools/sim_compare.py`) | 211 identici: 190 precedenti invariati, 2 rigenerati per cambiamenti voluti (141, 142), 21 nuovi (203–223) | — |
+| Fuzzing (≥ 300 s per harness nuovo o toccato) | nuovi: `fuzz_c` 346 445 esecuzioni (314 s), `fuzz_cpp` 275 720 (322 s), `fuzz_cs` 366 416 (318 s), `fuzz_libjson` 6 771 667 (303 s), `fuzz_http` 4 499 522 (303 s), `fuzz_codestore` 139 861 (311 s); toccati: `fuzz_program` 848 339 (313 s), `fuzz_modes` 1 089 642 (306 s), `fuzz_ui` 6 606 (315 s): nessun crash né artefatto sul codice finale. Durante lo sviluppo i fuzzer hanno trovato F4, F8–F11, F19 e F21 ([SVILUPPO §6](reports/SVILUPPO_v1.20.0.md)) | — |
+| Simulatore (`tools/sim_compare.py`) | 213 identici: 190 precedenti invariati, 2 rigenerati per cambiamenti voluti (141, 142), 21 nuovi (203–223) | — |
 
 ## v1.19.0
 

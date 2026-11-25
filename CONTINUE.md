@@ -16,7 +16,11 @@ test, firmware, cancello). Versioni precedenti:
 > dell'immagine sul Raspberry Pi Pico 2 W, salvo correzioni di errori
 > condivise. Nella v1.18.0 l'immagine del Pico 2 W è **identica** a quella
 > della v1.17.0 salvo i 4 byte della stringa della versione (1 944 228 B); nella
-> v1.19.0 è ancora di 1 944 228 B, uguale alla v1.18.0 salvo la versione e la data.
+> v1.19.0 e nella v1.20.0 è ancora di 1 944 228 B, uguale alla precedente salvo
+> la versione e la data. **Plus: budget del 90 % (3 774 873 B)**; nella v1.20.0
+> l'immagine è di 3 639 624 B (87 %) con `-Os` sul codice di Program fuori dal
+> ciclo della macchina (`FXAI_PLUS_SIZE_SOURCES`): la v1.21.0 deve recuperare
+> spazio (altro codice freddo a `-Os`) prima di aggiungere Java.
 > `architecture_test` fallisce se cambia l'insieme delle modalità aperte del
 > Pico 2 W (23 modalità) o se una modalità Base vi compare. Le modalità nuove
 > sono solo per la Pimoroni Pico Plus 2 W. Budget del Pico 2 W: immagine ≤ 2 064 384 B.
@@ -164,6 +168,9 @@ modulo, revisione della scheda).
 
 ## 5. Problemi noti / da verificare
 
+- v1.20.0: installazione delle librerie con il Wi-Fi reale e le interruzioni,
+  SD tolta durante il salvataggio di un file grande, tempi dell'interprete e
+  dell'editor con un file di 3 MB (HW-301…HW-306);
 - v1.19.0: tempi del risolutore dei blocchi e del ridisegno con 1 000 oggetti
   sul Cortex-M33 (HW-284, HW-293); fluidità delle animazioni, che vanno a un
   fotogramma per ciclo del firmware senza cadenza a tempo (HW-291); leggibilità
@@ -245,6 +252,8 @@ build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/eactivity.txt        #
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/base_v117.txt        # modalità Base v1.17.0 (128-147)
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/statistics_v118.txt  # Statistics e Distribution v1.18.0 (148-174)
 build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/geometry_v119.txt    # Geometry v1.19.0 (175-202)
+build/host-pico_plus_2w/picocalc_sim /tmp/shots tests/sim/program_v120.txt     # Program v1.20.0 (203-223; sdcopy del repository delle librerie)
+python3 tools/program_corpus_ref.py          # v1.20.0: rigenera le uscite del corpus con gcc, g++ e mcs/mono
 ```
 
 ```bash

@@ -1,5 +1,13 @@
 # Analisi delle fonti — v1.20.0: Program in C, C++ e C# sulla microSD e gestore delle librerie
 
+> **Nota a fine sviluppo.** Questo documento è il piano scritto prima del
+> codice e resta com'era. Gli scostamenti (editor a blocchi fino a 4 MB e non
+> 8 MB, password in `CODE/.passwords`, nomi di 40 caratteri, campi
+> `minFirmware` e indice con una voce per versione, limiti delle librerie,
+> niente redirect HTTPS, nomi delle suite e dei fuzzer, SET UP ridotto) e le
+> voci rimandate alla v1.21.0 sono in
+> [SVILUPPO_v1.20.0.md §3](SVILUPPO_v1.20.0.md#3-scostamenti-dallanalisi).
+
 Scritto **prima** del codice della v1.20.0 (fase 0). Obiettivo della versione:
 scrivere sulla PicoCalc programmi veri in **C, C++ e C#**, interpretati dal
 sorgente, salvati come file sorgente standard (`.c/.h`, `.cpp/.hpp`, `.cs`)
