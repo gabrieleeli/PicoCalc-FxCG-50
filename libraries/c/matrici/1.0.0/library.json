@@ -1,0 +1,22 @@
+{
+  "name": "matrici",
+  "version": "1.0.0",
+  "language": "c",
+  "description": "Matrici fino a 6x6: prodotto, trasposta, determinante, inversa, stampa",
+  "author": "PicoCalc FxCG-50",
+  "license": "MIT",
+  "minFirmware": "1.20.0",
+  "dependencies": {},
+  "files": [
+    {
+      "path": "matrici.c",
+      "sha256": "89e42a033b3a8061781495ea3d5052e6f254be8176698bdc1b360e7cf8840362",
+      "size": 3342
+    },
+    {
+      "path": "matrici.h",
+      "sha256": "68a4076e3487db16471e6a315e5995b4c5ecbc4f7cc3e4bea3bf366faec5661c",
+      "size": 878
+    }
+  ]
+}

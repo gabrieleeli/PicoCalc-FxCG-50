@@ -1,0 +1,7 @@
+#1 Ada    responsabile   3200.00
+#2 Bob    impiegato      2000.00
+#3 Cleo   a ore          2759.00
+#4 Dan    a ore          2000.00
+totale 9959.00 per 4 persone
+True True True 172
+Ada, Cleo, Bob, Dan

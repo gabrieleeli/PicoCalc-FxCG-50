@@ -230,6 +230,11 @@ bool migrate(const std::vector<OldObject>& objs, const View& view, State& t) {
         return false;
     }
     t.view = view;
+    // v1.20.0: la v1.17.0 accettava qualunque centro finito, il formato 2 vuole
+    // |c| < 1e150: un centro fuori scala torna all'origine (il file resta leggibile
+    // dopo il salvataggio nel formato 2; trovato dal fuzzer fuzz_modes)
+    if (!finiteValue(t.view.cx)) t.view.cx = 0;
+    if (!finiteValue(t.view.cy)) t.view.cy = 0;
     return true;
 }
 } // namespace

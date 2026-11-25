@@ -147,9 +147,9 @@ constexpr AppInfo kApps[AppCount] = {
      d::Settings | d::Memory | d::Equation, 0, kEquationSrc},
 #if FXAI_BOARD_PICO_PLUS_2W
     {AppId::Program, "Program", "B", rgb888To565(170, 160, 20), BaseStatus,
-     "Programmi .pcprog in C, C++ e C# (sottoinsiemi interpretati): elenco NEW/EDIT/DEL/RUN, editor con evidenziazione, output, input, comandi grafici disegnati da Graph, A-Z e liste, AC = Break, errori con riga e colonna",
-     "Base v1.17.0: mancano per la parita' (cap. 8) DEBUG passo passo, SEARCH, RENAME, password e la libreria fx completa (statistiche, finanza).",
-     s::Expression | Ui | s::Storage | Shell | s::TextEdit | s::StepTask | s::Binding | s::Interp | s::GraphCmd | Core,
+     "Programmi C, C++ e C# interpretati dal sorgente, salvati come file standard sulla microSD (PICOCALC/CODE, progetti = cartelle): gestore dei file (NEW, EDIT, DEL, DEL-ALL, SEARCH, RENAME, COPY, MOVE, password), editor con numeri di riga, evidenziazione, rientro, trova/sostituisci, annulla; RUN e DEBUG passo passo con variabili e punti d'interruzione; librerie in PICOCALC/LIB (LIB: INSTALL dal Wi-Fi o dalla SD, UPDATE, REMOVE, VERIFY); libreria fx; errori con file, riga e colonna",
+     "Base v1.20.0: Java in Program arriva nella v1.21.0 (la modalita' diventa Available con i quattro linguaggi).",
+     s::Expression | Ui | s::Storage | Shell | s::TextEdit | s::StepTask | s::Binding | s::Interp | s::GraphCmd | s::Network | s::Hardware | Core,
      d::Settings | d::Memory | d::Lists | d::Program, linkTo(AppId::Graph), FXAI_SRC(Program), Plus},
 #else   // Pico 2 W congelato: la voce della v1.16.0, identica
     {AppId::Program, "Program", "B", rgb888To565(170, 160, 20), AppStatus::Planned,
@@ -278,7 +278,12 @@ const char* const kHTextEdit[] = {"text_editor.hpp", nullptr};
 const char* const kHStepTask[] = {"step_task.hpp", nullptr};
 const char* const kHGraph2D[] = {"graph2d.hpp", nullptr};
 const char* const kHBinding[] = {"binding.hpp", nullptr};
+#if FXAI_BOARD_PICO_PLUS_2W
+// v1.20.0: l'interprete con l'archivio CODE/LIB sulla SD e il gestore delle librerie.
+const char* const kHInterp[] = {"program.hpp", "code_store.hpp", "lib_manager.hpp", "lib_fetch.hpp", nullptr};
+#else
 const char* const kHInterp[] = {"program.hpp", nullptr};
+#endif
 const char* const kHEActivity[] = {"eactivity.hpp", "limits.hpp", nullptr};
 #if FXAI_BOARD_PICO_PLUS_2W
 // v1.17.0: tutti i nuclei delle modalita' Base (l'architecture_test permette a

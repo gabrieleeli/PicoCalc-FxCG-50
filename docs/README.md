@@ -1,9 +1,13 @@
 # Documentazione
 
-## Documenti attuali (v1.19.0)
+## Documenti attuali (v1.20.0)
 
 | Documento | Contenuto |
 |---|---|
+| [reports/ANALISI_FONTI_v1.20.0.md](reports/ANALISI_FONTI_v1.20.0.md) | v1.20.0: tabelle del capitolo 8 (elenco, password, RUN, editor, DEBUG, archivio, migrazione, libreria `fx`), sottoinsiemi di C, C++ e C# costrutto per costrutto (LK, LC, LP, LS), progetto del nucleo dell'interprete e del gestore delle librerie, differenze e domande con le risposte scelte prima del codice |
+| [reports/SVILUPPO_v1.20.0.md](reports/SVILUPPO_v1.20.0.md) | v1.20.0: decisioni, scostamenti dall'analisi e voci rimandate alla v1.21.0, codice, errori trovati (fuzzer e corpus differenziale), test, firmware, cancello |
+| [PROGRAM.md](PROGRAM.md) · [LIBRARIES.md](LIBRARIES.md) · [examples/program](examples/program/README.md) | guida di Program (programmi sulla microSD, gestore dei file, editor, RUN, DEBUG, linguaggi, libreria `fx`), delle librerie (manifest, indice, LIB, installazione atomica) ed esempi completi |
+| [HARDWARE_TEST_v1.20.0.md](HARDWARE_TEST_v1.20.0.md) | collaudo della v1.20.0: Program e librerie sul dispositivo (SD tolta durante il salvataggio, file di 3 MB, installazione via Wi-Fi reale e interruzioni, tempi dell'interprete), Pico 2 W invariato (HW-296…HW-313) |
 | [reports/ANALISI_FONTI_v1.19.0.md](reports/ANALISI_FONTI_v1.19.0.md) | v1.19.0: tabella di parità del capitolo 14 voce per voce (K, F, V, E, O, D, C, T, M, A, S, P, R), progetto del nucleo (grafo delle dipendenze, risolutore dei blocchi, tolleranze dichiarate, animazioni), formato `.pcgeo` v2, differenze e domande con le risposte scelte prima del codice |
 | [reports/SVILUPPO_v1.19.0.md](reports/SVILUPPO_v1.19.0.md) | v1.19.0: tabella di parità finale, nucleo e controller, errori trovati, test, fuzzing, simulatore, firmware, cancello |
 | [GEOMETRY.md](GEOMETRY.md) | guida completa di Geometry (parità con il capitolo 14, Plus): tasti, menu, Draw, Construct, Transform, casella di misura e blocchi, animazioni, esempi da scuola |
@@ -16,7 +20,7 @@
 | [reports/SVILUPPO_v1.17.0.md](reports/SVILUPPO_v1.17.0.md) | v1.17.0: fase 1 (inizializzazione di tutte le modalità, errori trovati), fase 2 (dieci modalità Base, cosa manca alla parità), differenze, test, fuzzing, simulatore, firmware e flash per modalità, cancello |
 | [HARDWARE_TEST_v1.17.0.md](HARDWARE_TEST_v1.17.0.md) | collaudo della v1.17.0: segni Base, ogni modalità sul dispositivo, Python (coroutine, MSPLIM, AC), Link sulla USB con il PC, record v11 → v12 e ritorno, solo SRAM, Pico 2 W invariato (HW-220…HW-245) |
 | [SPREADSHEET.md](SPREADSHEET.md) · [DYNA_GRAPH.md](DYNA_GRAPH.md) · [RECURSION.md](RECURSION.md) · [CONIC_GRAPHS.md](CONIC_GRAPHS.md) · [FINANCIAL.md](FINANCIAL.md) | guide delle modalità Base della v1.17.0 (Pimoroni Pico Plus 2 W): tasti, barre F1–F6, file, limiti, cosa manca alla parità |
-| [PROGRAM.md](PROGRAM.md) · [LINK.md](LINK.md) · [PICTURE_PLOT.md](PICTURE_PLOT.md) · [PYTHON.md](PYTHON.md) | guide delle altre modalità Base (Program in C/C++/C#, Link con `tools/picocalc_link.py`, Picture Plot, Python con MicroPython) |
+| [LINK.md](LINK.md) · [PICTURE_PLOT.md](PICTURE_PLOT.md) · [PYTHON.md](PYTHON.md) | guide delle altre modalità Base (Link con `tools/picocalc_link.py`, Picture Plot, Python con MicroPython) |
 | [EACTIVITY.md](EACTIVITY.md) | guida di eActivity (v1.16.0): tasti della PicoCalc, elenco dei file, righe, barre, strisce, memorie e limiti per scheda |
 | [reports/ANALISI_FONTI_v1.16.0.md](reports/ANALISI_FONTI_v1.16.0.md) | M2: capitolo 10 del manuale, progetto (documento, strisce, espressioni nel testo, memorie per file), tabella di parità E01–E56 scritta prima del codice, differenze previste |
 | [reports/SVILUPPO_v1.16.0.md](reports/SVILUPPO_v1.16.0.md) | v1.16.0: eActivity, tabella di parità finale con le prove, differenze inevitabili, test, firmware e memoria, congelamento del Pico 2 W |

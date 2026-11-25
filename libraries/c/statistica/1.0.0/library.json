@@ -1,0 +1,22 @@
+{
+  "name": "statistica",
+  "version": "1.0.0",
+  "language": "c",
+  "description": "Media, deviazioni standard, mediana, minimo, massimo e retta di regressione",
+  "author": "PicoCalc FxCG-50",
+  "license": "MIT",
+  "minFirmware": "1.20.0",
+  "dependencies": {},
+  "files": [
+    {
+      "path": "statistica.c",
+      "sha256": "c9d3e3cdce75ed92504b9c8bc4f3c710190a7de667026c064c05d18be6f3e9e6",
+      "size": 1948
+    },
+    {
+      "path": "statistica.h",
+      "sha256": "6c37b4ee927aa9378126b919b94136353d11ea12ace55c0d3484516a4ac54fb6",
+      "size": 808
+    }
+  ]
+}

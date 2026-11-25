@@ -1,0 +1,22 @@
+{
+  "name": "polinomi",
+  "version": "1.0.0",
+  "language": "cpp",
+  "description": "Classe Polinomio: valore (Horner), derivata, somma, prodotto, testo e radici reali",
+  "author": "PicoCalc FxCG-50",
+  "license": "MIT",
+  "minFirmware": "1.20.0",
+  "dependencies": {},
+  "files": [
+    {
+      "path": "polinomi.cpp",
+      "sha256": "ce6f6771564e62cc57e797a4346e0607fe09439cb3fb75cce09fb0cd47ef3894",
+      "size": 3312
+    },
+    {
+      "path": "polinomi.hpp",
+      "sha256": "d7ab2f821676febd4bd35836957b87f4a1283f08f5bee41f913f11b73192f9e5",
+      "size": 839
+    }
+  ]
+}

@@ -16,7 +16,7 @@ formati (progetti `.pcgraph`, immagini `.pcpict`, CSV) sono descritti in
 | Tipo | Cartella | Estensioni | Formato | Nomi | Dati per file | Schede |
 |---|---|---|---|---|---|---|
 | eActivity | `PICOCALC/EACT` | `.pceact` | binario con intestazione | 1–8 caratteri `A–Z 0–9 { } ' ~` (manuale 10-5; le minuscole digitate diventano maiuscole) | 24 KB sul Pico 2 W, 256 KB sulla Plus | entrambe |
-| Program | `PICOCALC/PROG` | `.pcprog` (v1.17.0), `.cpp`, `.c`, `.cs` | testo UTF-8 | 1–8 caratteri `A–Z a–z 0–9 _ -` | 256 KB | Pico Plus 2 W |
+| Program | `PICOCALC/PROG` | `.pcprog` (v1.17.0), `.cpp`, `.c`, `.cs` | testo UTF-8 | 1–8 caratteri `A–Z a–z 0–9 _ -` | 256 KB | Pico Plus 2 W; **dalla v1.20.0 solo letti per la migrazione**: i programmi sono sorgenti standard in `PICOCALC/CODE/<LING>` ([STORAGE.md](STORAGE.md#programmi-e-librerie-sulla-microsd-v1200)) |
 | Spreadsheet | `PICOCALC/SHEET` | `.pcsheet` (v1.17.0; `.sheet` nella tabella della v1.16.0, mai scritto) | binario con intestazione | come Program | 1 MB | Pico Plus 2 W |
 | Python | `PICOCALC/PY` | `.py` | testo UTF-8 | come Program | 256 KB | Pico Plus 2 W |
 | Geometry | `PICOCALC/GEOM` | `.pcgeo` | binario con intestazione | come Program | 1 MB | Pico Plus 2 W |

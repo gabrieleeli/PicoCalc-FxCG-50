@@ -1,0 +1,18 @@
+{
+  "name": "matrici",
+  "version": "1.0.0",
+  "language": "cs",
+  "description": "Classe Matrice con indicizzatore, prodotto, trasposta e determinante",
+  "author": "PicoCalc FxCG-50",
+  "license": "MIT",
+  "namespace": "PicoCalc.Matrici",
+  "minFirmware": "1.20.0",
+  "dependencies": {},
+  "files": [
+    {
+      "path": "Matrici.cs",
+      "sha256": "2133ca6697cb1ca8418cf7da030e9e58a1c5914849af17a4be9db28c31cc1353",
+      "size": 3565
+    }
+  ]
+}

@@ -39,6 +39,18 @@ if(NOT FXAI_RELAY_CA_PEM MATCHES "BEGIN CERTIFICATE")
 endif()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${FXAI_RELAY_CA_FILE})
 configure_file(${CMAKE_CURRENT_LIST_DIR}/cmake/relay_ca.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/relay_ca.h @ONLY)
+# v1.20.0 (solo Pimoroni Pico Plus 2 W): radici fidate per il download delle librerie (LIB).
+set(FXAI_LIBRARY_CA_FILE ${CMAKE_CURRENT_LIST_DIR}/certs/library_ca.pem CACHE FILEPATH "PEM bundle trusted for the library repository")
+set(FXAI_PLUS_DEVICE_SOURCES)
+if(NOT FXAI_BOARD STREQUAL "PICO2W")
+  file(READ ${FXAI_LIBRARY_CA_FILE} FXAI_LIBRARY_CA_PEM)
+  if(NOT FXAI_LIBRARY_CA_PEM MATCHES "BEGIN CERTIFICATE")
+    message(FATAL_ERROR "FXAI_LIBRARY_CA_FILE does not contain a PEM certificate: ${FXAI_LIBRARY_CA_FILE}")
+  endif()
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${FXAI_LIBRARY_CA_FILE})
+  configure_file(${CMAKE_CURRENT_LIST_DIR}/cmake/library_ca.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/library_ca.h @ONLY)
+  set(FXAI_PLUS_DEVICE_SOURCES src/platform/pico/fetch_pico.cpp)
+endif()
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/fxai_sources.cmake)
 set(FXAI_TARGET picocalc_fxai)
@@ -48,7 +60,8 @@ add_executable(${FXAI_TARGET}
   src/platform/pico/board_pico.cpp
   src/platform/pico/net_pico.cpp
   src/platform/pico/sd_spi_pico.cpp
-  src/platform/pico/main_pico.cpp)
+  src/platform/pico/main_pico.cpp
+  ${FXAI_PLUS_DEVICE_SOURCES})
 # Distinct image names per board: UF2 files are not interchangeable.
 set_target_properties(${FXAI_TARGET} PROPERTIES OUTPUT_NAME "picocalc_fxai_${FXAI_BOARD_SUFFIX}")
 target_include_directories(${FXAI_TARGET} PRIVATE ${FXAI_INCLUDE_DIR}
@@ -90,6 +103,11 @@ target_link_options(${FXAI_TARGET} PRIVATE "LINKER:--print-memory-usage")
 # ottimizzato per dimensione. La Plus resta interamente a ${FXAI_OPT_LEVEL}.
 if(FXAI_BOARD STREQUAL "PICO2W")
   set_property(SOURCE ${FXAI_PICO2W_SIZE_SOURCES} APPEND PROPERTY COMPILE_OPTIONS -Os)
+endif()
+# v1.20.0: sulla Plus il codice di Program fuori dal ciclo della macchina (vedi
+# FXAI_PLUS_SIZE_SOURCES in cmake/fxai_sources.cmake).
+if(FXAI_BOARD STREQUAL "PICO_PLUS_2W")
+  set_property(SOURCE ${FXAI_PLUS_SIZE_SOURCES} APPEND PROPERTY COMPILE_OPTIONS -Os)
 endif()
 if(FXAI_ENABLE_LTO)
   # Whole-target LTO breaks the SDK's -Wl,--wrap mechanism (pico_stdio,

@@ -195,7 +195,7 @@ int main() {
             {service::TypedFiles, {"src/typed_files.cpp"}}, {service::ModeShell, {"src/apps/mode_shell.cpp"}},
             {service::TextEdit, {"src/text_editor.cpp"}}, {service::StepTask, {"src/step_task.cpp"}},
             {service::Graph2D, {"src/graph2d.cpp"}}, {service::Binding, {"src/binding.cpp"}},
-            {service::Interp, {"src/program_lang.cpp", "src/program_vm.cpp"}}};
+            {service::Interp, {"src/coroutine.cpp", "src/program_lex.cpp", "src/program_parse.cpp", "src/program_parse_cs.cpp", "src/program_parse_java.cpp", "src/program_compile.cpp", "src/program_compile_decl.cpp", "src/program_compile_stmt.cpp", "src/program_compile_expr.cpp", "src/program_compile_call.cpp", "src/program_natives.cpp", "src/program_vm.cpp", "src/program_heap.cpp", "src/program_format.cpp", "src/program_lib.cpp", "src/program_lib_c.cpp", "src/program_lib_cpp.cpp", "src/program_lib_cs.cpp", "src/program_fx.cpp", "src/program_project.cpp", "src/sha256.cpp", "src/json_lite.cpp", "src/lib_manager.cpp", "src/lib_fetch.cpp", "src/code_store.cpp"}}};
         for (std::size_t k = 0; k < service::Count; ++k) {
             const ServiceInfo& sv = serviceInfo(k);
             CHECK(sv.boards != 0 && (sv.boards & ~boards::Both) == 0);
@@ -473,7 +473,7 @@ int main() {
                                    "src/sd_card.cpp", "src/fatfs_store.cpp", "src/value.cpp", "src/csv_io.cpp", "src/graph_commands.cpp",
                                    "src/calc_library.cpp", "src/equation.cpp", "src/graph3d_model.cpp",
                                    "src/step_task.cpp", "src/typed_files.cpp", "src/workspace_sections.cpp", "src/binding.cpp",
-                                   "src/program_lang.cpp", "src/program_vm.cpp"};
+                                   "src/coroutine.cpp", "src/program_lex.cpp", "src/program_parse.cpp", "src/program_parse_cs.cpp", "src/program_parse_java.cpp", "src/program_compile.cpp", "src/program_compile_decl.cpp", "src/program_compile_stmt.cpp", "src/program_compile_expr.cpp", "src/program_compile_call.cpp", "src/program_natives.cpp", "src/program_vm.cpp", "src/program_heap.cpp", "src/program_format.cpp", "src/program_lib.cpp", "src/program_lib_c.cpp", "src/program_lib_cpp.cpp", "src/program_lib_cs.cpp", "src/program_fx.cpp", "src/program_project.cpp", "src/sha256.cpp", "src/json_lite.cpp", "src/lib_manager.cpp", "src/lib_fetch.cpp", "src/code_store.cpp"};
         for (const char* h : engine)
             for (const auto& inc : includesOf(codeOnly(readFile(std::string("include/") + h))))
                 ::testutil::report(appLayer.count(inc) == 0, "engine header independent of the UI", h, 0, inc);
@@ -492,20 +492,26 @@ int main() {
                 ::testutil::report(code.find(f) == std::string::npos, "single parser and evaluator", rel.c_str(), 0, f);
         }
         {
-            // v1.15.0 (F9): il linguaggio dei programmi (C, C++, C#) ha il suo analizzatore
-            // solo in program_lang.cpp; le espressioni della calcolatrice passano dal parser
-            // unico (fx::calc) e i grafici dall'interprete dei comandi di Run-Matrix.
-            const std::string lang = codeOnly(readFile("src/program_lang.cpp"));
-            const std::string vm = codeOnly(readFile("src/program_vm.cpp"));
-            CHECK(lang.find("class SourceLexer") != std::string::npos && lang.find("class Compiler") != std::string::npos);
-            CHECK(vm.find("parseExpression(") != std::string::npos && vm.find("graphcmd::execute(") != std::string::npos);
-            CHECK(vm.find("bind::BindingResolver") != std::string::npos);
-            for (const char* f : {"evaluateAny(", "evaluateExact(", "class Lexer", "class Parser"})
-                ::testutil::report(lang.find(f) == std::string::npos && vm.find(f) == std::string::npos, "program core uses the calculator engine only through parseExpression", "src/program_*.cpp", 0, f);
+            // v1.20.0: il linguaggio dei programmi (C, C++, C#, Java) ha il suo lexer solo in
+            // program_lex.cpp e i suoi parser in program_parse*.cpp; il ponte verso la
+            // calcolatrice e' solo program_fx.cpp: le espressioni passano dal parser unico
+            // (fx::calc), i grafici dall'interprete dei comandi di Run-Matrix, le variabili
+            // del programma da bind::BindingResolver.
+            const std::string lex = codeOnly(readFile("src/program_lex.cpp"));
+            const std::string comp = codeOnly(readFile("src/program_compile.hpp"));
+            const std::string bridge = codeOnly(readFile("src/program_fx.cpp"));
+            CHECK(lex.find("class SourceLexer") != std::string::npos && comp.find("class Compiler") != std::string::npos);
+            CHECK(bridge.find("parseExpression(") != std::string::npos && bridge.find("graphcmd::execute(") != std::string::npos);
+            CHECK(bridge.find("bind::BindingResolver") != std::string::npos);
             for (const auto& entry : std::filesystem::recursive_directory_iterator(kRoot + "/src")) {
                 const std::string rel = entry.path().lexically_relative(kRoot).string();
-                if (entry.path().extension() != ".cpp" || rel == "src/program_lang.cpp") continue;
-                ::testutil::report(codeOnly(readFile(rel)).find("SourceLexer") == std::string::npos, "only program_lang parses program sources", rel.c_str(), 0, "SourceLexer");
+                if (entry.path().extension() != ".cpp") continue;
+                const std::string code = codeOnly(readFile(rel));
+                if (rel != "src/program_lex.cpp")
+                    ::testutil::report(code.find("SourceLexer") == std::string::npos, "only program_lex lexes program sources", rel.c_str(), 0, "SourceLexer");
+                if (rel.rfind("src/program_", 0) == 0 && rel != "src/program_fx.cpp" && rel != "src/program_mode.cpp")
+                    for (const char* f : {"parseExpression(", "graphcmd::execute(", "evaluateAny(", "evaluateExact(", "evaluateReal("})
+                        ::testutil::report(code.find(f) == std::string::npos, "program core reaches the calculator only through program_fx", rel.c_str(), 0, f);
             }
             // F8: celle e nomi legati sono opzioni dello stesso lexer.
             const std::string expr = codeOnly(readFile("src/expression.cpp"));

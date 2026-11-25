@@ -9,6 +9,7 @@
 #include "test_util.hpp"
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -797,6 +798,18 @@ void persistence() {
     const std::size_t hdr = 16;
     State fm;
     T("P02 file .pcgeo della v1.17.0", decodeFile(kGeometryV1File + hdr, sizeof kGeometryV1File - hdr, fm) && fm.objects.size() == m.objects.size());
+    // v1.20.0 (fuzz_modes): vista della v1.17.0 con il centro oltre 1e150 (finito,
+    // accettato dalla v1): migrata all'origine, il formato 2 si rilegge
+    {
+        std::vector<std::uint8_t> v1{1, 0, 0};                  // versione 1, nessun oggetto
+        auto f64 = [&](double d) { std::uint64_t u; std::memcpy(&u, &d, 8); for (int i = 0; i < 8; ++i) v1.push_back(static_cast<std::uint8_t>(u >> (8 * i))); };
+        f64(1e200); f64(-3); f64(36);
+        State far;
+        T("P02 centro fuori scala della v1.17.0", decodeFile(v1.data(), v1.size(), far) && far.view.cx == 0 && far.view.cy == -3);
+        const auto again = encodeFile(far);
+        State back;
+        T("P02 ... e il formato 2 si rilegge", decodeFile(again.data(), again.size(), back) && back == far);
+    }
 
     // P04 limiti
     State full;

@@ -1,4 +1,4 @@
-# Roadmap — dopo la v1.19.0
+# Roadmap — dopo la v1.20.0
 
 **Piano dalla v1.17.0** ([reports/ANALISI_FONTI_v1.17.0.md](reports/ANALISI_FONTI_v1.17.0.md)):
 la v1.17.0 è la **base di tutte le modalità** (ogni modalità del registro si
@@ -17,23 +17,28 @@ budget, relay, documentazione) e un solo commit su `main`.
 | v1.17.0 | **base di tutte le modalità** (fatta) | stato Base, `apps_init_test`, record v12, dieci modalità Base | Plus (inizializzazione: entrambe) |
 | v1.18.0 | **Statistics** (cap. 6, fatta) | parità completa sulla Plus: editor a tre pagine con formule e colori, StatGraph1–3 con 20 tipi, 12 regressioni con residui, TEST (Z, t, χ², F, ANOVA), INTR, DIST con le 24 funzioni, VARS › STAT; **Distribution** (cap. 18) nel registro come modalità Base | Plus |
 | v1.19.0 | **Geometry** (cap. 14, fatta) | parità completa sulla Plus: Draw/Draw Spec, Construct e Transform legati ai genitori (grafo delle dipendenze, ricalcolo incrementale), casella di misura con blocchi e risolutore a passi, testo, etichette, FORMAT, Undo/Redo, View, animazioni con traccia e tabella, `.pcgeo` v2; Geometry **Available** | Plus |
-| **v1.20.0** | **Program** (cap. 8 come modalità) | DEBUG, SEARCH, RENAME, password, libreria `fx` completa | Plus |
-| v1.21.0 | Python (cap. 17) | menu delle funzioni, CATALOG, moduli `random`, `turtle`, `matplotl` | Plus |
-| v1.22.0 | Graph e Table | Dual Screen G+G/GtoT/T+G, Graph to Table, FORMAT nello SKETCH | Plus |
-| v1.23.0 | Recursion (5-45) | bn, cn, an = f(n), grafico di fase, convergenza | Plus |
-| v1.24.0 | Dyna Graph (5-42) | BUILT-IN, Locus, Dynamic Graph Memory | Plus |
-| v1.25.0 | Conic Graphs (5-50) | forme polari e parametriche, direttrice, asse, latus rectum, ZOOM | Plus |
-| v1.26.0 | Financial (cap. 7) | Cost/Sell/Margin, Depreciation, Bond, grafici, 360 giorni | Plus |
-| v1.27.0 | Spreadsheet (cap. 9) | SEQ, SORT, CellIf/CellProd, formattazione condizionale, GRAPH e CALC dalle celle | Plus |
-| v1.28.0 | Picture Plot (cap. 15) | fotogrammi, AXTRANS, Plot List, Fade I/O | Plus |
-| v1.29.0 | Memory, System e Link (cap. 11–13) | Link: più file, immagini dello schermo | Plus |
-| v1.30.0 | Distribution (cap. 18) | dalla Base della v1.18.0: schermo diviso dal vivo, limiti sul grafico, tabella, strisce | Plus |
-| v1.31.0 | chiusura: revisione completa e recap | | entrambe |
+| v1.20.0 | **Program** (cap. 8 come modalità, fatta: C, C++, C#) | programmi come sorgenti standard sulla microSD (`PICOCALC/CODE`), gestore dei file (NEW, RENAME, COPY, MOVE, DEL-ALL, SEARCH, password), editor con file grandi a blocchi, DEBUG, nucleo dell'interprete nuovo confrontato con gcc/g++/Mono, libreria `fx` completa, gestore delle librerie (indice HTTPS, SHA-256, dipendenze, installazione atomica); Program resta **Base** | Plus |
+| **v1.21.0** | **Program: Java** | sottoinsieme di Java 17 sul nucleo della v1.20.0 (classi, interfacce, generici, eccezioni, `java.util`, `Scanner`), librerie Java (`LIB/JAVA`); tabella del capitolo 8 completa per i quattro linguaggi → Program **Available** | Plus |
+| v1.22.0 | Python (cap. 17) | parità del capitolo 17 con gli script sulla microSD (`PICOCALC/CODE/PY`), menu delle funzioni, CATALOG, moduli `random`, `turtle`, `matplotl`, `import` dalle librerie (`LIB/PY`) | Plus |
+| v1.23.0 | Graph e Table | Dual Screen G+G/GtoT/T+G, Graph to Table, FORMAT nello SKETCH | Plus |
+| v1.24.0 | Recursion (5-45) | bn, cn, an = f(n), grafico di fase, convergenza | Plus |
+| v1.25.0 | Dyna Graph (5-42) | BUILT-IN, Locus, Dynamic Graph Memory | Plus |
+| v1.26.0 | Conic Graphs (5-50) | forme polari e parametriche, direttrice, asse, latus rectum, ZOOM | Plus |
+| v1.27.0 | Financial (cap. 7) | Cost/Sell/Margin, Depreciation, Bond, grafici, 360 giorni | Plus |
+| v1.28.0 | Spreadsheet (cap. 9) | SEQ, SORT, CellIf/CellProd, formattazione condizionale, GRAPH e CALC dalle celle | Plus |
+| v1.29.0 | Picture Plot (cap. 15) | fotogrammi, AXTRANS, Plot List, Fade I/O | Plus |
+| v1.30.0 | Memory, System e Link (cap. 11–13) | Link: più file, immagini dello schermo | Plus |
+| v1.31.0 | Distribution (cap. 18) | dalla Base della v1.18.0: schermo diviso dal vivo, limiti sul grafico, tabella, strisce | Plus |
+| v1.32.0 | chiusura: revisione completa e recap | | entrambe |
 
-La v1.18.0 (Statistics) e la v1.19.0 (Geometry) sono fatte
+La v1.18.0 (Statistics), la v1.19.0 (Geometry) e la v1.20.0 (Program in C,
+C++ e C#) sono fatte
 ([reports/SVILUPPO_v1.18.0.md](reports/SVILUPPO_v1.18.0.md),
-[reports/SVILUPPO_v1.19.0.md](reports/SVILUPPO_v1.19.0.md)); la prossima è
-**Program** (v1.20.0), seguita da Python (v1.21.0);
+[reports/SVILUPPO_v1.19.0.md](reports/SVILUPPO_v1.19.0.md),
+[reports/SVILUPPO_v1.20.0.md](reports/SVILUPPO_v1.20.0.md)); la prossima è
+**Java in Program** (v1.21.0), seguita da Python (v1.22.0); dalla v1.20.0 le
+versioni successive sono spostate di uno (Graph e Table v1.23.0 … chiusura
+v1.32.0);
 l'ordine delle versioni successive è una proposta da confermare all'inizio di ognuna (cosa manca a ogni modalità Base è
 nel campo `missing` del registro e in [FEATURE_MATRIX.md](FEATURE_MATRIX.md)).
 E-CON4 resta External.
@@ -42,7 +47,7 @@ Il **Raspberry Pi Pico 2 W è congelato alla v1.16.0**: le versioni successive
 aggiungono funzioni solo alla Pimoroni Pico Plus 2 W; sul Pico 2 W entrano
 soltanto correzioni di errori condivise (controllo in `architecture_test`, che
 fallisce se cambia l'insieme delle modalità aperte del Pico 2 W). Le prove su
-hardware continuano la numerazione: la v1.19.0 arriva a HW-295.
+hardware continuano la numerazione: la v1.20.0 arriva a HW-313.
 
 La v1.14.0 completa il **3D Graph** (capitolo 16 del manuale fx-CG50: modelli
 Line, Plane, Sphere, Cylinder, Cone, grafici Z=, Param, Rot X/Y, V-Window con
@@ -181,12 +186,12 @@ Stato e progetto di ogni modalità in [APPLICATIONS_ARCHITECTURE.md](APPLICATION
 | Equation | **parità completata nella v1.12.0** ([EQUATION.md](EQUATION.md)); restano come estensioni: interfaccia per i sistemi di disequazioni; forme esatte di quozienti complessi (`1/(1+i)`) e delle radici cubiche |
 | Recursion, Conic Graphs, Dyna Graph | **Base dalla v1.17.0** (solo Plus): mancano bn/cn, an = f(n), fase (Recursion); BUILT-IN, Locus, memoria (Dyna); forme polari/parametriche, direttrice, asse, latus rectum, ZOOM (Conic) |
 | Financial | **Base dalla v1.17.0** (SMPL, CMPD, CASH, AMT, CNVT, DAYS): mancano Cost/Sell/Margin, Depreciation, Bond, grafici, 360 giorni |
-| Spreadsheet, Program | **Base dalla v1.17.0**: mancano SEQ, SORT, CellIf/CellProd, formattazione condizionale, GRAPH/CALC dalle celle (Spreadsheet); DEBUG, SEARCH, RENAME, password, libreria `fx` completa (Program). eActivity: parità dalla v1.16.0 |
+| Spreadsheet, Program | **Base dalla v1.17.0**: mancano SEQ, SORT, CellIf/CellProd, formattazione condizionale, GRAPH/CALC dalle celle (Spreadsheet); Program: dalla v1.20.0 gestore dei file, DEBUG, SEARCH, RENAME, password, libreria `fx` completa e librerie in C, C++ e C#; manca Java (v1.21.0), poi Available. eActivity: parità dalla v1.16.0 |
 | Geometry | **parità completata nella v1.19.0** sulla Plus ([GEOMETRY.md](GEOMETRY.md)); differenze inevitabili D1–D9 di [reports/ANALISI_FONTI_v1.19.0.md](reports/ANALISI_FONTI_v1.19.0.md) (grafica propria, tasti, casella anche con OPTN, Clr Constraint non tocca le costruzioni, sfondi `.pcpict`, STORE › STAT al posto di S-SHT) |
 | Picture Plot | **Base dalla v1.17.0**: mancano fotogrammi, AXTRANS, Plot List, Fade I/O |
 | 3D Graph | **parità completata nella v1.14.0** ([GRAPH3D.md](GRAPH3D.md)); differenze inevitabili: griglia ≤ 25 e pittore senza PSRAM, tasti della PicoCalc; collaudo su hardware (HW-170…HW-189) |
 | Link | **Base dalla v1.17.0** (workspace e file in pacchetti `.pclink` su USB seriale, `tools/picocalc_link.py`): mancano la selezione di più file e le immagini dello schermo; il protocollo Casio tra calcolatrici non è supportato |
-| Python | **Base dalla v1.17.0** (MicroPython v1.24.1, heap separato, casioplot): mancano il menu delle funzioni, il CATALOG, il debug e i moduli `random`, `turtle`, `matplotl` |
+| Python | **Base dalla v1.17.0** (MicroPython v1.24.1, heap separato, casioplot): mancano il menu delle funzioni, il CATALOG, il debug e i moduli `random`, `turtle`, `matplotl` (v1.22.0, con gli script in `PICOCALC/CODE/PY` sulla microSD) |
 | E-CON4 | non realizzabile (data logger esterno); al più import CSV nelle liste |
 
 ## 5. Piattaforma

@@ -100,6 +100,32 @@ class RoundTrip(unittest.TestCase):
         with open(back, "rb") as f:
             self.assertEqual(pl.decode_package(f.read()), entries)
 
+    def test_send_library(self):
+        # v1.20.0: una libreria con il manifest scritto a mano (senza impronte): lo strumento le calcola
+        lib = self.path("geo")
+        os.makedirs(os.path.join(lib, "sub"))
+        with open(os.path.join(lib, "geo.h"), "w") as f:
+            f.write("#pragma once\nint area(int a, int b);\n")
+        with open(os.path.join(lib, "sub", "geo.c"), "w") as f:
+            f.write("#include \"../geo.h\"\nint area(int a, int b) { return a * b; }\n")
+        with open(os.path.join(lib, "library.json"), "w") as f:
+            f.write('{"name": "geo", "version": "1.2.0", "language": "c", "description": "prova", "dependencies": {}, "files": []}')
+        out = self.path("lib.bin")
+        rc = pl.main(["send-library", "--quiet", "--command", PEER + " receive " + out, lib])
+        self.assertEqual(rc, 0)
+        with open(out, "rb") as f:
+            entries = pl.decode_package(f.read())
+        paths = [p for _, p, _ in entries]
+        self.assertEqual(paths, ["PICOCALC/LIB/IMPORT/c/geo/1.2.0/geo.h", "PICOCALC/LIB/IMPORT/c/geo/1.2.0/sub/geo.c", "PICOCALC/LIB/IMPORT/c/geo/1.2.0/library.json"])
+        import json, hashlib
+        manifest = json.loads(entries[-1][2].decode("utf-8"))
+        self.assertEqual([x["path"] for x in manifest["files"]], ["geo.h", "sub/geo.c"])
+        self.assertEqual(manifest["files"][0]["sha256"], hashlib.sha256(entries[0][2]).hexdigest())
+        # nome non valido: rifiutata prima di inviare
+        with open(os.path.join(lib, "library.json"), "w") as f:
+            f.write('{"name": "Geo!", "version": "1.2.0", "language": "c"}')
+        self.assertEqual(pl.main(["send-library", "--quiet", "--command", PEER + " receive " + out, lib]), 1)
+
     def test_pc_rejects_damaged_package(self):
         # il trasporto e' corretto (CRC giusti) ma il contenuto non e' un pacchetto: rifiutato, nessun file
         with open(self.path("bad.bin"), "wb") as f:

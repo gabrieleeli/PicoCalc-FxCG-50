@@ -1,0 +1,17 @@
+{
+  "name": "frazioni",
+  "version": "1.0.0",
+  "language": "cpp",
+  "description": "Classe Frazione esatta con + - * / e confronti (solo intestazione)",
+  "author": "PicoCalc FxCG-50",
+  "license": "MIT",
+  "minFirmware": "1.20.0",
+  "dependencies": {},
+  "files": [
+    {
+      "path": "frazioni.hpp",
+      "sha256": "d6cc7638ad3e7bee20439c4a14ade2c04effc37fe3ceef979a4d5fc94fa5d735",
+      "size": 1853
+    }
+  ]
+}

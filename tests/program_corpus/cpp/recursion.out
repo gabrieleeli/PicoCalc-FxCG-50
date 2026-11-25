@@ -1,0 +1,7 @@
+4 regine: 2
+5 regine: 10
+6 regine: 4
+7 regine: 40
+{} {c} {b} {bc} {a} {ac} {ab} {abc} 
+Collatz: 2919 con 217 termini
+Hanoi(10): 1023 mosse, prima A->B

@@ -19,6 +19,9 @@ Uso:
   picocalc_link.py send --port /dev/ttyACM0 FILE[:PERCORSO] ... [--package x.pclink]
       (sul dispositivo: Link > RECEIVE; PERCORSO predefinito: dalla estensione)
   picocalc_link.py list x.pclink
+  picocalc_link.py send-library --port /dev/ttyACM0 CARTELLA_LIBRERIA
+      (v1.20.0; sul dispositivo: Link > RECEIVE, poi Program > LIB > LOCAL per
+      installarla con il controllo delle impronte)
 
 --command "programma argomenti" usa lo stdin/stdout di un processo invece della
 porta seriale (test di andata e ritorno con tests/link_peer).
@@ -331,6 +334,34 @@ def device_path(local, explicit):
     return "PICOCALC/" + FOLDERS[ext] + "/" + base
 
 
+IMPORT_ROOT = "PICOCALC/LIB/IMPORT"
+
+
+def library_entries(folder):
+    """Voci del pacchetto per una libreria (v1.20.0): i file e il manifest con le
+    impronte calcolate (tools/libraries.py) in PICOCALC/LIB/IMPORT/<ling>/<nome>/<versione>/.
+    Sul dispositivo LIB > LOCAL le trova e le installa verificando dimensioni e SHA-256."""
+    import libraries  # noqa: E402 (stessa cartella)
+    try:
+        manifest = libraries.manifest_for(folder)
+        text = libraries.manifest_text(manifest)
+    except libraries.RepoError as e:
+        raise LinkError(str(e))
+    base = "%s/%s/%s/%s" % (IMPORT_ROOT, manifest["language"], manifest["name"], manifest["version"])
+    entries = []
+    for f in manifest["files"]:
+        path = base + "/" + f["path"]
+        if not valid_path(path):
+            raise LinkError("percorso troppo lungo o non valido sul dispositivo: " + path)
+        with open(os.path.join(folder, *f["path"].split("/")), "rb") as fh:
+            data = fh.read()
+        if libraries.sha256(data) != f["sha256"]:
+            raise LinkError("file cambiato durante la preparazione: " + f["path"])
+        entries.append((1, path, data))
+    entries.append((1, base + "/library.json", text.encode("utf-8")))
+    return manifest, entries
+
+
 def open_port(args):
     if args.command:
         return ProcessPort(args.command)
@@ -364,11 +395,29 @@ def main(argv=None):
     r.add_argument("--wait", type=float, default=None, help="secondi di attesa dell'invio")
     lp = sub.add_parser("list")
     lp.add_argument("package")
+    sl = sub.add_parser("send-library", help="invia una libreria (cartella con library.json) in PICOCALC/LIB/IMPORT")
+    sl.add_argument("folder")
+    sl.add_argument("--port")
+    sl.add_argument("--command")
+    sl.add_argument("--quiet", action="store_true")
+    sl.add_argument("--name", default="LIB")
     args = ap.parse_args(argv)
     try:
         if args.cmd == "list":
             with open(args.package, "rb") as f:
                 show(decode_package(decode_file(f.read())))
+            return 0
+        if args.cmd == "send-library":
+            manifest, entries = library_entries(args.folder)
+            progress = None if args.quiet else (lambda done, total: print("\r%3d%%" % (100 * done // max(1, total)), end="", file=sys.stderr))
+            port = open_port(args)
+            try:
+                send(port, encode_package(entries), args.name, progress, b"")
+            finally:
+                port.close()
+            if progress:
+                print("", file=sys.stderr)
+            print("inviata %s %s (%s, %d file): sul dispositivo Program > LIB > LOCAL" % (manifest["name"], manifest["version"], manifest["language"], len(entries) - 1))
             return 0
         progress = None if args.quiet else (lambda done, total: print("\r%3d%%" % (100 * done // max(1, total)), end="", file=sys.stderr))
         port = open_port(args)

@@ -1,0 +1,5 @@
+bisezione 1.52137971 in 30 passi
+sqrt(2) 1.41421356 errore 2.22E-016
+integrale di sin su [0, pi] 2.00000001
+integrale di x^2 su [0, 3] 9.00000000
+e 2.71828183 2.71828183

@@ -1,0 +1,15 @@
+Eroe (30 PV) contro Orco (26 PV)
+turno 1: mossa (a/c/f)? a
+  colpisci per 8: Orco (18 PV)
+  l'orco colpisce per 8: Eroe (22 PV)
+turno 2: mossa (a/c/f)? a
+  colpisci per 9: Orco (9 PV)
+  l'orco colpisce per 6: Eroe (16 PV)
+turno 3: mossa (a/c/f)? x
+  mossa non valida
+turno 3: mossa (a/c/f)? c
+  ti curi: Eroe (24 PV), pozioni 1
+  l'orco colpisce per 6: Eroe (18 PV)
+turno 4: mossa (a/c/f)? a
+  colpisci per 11: Orco (-2 PV)
+hai vinto!

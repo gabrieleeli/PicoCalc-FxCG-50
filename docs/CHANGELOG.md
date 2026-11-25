@@ -1,5 +1,78 @@
 # Changelog
 
+## v1.20.0 — Program sulla microSD: C, C++, C# e librerie
+
+Base: `main` = `bcd28af` (v1.19.0). Sulla **Pimoroni Pico Plus 2 W**
+**Program** usa la microSD: i programmi **C, C++ e C#** sono file sorgente
+standard in `PICOCALC/CODE/<LING>`, con un gestore dei file, un editor per il
+codice, il DEBUG, la libreria `fx` completa e un **gestore delle librerie**.
+Program resta **Base** fino a Java (v1.21.0). Il **Raspberry Pi Pico 2 W resta
+congelato** alla v1.16.0. Analisi: [reports/ANALISI_FONTI_v1.20.0.md](reports/ANALISI_FONTI_v1.20.0.md);
+rapporto: [reports/SVILUPPO_v1.20.0.md](reports/SVILUPPO_v1.20.0.md); guide:
+[PROGRAM.md](PROGRAM.md), [LIBRARIES.md](LIBRARIES.md); esempi:
+[examples/program](examples/program/README.md). **Nessuna prova su hardware
+fisico**: procedura [HARDWARE_TEST_v1.20.0.md](HARDWARE_TEST_v1.20.0.md)
+(HW-296…HW-313).
+
+### Nuovo (solo Pimoroni Pico Plus 2 W)
+- **Programmi sulla microSD** come sorgenti standard senza righe aggiunte
+  (`.c/.h`, `.cpp/.hpp`, `.cs`), progetti = cartelle (fino a 64 file);
+  salvataggi atomici (una SD tolta lascia il file vecchio intatto), «Inserire
+  la scheda SD», «SD piena»; nella flash solo impostazioni, file recenti e
+  cursore (sezione `0x010A` versione 2). Migrazione dei `.pcprog` e degli
+  script della v1.17.0 da flash e SD.
+- **Gestore dei file**: EXE, EDIT, NEW (file, progetto, cartella dai
+  modelli), DEL, DEL-ALL con conferma, SEARCH dall'inizio del nome, RENAME,
+  COPY, MOVE, SORT, password chiesta per EDIT e DEBUG (non per RUN).
+- **Editor**: numeri di riga, evidenziazione, rientro automatico, parentesi
+  corrispondente, FIND/REPLACE, UNDO/REDO, JUMP, ERR, copia/incolla, SAVE·AS,
+  **file fino a 4 MB a blocchi** (256 KB per intero).
+- **RUN** a passi con input, Ctrl+D (fine dell'input), AC = Break, errori con
+  file, riga e colonna e cursore sull'errore, GRAPH per i disegni.
+- **DEBUG**: STEP, OVER, OUT, CONT, punti d'interruzione (BRK) che scattano
+  all'ingresso della riga, pila delle chiamate, VARS con oggetti, array e
+  contenitori espandibili, AC in pausa.
+- **Nucleo dell'interprete nuovo** per C11, C++17 e C# 10 in sottoinsieme
+  (tabelle LK/LC/LP/LS dell'analisi): macchina a pila iterativa, heap con GC,
+  eccezioni, puntatori controllati, classi, template e generici, lambda,
+  librerie standard (stdio/stdlib/string/math; string, iostream, iomanip,
+  fstream, sstream, contenitori e algoritmi; Console, Math, Convert,
+  collezioni, StringBuilder, File e stream); file confinati nella cartella del
+  programma. Funzioni della libreria utilizzabili come puntatori a funzione e
+  delegati.
+- **Libreria `fx`** in C (`fx_…`), C++ (`fx::…`) e C# (`Fx.…`): calcolo anche
+  esatto, variabili, liste, matrici, testo e tasti, grafica come i comandi
+  del capitolo 8, statistiche 1-Var e 2-Var, 12 regressioni, distribuzioni,
+  finanza (TVM, flussi di cassa, ammortamento, tassi, giorni).
+- **Gestore delle librerie** (Program › LIB): INFO, INST dall'indice
+  (Wi-Fi + HTTPS con mbedTLS, impronte SHA-256 controllate durante lo
+  scaricamento), UPD (versione più vecchia solo con conferma), DEL con avviso
+  sulle librerie che ne dipendono, VERIF, LOCAL da `LIB/IMPORT`; dipendenze
+  semver con conflitti e cicli rifiutati, firmware minimo, installazione
+  atomica con giornale e recupero dopo un'interruzione; indice nella cache per
+  l'uso senza rete. URL dell'indice in SET UP.
+- Cartella **`libraries/`** con l'indice e 9 librerie (C: matrici,
+  statistica, trasformazioni; C++: frazioni, geometria2d, polinomi; C#:
+  finanza, matrici, statistica), `tools/libraries.py` (impronte e indice),
+  `tools/picocalc_link.py send-library`.
+- Esempi completi in `docs/examples/program` (equazioni di secondo grado,
+  trasformazioni con le matrici, statistiche di un CSV, duello a turni, uso di
+  una libreria installata).
+
+### Corretto
+- Geometry: un `.pcgeo` della v1.17.0 con il centro della vista oltre 1e150
+  si apriva ma, salvato nel formato 2, non si rileggeva (trovato da
+  `fuzz_modes`).
+
+### Test
+- Suite nuove (solo Plus): `program_lang_test` (un caso per costrutto e il
+  debugger), `program_corpus_test` (51 programmi confrontati byte per byte con
+  gcc, g++ e Mono), `code_store_test`, `lib_manager_test`, `libraries_test`,
+  `program_flow_test`, `https_lib_test` (server HTTPS locale),
+  `libraries_index_test`. Fuzzer nuovi `fuzz_c`, `fuzz_cpp`, `fuzz_cs`,
+  `fuzz_libjson`, `fuzz_http`, `fuzz_codestore`. Screenshot 203–223; 141 e 142
+  rigenerati (la Program della v1.17.0).
+
 ## v1.19.0 — Geometry alla parità
 
 Base: `main` = `a7c861b` (v1.18.0). Sulla **Pimoroni Pico Plus 2 W**

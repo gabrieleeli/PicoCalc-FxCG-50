@@ -6,6 +6,9 @@
 //   hold <NAME>      long press (first HOLD report)
 //   wait <ms>        advance the simulated clock
 //   shot <file.png>  save a screenshot (2x scale)
+//   sdcopy <src> <dst>  v1.20.0: copy a file or folder of the repository (path relative to
+//                    the repository root, found from the script's folder tests/sim) to the
+//                    simulated microSD (e.g. "sdcopy libraries PICOCALC/LIB/IMPORT")
 // The microSD card is a 16 MB RAM card; with PICOCALC_SD_IMAGE=<file> it is a
 // FAT/exFAT disk image instead (for example a copy of a real card), used
 // through the same FatFs code as the firmware.
@@ -20,6 +23,7 @@
 #include "mem_pools.hpp"
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -91,6 +95,28 @@ int main(int argc, char** argv) {
             board::host::pushKey(press(fx::pckey::ModCtrl, 3));
             pump();
         } else if (cmd == "wait") { board::host::advance(static_cast<std::uint32_t>(std::stoul(arg))); pump(); }
+        else if (cmd == "sdcopy") {
+            std::istringstream as(arg);
+            std::string src, dst;
+            as >> src >> dst;
+            namespace fsys = std::filesystem;
+            const fsys::path root = argv[2] == std::string("-") ? fsys::current_path() : fsys::absolute(argv[2]).parent_path().parent_path().parent_path();
+            fx::files::FileSystem& card = board::fileSystem() ? *board::fileSystem() : board::host::ramCard();
+            auto copyFile = [&](const fsys::path& from, const std::string& to) {
+                std::ifstream f(from, std::ios::binary);
+                const std::string data((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+                const std::size_t slash = to.rfind('/');
+                if (slash != std::string::npos) (void)card.makeDirs(to.substr(0, slash));
+                (void)fx::files::writeAtomic(card, to, reinterpret_cast<const std::uint8_t*>(data.data()), data.size());
+            };
+            const fsys::path from = root / src;
+            if (fsys::is_directory(from)) {
+                for (const auto& e : fsys::recursive_directory_iterator(from))
+                    if (e.is_regular_file()) copyFile(e.path(), dst + "/" + fsys::relative(e.path(), from).generic_string());
+            } else if (fsys::is_regular_file(from)) copyFile(from, dst);
+            else { std::fprintf(stderr, "line %d: %s not found\n", lineNo, from.string().c_str()); return 1; }
+            pump();
+        }
         else if (cmd == "shot") {
             fw.draw(board::graphics()); board::present();
             if (!board::host::savePng(out + "/" + arg)) { std::fprintf(stderr, "cannot write %s\n", arg.c_str()); return 1; }
