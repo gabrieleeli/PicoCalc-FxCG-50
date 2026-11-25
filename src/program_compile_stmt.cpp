@@ -1061,7 +1061,7 @@ void Compiler::declareLocalVars(Node* n) {
                 std::int64_t ix = 0;
                 if (constInt(item->list[0], ix)) count = std::max<std::int32_t>(count, static_cast<std::int32_t>(ix + 1));
             }
-            t = arrayOf(t->elem, std::max(count, 1), 1);
+            t = arrayOf(t->elem, std::max<std::int32_t>(count, 1), 1);
         }
         if (t->k == TK::Array && t->size < 0 && d->a && d->a->k == K::StrLit && t->elem && t->elem->k == TK::C8) {
             t = arrayOf(t->elem, static_cast<std::int32_t>(units_[unit_].strings[d->a->str].size() + 1), 1);   // char s[] = "ciao"
@@ -1301,7 +1301,7 @@ void Compiler::initFromList(TypeP t, Node* list, Pos at) {
                 cols = static_cast<std::int32_t>(r->list.size());
             }
             pushInt(rows, VK::I64);
-            pushInt(std::max(cols, 0), VK::I64);
+            pushInt(std::max<std::int32_t>(cols, 0), VK::I64);
             emit(Op::NewArr, e->index, 2, 2);
             for (std::int32_t r = 0; r < rows; ++r) for (std::int32_t c = 0; c < cols; ++c) {
                 emit(Op::Dup);

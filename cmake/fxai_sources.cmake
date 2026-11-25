@@ -210,6 +210,21 @@ set(FXAI_PICO2W_SIZE_SOURCES
   ${FXAI_ROOT}/src/apps/graph_files.cpp ${FXAI_ROOT}/src/csv_io.cpp ${FXAI_ROOT}/src/typed_files.cpp
   ${FXAI_ROOT}/src/apps/system_app.cpp ${FXAI_ROOT}/src/apps/memory_app.cpp ${FXAI_ROOT}/src/apps/ai_chat_app.cpp
   ${FXAI_ROOT}/src/ai_protocol.cpp ${FXAI_ROOT}/src/apps/mode_shell.cpp)
+# v1.20.0: sulla Pimoroni Pico Plus 2 W il codice di Program che non e' il ciclo
+# della macchina (lexer, parser, compilatore, librerie native, formati,
+# archivio, gestore delle librerie, controller) e' ottimizzato per dimensione:
+# si esegue una volta per RUN o per tasto. program_vm.cpp (ciclo delle
+# istruzioni), program_heap.cpp (allocazione e GC) e coroutine.cpp restano a
+# -O2. Senza questa lista l'immagine supera il budget del 90 % della partizione.
+set(FXAI_PLUS_SIZE_SOURCES
+  ${FXAI_ROOT}/src/program_lex.cpp ${FXAI_ROOT}/src/program_parse.cpp ${FXAI_ROOT}/src/program_parse_cs.cpp
+  ${FXAI_ROOT}/src/program_parse_java.cpp ${FXAI_ROOT}/src/program_compile.cpp ${FXAI_ROOT}/src/program_compile_decl.cpp
+  ${FXAI_ROOT}/src/program_compile_stmt.cpp ${FXAI_ROOT}/src/program_compile_expr.cpp ${FXAI_ROOT}/src/program_compile_call.cpp
+  ${FXAI_ROOT}/src/program_natives.cpp ${FXAI_ROOT}/src/program_format.cpp ${FXAI_ROOT}/src/program_lib.cpp
+  ${FXAI_ROOT}/src/program_lib_c.cpp ${FXAI_ROOT}/src/program_lib_cpp.cpp ${FXAI_ROOT}/src/program_lib_cs.cpp
+  ${FXAI_ROOT}/src/program_fx.cpp ${FXAI_ROOT}/src/program_project.cpp ${FXAI_ROOT}/src/json_lite.cpp
+  ${FXAI_ROOT}/src/lib_manager.cpp ${FXAI_ROOT}/src/lib_fetch.cpp ${FXAI_ROOT}/src/code_store.cpp
+  ${FXAI_ROOT}/src/program_mode.cpp ${FXAI_ROOT}/src/apps/program_app.cpp)
 # Sorgenti compilati (relativi al repository), per architecture_test.
 set(FXAI_COMPILED_SOURCES)
 foreach(_s ${FXAI_CORE_SOURCES})

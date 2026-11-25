@@ -744,7 +744,7 @@ public:
         Node* f = pool_.node(K::Func, at);
         f->sym = ident("il nome della funzione locale");
         f->type = t;
-        f->mods = MPrivate | ((isStatic || staticCtx_) ? MStatic : 0u);
+        f->mods = MPrivate | ((isStatic || staticCtx_) ? static_cast<std::uint32_t>(MStatic) : 0u);
         f->list = parameters();
         f->b = methodBody(f);
         if (!f->b) error("funzione locale senza corpo");

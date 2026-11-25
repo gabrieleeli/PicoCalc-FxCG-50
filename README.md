@@ -12,7 +12,22 @@ Plus 2 W** (RP2350B, 8 MB di PSRAM, 16 MB di flash); profilo alternativo:
 
 ![Menu principale](docs/screenshots/01_main_menu.png) ![Run-Matrix](docs/screenshots/12_run_matrix_exact.png) ![Matrici](docs/screenshots/46_run_matrix_matrices.png) ![Comandi grafici](docs/screenshots/61_graph_commands.png) ![CATALOG](docs/screenshots/79_catalog.png) ![Base-N](docs/screenshots/60_base_n.png) ![Equation](docs/screenshots/70_equation_poly_complex.png) ![Graph](docs/screenshots/22_graph_multi.png) ![3D Graph](docs/screenshots/90_graph3d_sphere.png) ![3D Graph: INTSECT](docs/screenshots/93_graph3d_intsect.png) ![3D Graph: CROSS](docs/screenshots/97_graph3d_cross.png) ![eActivity](docs/screenshots/112_eact_calc_lines.png) ![eActivity: striscia](docs/screenshots/118_eact_doc_strip.png) ![Modalità Base](docs/screenshots/128_main_menu_base.png) ![Spreadsheet](docs/screenshots/129_spreadsheet_formulas.png) ![Python](docs/screenshots/146_python_shell.png) ![Geometry: costruzioni](docs/screenshots/185_geometry_construct_result.png) ![Geometry: omotetia](docs/screenshots/196_geometry_dilation_2.png)
 
-## Stato (v1.19.0)
+## Stato (v1.20.0)
+
+La **v1.20.0** porta **Program sulla microSD** della **Pimoroni Pico Plus 2 W**
+([docs/PROGRAM.md](docs/PROGRAM.md)): i programmi **C, C++ e C#** sono file
+sorgente standard in `PICOCALC/CODE` (progetti = cartelle), con un gestore dei
+file (NEW, RENAME, COPY, MOVE, DEL-ALL, SEARCH, password), un editor per il
+codice (evidenziazione, rientro, parentesi, trova/sostituisci, undo/redo, file
+fino a 4 MB), il **DEBUG** passo passo, un nucleo dell'interprete nuovo
+confrontato con gcc, g++ e Mono su 51 programmi, la libreria `fx` con
+statistiche, distribuzioni e finanza e un **gestore delle librerie**
+([docs/LIBRARIES.md](docs/LIBRARIES.md)) che installa dall'indice HTTPS con
+SHA-256, dipendenze e installazione atomica. Program resta Base fino a Java
+(v1.21.0). Il **Raspberry Pi Pico 2 W resta congelato** alla v1.16.0.
+Rapporti:
+[docs/reports/ANALISI_FONTI_v1.20.0.md](docs/reports/ANALISI_FONTI_v1.20.0.md),
+[docs/reports/SVILUPPO_v1.20.0.md](docs/reports/SVILUPPO_v1.20.0.md).
 
 La **v1.19.0** porta **Geometry alla parità completa** con il capitolo 14 del
 manuale fx-CG50 sulla **Pimoroni Pico Plus 2 W** ([docs/GEOMETRY.md](docs/GEOMETRY.md)):
@@ -191,7 +206,7 @@ interna (MEMORY › FILES); le operazioni lunghe si interrompono con AC.
 | 6 | **Dyna Graph** | una funzione con un coefficiente che varia da Start a End, animazione con tre velocità — [docs/DYNA_GRAPH.md](docs/DYNA_GRAPH.md) |
 | 8 | **Recursion** | an+1 e an+2, tabella con Σan, grafico e ragnatela — [docs/RECURSION.md](docs/RECURSION.md) |
 | 9 | **Conic Graphs** | parabole, circonferenza, ellisse, iperboli; TRACE e G-SOLVE — [docs/CONIC_GRAPHS.md](docs/CONIC_GRAPHS.md) |
-| B | **Program** | programmi in C, C++ e C# interpretati: editor con i colori della sintassi, RUN con input, AC, errori con riga e colonna, grafici in Graph — [docs/PROGRAM.md](docs/PROGRAM.md) |
+| B | **Program** | programmi C, C++ e C# come sorgenti sulla microSD (v1.20.0): gestore dei file, editor per il codice, RUN, DEBUG, libreria `fx`, librerie installabili (LIB) — [docs/PROGRAM.md](docs/PROGRAM.md), [docs/LIBRARIES.md](docs/LIBRARIES.md) |
 | C | **Financial** | interesse semplice e composto (TVM), flussi di cassa, ammortamento, tassi, giorni — [docs/FINANCIAL.md](docs/FINANCIAL.md) |
 | E | **Link** | workspace e file da e verso il PC sulla USB seriale con `tools/picocalc_link.py` — [docs/LINK.md](docs/LINK.md) |
 | O | **Distribution** (v1.18.0) | le 24 funzioni di distribuzione (PD, CD, inverse) con Data Variable o List, Ans/ListAns, Save Res, grafico con l'area; stesso nucleo del DIST di Statistics — [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) |
@@ -276,14 +291,14 @@ Senza rete tutte le funzioni matematiche restano disponibili.
 [GRAPH_PARITY](docs/GRAPH_PARITY.md) · [GRAPH_ENGINE](docs/GRAPH_ENGINE.md) ·
 [STORAGE](docs/STORAGE.md) · [PCGRAPH_FORMAT](docs/PCGRAPH_FORMAT.md) ·
 [TABLE](docs/TABLE.md) · [PICO_PLUS_2W](docs/PICO_PLUS_2W.md) ·
-[EQUATION](docs/EQUATION.md) · [GRAPH3D](docs/GRAPH3D.md) · [ERRORI v1.13.1](docs/reports/ERRORI_v1.13.1.md) · [HARDWARE_TEST v1.18.0](docs/HARDWARE_TEST_v1.18.0.md) · [v1.17.0](docs/HARDWARE_TEST_v1.17.0.md) · [STATISTICS](docs/STATISTICS.md) · [DISTRIBUTION](docs/DISTRIBUTION.md) · [v1.16.0](docs/HARDWARE_TEST_v1.16.0.md) · [v1.15.0](docs/HARDWARE_TEST_v1.15.0.md) · [EACTIVITY](docs/EACTIVITY.md) · [v1.14.0](docs/HARDWARE_TEST_v1.14.0.md) · [FILE_FORMATS](docs/FILE_FORMATS.md) · [v1.13.1](docs/HARDWARE_TEST_v1.13.1.md) · [v1.13.0](docs/HARDWARE_TEST_v1.13.0.md) · [v1.12.0](docs/HARDWARE_TEST_v1.12.0.md) · [v1.11.0](docs/HARDWARE_TEST_v1.11.0.md) · [v1.10.0](docs/HARDWARE_TEST_v1.10.0.md) · [v1.9.0](docs/HARDWARE_TEST_v1.9.0.md) · [v1.8.0](docs/HARDWARE_TEST_v1.8.0.md) ·
+[EQUATION](docs/EQUATION.md) · [GRAPH3D](docs/GRAPH3D.md) · [ERRORI v1.13.1](docs/reports/ERRORI_v1.13.1.md) · [HARDWARE_TEST v1.20.0](docs/HARDWARE_TEST_v1.20.0.md) · [v1.19.0](docs/HARDWARE_TEST_v1.19.0.md) · [v1.18.0](docs/HARDWARE_TEST_v1.18.0.md) · [v1.17.0](docs/HARDWARE_TEST_v1.17.0.md) · [STATISTICS](docs/STATISTICS.md) · [DISTRIBUTION](docs/DISTRIBUTION.md) · [v1.16.0](docs/HARDWARE_TEST_v1.16.0.md) · [v1.15.0](docs/HARDWARE_TEST_v1.15.0.md) · [EACTIVITY](docs/EACTIVITY.md) · [v1.14.0](docs/HARDWARE_TEST_v1.14.0.md) · [FILE_FORMATS](docs/FILE_FORMATS.md) · [v1.13.1](docs/HARDWARE_TEST_v1.13.1.md) · [v1.13.0](docs/HARDWARE_TEST_v1.13.0.md) · [v1.12.0](docs/HARDWARE_TEST_v1.12.0.md) · [v1.11.0](docs/HARDWARE_TEST_v1.11.0.md) · [v1.10.0](docs/HARDWARE_TEST_v1.10.0.md) · [v1.9.0](docs/HARDWARE_TEST_v1.9.0.md) · [v1.8.0](docs/HARDWARE_TEST_v1.8.0.md) ·
 [GRAPHICS_ENGINE](docs/GRAPHICS_ENGINE.md) · [MATH_ENGINE](docs/MATH_ENGINE.md) ·
 [AI_INTEGRATION](docs/AI_INTEGRATION.md) · [TESTING](docs/TESTING.md) ·
 [ROADMAP](docs/ROADMAP.md) · [CHANGELOG](docs/CHANGELOG.md) ·
 [INSTALLATION](docs/INSTALLATION.md) · [indice completo](docs/README.md)
 
 Modalità Base (v1.17.0): [SPREADSHEET](docs/SPREADSHEET.md) · [DYNA_GRAPH](docs/DYNA_GRAPH.md) ·
-[RECURSION](docs/RECURSION.md) · [CONIC_GRAPHS](docs/CONIC_GRAPHS.md) · [PROGRAM](docs/PROGRAM.md) ·
+[RECURSION](docs/RECURSION.md) · [CONIC_GRAPHS](docs/CONIC_GRAPHS.md) · [PROGRAM](docs/PROGRAM.md) · [LIBRARIES](docs/LIBRARIES.md) ·
 [FINANCIAL](docs/FINANCIAL.md) · [LINK](docs/LINK.md) · [GEOMETRY](docs/GEOMETRY.md) ·
 [PICTURE_PLOT](docs/PICTURE_PLOT.md) · [PYTHON](docs/PYTHON.md)
 

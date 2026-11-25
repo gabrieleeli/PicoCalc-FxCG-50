@@ -169,7 +169,7 @@ TypeP Compiler::parseSig(const char* sig, std::vector<TypeP>& params, bool& vari
         if ((recvBase->nk == NK::Iter || recvBase->nk == NK::MapIter || recvBase->nk == NK::MapEntry) && !recvBase->args.empty() && recvBase->args[0]->k == TK::Native) targs = recvBase->args[0]->args;
         if (recvBase->nk == NK::MapEntry) targs = recvBase->args;
     }
-    if (recvBase && (recvBase->k == TK::Nullable || recvBase->k == TK::Array) && recvBase->elem) targs = {recvBase->elem};
+    if (recvBase && (recvBase->k == TK::Nullable || recvBase->k == TK::Array) && recvBase->elem) targs.assign(1, recvBase->elem);
     auto one = [&](std::string t) -> TypeP {
         bool ref = false;
         if (!t.empty() && t.back() == '&') { ref = true; t.pop_back(); }

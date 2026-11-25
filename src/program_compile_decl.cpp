@@ -789,7 +789,7 @@ Function* Compiler::instantiateFunction(TemplateDef* t, const std::vector<TypeP>
     f->name = nm + ">";
     // il corpo si compila nel namespace vero
     for (Pending& p : pending_) if (p.fn == f) { p.ns = declNs; p.tbind = bind; }
-    t->functions[key] = {f};
+    t->functions[key].assign(1, f);                 // non = {f}: falso positivo di -Warray-bounds (GCC 13, sanitizer)
     tbind_ = saveT; lang_ = saveLang; unit_ = saveUnit; library_ = saveLib; ns_ = saveNs; cls_ = saveCls;
     return f;
 }

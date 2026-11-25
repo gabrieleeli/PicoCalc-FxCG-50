@@ -104,6 +104,11 @@ target_link_options(${FXAI_TARGET} PRIVATE "LINKER:--print-memory-usage")
 if(FXAI_BOARD STREQUAL "PICO2W")
   set_property(SOURCE ${FXAI_PICO2W_SIZE_SOURCES} APPEND PROPERTY COMPILE_OPTIONS -Os)
 endif()
+# v1.20.0: sulla Plus il codice di Program fuori dal ciclo della macchina (vedi
+# FXAI_PLUS_SIZE_SOURCES in cmake/fxai_sources.cmake).
+if(FXAI_BOARD STREQUAL "PICO_PLUS_2W")
+  set_property(SOURCE ${FXAI_PLUS_SIZE_SOURCES} APPEND PROPERTY COMPILE_OPTIONS -Os)
+endif()
 if(FXAI_ENABLE_LTO)
   # Whole-target LTO breaks the SDK's -Wl,--wrap mechanism (pico_stdio,
   # pico_float/double): only the application sources are LTO-compiled.
