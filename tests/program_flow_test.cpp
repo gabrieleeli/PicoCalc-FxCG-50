@@ -26,7 +26,7 @@ void put(files::FileSystem& fs, const std::string& path, const std::string& text
 }
 std::string get(const std::string& path) {
     std::vector<std::uint8_t> d;
-    if (files::readAll(card(), path, d, 1u << 20) != files::Status::Ok) return "<assente>";
+    if (files::readAll(card(), path, d, 8u << 20) != files::Status::Ok) return "<assente>";
     return std::string(d.begin(), d.end());
 }
 bool exists(const std::string& path) { files::Entry e; return card().stat(path, e) == files::Status::Ok; }
@@ -101,6 +101,36 @@ int main() {
     CHECK(screen<ProgramApp>(*r) == "edit");
     r->key(pk::Esc);
     CHECK(screen<ProgramApp>(*r) == "list");
+
+    // ---- file grande (3 MB, oltre i 256 KB dell'editor): a blocchi di 128 KB, modifica e salvataggio del solo blocco
+    {
+        std::string big;
+        for (int i = 0; big.size() < 3u * 1024u * 1024u; ++i) big += "// riga " + std::to_string(i) + " del file grande\n";
+        big += "// ultima riga senza a capo";
+        put(card(), "PICOCALC/CODE/CPP/GRANDE.cpp", big);
+        r->key(pk::Esc); r->key(pk::Enter);                                 // l'elenco si rilegge
+        r->type("G"); r->key(pk::F2);                                       // EDIT
+        CHECK(screen<ProgramApp>(*r) == "edit" && toast(*r).find("blocchi") != std::string::npos);
+        page(*r, 2); r->key(pk::F2);                                        // BTM del blocco
+        r->key(pk::PageDown);                                               // blocco seguente
+        r->type("@");
+        ctrl(*r, 's');                                                      // Ctrl+S
+        const std::size_t first = big.rfind('\n', 128u * 1024u) + 1;        // il primo blocco finisce a fine riga
+        const std::string want = big.substr(0, first) + "@" + big.substr(first);
+        CHECK(get("PICOCALC/CODE/CPP/GRANDE.cpp") == want);
+        // fino all'ultimo blocco: l'ultima riga resta senza a capo
+        for (int i = 0; i < 40; ++i) { r->key(pk::F2); r->key(pk::PageDown); }
+        r->key(pk::End);
+        r->type("!");
+        ctrl(*r, 's');
+        CHECK(get("PICOCALC/CODE/CPP/GRANDE.cpp") == want + "!");
+        r->key(pk::PageUp); r->key(pk::Home);
+        page(*r, 1);                                                        // pagina 1
+        r->key(pk::Esc);
+        CHECK(screen<ProgramApp>(*r) == "list");
+        CHECK(card().remove("PICOCALC/CODE/CPP/GRANDE.cpp") == files::Status::Ok);
+        r->key(pk::Esc); r->key(pk::Enter);
+    }
 
     // ---- input e fine dell'input (Ctrl+D)
     put(card(), "PICOCALC/CODE/CPP/SOMMA.cpp", "#include <iostream>\nint main() { int x, s = 0; while (std::cin >> x) s += x; fx::setVar(\"C\", s); return 0; }\n");

@@ -187,6 +187,7 @@ struct ProgramApp::View {
     std::map<std::string, std::set<int>> breakpoints;  // percorso -> righe (1-based)
     // file grande: blocco aperto
     bool block{false};
+    bool blockEndsNl{false};                            // il blocco sulla SD finisce con '\n'
     std::uint64_t blockOffset{0}, blockLength{0}, fileSize{0};
     std::size_t blockFirstLine{0};
     std::vector<std::pair<std::uint64_t, std::size_t>> blockStack;   // blocchi precedenti (offset, prima riga)
@@ -324,7 +325,8 @@ void loadBlock(Context& ctx, V& v, std::uint64_t offset, std::size_t firstLine) 
         len = nl + 1;
     }
     std::string shown = text;
-    if (!shown.empty() && shown.back() == '\n') shown.pop_back();
+    v.blockEndsNl = !shown.empty() && shown.back() == '\n';
+    if (v.blockEndsNl) shown.pop_back();
     if (!v.editor.setText(shown)) throw MathError("Memory ERROR: blocco troppo grande");
     v.block = true;
     v.blockOffset = offset;
@@ -336,8 +338,10 @@ void loadBlock(Context& ctx, V& v, std::uint64_t offset, std::size_t firstLine) 
     v.history.clear();
 }
 std::string blockText(V& v) {
+    // il blocco torna com'era: con l'a capo finale se l'aveva (sempre, tranne l'ultimo
+    // blocco di un file che non finisce con un a capo)
     std::string t = v.editor.text();
-    if (v.blockOffset + v.blockLength < v.fileSize || (v.blockLength > 0)) t += "\n";
+    if (v.blockEndsNl) t += "\n";
     return t;
 }
 void saveFile(Context& ctx, V& v) {
@@ -362,6 +366,10 @@ void openEditor(Context& ctx, V& v, const std::string& path, int line = 0, int c
     if (!code::langOfFile(path, v.lang)) v.lang = code::Lang::Cpp;
     v.block = false;
     v.blockStack.clear();
+    v.blockOffset = v.blockLength = 0;                  // niente resti del file grande aperto prima
+    v.blockFirstLine = 0;
+    v.blockEndsNl = false;
+    v.fileSize = size;
     v.history.clear();
     v.first = 0;
     v.scroll = 0;
