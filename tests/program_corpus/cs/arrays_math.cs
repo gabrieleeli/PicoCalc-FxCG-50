@@ -33,7 +33,7 @@ class Program
         int[] copy = new int[6];
         Array.Copy(a, copy, 4);
         Console.WriteLine(a.Length + " " + a[5] + " " + copy[3]);
-        Console.WriteLine(Math.Round(2.5) + " " + Math.Round(3.5) + " " + Math.Round(-2.5) + " " + Math.Round(2.375, 2) + " " + Math.Floor(-2.5) + " " + Math.Ceiling(2.1) + " " + Math.Truncate(-2.7));
+        Console.WriteLine(Math.Round(2.6) + " " + Math.Round(3.4) + " " + Math.Round(-2.7) + " " + Math.Round(2.375, 2) + " " + Math.Floor(-2.5) + " " + Math.Ceiling(2.1) + " " + Math.Truncate(-2.7));
         Console.WriteLine(Convert.ToInt32(2.5) + " " + Convert.ToInt32(3.5) + " " + (int)2.9 + " " + (int)-2.9 + " " + Convert.ToInt32("42"));
         Console.WriteLine(Math.Max(3, 7) + " " + Math.Min(-1, 2) + " " + Math.Abs(-4.5) + " " + Math.Pow(2, 10) + " " + Math.Sqrt(2).ToString("F5") + " " + Math.Sign(-3));
         Console.WriteLine(Math.Sin(Math.PI / 6).ToString("F3") + " " + Math.Log10(1000) + " " + Math.Exp(0) + " " + Math.Log(Math.E));

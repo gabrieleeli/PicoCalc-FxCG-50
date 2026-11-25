@@ -480,6 +480,9 @@ bool Compiler::nativeConstant(const std::string& nm, EV& out, ast::Pos at) {
         {L::Cs, "", "Math.Tau", 'd', 6.28318530717958647692},
         {L::Cs, "", "Int32.MaxValue", 'i', 2147483647.0}, {L::Cs, "", "Int32.MinValue", 'i', -2147483648.0},
         {L::Cs, "", "Double.MaxValue", 'd', 1.7976931348623157e308}, {L::Cs, "", "Double.NaN", 'd', std::numeric_limits<double>::quiet_NaN()},
+        // opzioni di string.Split (enum di .NET come int)
+        {L::Cs, "", "StringSplitOptions.None", 'i', 0}, {L::Cs, "", "StringSplitOptions.RemoveEmptyEntries", 'i', 1},
+        {L::Cs, "", "StringSplitOptions.TrimEntries", 'i', 2},
     };
     const std::uint8_t mask = static_cast<std::uint8_t>(1u << static_cast<unsigned>(lang_));
     for (const C& c : kConst) {

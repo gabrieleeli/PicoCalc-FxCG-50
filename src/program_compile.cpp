@@ -208,6 +208,8 @@ bool Compiler::isValueType(TypeP t) const {
         switch (t->nk) {
         case NK::Vector: case NK::Map: case NK::Set: case NK::UMap: case NK::USet: case NK::Pair: case NK::Stack: case NK::Queue:
         case NK::Deque: case NK::List: case NK::StringStream: case NK::CsKvp:
+        // ifstream/ofstream/fstream locali: il distruttore a fine blocco scrive e chiude il file
+        case NK::IFStream: case NK::OFStream: case NK::FStream:
             return true;
         default: return false;
         }
@@ -381,7 +383,8 @@ Function* Compiler::newFunction(const std::string& nm, Dialect d, ClassInfo* own
     prog_.functions.push_back(std::move(f));
     return raw;
 }
-// C/C++: sqrt, sin, strlen... come valori (puntatori a funzione): una funzione
+// sqrt, sin, strlen (C/C++) e Math.Sin (C#) come valori (puntatori a funzione,
+// delegati): una funzione
 // senza istruzioni del sorgente che passa i parametri al nativo e ne restituisce
 // il risultato, una per nativo. Fra piu' versioni (C++: float/double) si sceglie
 // quella con parametri e risultato dello stesso tipo, poi la prima.
@@ -391,7 +394,7 @@ Function* Compiler::nativeWrapper(const std::vector<std::int32_t>& natives, ast:
     std::vector<TypeP> params;
     for (std::int32_t idx : natives) {
         const NativeEntry& ne = nativeEntry(idx);
-        if (ne.owner[0] || (ne.flags & (NF::Property | NF::Indexer | NF::Ctor | NF::Operator))) continue;
+        if ((ne.owner[0] && !(ne.flags & NF::Static)) || (ne.flags & (NF::Property | NF::Indexer | NF::Ctor | NF::Operator))) continue;
         std::vector<TypeP> ps;
         bool variadic = false;
         TypeP r = parseSig(ne.sig, ps, variadic, nullptr, lang_);

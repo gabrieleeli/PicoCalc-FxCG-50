@@ -1,0 +1,8 @@
+1x^2 -3x +2 = 0: x1 = 1.0000, x2 = 2.0000
+1x^2 +2x +1 = 0: x = -1.0000 (doppia)
+1x^2 +0x +1 = 0: x = -0.0000 +- 1.0000i
+2x^2 +4x -6 = 0: x1 = -3.0000, x2 = 1.0000
+0x^2 +2x -4 = 0: lineare, x = 2.0000
+0x^2 +0x +5 = 0: impossibile
+0x^2 +0x +0 = 0: infinite soluzioni
+7 equazioni

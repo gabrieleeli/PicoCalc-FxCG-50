@@ -520,6 +520,21 @@ void vCtorCopy(Vm& vm, NativeCall& c) {
 }
 void vCtorRange(Vm& vm, NativeCall& c) {
     VecObj* v = vec(vm, c);
+    const Value& f = c.args[1];
+    if (f.k == VK::Ptr && f.f != 2 && f.o && f.o->kind == OK::Map) {
+        // vector<pair<K, V>> v(m.begin(), m.end()), vector<T> v(s.begin(), s.end())
+        MapObj* m = static_cast<MapObj*>(f.o);
+        if (c.args[2].o != f.o) vm.fault(FaultKind::Generic, "iteratori di contenitori diversi");
+        const TypeP et = elemT(c);
+        v->items.clear();
+        for (std::uint32_t cell = f.idx; cell != c.args[2].idx; cell = mapNext(vm, m, cell)) {
+            if (cell == End) vm.fault(FaultKind::Argument, "intervallo con l'inizio dopo la fine");
+            const Value x = m->isSet ? m->keys[cell] : Value::ref(vm.newPair(et && et->k == TK::Native && et->nk == NK::Pair ? et : nullptr, m->keys[cell], m->vals[cell]));
+            v->items.push_back(stored(vm, x, et));
+        }
+        touch(v);
+        return;
+    }
     Seq s;
     std::uint32_t b = 0, e = 0;
     rangeOf(vm, c.args[1], c.args[2], s, b, e);

@@ -382,11 +382,11 @@ void strReplace(Vm& vm, NativeCall& c) {
 void strSplit(Vm& vm, NativeCall& c) {
     const auto s = sv(vm, c);
     std::vector<std::u16string> seps;
-    bool removeEmpty = false;
+    bool removeEmpty = false, trim = false;
     for (int i = 1; i < c.argc; ++i) {
         const Value& v = c.args[i];
         if (v.k == VK::C16) seps.push_back(std::u16string(1, static_cast<char16_t>(v.i)));
-        else if (v.k == VK::I32) removeEmpty = (v.i & 1) != 0;         // StringSplitOptions.RemoveEmptyEntries = 1
+        else if (v.k == VK::I32) { removeEmpty = (v.i & 1) != 0; trim = (v.i & 2) != 0; }   // StringSplitOptions: RemoveEmptyEntries 1, TrimEntries 2
         else if (v.holdsObj() && v.o->kind == OK::StrW) seps.push_back(std::u16string(static_cast<StrWObj*>(v.o)->s));
         else if (v.holdsObj() && v.o->kind == OK::Array) {
             ArrayObj* a = static_cast<ArrayObj*>(v.o);
@@ -418,6 +418,13 @@ void strSplit(Vm& vm, NativeCall& c) {
             ++i;
         }
     }
+    if (trim)
+        for (auto& x : parts) {
+            std::size_t b = 0, e = x.size();
+            while (b < e && isWs16(x[b])) ++b;
+            while (e > b && isWs16(x[e - 1])) --e;
+            x = x.substr(b, e - b);
+        }
     if (removeEmpty) parts.erase(std::remove_if(parts.begin(), parts.end(), [](const std::u16string& x) { return x.empty(); }), parts.end());
     ArrayObj* a = vm.newArray(vm.program().csString, static_cast<std::uint32_t>(parts.size()));
     vm.root(a);
@@ -452,6 +459,24 @@ template <bool Left> void strPad(Vm& vm, NativeCall& c) {
     c.ret = sw(vm, s);
 }
 void strEquals(Vm& vm, NativeCall& c) { c.ret = Value::boolean(!c.args[1].isNull() && sv(vm, c) == vm.utf16(c.args[1])); }
+// string.Equals(a, b): statico, anche con null
+void strEqualsStatic(Vm& vm, NativeCall& c) {
+    const bool an = c.args[0].isNull(), bn = c.args[1].isNull();
+    c.ret = Value::boolean(an || bn ? an && bn : vm.utf16(c.args[0]) == vm.utf16(c.args[1]));
+}
+// double.IsNaN, IsInfinity, IsPositiveInfinity, IsNegativeInfinity, IsFinite
+template <int K> void dblIs(Vm&, NativeCall& c) {
+    const double d = D(c, 0);
+    bool r = false;
+    switch (K) {
+    case 0: r = std::isnan(d); break;
+    case 1: r = std::isinf(d); break;
+    case 2: r = std::isinf(d) && d > 0; break;
+    case 3: r = std::isinf(d) && d < 0; break;
+    default: r = std::isfinite(d); break;
+    }
+    c.ret = Value::boolean(r);
+}
 void strCompareTo(Vm& vm, NativeCall& c) { c.ret = Value::i32(c.args[1].isNull() ? 1 : vm.compareValues(c.args[0], c.args[1])); }
 void strToCharArray(Vm& vm, NativeCall& c) {
     const auto s = sv(vm, c);
@@ -495,6 +520,16 @@ void strConcat(Vm& vm, NativeCall& c) {
 }
 void strFormat(Vm& vm, NativeCall& c) { c.ret = s8(vm, formatComposite(vm, text(vm, c, 0), c.args + 1, c.argc - 1)); }
 void strCompare(Vm& vm, NativeCall& c) { c.ret = Value::i32(vm.compareValues(c.args[0], c.args[1])); }
+// string.CompareOrdinal: differenza delle prime unita' UTF-16 diverse, poi delle lunghezze (come .NET)
+void strCompareOrdinal(Vm& vm, NativeCall& c) {
+    const bool an = c.args[0].isNull(), bn = c.args[1].isNull();
+    if (an || bn) { c.ret = Value::i32(an && bn ? 0 : an ? -1 : 1); return; }
+    const std::u16string a = vm.utf16(c.args[0]), b = vm.utf16(c.args[1]);
+    const std::size_t n = std::min(a.size(), b.size());
+    for (std::size_t i = 0; i < n; ++i)
+        if (a[i] != b[i]) { c.ret = Value::i32(static_cast<int>(a[i]) - static_cast<int>(b[i])); return; }
+    c.ret = Value::i32(static_cast<int>(a.size()) - static_cast<int>(b.size()));
+}
 void strCtorFill(Vm& vm, NativeCall& c) { c.ret = sw(vm, std::u16string(static_cast<std::size_t>(std::max<std::int64_t>(0, I(c, 1))), static_cast<char16_t>(c.args[0].i))); }
 void strCtorChars(Vm& vm, NativeCall& c) {
     ArrayObj* a = arrayArg(vm, c.args[0]);
@@ -509,6 +544,12 @@ void sbCtor(Vm& vm, NativeCall& c) { if (c.argc > 1 && c.args[1].holdsObj()) { c
 void sbAppend(Vm& vm, NativeCall& c) {
     const Value& v = c.args[1];
     std::u16string t = v.k == VK::C16 ? std::u16string(1, static_cast<char16_t>(v.i)) : v.isNull() ? std::u16string() : utf8To16(vm.format(v, Dialect::CSharp));
+    sb(vm, c).append(t.data(), t.size());
+    c.ret = c.args[0];
+}
+// AppendFormat("{0,5:F2}", ...): formato composito come string.Format
+void sbAppendFormat(Vm& vm, NativeCall& c) {
+    const std::u16string t = utf8To16(formatComposite(vm, text(vm, c, 1), c.args + 2, c.argc - 2));
     sb(vm, c).append(t.data(), t.size());
     c.ret = c.args[0];
 }
@@ -1234,6 +1275,9 @@ const NativeEntry kCs[] = {
     S_("int", "TryParse", "bool(string,int&)", tryParseInt<VK::I32>), S_("long", "TryParse", "bool(string,long&)", tryParseInt<VK::I64>),
     S_("double", "Parse", "double(string)", parseDoubleV), S_("float", "Parse", "float(string)", parseFloatV),
     S_("double", "TryParse", "bool(string,double&)", tryParseDouble),
+    S_("double", "IsNaN", "bool(double)", dblIs<0>), S_("double", "IsInfinity", "bool(double)", dblIs<1>),
+    S_("double", "IsPositiveInfinity", "bool(double)", dblIs<2>), S_("double", "IsNegativeInfinity", "bool(double)", dblIs<3>),
+    S_("double", "IsFinite", "bool(double)", dblIs<4>), S_("float", "IsNaN", "bool(double)", dblIs<0>), S_("float", "IsInfinity", "bool(double)", dblIs<1>),
     S_("bool", "Parse", "bool(string)", parseBool), S_("bool", "TryParse", "bool(string,bool&)", tryParseBool), S_("char", "Parse", "char(string)", parseChar),
     // char
     S_("char", "IsDigit", "bool(char)", chIs<0>), S_("char", "IsLetter", "bool(char)", chIs<1>), S_("char", "IsLetterOrDigit", "bool(char)", chIs<2>),
@@ -1261,16 +1305,16 @@ const NativeEntry kCs[] = {
     M_("string", "Insert", "string(int,string)", strInsert), M_("string", "Remove", "string(int)", strRemove), M_("string", "Remove", "string(int,int)", strRemove),
     M_("string", "PadLeft", "string(int)", strPad<true>), M_("string", "PadLeft", "string(int,char)", strPad<true>),
     M_("string", "PadRight", "string(int)", strPad<false>), M_("string", "PadRight", "string(int,char)", strPad<false>),
-    M_("string", "Equals", "bool(string)", strEquals), M_("string", "CompareTo", "int(string)", strCompareTo),
+    M_("string", "Equals", "bool(string)", strEquals), S_("string", "Equals", "bool(string,string)", strEqualsStatic), M_("string", "CompareTo", "int(string)", strCompareTo),
     M_("string", "ToCharArray", "array<char>()", strToCharArray),
     S_("string", "IsNullOrEmpty", "bool(string)", strIsNullOrEmpty), S_("string", "IsNullOrWhiteSpace", "bool(string)", strIsNullOrWhiteSpace),
     S_("string", "Join", "string(string,any)", strJoin), S_("string", "Join", "string(char,any)", strJoin), S_("string", "Join", "string(string,any,any,...)", strJoin),
     S_("string", "Concat", "string(any,...)", strConcat), S_("string", "Format", "string(string,any,...)", strFormat), S_("string", "Format", "string(string)", strFormat),
-    S_("string", "Compare", "int(string,string)", strCompare),
+    S_("string", "Compare", "int(string,string)", strCompare), S_("string", "CompareOrdinal", "int(string,string)", strCompareOrdinal),
     S_("string", "#new", "string(char,int)", strCtorFill), S_("string", "#new", "string(array<char>)", strCtorChars),
     // StringBuilder
     C_("StringBuilder", "void()", sbCtor), C_("StringBuilder", "void(string)", sbCtor), C_("StringBuilder", "void(int)", sbCtor),
-    M_("StringBuilder", "Append", "self(any)", sbAppend), M_("StringBuilder", "AppendLine", "self()", sbAppendLine), M_("StringBuilder", "AppendLine", "self(any)", sbAppendLine),
+    M_("StringBuilder", "Append", "self(any)", sbAppend), M_("StringBuilder", "AppendFormat", "self(string,any,...)", sbAppendFormat), M_("StringBuilder", "AppendLine", "self()", sbAppendLine), M_("StringBuilder", "AppendLine", "self(any)", sbAppendLine),
     M_("StringBuilder", "Insert", "self(int,any)", sbInsert), M_("StringBuilder", "Remove", "self(int,int)", sbRemove),
     M_("StringBuilder", "Replace", "self(string,string)", sbReplace), M_("StringBuilder", "Replace", "self(char,char)", sbReplace),
     M_("StringBuilder", "Clear", "self()", sbClear), M_("StringBuilder", "ToString", "string()", sbToString), P_("StringBuilder", "Length", "int()", sbLength),

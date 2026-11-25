@@ -199,7 +199,11 @@ EV Compiler::callOverloads(const std::vector<Function*>& fns, const std::vector<
             const bool argRef = (a->mods & (MRef | MOut)) != 0 || a->k == K::Declarator;
             if (argRef != byRef) return -1;
             if (byRef && a->k == K::Declarator && p.type && p.type->k == TK::Dynamic && p.type->size == -2) return 0;   // out var x
-            if (byRef) return stripRef(p.type) == stripRef(pt) ? 0 : -1;
+            if (byRef) {
+                if (stripRef(p.type) == stripRef(pt)) return 0;
+                if (p.lvalue && stripRef(pt)->k == TK::Dynamic) return 1;      // nativi: Array.Resize(ref a, n)
+                return -1;
+            }
         }
         if (byRef) {
             if (p.lvalue && stripRef(p.type) == stripRef(pt)) return 0;
@@ -257,6 +261,10 @@ EV Compiler::callOverloads(const std::vector<Function*>& fns, const std::vector<
         if (deletedFns_.count(f)) continue;
         consider(c);
     }
+    // lambda passate a un template (template <class F> double integra(F f, ...)): il tipo
+    // funzione dai parametri dichiarati e dal primo return, calcolato una volta
+    std::vector<TypeP> lambdaTypes(tmpls.empty() ? 0 : args.size(), nullptr);
+    for (std::size_t i = 0; i < lambdaTypes.size(); ++i) if (args[i]->k == K::Lambda) lambdaTypes[i] = lambdaType(args[i]);
     for (TemplateDef* t : tmpls) {
         Node* tn = t->node;
         Node* fn = tn->a;
@@ -270,8 +278,9 @@ EV Compiler::callOverloads(const std::vector<Function*>& fns, const std::vector<
         // contesto del template per i tipi dei parametri
         auto saveT = tbind_;
         for (std::size_t i = 0; i < fn->list.size() && i < args.size() && ok; ++i) {
-            if (!probes[i].type) continue;
-            ok = deduce(fn->list[i]->type, probes[i].type, bind, deducible);
+            const TypeP at = args[i]->k == K::Lambda ? lambdaTypes[i] : probes[i].type;
+            if (!at) continue;
+            ok = deduce(fn->list[i]->type, at, bind, deducible);
         }
         tbind_ = saveT;
         if (!ok) continue;
@@ -464,6 +473,7 @@ void Compiler::emitVarArg(Node* arg, Pos at) {
     EV a = expr(arg);
     load(a, at);
     TypeP t = stripRef(a.type);
+    if (lang_ != Dialect::C && lang_ != Dialect::Cpp) return;   // C#/Java (params object[]): nessuna promozione
     if (t->k == TK::F32) convert(t, tF64_, at);
     else if (t->k == TK::Bool || t->k == TK::C8 || t->k == TK::I8 || t->k == TK::U8 || t->k == TK::I16 || t->k == TK::U16) convert(t, tI32_, at);
     else if (t->k == TK::Array && t->elem) convert(t, ptrTo(t->elem), at);
@@ -524,7 +534,23 @@ bool Compiler::operatorCall(P op, Node* a, Node* b, Pos at, EV& out) {
             bool found = false;
             for (Function* m : findMethods(t->cls, opName, &found)) if (m->isStatic && std::find(frees.begin(), frees.end(), m) == frees.end()) frees.push_back(m);
         }
-        if (frees.empty()) return false;
+        // solo gli operatori applicabili: Punto + " " e' la concatenazione predefinita di C#
+        const EV* probes[2] = {&pa, b ? &pb : nullptr};
+        bool applicable = false;
+        for (Function* f : frees) {
+            if (f->params.size() != (b ? 2u : 1u)) continue;
+            bool ok = true;
+            for (std::size_t i = 0; i < f->params.size() && ok; ++i) {
+                const EV& pr = *probes[i];
+                if (!pr.type) { ok = false; break; }
+                const TypeP at2 = stripRef(pr.type), pt2 = stripRef(f->params[i].type);
+                if (at2 == pt2) continue;
+                if (at2->k == TK::Class && pt2->k == TK::Class && at2->cls && pt2->cls && at2->cls->derivesFrom(pt2->cls)) continue;
+                if (convCost(pr.type, pt2, &pr) < 0) ok = false;
+            }
+            if (ok) applicable = true;
+        }
+        if (!applicable) return false;
         std::vector<Node*> args{a};
         if (b) args.push_back(b);
         out = callOverloads(frees, {}, {}, args, {}, at, false, nullptr, false, opName);
@@ -1157,6 +1183,9 @@ EV Compiler::conditional(Node* n) {
         else if (ta->k == TK::Class && tb->k == TK::Class && ta->cls && tb->cls && ta->cls->derivesFrom(tb->cls)) rt = tb;
         else if (ta->k == TK::Str && tb->k == TK::Array && ta->cppValue) rt = ta;
         else if (tb->k == TK::Str && ta->k == TK::Array && tb->cppValue) rt = tb;
+        // c ? "testo" : std::string(...): il char* diventa std::string (costruttore di conversione)
+        else if (ta->k == TK::Str && ta->cppValue && tb->k == TK::Ptr && tb->elem && tb->elem->k == TK::C8) rt = ta;
+        else if (tb->k == TK::Str && tb->cppValue && ta->k == TK::Ptr && ta->elem && ta->elem->k == TK::C8) rt = tb;
         else if (ta->k == TK::Dynamic || tb->k == TK::Dynamic) rt = tDyn_;
         else if (ta->k == TK::Void && tb->k == TK::Void) rt = tVoid_;
         else error("i due rami di ?: hanno tipi diversi (" + typeName(ta) + " e " + typeName(tb) + ")", n->pos);
@@ -1405,7 +1434,13 @@ EV Compiler::newExpr(Node* n) {
             r.type = ptrTo(t);
             return r;
         }
-        if (t->k == TK::Str) error("new string(...) non supportato: usa new string(c, n) non disponibile, scrivi new String(...) come testo", n->pos);
+        if (t->k == TK::Str) {
+            // C#: new string('x', 3), new string(char[]) (nativi string.#new)
+            std::vector<std::int32_t> mk = nativeMembers("string", "#new", NF::Static, 0);
+            (void)callOverloads({}, mk, {}, n->list, {}, n->pos, false, nullptr, false, "new string");
+            r.type = t;
+            return r;
+        }
         constructNative(t, n->list, n->pos);
         r.type = t;
         return r;
@@ -1584,6 +1619,58 @@ EV Compiler::captureThis(Pos at) {
     return e;
 }
 
+namespace {
+// Il primo return con un valore del corpo di una lambda (non di quelle annidate).
+Node* firstReturn(Node* s) {
+    if (!s || s->k == K::Lambda || s->k == K::LocalFunc) return nullptr;
+    if (s->k == K::Return) return s->a ? s : nullptr;
+    for (Node* x : {s->a, s->b, s->c, s->d}) if (Node* r = firstReturn(x)) return r;
+    for (Node* x : s->list) if (Node* r = firstReturn(x)) return r;
+    return nullptr;
+}
+} // namespace
+// Tipo funzione di una lambda prima di compilarla: parametri dichiarati, risultato
+// dichiarato (-> T) o del primo return calcolato con i parametri visibili. nullptr
+// se non si sa (parametri auto, fuori da una funzione).
+TypeP Compiler::lambdaType(Node* n) {
+    std::vector<TypeP> ps;
+    for (Node* p : n->list) {
+        if (!p->type || p->type->f == TF::Auto) return nullptr;
+        ps.push_back(resolveType(p->type, false));
+    }
+    TypeP ret = nullptr;
+    if (n->type) ret = resolveType(n->type, true);
+    else if (Node* re = firstReturn(n->b)) {
+        if (!fn_) return nullptr;
+        auto saveScopes = scopes_;
+        const std::int32_t saveN = fn_->nlocals;
+        const std::size_t saveLocals = fn_->locals.size();
+        auto saveFree = freeSlots_;
+        pushScope();
+        try {
+            for (std::size_t i = 0; i < ps.size(); ++i)
+                addLocal(syms_[n->list[i]->sym], ps[i]->k == TK::Ref ? ps[i]->elem : ps[i], n->list[i]->pos);
+            EV e = exprType(re->a);
+            ret = e.type ? stripRef(e.type) : nullptr;
+            if (e.isStringLit && ret && ret->k == TK::Array && ret->elem) ret = ptrTo(ret->elem);   // "testo" -> const char*
+        } catch (const Error&) {
+            ret = nullptr;
+        }
+        scopes_ = std::move(saveScopes);
+        fn_->nlocals = saveN;
+        fn_->locals.resize(saveLocals);
+        freeSlots_ = std::move(saveFree);
+        if (!ret || ret->k == TK::Dynamic) return nullptr;
+    } else ret = tVoid_;
+    // tipo "oggetto lambda" (size 1): come parametro non diventa un puntatore a
+    // funzione, cosi' passano anche le lambda con catture
+    TypeRef r;
+    r.k = TK::Func;
+    r.ret = ret;
+    r.args = std::move(ps);
+    r.size = 1;
+    return intern(r);
+}
 EV Compiler::lambda(Node* n, TypeP want) {
     EV r;
     if (probing_) {

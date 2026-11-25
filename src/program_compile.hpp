@@ -280,6 +280,8 @@ public:
     std::int32_t selector(const std::string& n, std::size_t arity);
     Function* newFunction(const std::string& nm, Dialect d, ClassInfo* owner);
     // C/C++: una funzione della libreria (sqrt, sin...) usata come puntatore a funzione
+    bool constFromExpr(ast::Node* n, std::int64_t& out);
+    TypeP lambdaType(ast::Node* lambda);
     Function* nativeWrapper(const std::vector<std::int32_t>& natives, ast::Pos at);
     ClassInfo* newClass(const std::string& nm, Dialect d);
 

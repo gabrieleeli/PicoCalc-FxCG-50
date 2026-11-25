@@ -1,0 +1,8 @@
+ok Anna -> Carla
+rifiutato: Bruno: fondi insufficienti
+errore: conto inesistente: Dario
+ok Carla -> Bruno
+conto gia' aperto: Anna
+Anna        300.00 (2)
+Bruno       170.00 (2)
+Carla       150.00 (2)

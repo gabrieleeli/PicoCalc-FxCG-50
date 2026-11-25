@@ -97,7 +97,7 @@ std::vector<TypeP> Compiler::paramTypes(Node* fn) {
         TypeP t = resolveType(p->type, true);
         if (t->k == TK::Void && fn->list.size() == 1 && !p->sym) break;
         if ((lang_ == Dialect::C || lang_ == Dialect::Cpp) && t->k == TK::Array) t = ptrTo(t->elem);   // decadimento
-        if ((lang_ == Dialect::C || lang_ == Dialect::Cpp) && t->k == TK::Func) t = ptrTo(t);
+        if ((lang_ == Dialect::C || lang_ == Dialect::Cpp) && t->k == TK::Func && t->size != 1) t = ptrTo(t);   // non le lambda (template)
         if (p->mods & (MRef | MOut | MIn)) t = refTo(t);
         ps.push_back(t);
     }

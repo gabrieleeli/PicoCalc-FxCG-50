@@ -1009,6 +1009,11 @@ void excToString(Vm& vm, NativeCall& c) {
 void arrLength(Vm& vm, NativeCall& c) { c.ret = Value::i32(arrayArg(vm, c.args[0])->count); }
 void arrLongLength(Vm& vm, NativeCall& c) { c.ret = Value::i64(arrayArg(vm, c.args[0])->count); }
 void arrRank(Vm& vm, NativeCall& c) { c.ret = Value::i32(arrayArg(vm, c.args[0])->rank); }
+// C#: a.Clone() copia superficiale (le struct per valore), da convertire con (T[])
+void arrClone(Vm& vm, NativeCall& c) {
+    (void)arrayArg(vm, c.args[0]);
+    c.ret = vm.copyValue(c.args[0]);
+}
 void arrGetLength(Vm& vm, NativeCall& c) {
     ArrayObj* a = arrayArg(vm, c.args[0]);
     const std::int64_t d = I(c, 1);
@@ -1205,6 +1210,7 @@ const NativeEntry kCore[] = {
     {L::Cs, "", "array", "LongLength", "long()", arrLongLength, P},
     {L::Cs, "", "array", "Rank", "int()", arrRank, P},
     {L::Cs, "", "array", "GetLength", "int(int)", arrGetLength, 0},
+    {L::Cs, "", "array", "Clone", "any()", arrClone, 0},
     {L::Java, "", "array", "length", "int()", arrLength, P},
     // iteratori delle sequenze
     {L::Cpp, "iterator", "iterator", "*", "elem&()", itDeref, 0},

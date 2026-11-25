@@ -53,7 +53,7 @@ void Compiler::load(EV& e, Pos at) {
             e.type = funcOf(f->ret, ps);
             break;
         }
-        if (!e.natives.empty() && e.fns.empty() && (lang_ == Dialect::C || lang_ == Dialect::Cpp)) {
+        if (!e.natives.empty() && e.fns.empty() && !e.hasReceiver) {
             // integra(sin, 0, pi): la funzione della libreria passa da una funzione che la chiama
             Function* w = nativeWrapper(e.natives, at);
             emit(Op::PushFn, w->index);
@@ -500,6 +500,21 @@ void Compiler::discard(Node* n) {
     emit(Op::Pop);
 }
 
+// Colore::Rosso (enum class), Classe::COSTANTE: il valore costante calcolato dal
+// compilatore delle espressioni (solo dentro una funzione: case, array locali).
+bool Compiler::constFromExpr(Node* n, std::int64_t& out) {
+    if (!fn_) return false;
+    try {
+        EV x = exprType(n);
+        const TypeP xt = x.type ? stripRef(x.type) : nullptr;
+        if (x.hasConst && xt && (isIntegral(xt) || xt->k == TK::Enum || (xt->k == TK::Class && xt->cls && xt->cls->isEnum))) {
+            out = x.constValue.i;
+            return true;
+        }
+    } catch (const Error&) {
+    }
+    return false;
+}
 bool Compiler::constInt(Node* n, std::int64_t& out) {
     if (!n) return false;
     switch (n->k) {
@@ -565,7 +580,7 @@ bool Compiler::constInt(Node* n, std::int64_t& out) {
         else if (n->k == K::Scope && n->a && n->a->k == K::Name) nm = syms_[n->a->sym] + "::" + syms_[n->sym];
         else if (n->k == K::Member && n->a && n->a->k == K::Name) nm = syms_[n->a->sym] + "::" + syms_[n->sym];
         else if (n->k == K::Scope && !n->a) nm = syms_[n->sym];
-        else return false;
+        else return constFromExpr(n, out);                 // Colore::Rosso (Colore tipo), A::B::c
         if (fn_) {
             if (LocalVar* v = findLocal(nm)) { if (v->hasConstValue) { out = v->constValue.i; return true; } return false; }
         }
@@ -576,17 +591,9 @@ bool Compiler::constInt(Node* n, std::int64_t& out) {
         if (e && e->kind == NsEntry::Global && e->global->hasConstValue) { out = e->global->constValue.i; return true; }
         EV c;
         if (n->k == K::Name && nativeConstant(nm, c, n->pos) && c.hasConst && isIntegral(c.type)) { out = c.constValue.i; return true; }
-        // Colore::Rosso (enum class), Classe::COSTANTE: dal compilatore delle espressioni
-        if (fn_ && n->k != K::Name) {
-            try {
-                EV x = exprType(n);
-                const TypeP xt = x.type ? stripRef(x.type) : nullptr;
-                if (x.hasConst && xt && (isIntegral(xt) || (xt->k == TK::Class && xt->cls && xt->cls->isEnum))) { out = x.constValue.i; return true; }
-            } catch (const Error&) {
-            }
-        }
-        return false;
+        return constFromExpr(n, out);
     }
+    case K::TypeExpr: return constFromExpr(n, out);            // Colore::Rosso con Colore tipo
     default: return false;
     }
 }
@@ -1337,7 +1344,17 @@ EV Compiler::fieldOf(TypeP objType, const FieldInfo* f, Pos at) {
 
 EV Compiler::member(Node* n, bool arrow) {
     const std::string m = syms_[n->sym];
-    EV base = expr(n->a);
+    EV base;
+    if ((lang_ == Dialect::CSharp || lang_ == Dialect::Java) && n->a && n->a->k == K::Name) {
+        // StringSplitOptions.RemoveEmptyEntries: costanti di tipi della libreria senza classe nel nucleo
+        try {
+            base = expr(n->a);
+        } catch (const Error&) {
+            EV c;
+            if (nativeConstant(syms_[n->a->sym] + "." + m, c, n->pos)) return c;
+            throw;
+        }
+    } else base = expr(n->a);
     if (base.cat == EV::NsName) {
         NsEntry* e = lookupScoped(base.ns, m);
         if (!e) for (Namespace* u : base.ns->usings) if ((e = lookupScoped(u, m))) break;

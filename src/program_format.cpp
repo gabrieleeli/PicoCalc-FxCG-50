@@ -59,10 +59,12 @@ std::string fixedDecimal(double d, int decimals, bool awayFromZero) {
 
 // ---------------------------------------------------------------- .NET
 // double.ToString(): la rappresentazione piu' corta che si rilegge uguale,
-// in notazione E (E+XX) se l'esponente e' >= 15 o < -5.
+// in notazione E (E+XX) se l'esponente e' >= 15 o < -5. Cultura invariante
+// (la PicoCalc non ha impostazioni locali): "Infinity", "-Infinity", "NaN",
+// come i formati F/N/E di fixedDecimal.
 std::string formatDoubleCs(double d) {
     if (std::isnan(d)) return "NaN";
-    if (std::isinf(d)) return d > 0 ? "\xE2\x88\x9E" : "-\xE2\x88\x9E";
+    if (std::isinf(d)) return d > 0 ? "Infinity" : "-Infinity";
     if (d == 0) return std::signbit(d) ? "-0" : "0";
     char buf[64];
     int prec = 1;
