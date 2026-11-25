@@ -74,8 +74,9 @@ enum Ask : int {
     AskNone = 0, AskNewName, AskRename, AskSearch, AskPick, AskPassOld, AskPassNew, AskEditPass, AskFind, AskReplaceWhat, AskReplaceWith,
     AskGoto, AskSaveAs, AskCopyTo, AskMoveTo, AskLibChoose, AskConfirmPlan,
 };
-enum Confirm : int { ConfirmDel = 1, ConfirmDelAll, ConfirmMigrate, ConfirmMigrateRemove, ConfirmLibDel, ConfirmPlan, ConfirmLeaveBlock };
-enum MenuTag : int { MenuNewKind = 1, MenuNewLang };
+enum Confirm : int { ConfirmDel = 1, ConfirmDelAll, ConfirmLibDel, ConfirmPlan };
+// Domande con piu' risposte (il "No" della ConfirmBox chiude soltanto): menu.
+enum MenuTag : int { MenuNewKind = 1, MenuNewLang, MenuMigrate };
 constexpr int EditorRows = 15;
 constexpr int ListRowH = 18;
 constexpr std::size_t BlockBytes = 128u * 1024u;          // blocco di un file grande nell'editor
@@ -171,6 +172,7 @@ struct ProgramApp::View {
     std::string target;                                 // file o cartella dell'operazione
     std::vector<std::string> picks;                     // risultati di SEARCH, cartelle di COPY/MOVE
     int newKind{0};                                     // 0 file, 1 progetto, 2 cartella
+    int migrateChoices{0};                              // voci del menu della migrazione
     code::Lang newLang{code::Lang::Cpp};
     std::string passOld;
     // ---- editor
@@ -715,7 +717,12 @@ void offerMigration(Context& ctx, V& v, bool manual) {
         ctx.markDirty();
         return;
     }
-    v.shell.confirm.open("Programmi della v1.17.0 trovati: convertirli in file sorgente in PICOCALC/CODE?", ConfirmMigrate);
+    // EXIT: si richiede al prossimo ingresso; "Non chiedere piu'": MIGR (SET UP o pagina 3) resta disponibile
+    std::vector<std::string> choices{"Converti in PICOCALC/CODE (originali tenuti)"};
+    if (fromFlash) choices.push_back("Converti ed elimina gli originali dalla flash");
+    choices.push_back("Non chiedere piu' (MIGR per convertire dopo)");
+    v.migrateChoices = static_cast<int>(choices.size());
+    v.shell.showMenu("Programmi della v1.17.0 trovati", choices, MenuMigrate);
 }
 void migrate(Context& ctx, V& v, bool removeFlash) {
     code::Store st = store(ctx);
@@ -1007,13 +1014,6 @@ void ProgramApp::key(Context& ctx, const KeyEvent& ev) {
                     refresh(ctx, v);
                 }
                 return;
-            case ConfirmMigrate:
-                if (!yes) { ctx.ws.program.migrationAsked = true; ctx.markDirty(); return; }
-                if (ctx.platform.internalFiles() && code::Store::hasLegacy(*ctx.platform.internalFiles()))
-                    v.shell.confirm.open("Dopo la conversione, eliminare gli originali dalla flash interna?", ConfirmMigrateRemove);
-                else migrate(ctx, v, false);
-                return;
-            case ConfirmMigrateRemove: migrate(ctx, v, yes); return;
             case ConfirmLibDel:
                 if (!yes) return;
                 if (const libs::Installed* l = selectedLib(v)) {
@@ -1033,6 +1033,11 @@ void ProgramApp::key(Context& ctx, const KeyEvent& ev) {
         [](int) {},
         [&](int tag, int choice) {
             if (choice < 0) return;
+            if (tag == MenuMigrate) {
+                if (choice == v.migrateChoices - 1) { ctx.ws.program.migrationAsked = true; ctx.markDirty(); return; }
+                migrate(ctx, v, choice == 1 && v.migrateChoices == 3);
+                return;
+            }
             if (tag == MenuNewKind) {
                 v.newKind = choice;
                 code::Lang l;
