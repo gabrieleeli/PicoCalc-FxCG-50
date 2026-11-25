@@ -1026,6 +1026,7 @@ EV Compiler::entryValue(NsEntry* ent, const std::string& nm, Node* n) {
     case NsEntry::Namespace:
         e.cat = EV::NsName;
         e.ns = ent->ns;
+        e.type = tVoid_;                                  // mai nullo: std[1], ++std, &std... danno un errore, non un crash
         return e;
     default: break;
     }

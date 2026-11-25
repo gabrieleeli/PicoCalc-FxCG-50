@@ -499,6 +499,9 @@ void testCore() {
     // i token), spazio dei nomi come operando, std::string lunga distrutta a fine blocco
     CHECK(err("class P { static void Main() { var x = (a.b", Dialect::CSharp).find("Syntax ERROR") == 0);
     CHECK(err("#include <iostream>\nint main() { std << 1; return 0; }", Dialect::Cpp).find("operando che non e' un valore@2") != std::string::npos);
+    // ... e negli altri usi come valore (fuzz_cpp sul codice finale: std[1][1] = 5)
+    for (const char* e : {"std[1]", "std[1] = 5", "std++", "++std", "std += 1", "sizeof(std)", "&std", "int a = std"})
+        CHECK(err(std::string("#include <iostream>\nint main() { ") + e + "; return 0; }", Dialect::Cpp).find("Syntax ERROR") == 0);
     CHECK_EQ_STR(cpp("#include <string>\n#include <iostream>\nint main() { for (int i = 0; i < 3; ++i) { std::string s(200, 'x'); s += \"y\"; } std::cout << \"ok\"; return 0; }"), "ok");
     // stringhe UTF-8 nei sorgenti e nell'output
     CHECK_EQ_STR(c("int main() { printf(\"perché %s\", \"π\"); return 0; }"), "perché π");

@@ -1,9 +1,46 @@
-# Build status — v1.19.0 (Geometry alla parità sulla Plus; Raspberry Pi Pico 2 W congelato)
+# Build status — v1.20.0 (Program sulla microSD con C, C++, C# e librerie sulla Plus; Raspberry Pi Pico 2 W congelato)
 
 Stato delle build per versione; le novità sono in [CHANGELOG.md](CHANGELOG.md).
-Le sezioni dopo "v1.19.0" descrivono le build delle versioni precedenti.
+Le sezioni dopo "v1.20.0" descrivono le build delle versioni precedenti.
 
-## v1.19.0 — `main`
+## v1.20.0 — `main`
+
+Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`;
+sul Pico 2 W `-Os` per i sorgenti di `FXAI_PICO2W_SIZE_SOURCES`; **nuovo**:
+sulla Plus `-Os` per il codice di Program fuori dal ciclo della macchina,
+`FXAI_PLUS_SIZE_SOURCES`), nello stesso ambiente della v1.19.0 (Pico SDK
+2.2.0, `gcc-arm-none-eabi` 13.2.1). Novità: Program sulla microSD con C, C++,
+C# e il gestore delle librerie sulla Plus
+([reports/SVILUPPO_v1.20.0.md](reports/SVILUPPO_v1.20.0.md)). **Nessuna prova su hardware.**
+
+> **Raspberry Pi Pico 2 W congelato alla v1.16.0**: 1 944 228 byte, confrontato
+> byte per byte con la v1.19.0 compilata nello stesso ambiente: 9 byte diversi,
+> le due cifre della stringa della versione in quattro punti («1.19.0» →
+> «1.20.0») e la data di compilazione; stesse modalità, stessa RAM statica.
+
+| Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| Output | `build/pico_plus_2w/picocalc_fxai_pico_plus_2w.uf2` (7 280 128 byte) | `build/pico2w/picocalc_fxai_pico2w.uf2` (3 889 152 byte) |
+| Immagine flash | 3 639 616 byte (`__flash_binary_end` = `0x10378940`) = 87 % della partizione da 4 MB (budget < 90 %: 3 774 873 B, restano 135 257 B); +656 056 byte rispetto alla v1.19.0 (codice di Program 844 628 B: interprete con le librerie native e `fx` 699 130 B, archivio e librerie con `fetch_pico` per l'HTTPS 90 525 B, controller 54 973 B; al posto del nucleo e della modalità della v1.17.0). Senza `-Os` sul codice di Program l'immagine era di 3 965 572 B (94 %, oltre il budget) | **1 944 228 byte** (`0x101DAAA4`) = 92 % della partizione da 2 MB, identica alla v1.19.0 salvo versione e data; restano 120 156 B sotto il budget di 2 064 384 B |
+| Codice nuovo nell'immagine | `program_*` (lexer, parser, compilatore, macchina, heap, formati, librerie native C/C++/C#, `fx`), `code_store`, `lib_manager`, `lib_fetch`, `json_lite`, `sha256`, `coroutine` (estratta da Python), `fetch_pico`; `program_app` riscritto | nessuno (mappa: **208** oggetti/simboli esclusi, nessuno nell'immagine) |
+| RAM statica | 313 536 byte fino a `__end__` = `0x2004C8C0` (+800) | 305 236 byte (`0x2004A854`, invariata) |
+| Heap SRAM | 177 984 byte (`__end__` → `0x20078000`) | 186 284 byte (invariato) |
+| Frame di stack (`-fstack-usage`) | nuovo massimo `libs::FolderSource::poll` 2 080 B (copia a blocchi dalla cartella `LIB/IMPORT`, nel ciclo principale; pila di 32 KB); `prog::compile` 1 376 B, `Compiler::assignImpl` 856 B, `formatPrintf` 680 B; il codice dei programmi gira nella coroutine da 48 KB | invariati |
+| Warning | **nessuno** del compilatore | nessuno |
+| SHA-256 dell'UF2 locale | `7e96e5a7cd87179a4f0cdce74b4cde2166ec8684de3995b42440f7a4981cfcc9` | `8bff26623de208fb7c790c5ba64cc70d60df99f9b619cce99636397f9c92758d` |
+
+### Test
+
+| Suite | Pico Plus 2 W | Pico 2 W |
+|---|---|---|
+| CTest (`tests/run_host_tests.sh`) | 72/72: 68 suite C++ con **22 482** controlli, `mem_pools_smoke`, `sd_interop_test`, `link_tool_test`, `libraries_index_test` | 54/54: 52 suite con **16 722** controlli (solo `architecture_test` cambia: 2 462), `mem_pools_smoke`, `sd_interop_test` |
+| AddressSanitizer + UBSan bloccante (`--sanitize`) | 72/72 | 54/54 |
+| ThreadSanitizer (`--tsan`) | superato | superato |
+| Relay AI (Python, `unittest`) | 15/15 | — |
+| Fuzzing (≥ 300 s per harness nuovo o toccato) | @@FUZZ@@ | — |
+| Simulatore (`tools/sim_compare.py`) | 211 identici: 190 precedenti invariati, 2 rigenerati per cambiamenti voluti (141, 142), 21 nuovi (203–223) | — |
+
+## v1.19.0
 
 Build pulite con `scripts/build.sh --clean --board <scheda>` (Release, `-O2`;
 sul Pico 2 W `-Os` per i sorgenti di `FXAI_PICO2W_SIZE_SOURCES`), nello stesso

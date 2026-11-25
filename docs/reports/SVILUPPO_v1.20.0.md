@@ -110,15 +110,72 @@ D1–D12. In più: C# con la cultura invariante (S3).
 | F18 | corpus | C++: `c ? "testo" : std::string`, `vector` costruito da iteratori di `map`, lambda a un template, funzioni della libreria come puntatori | S5, S6 e le regole del ternario e del costruttore | corpus `quadratic.cpp`, `text_stats.cpp`, `numeric.cpp`, `funcptr.c` |
 | F19 | `fuzz_cpp` sul codice di F18 | la deduzione dei template (S6) riassegnava gli scope del chiamante: `LocalVar&` di `initVariable` invalidato (use-after-free) | si aggiunge e si toglie solo lo scope temporaneo | `fuzz_cpp`, corpus sotto ASan |
 | F20 | revisione dell'analisi | DEBUG dall'elenco mostrava il sorgente di un file protetto senza password | S11 | `program_flow_test` |
+| F21 | `fuzz_cpp` sul codice finale | uno spazio dei nomi usato come valore in un indice, in `++`/`--`, in un'assegnazione composta, in `sizeof` o dopo `&` (`std[1][1] = 5`) dereferenziava un tipo nullo; `std << 1` (F10) era solo il primo caso | il nome di uno spazio dei nomi ha il tipo `void`: ogni uso come valore dà un errore di sintassi | `program_lang_test` (otto forme), `fuzz_cpp` e gli altri tre fuzzer dell'interprete ripetuti sul codice finale |
 
 ## 7. Test, fuzzing, simulatore
 
-@@TEST@@
+| Verifica | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| CTest (`tests/run_host_tests.sh`) | **72/72**: 68 suite C++ con **22 482** controlli (+1 888 sulla v1.19.0), `mem_pools_smoke`, `sd_interop_test`, `link_tool_test`, `libraries_index_test` | **54/54**: 52 suite con **16 722** controlli (+344, solo `architecture_test` 2 462), `mem_pools_smoke`, `sd_interop_test` |
+| Suite nuove | `program_lang_test` 180, `program_corpus_test` 52 (51 programmi), `code_store_test` 223, `lib_manager_test` 903, `libraries_test` 50, `program_flow_test` 96, `https_lib_test`, `libraries_index_test` | — |
+| Suite cambiate | `architecture_test` 2 927 (sorgenti e servizi nuovi solo Plus), `geometry_test` 264 (+2, F11), `base_modes_test` 444, `base_flow_test` 125 (Program della v1.17.0 sostituita), `program_core_test` 47 (regressione del nucleo della v1.15.0 sul nucleo nuovo) | `architecture_test` 2 462 |
+| ASan + UBSan (bloccante), TSan | 72/72, TSan superato (dopo i falsi positivi di `-Warray-bounds` di GCC 13 nella build con i sanitizer, corretti come nella v1.19.0) | 54/54, TSan superato |
+| Corpus differenziale | 51 programmi (C 12, C++ 25, C# 14) identici byte per byte a gcc 13, g++ 13 e Mono 6; i 5 esempi della documentazione identici a g++, gcc (`-std=gnu11`) e Mono togliendo le chiamate `fx` | — |
+| Fuzzing (≥ 300 s per harness nuovo o toccato, sul codice finale) | @@FUZZ@@ | — |
+| Simulatore (`tools/sim_compare.py`) | **211 identici** al confronto finale: 190 precedenti invariati, 2 rigenerati per cambiamenti voluti (141, 142: la Program della v1.17.0 con il gestore dei file e l'editor nuovi), 21 nuovi (203–223, `tests/sim/program_v120.txt`) | le stesse schermate (Program non esiste) |
+| Relay AI | 15/15 | — |
 
 ## 8. Firmware e memoria
 
-@@FIRMWARE@@
+| Voce | Pimoroni Pico Plus 2 W | Raspberry Pi Pico 2 W |
+|---|---|---|
+| Immagine | **3 639 616 B** = 87 % della partizione da 4 MB (+656 056 B sulla v1.19.0; budget 3 774 873 B: restano 135 257 B) | **1 944 228 B** = 92 % della partizione da 2 MB, **identica** alla v1.19.0 salvo la stringa della versione e la data (9 byte); restano 120 156 B sotto il budget di 2 064 384 B |
+| RAM statica | 313 536 B fino a `__end__` = `0x2004C8C0` (+800 B); heap SRAM 177 984 B | 305 236 B (invariata); heap SRAM 186 284 B |
+| Oggetti esclusi nella mappa | 0 (tutto compilato) | **208** oggetti/simboli della Plus (+23: i file nuovi di Program e delle librerie), nessuno nell'immagine |
+| Warning del compilatore | nessuno | nessuno |
+
+**Budget della Plus.** La prima build completa del firmware ha dato
+3 965 572 B (94 %), oltre il controllo bloccante del 90 %. Il codice di
+Program fuori dal ciclo della macchina (lexer, parser, compilatore, librerie
+native, formati, archivio, gestore delle librerie, controller) è ora
+compilato con `-Os` (`FXAI_PLUS_SIZE_SOURCES` in `cmake/fxai_sources.cmake`,
+lo stesso meccanismo del Pico 2 W); `program_vm.cpp`, `program_heap.cpp` e
+`coroutine.cpp` restano a `-O2`. La stessa build ha trovato due chiamate
+`std::max(int32_t, int)` che compilavano solo sul PC (su ARM `int32_t` è
+`long`) e un avviso in `program_parse_cs.cpp`, corretti. Margine rimasto:
+135 257 B; la v1.21.0 (Java) dovrà portare a `-Os` altro codice freddo della
+Plus prima di aggiungere il suo front-end.
+
+Flash del codice di Program sulla Plus (mappa del linker, `tools/map_sizes.py`):
+
+| Parte | Flash (B) |
+|---|---:|
+| Interprete: lexer, parser C/C++/C#, compilatore, macchina, heap, formati, librerie native C/C++/C#, `fx`, progetto, coroutine | 699 130 |
+| Archivio (`code_store`), librerie (`lib_manager`, `json_lite`, `sha256`), HTTPS (`lib_fetch`, `fetch_pico`) | 90 525 |
+| Controller (`program_app`, `program_mode`) | 54 973 |
+| **Totale** | **844 628** |
+
+Stack (`-fstack-usage`, Plus): nuovo massimo del firmware
+`libs::FolderSource::poll` 2 080 B (copia a blocchi da `LIB/IMPORT`, nel
+ciclo principale con la pila di 32 KB); `prog::compile` 1 376 B,
+`Compiler::assignImpl` 856 B, `formatPrintf` 680 B. Il codice dei programmi
+gira nella coroutine da 48 KB (pila propria con MSPLIM); il compilatore non è
+ricorsivo oltre la profondità del sorgente (limite di annidamento 48) e la
+macchina non usa la pila nativa per le chiamate del programma.
+
+Dettagli e hash degli UF2: [BUILD_STATUS.md](../BUILD_STATUS.md).
 
 ## 9. Cancello
 
-@@GATE@@
+| Controllo | Esito |
+|---|---|
+| `git fetch origin main` | `main` fermo a `bcd28af`: fast-forward |
+| `tests/run_host_tests.sh` (due profili) | 72/72 e 54/54 |
+| `--sanitize --tsan` | 72/72 e 54/54, TSan superato su entrambi |
+| Corpus differenziale | 51/51 programmi identici a gcc, g++ e Mono |
+| Fuzzing ≥ 300 s per harness nuovo o toccato | @@FUZZGATE@@ |
+| Simulatore | 190 identici, 2 rigenerati con il motivo (141, 142), 21 nuovi; confronto finale 211/211 |
+| Firmware | due schede `--clean`, nessun warning; Plus 87 % (< 90 %, con `-Os` sul codice di Program); Pico 2 W 1 944 228 B, identico alla v1.19.0 salvo la stringa della versione e la data |
+| Congelamento del Pico 2 W | `architecture_test` («Pico 2 W frozen at v1.16.0», 23 modalità, nessuna Base); immagine confrontata byte per byte con la v1.19.0 compilata dallo stesso ambiente: **9 byte diversi**, le due cifre della versione in quattro punti e la data |
+| Relay | 15/15 |
+| Documentazione | ANALISI_FONTI e SVILUPPO v1.20.0, PROGRAM (guida riscritta), LIBRARIES (nuova), esempi in `docs/examples/program`, HARDWARE_TEST_v1.20.0, FEATURE_MATRIX, ROADMAP (versioni successive rinumerate), BUILD_STATUS, CHANGELOG, APPLICATIONS_ARCHITECTURE, FILE_FORMATS, STORAGE, TESTING, README, docs/README, releases/v1.20.0, CONTINUE, VERSION |

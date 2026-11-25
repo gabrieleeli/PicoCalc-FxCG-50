@@ -8,7 +8,7 @@ branch **`main`** (tag `v1.20.0` da creare con il workflow
 Rapporti: `docs/reports/ANALISI_FONTI_v1.20.0.md` (tabelle del capitolo 8 e
 dei sottoinsiemi LK/LC/LP/LS, progetto del nucleo, del gestore delle librerie
 e dell'archivio, Q1–Q30), `docs/reports/SVILUPPO_v1.20.0.md` (decisioni
-S1–S14, scostamenti dall'analisi, voci rimandate alla v1.21.0, errori F1–F20,
+S1–S14, scostamenti dall'analisi, voci rimandate alla v1.21.0, errori F1–F21,
 test, firmware, cancello). Versioni precedenti:
 `ANALISI_FONTI_v1.15.0…v1.19.0.md`, `SVILUPPO_v1.15.0…v1.19.0.md`.
 
@@ -139,7 +139,7 @@ hardware**: `docs/HARDWARE_TEST_v1.20.0.md` (HW-296…HW-313).
 | Area | Contenuto |
 |---|---|
 | Git (v1.20.0) | partenza da `main` = `bcd28af` (v1.19.0); commit intermedi su `claude/blissful-knuth-x1ei65`; un solo commit su `main` in fast-forward |
-| v1.20.0 | `ANALISI_FONTI_v1.20.0.md` (tabelle PM/PW/RN/ED/DB/SD/MG/FX, LK/LC/LP/LS, progetto del nucleo e delle librerie, Q1–Q30); nucleo dell'interprete nuovo; `code_store`, `lib_manager`, `lib_fetch` (HTTPS solo Plus), `program_app.cpp`; `libraries/` con 9 librerie; test `program_lang_test`, `program_corpus_test` (51 programmi = gcc/g++/Mono), `code_store_test`, `lib_manager_test`, `libraries_test` (anche gli esempi), `program_flow_test`, `https_lib_test`; fuzzer `fuzz_c`, `fuzz_cpp`, `fuzz_cs`, `fuzz_libjson`, `fuzz_http`, `fuzz_codestore`; screenshot 203–223; errori F1–F20 |
+| v1.20.0 | `ANALISI_FONTI_v1.20.0.md` (tabelle PM/PW/RN/ED/DB/SD/MG/FX, LK/LC/LP/LS, progetto del nucleo e delle librerie, Q1–Q30); nucleo dell'interprete nuovo; `code_store`, `lib_manager`, `lib_fetch` (HTTPS solo Plus), `program_app.cpp`; `libraries/` con 9 librerie; test `program_lang_test`, `program_corpus_test` (51 programmi = gcc/g++/Mono), `code_store_test`, `lib_manager_test`, `libraries_test` (anche gli esempi), `program_flow_test`, `https_lib_test`; fuzzer `fuzz_c`, `fuzz_cpp`, `fuzz_cs`, `fuzz_libjson`, `fuzz_http`, `fuzz_codestore`; screenshot 203–223; errori F1–F21 |
 | Git (v1.19.0) | partenza da `main` = `a7c861b` (v1.18.0); commit intermedi su `ccr-6804dfc4-cwp8zw`; un solo commit su `main` in fast-forward |
 | v1.19.0 | `ANALISI_FONTI_v1.19.0.md` (tabella del cap. 14, Q1–Q18, tolleranze); nucleo puro `src/geometry*.cpp` (grafo, ricalcolo incrementale, intersezioni, costruzioni, trasformazioni, misure, `SolveTask`, `AnimationTask`, `.pcgeo` v2 e migrazione v1 con la fixture `tests/fixtures/geometry_v1_17_0.inc`); controller `geometry_app.cpp`/`geometry_view.cpp`; test `geometry_test` (una voce un caso, proprietà G01–G14), `geometry_flow_test` (tasti veri); `fuzz_geometry` (formato e sequenze di comandi; un errore trovato e corretto); screenshot 175–202 (144 e 172 rigenerati) |
 | Git (v1.18.0) | partenza da `main` = `aa2923c` (v1.17.0); commit intermedi su `claude/eager-wozniak-bg3tqx`; un solo commit su `main` in fast-forward |
